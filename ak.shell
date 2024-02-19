@@ -1,0 +1,20 @@
+#!/bin/bash
+
+org="91go"
+repo="docs-alfred"
+
+# Update ak
+#go install github.com/cage1016/ak@latest &&
+#ak && ak init && ak new cmd && ak add ga && ak add mf && rm .github/workflows/release.yml
+
+
+# Modify various fixed strings in the template
+grep -rl "github.com.91go.docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#github.com.91go.docs-alfred#github.com/$org/$repo#g"
+
+grep -rl "docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#docs-alfred#$repo#g"
+
+grep -rl "com.91go.docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#com.91go.docs-alfred#com.$org.$repo#g"
+grep -rl "91go/docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#91go/docs-alfred#$org/$repo#g"
+
+echo "success !!!"
+
