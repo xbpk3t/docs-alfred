@@ -10,7 +10,7 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>2FA23552-77B6-4B65-863A-70C674DAFC4B</string>
+				<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -68,7 +68,7 @@
 				<key>argumenttrimmode</key>
 				<integer>0</integer>
 				<key>argumenttype</key>
-				<integer>2</integer>
+				<integer>1</integer>
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>keyword</key>
@@ -96,7 +96,7 @@
 				<key>type</key>
 				<integer>0</integer>
 				<key>withspace</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>type</key>
 			<string>alfred.workflow.input.scriptfilter</string>
@@ -137,23 +137,31 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>browser</key>
+				<key>alignment</key>
+				<integer>0</integer>
+				<key>backgroundcolor</key>
 				<string></string>
-				<key>skipqueryencode</key>
+				<key>fadespeed</key>
+				<integer>0</integer>
+				<key>fillmode</key>
+				<integer>0</integer>
+				<key>font</key>
+				<string></string>
+				<key>ignoredynamicplaceholders</key>
 				<false/>
-				<key>skipvarencode</key>
-				<false/>
-				<key>spaces</key>
+				<key>largetypetext</key>
+				<string>{query}</string>
+				<key>textcolor</key>
 				<string></string>
-				<key>url</key>
-				<string></string>
+				<key>wrapat</key>
+				<integer>50</integer>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.action.openurl</string>
+			<string>alfred.workflow.output.largetype</string>
 			<key>uid</key>
-			<string>2FA23552-77B6-4B65-863A-70C674DAFC4B</string>
+			<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
 			<key>version</key>
-			<integer>1</integer>
+			<integer>3</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -180,12 +188,12 @@
 	<string></string>
 	<key>uidata</key>
 	<dict>
-		<key>2FA23552-77B6-4B65-863A-70C674DAFC4B</key>
+		<key>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</key>
 		<dict>
 			<key>xpos</key>
-			<real>765</real>
+			<real>700</real>
 			<key>ypos</key>
-			<real>230</real>
+			<real>225</real>
 		</dict>
 		<key>5EE9F4A7-AC17-4312-80DB-F35F446B5E08</key>
 		<dict>
