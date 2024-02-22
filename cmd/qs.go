@@ -5,23 +5,32 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"strings"
+	"sync"
+
+	"github.com/samber/lo"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 const syncJob = "sync"
 
 const QsFile = "qs.yml"
 
-type Docs struct {
+type Doc struct {
 	Name string `yaml:"name,omitempty"`
 	Cate string `yaml:"cate,omitempty"`
-	Xxx  []struct {
-		Qs string `yaml:"qs,omitempty"`
-		As string `yaml:"as,omitempty"`
-	} `yaml:"xxx,omitempty"`
+	Xxx  []Xxx  `yaml:"xxx,omitempty"`
 }
+
+type Xxx struct {
+	Qs string `yaml:"qs,omitempty"`
+	As string `yaml:"as,omitempty"`
+}
+
+type Docs []Doc
 
 // qsCmd represents the qs command
 var qsCmd = &cobra.Command{
@@ -36,40 +45,43 @@ var qsCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		var docs []Docs
-		if wf.Cache.Exists(QsFile) {
-			f, err := wf.Cache.Load(QsFile)
-			if err != nil {
-				return
+		docs := NewDocs()
+
+		switch len(args) {
+		case 0:
+			// default: display all name
+			for _, v := range docs.GetNames() {
+				wf.NewItem(v).Title(v).Valid(false).Arg(v).Autocomplete(v)
 			}
-			d := yaml.NewDecoder(bytes.NewReader(f))
-			for {
-				spec := new(Docs)
-				if err := d.Decode(&spec); err != nil {
-					// break the loop in case of EOF
-					if errors.Is(err, io.EOF) {
-						break
-					}
-					panic(err)
-				}
-				if spec != nil {
-					docs = append(docs, *spec)
-				}
+			wf.SendFeedback()
+		case 1:
+			// determine
+			query := args[0]
+			var qss []Xxx
+			if docs.IsHitName(query) {
+				qss = docs.GetQsByName(query)
+			} else {
+				qss = docs.SearchQs(query)
 			}
+
+			for _, qs := range qss {
+				wf.NewItem(qs.Qs).Title(qs.Qs).Valid(true).Arg(qs.As).Autocomplete(qs.As).Subtitle(qs.As)
+			}
+
+			wf.Filter(query)
+			wf.SendFeedback()
+		case 2:
+			// vv name <qs>
+			name := args[0]
+			query := args[1]
+
+			qss := docs.GetQsByName(name)
+			for _, qs := range qss {
+				wf.NewItem(qs.Qs).Title(qs.Qs).Valid(true).Arg(qs.As).Autocomplete(qs.As).Subtitle(qs.As)
+			}
+			wf.Filter(query)
+			wf.SendFeedback()
 		}
-
-		for _, doc := range docs {
-			for _, q := range doc.Xxx {
-				wf.NewItem(q.Qs).Title(q.Qs).Subtitle(q.As).Valid(false)
-			}
-			// wf.NewItem(doc.Name).Title(doc.Name).Valid(false)
-		}
-
-		// if len(args) > 0 {
-		// 	wf.Filter(args[0])
-		// }
-
-		wf.SendFeedback()
 	},
 }
 
@@ -85,4 +97,78 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// qsCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
+
+var once sync.Once
+
+func NewDocs() Docs {
+	var docs Docs
+
+	once.Do(func() {
+		if wf.Cache.Exists(QsFile) {
+			f, err := wf.Cache.Load(QsFile)
+			if err != nil {
+				return
+			}
+			d := yaml.NewDecoder(bytes.NewReader(f))
+			for {
+				spec := new(Doc)
+				if err := d.Decode(&spec); err != nil {
+					// break the loop in case of EOF
+					if errors.Is(err, io.EOF) {
+						break
+					}
+					panic(err)
+				}
+				if spec != nil {
+					docs = append(docs, *spec)
+				}
+			}
+		}
+	})
+	return docs
+}
+
+// GetNames Get All Names
+func (d Docs) GetNames() (names []string) {
+	for _, doc := range d {
+		names = append(names, doc.Name)
+	}
+	return
+}
+
+// func (d Docs) GetNameByCate(cate string) (names []string) {
+// 	for _, doc := range d {
+// 		if doc.Cate == cate {
+// 			names = append(names, doc.Name)
+// 		}
+// 	}
+// 	return
+// }
+//
+
+func (d Docs) IsHitName(query string) bool {
+	return lo.ContainsBy(d, func(item Doc) bool {
+		return strings.EqualFold(item.Name, query)
+	})
+}
+
+func (d Docs) GetQsByName(name string) (qs []Xxx) {
+	for _, doc := range d {
+		if doc.Name == name {
+			qs = append(qs, doc.Xxx...)
+		}
+	}
+	return
+}
+
+func (d Docs) SearchQs(query string) (qs []Xxx) {
+	for _, doc := range d {
+		for _, xxx := range doc.Xxx {
+			if strings.Contains(xxx.Qs, query) {
+				qs = append(qs, xxx)
+			}
+		}
+	}
+	return
 }
