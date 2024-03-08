@@ -12,7 +12,6 @@ var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		// gh.yml
 		url := wf.Config.GetString("url")
 		if url != "" {
 			resp, err := http.Get(url)
@@ -25,7 +24,7 @@ var syncCmd = &cobra.Command{
 			if err != nil {
 				return
 			}
-			err = wf.Cache.Store(QsFile, data)
+			err = wf.Cache.Store(QsFolder, data)
 			if err != nil {
 				return
 			}
