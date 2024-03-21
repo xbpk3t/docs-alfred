@@ -92,7 +92,7 @@
 				<key>subtext</key>
 				<string></string>
 				<key>title</key>
-				<string>Search Github</string>
+				<string>qs searching...</string>
 				<key>type</key>
 				<integer>0</integer>
 				<key>withspace</key>
@@ -108,31 +108,35 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>alignment</key>
+				<key>behaviour</key>
+				<integer>2</integer>
+				<key>fontmode</key>
 				<integer>0</integer>
-				<key>backgroundcolor</key>
-				<string></string>
-				<key>fadespeed</key>
+				<key>fontsizing</key>
 				<integer>0</integer>
-				<key>fillmode</key>
+				<key>footertext</key>
+				<string></string>
+				<key>inputfile</key>
+				<string></string>
+				<key>inputtype</key>
 				<integer>0</integer>
-				<key>font</key>
+				<key>loadingtext</key>
 				<string></string>
-				<key>ignoredynamicplaceholders</key>
-				<false/>
-				<key>largetypetext</key>
-				<string>{query}</string>
-				<key>textcolor</key>
-				<string></string>
-				<key>wrapat</key>
-				<integer>50</integer>
+				<key>outputmode</key>
+				<integer>0</integer>
+				<key>scriptinput</key>
+				<integer>0</integer>
+				<key>spellchecking</key>
+				<integer>0</integer>
+				<key>stackview</key>
+				<true/>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.output.largetype</string>
+			<string>alfred.workflow.userinterface.text</string>
 			<key>uid</key>
 			<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
 			<key>version</key>
-			<integer>3</integer>
+			<integer>1</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -268,27 +272,6 @@
 			<string>textfield</string>
 			<key>variable</key>
 			<string>url</string>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>default</key>
-				<string>linux,algo,arch,database,lang,golang,works,life</string>
-				<key>placeholder</key>
-				<string></string>
-				<key>required</key>
-				<false/>
-				<key>trim</key>
-				<true/>
-			</dict>
-			<key>description</key>
-			<string></string>
-			<key>label</key>
-			<string></string>
-			<key>type</key>
-			<string>textfield</string>
-			<key>variable</key>
-			<string>fff</string>
 		</dict>
 	</array>
 	<key>version</key>
