@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 
@@ -19,14 +20,15 @@ var qsCmd = &cobra.Command{
 	Short: "A brief description of your command",
 	PostRun: func(cmd *cobra.Command, args []string) {
 		if !wf.IsRunning(syncJob) {
-			cmd := exec.Command("./exe", syncJob)
+			cmd := exec.Command("./exe", syncJob, fmt.Sprintf("--config=%s", cfgFile))
+			slog.Info("sync cmd: ", slog.Any("cmd", cmd.String()))
 			if err := wf.RunInBackground(syncJob, cmd); err != nil {
 				ErrorHandle(err)
 			}
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		docs := qs.NewDocs(wf.CacheDir() + "/qs.yml")
+		docs := qs.NewDocs(wf.CacheDir() + fmt.Sprintf("/%s.yml", cfgFile))
 		// default: display all name
 		for _, doc := range docs {
 			for _, xxx := range doc.Xxx {

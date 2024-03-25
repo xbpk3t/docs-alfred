@@ -6,7 +6,7 @@
 	<string>com.91go.docs</string>
 	<key>connections</key>
 	<dict>
-		<key>5EE9F4A7-AC17-4312-80DB-F35F446B5E08</key>
+		<key>01A7C66C-9429-410F-8D58-1576C22B8E54</key>
 		<array>
 			<dict>
 				<key>destinationuid</key>
@@ -19,24 +19,11 @@
 				<false/>
 			</dict>
 		</array>
-		<key>A986C4B7-DEE5-4075-844D-63A2B134A520</key>
+		<key>5EE9F4A7-AC17-4312-80DB-F35F446B5E08</key>
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>FF6B8551-01F6-4837-9FD0-AC970C92F71C</string>
-				<key>modifiers</key>
-				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-		</array>
-		<key>FF6B8551-01F6-4837-9FD0-AC970C92F71C</key>
-		<array>
-			<dict>
-				<key>destinationuid</key>
-				<string>5EE9F4A7-AC17-4312-80DB-F35F446B5E08</string>
+				<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -72,7 +59,7 @@
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>keyword</key>
-				<string>{var:keyword}</string>
+				<string>{var:qs}</string>
 				<key>queuedelaycustom</key>
 				<integer>3</integer>
 				<key>queuedelayimmediatelyinitially</key>
@@ -84,7 +71,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./exe qs $1</string>
+				<string>./exe qs $1 --config=qs</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -92,7 +79,7 @@
 				<key>subtext</key>
 				<string></string>
 				<key>title</key>
-				<string>qs searching...</string>
+				<string></string>
 				<key>type</key>
 				<integer>0</integer>
 				<key>withspace</key>
@@ -113,7 +100,7 @@
 				<key>fontmode</key>
 				<integer>0</integer>
 				<key>fontsizing</key>
-				<integer>0</integer>
+				<integer>3</integer>
 				<key>footertext</key>
 				<string></string>
 				<key>inputfile</key>
@@ -141,92 +128,81 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>action</key>
-				<integer>0</integer>
-				<key>argument</key>
-				<integer>0</integer>
-				<key>focusedappvariable</key>
+				<key>alfredfiltersresults</key>
 				<false/>
-				<key>focusedappvariablename</key>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<false/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>{var:qs2}</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
 				<string></string>
-				<key>hotkey</key>
+				<key>script</key>
+				<string>./exe qs $1 --config=qs2</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string></string>
+				<key>type</key>
 				<integer>0</integer>
-				<key>hotmod</key>
-				<integer>0</integer>
-				<key>leftcursor</key>
-				<false/>
-				<key>modsmode</key>
-				<integer>2</integer>
-				<key>relatedAppsMode</key>
-				<integer>0</integer>
+				<key>withspace</key>
+				<true/>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.trigger.hotkey</string>
+			<string>alfred.workflow.input.scriptfilter</string>
 			<key>uid</key>
-			<string>A986C4B7-DEE5-4075-844D-63A2B134A520</string>
+			<string>01A7C66C-9429-410F-8D58-1576C22B8E54</string>
 			<key>version</key>
-			<integer>2</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>argument</key>
-				<string>{query}</string>
-				<key>passthroughargument</key>
-				<false/>
-				<key>variables</key>
-				<dict>
-					<key>hotkey</key>
-					<string>1</string>
-				</dict>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.argument</string>
-			<key>uid</key>
-			<string>FF6B8551-01F6-4837-9FD0-AC970C92F71C</string>
-			<key>version</key>
-			<integer>1</integer>
+			<integer>3</integer>
 		</dict>
 	</array>
 	<key>readme</key>
 	<string></string>
 	<key>uidata</key>
 	<dict>
+		<key>01A7C66C-9429-410F-8D58-1576C22B8E54</key>
+		<dict>
+			<key>note</key>
+			<string>github.com</string>
+			<key>xpos</key>
+			<real>295</real>
+			<key>ypos</key>
+			<real>275</real>
+		</dict>
 		<key>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</key>
 		<dict>
 			<key>xpos</key>
-			<real>700</real>
+			<real>685</real>
 			<key>ypos</key>
-			<real>225</real>
+			<real>110</real>
 		</dict>
 		<key>5EE9F4A7-AC17-4312-80DB-F35F446B5E08</key>
 		<dict>
 			<key>note</key>
 			<string>github.com</string>
 			<key>xpos</key>
-			<real>300</real>
+			<real>285</real>
 			<key>ypos</key>
-			<real>225</real>
-		</dict>
-		<key>A986C4B7-DEE5-4075-844D-63A2B134A520</key>
-		<dict>
-			<key>colorindex</key>
-			<integer>12</integer>
-			<key>note</key>
-			<string>github.com</string>
-			<key>xpos</key>
-			<real>30</real>
-			<key>ypos</key>
-			<real>225</real>
-		</dict>
-		<key>FF6B8551-01F6-4837-9FD0-AC970C92F71C</key>
-		<dict>
-			<key>colorindex</key>
-			<integer>12</integer>
-			<key>xpos</key>
-			<real>200</real>
-			<key>ypos</key>
-			<real>255</real>
+			<real>110</real>
 		</dict>
 	</dict>
 	<key>userconfigurationconfig</key>
@@ -250,13 +226,34 @@
 			<key>type</key>
 			<string>textfield</string>
 			<key>variable</key>
-			<string>keyword</string>
+			<string>qs</string>
 		</dict>
 		<dict>
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://cdn.hxha.xyz/f/qs.yml</string>
+				<string>fc</string>
+				<key>placeholder</key>
+				<string></string>
+				<key>required</key>
+				<true/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string></string>
+			<key>label</key>
+			<string>Keyword</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>qs2</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>https://cdn.hxha.xyz/f/</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>

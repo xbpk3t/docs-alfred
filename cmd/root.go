@@ -1,6 +1,3 @@
-/*
-Copyright ©
-*/
 package cmd
 
 import (
@@ -46,7 +43,12 @@ func Execute() {
 	})
 }
 
+var cfgFile string
+
 func init() {
 	wf = aw.New(update.GitHub(repo), aw.HelpURL(repo+"/issues"))
 	wf.Args() // magic for "workflow:update"
+
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config File To Parse")
+	// rootCmd.MarkPersistentFlagRequired("config")
 }
