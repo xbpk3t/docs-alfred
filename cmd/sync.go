@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,7 +13,7 @@ var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		url := wf.Config.GetString("url") + fmt.Sprintf("%s.yml", cfgFile)
+		url := wf.Config.GetString("url") + cfgFile
 		if url != "" {
 			resp, err := http.Get(url)
 			if err != nil {
@@ -27,7 +26,7 @@ var syncCmd = &cobra.Command{
 			if err != nil {
 				return
 			}
-			err = wf.Cache.Store(QsFolder, data)
+			err = wf.Cache.Store(cfgFile, data)
 			if err != nil {
 				return
 			}

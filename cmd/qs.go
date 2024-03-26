@@ -12,8 +12,6 @@ import (
 
 const syncJob = "sync"
 
-const QsFolder = "qs"
-
 // qsCmd represents the qs command
 var qsCmd = &cobra.Command{
 	Use:   "qs",
@@ -28,7 +26,7 @@ var qsCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		docs := qs.NewDocs(wf.CacheDir() + fmt.Sprintf("/%s.yml", cfgFile))
+		docs := qs.NewDocs(wf.CacheDir() + "/" + cfgFile)
 		// default: display all name
 		for _, doc := range docs {
 			for _, xxx := range doc.Xxx {
