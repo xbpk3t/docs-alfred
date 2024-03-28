@@ -30,8 +30,9 @@ type Repository struct {
 	URL         string `yaml:"url"`
 	Name        string
 	User        string
-	Description string   `yaml:"des,omitempty"`
-	Qs          []string `yaml:"qs"`
+	Description string     `yaml:"des,omitempty"`
+	Qs          []string   `yaml:"qs"`
+	Cmd         [][]string `yaml:"cmd,omitempty"`
 	IsStar      bool
 }
 
@@ -101,9 +102,20 @@ var ghCmd = &cobra.Command{
 			name := repo.FullName()
 
 			if repo.Qs != nil {
-				name = name + " ⭐️"
 				qx := addMarkdownListFormat(repo.Qs)
-				des = fmt.Sprintf("%s \n --- \n \n%s", repo.Description, qx)
+				des += fmt.Sprintf("--- \n \n%s", qx)
+			}
+			if repo.Cmd != nil {
+				var cmds []string
+				for _, cmd := range repo.Cmd {
+					if len(cmd) > 1 {
+						cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
+					} else {
+						cmds = append(cmds, cmd[0])
+					}
+				}
+				qx := addMarkdownListFormat(cmds)
+				des += fmt.Sprintf("--- \n \n%s", qx)
 			}
 
 			item := wf.NewItem(name).Title(name).
@@ -113,7 +125,7 @@ var ghCmd = &cobra.Command{
 				Valid(true).
 				Autocomplete(name)
 
-			if repo.IsStar {
+			if repo.Qs != nil || repo.Cmd != nil {
 				item.Icon(&aw.Icon{Value: "icons/check.svg"})
 			} else {
 				item.Icon(&aw.Icon{Value: "icons/repo.png"})
