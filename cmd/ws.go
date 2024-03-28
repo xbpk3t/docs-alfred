@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os/exec"
 
 	"github.com/91go/docs-alfred/pkg"
@@ -22,17 +23,19 @@ var wsCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		webstackURL := wf.Config.GetString("url")
-		if webstackURL != "" {
-			tks := pkg.SearchWebstack(wf.CacheDir()+"/ws.yml", args)
-			for _, ws := range tks {
-				wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"}).Copytext(ws.URL).Cmd().Subtitle("Press Enter to copy this url to clipboard")
-			}
+		wsFile := wf.Cache.Exists(cfgFile)
+		if !wsFile {
+			ErrorHandle(errors.New(cfgFile + " not exist"))
 		}
 
-		if len(args) > 0 {
-			wf.Filter(args[0])
+		tks := pkg.SearchWebstack(wf.CacheDir()+"/ws.yml", args)
+		for _, ws := range tks {
+			wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"}).Copytext(ws.URL).Cmd().Subtitle("Press Enter to copy this url to clipboard")
 		}
+
+		// if len(args) > 0 {
+		// 	wf.Filter(args[0])
+		// }
 
 		wf.SendFeedback()
 	},
