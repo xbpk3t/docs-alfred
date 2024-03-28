@@ -19,11 +19,60 @@
 				<false/>
 			</dict>
 		</array>
+		<key>526CF41F-8FC3-49B8-85F8-BDE912B219B5</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>E90320D8-B030-405D-A597-184E2218A0BA</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
 		<key>5EE9F4A7-AC17-4312-80DB-F35F446B5E08</key>
 		<array>
 			<dict>
 				<key>destinationuid</key>
 				<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>AF79B5DA-CE94-4584-8A55-627B62996B65</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>064939EF-FE9A-49CA-9041-4DCD57DC2561</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>E90320D8-B030-405D-A597-184E2218A0BA</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
+				<key>modifiers</key>
+				<integer>1048576</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>064939EF-FE9A-49CA-9041-4DCD57DC2561</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -174,6 +223,146 @@
 			<key>version</key>
 			<integer>3</integer>
 		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>browser</key>
+				<string></string>
+				<key>skipqueryencode</key>
+				<false/>
+				<key>skipvarencode</key>
+				<false/>
+				<key>spaces</key>
+				<string></string>
+				<key>url</key>
+				<string></string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.openurl</string>
+			<key>uid</key>
+			<string>064939EF-FE9A-49CA-9041-4DCD57DC2561</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<false/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>{var:gh}</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string></string>
+				<key>script</key>
+				<string>./exe gh $1 --config=gh.yml</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string></string>
+				<key>type</key>
+				<integer>0</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>E90320D8-B030-405D-A597-184E2218A0BA</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>acceptsfiles</key>
+				<false/>
+				<key>acceptsmulti</key>
+				<integer>0</integer>
+				<key>acceptstext</key>
+				<true/>
+				<key>acceptsurls</key>
+				<false/>
+				<key>name</key>
+				<string>Search Github</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.universalaction</string>
+			<key>uid</key>
+			<string>526CF41F-8FC3-49B8-85F8-BDE912B219B5</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<false/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>{var:ch}</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string></string>
+				<key>script</key>
+				<string>./exe repo $1 $2</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string></string>
+				<key>type</key>
+				<integer>0</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>AF79B5DA-CE94-4584-8A55-627B62996B65</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
 	</array>
 	<key>readme</key>
 	<string></string>
@@ -184,25 +373,57 @@
 			<key>note</key>
 			<string>github.com</string>
 			<key>xpos</key>
-			<real>295</real>
+			<real>350</real>
 			<key>ypos</key>
-			<real>275</real>
+			<real>175</real>
 		</dict>
 		<key>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</key>
 		<dict>
 			<key>xpos</key>
-			<real>685</real>
+			<real>750</real>
 			<key>ypos</key>
-			<real>110</real>
+			<real>15</real>
+		</dict>
+		<key>064939EF-FE9A-49CA-9041-4DCD57DC2561</key>
+		<dict>
+			<key>xpos</key>
+			<real>780</real>
+			<key>ypos</key>
+			<real>210</real>
+		</dict>
+		<key>526CF41F-8FC3-49B8-85F8-BDE912B219B5</key>
+		<dict>
+			<key>xpos</key>
+			<real>90</real>
+			<key>ypos</key>
+			<real>335</real>
 		</dict>
 		<key>5EE9F4A7-AC17-4312-80DB-F35F446B5E08</key>
 		<dict>
 			<key>note</key>
 			<string>github.com</string>
 			<key>xpos</key>
-			<real>285</real>
+			<real>350</real>
 			<key>ypos</key>
-			<real>110</real>
+			<real>20</real>
+		</dict>
+		<key>AF79B5DA-CE94-4584-8A55-627B62996B65</key>
+		<dict>
+			<key>note</key>
+			<string>github.com</string>
+			<key>xpos</key>
+			<real>355</real>
+			<key>ypos</key>
+			<real>500</real>
+		</dict>
+		<key>E90320D8-B030-405D-A597-184E2218A0BA</key>
+		<dict>
+			<key>note</key>
+			<string>github.com</string>
+			<key>xpos</key>
+			<real>355</real>
+			<key>ypos</key>
+			<real>330</real>
 		</dict>
 	</dict>
 	<key>userconfigurationconfig</key>
@@ -269,6 +490,48 @@
 			<string>textfield</string>
 			<key>variable</key>
 			<string>url</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>gh</string>
+				<key>placeholder</key>
+				<string></string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string></string>
+			<key>label</key>
+			<string></string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>gh</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>ch</string>
+				<key>placeholder</key>
+				<string></string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string></string>
+			<key>label</key>
+			<string></string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>ch</string>
 		</dict>
 	</array>
 	<key>version</key>
