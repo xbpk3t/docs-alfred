@@ -1,4 +1,4 @@
-package pkg
+package ws
 
 import (
 	"fmt"

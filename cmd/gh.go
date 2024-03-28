@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	gh "github.com/91go/docs-alfred/pkg/gh"
+	"github.com/google/go-github/v56/github"
+
 	"gopkg.in/yaml.v3"
 
 	aw "github.com/deanishe/awgo"
@@ -47,6 +50,14 @@ var ghCmd = &cobra.Command{
 	Example: "icons/repo.png",
 	PostRun: func(cmd *cobra.Command, args []string) {
 		if !wf.IsRunning(syncJob) {
+			token := wf.Config.GetString("gh-token")
+			if _, err := UpdateRepositories(token); err != nil {
+				// wf.NewWarningItem("Sync Failed.", err.Error()).Valid(false).Title("Sync Failed.")
+				// wf.SendFeedback()
+				// slog.Error("Sync Failed.", slog.Any("err", err))
+				ErrorHandle(err)
+			}
+
 			cmd := exec.Command("./exe", syncJob, "--config=gh.yml")
 			if err := wf.RunInBackground(syncJob, cmd); err != nil {
 				ErrorHandle(err)
@@ -54,10 +65,10 @@ var ghCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		// repos, err := ListRepositories()
-		// if err != nil {
-		// 	wf.FatalError(err)
-		// }
+		repos, err := ListRepositories()
+		if err != nil {
+			wf.FatalError(err)
+		}
 
 		var ghs []Repository
 		if wf.Cache.Exists(CustomRepo) {
@@ -94,12 +105,25 @@ var ghCmd = &cobra.Command{
 			}
 		}
 
-		// repos = append(ghs, repos...)
+		repos = append(ghs, repos...)
 
-		for _, repo := range removeDuplicates(ghs) {
+		for _, repo := range removeDuplicates(repos) {
 			url := repo.URL
 			des := repo.Description
 			name := repo.FullName()
+
+			// if repo.Qs != nil {
+			// 	name = name + " ⭐️"
+			// 	qx := addMarkdownListFormat(repo.Qs)
+			// 	des = fmt.Sprintf("%s \n --- \n \n%s", repo.Description, qx)
+			// }
+			//
+			// item := wf.NewItem(name).Title(name).
+			// 	Arg(url).
+			// 	Subtitle(des).
+			// 	Copytext(url).
+			// 	Valid(true).
+			// 	Autocomplete(name)
 
 			item := wf.NewItem(name).Title(name).
 				Arg(url).
@@ -126,7 +150,7 @@ var ghCmd = &cobra.Command{
 				des += fmt.Sprintf("--- \n \n%s", qx)
 			}
 
-			if repo.Qs != nil || repo.Cmd != nil {
+			if repo.IsStar {
 				item.Icon(&aw.Icon{Value: "icons/check.svg"})
 			} else {
 				item.Icon(&aw.Icon{Value: "icons/repo.png"})
@@ -159,39 +183,39 @@ func init() {
 }
 
 // Search from sqlite
-// func ListRepositories() ([]Repository, error) {
-// 	db, err := utils.OpenDB(wf.CacheDir() + "/repo.db")
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	rows, err := db.Query("SELECT id, url,description, name,user,updated_at FROM repository")
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	var repos []Repository
-//
-// 	for rows.Next() {
-// 		var id, url, descr, name, user string
-// 		var updated time.Time
-// 		err = rows.Scan(&id, &url, &descr, &name, &user, &updated)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-//
-// 		repos = append(repos, Repository{
-// 			URL:         url,
-// 			Name:        name,
-// 			User:        user,
-// 			Description: descr,
-// 			LastUpdated: updated,
-// 			IsStar:      false,
-// 		})
-// 	}
-//
-// 	return repos, nil
-// }
+func ListRepositories() ([]Repository, error) {
+	db, err := gh.OpenDB(wf.CacheDir() + "/repo.db")
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.Query("SELECT id, url,description, name,user,updated_at FROM repository")
+	if err != nil {
+		return nil, err
+	}
+
+	var repos []Repository
+
+	for rows.Next() {
+		var id, url, descr, name, user string
+		var updated time.Time
+		err = rows.Scan(&id, &url, &descr, &name, &user, &updated)
+		if err != nil {
+			return nil, err
+		}
+
+		repos = append(repos, Repository{
+			URL:         url,
+			Name:        name,
+			User:        user,
+			Description: descr,
+			LastUpdated: updated,
+			IsStar:      false,
+		})
+	}
+
+	return repos, nil
+}
 
 func removeDuplicates(ts []Repository) []Repository {
 	uniqueValues := make(map[string]bool)
@@ -214,3 +238,98 @@ func removeDuplicates(ts []Repository) []Repository {
 // 	}
 // 	return builder.String()
 // }
+
+func UpdateRepositories(token string) (int64, error) {
+	// my repos
+	userRepos, err := gh.NewGithubClient(token).ListUserRepositories()
+	if err != nil {
+		return 0, err
+	}
+
+	// starred repos
+	starredRepos, err := gh.NewGithubClient(token).ListStarredRepositories()
+	if err != nil {
+		return 0, err
+	}
+
+	db, err := gh.OpenDB(wf.CacheDir() + "/repo.db")
+	if err != nil {
+		return 0, err
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, err
+	}
+
+	found := map[string]struct{}{}
+	counter := int64(0)
+
+	for _, repo := range append(userRepos, starredRepos...) {
+		log.Printf("Updating %s/%s", *repo.Owner.Login, *repo.Name)
+
+		name := fmt.Sprintf("%s/%s", *repo.Owner.Login, *repo.Name)
+		res, err := db.Exec(
+			`INSERT OR REPLACE INTO repository (
+					id,
+					url,
+					description,
+					name, user,
+					pushed_at,
+					updated_at,
+					created_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			name,
+			nilableString(repo.HTMLURL),
+			nilableString(repo.Description),
+			*repo.Name,
+			*repo.Owner.Login,
+			githubTime(repo.PushedAt),
+			githubTime(repo.UpdatedAt),
+			githubTime(repo.CreatedAt),
+		)
+		if err != nil {
+			return counter, err
+		}
+		found[name] = struct{}{}
+		rows, _ := res.RowsAffected()
+		counter += rows
+	}
+
+	existing, err := ListRepositories()
+	if err != nil {
+		return 0, err
+	}
+
+	// purge repos that don't exit any more
+	for _, repo := range existing {
+		if _, exists := found[repo.FullName()]; !exists {
+			log.Printf("Repo %s doesn't exist, deleting", repo.FullName())
+
+			_, err := db.Exec(
+				`DELETE FROM repository WHERE id=?`,
+				repo.FullName(),
+			)
+			if err != nil {
+				return 0, err
+			}
+
+		}
+	}
+
+	return counter, tx.Commit()
+}
+
+func nilableString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func githubTime(t *github.Timestamp) *time.Time {
+	if t == nil {
+		return nil
+	}
+	return &t.Time
+}
