@@ -1,7 +1,10 @@
 package cmd
 
 import (
-	"fmt"
+	"os/exec"
+
+	"github.com/91go/docs-alfred/pkg"
+	aw "github.com/deanishe/awgo"
 
 	"github.com/spf13/cobra"
 )
@@ -10,14 +13,28 @@ import (
 var wsCmd = &cobra.Command{
 	Use:   "ws",
 	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	PostRun: func(cmd *cobra.Command, args []string) {
+		if !wf.IsRunning(syncJob) {
+			cmd := exec.Command("./exe", syncJob, "--config=ws.yml")
+			if err := wf.RunInBackground(syncJob, cmd); err != nil {
+				ErrorHandle(err)
+			}
+		}
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("ws called")
+		webstackURL := wf.Config.GetString("url")
+		if webstackURL != "" {
+			tks := pkg.SearchWebstack(wf.CacheDir()+"/ws.yml", args)
+			for _, ws := range tks {
+				wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"}).Copytext(ws.URL).Cmd().Subtitle("Press Enter to copy this url to clipboard")
+			}
+		}
+
+		if len(args) > 0 {
+			wf.Filter(args[0])
+		}
+
+		wf.SendFeedback()
 	},
 }
 

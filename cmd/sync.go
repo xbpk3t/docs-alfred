@@ -32,8 +32,7 @@ var syncCmd = &cobra.Command{
 			}
 		}
 
-		wf.NewItem("Sync Repos Successfully.").Title("Sync Repos Successfully.").Valid(false)
-		wf.SendFeedback()
+		slog.Info("Sync Repos Successfully.")
 	},
 }
 
