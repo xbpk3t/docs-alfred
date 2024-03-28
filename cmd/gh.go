@@ -50,14 +50,6 @@ var ghCmd = &cobra.Command{
 	Example: "icons/repo.png",
 	PostRun: func(cmd *cobra.Command, args []string) {
 		if !wf.IsRunning(syncJob) {
-			token := wf.Config.GetString("gh-token")
-			if _, err := UpdateRepositories(token); err != nil {
-				// wf.NewWarningItem("Sync Failed.", err.Error()).Valid(false).Title("Sync Failed.")
-				// wf.SendFeedback()
-				// slog.Error("Sync Failed.", slog.Any("err", err))
-				ErrorHandle(err)
-			}
-
 			cmd := exec.Command("./exe", syncJob, "--config=gh.yml")
 			if err := wf.RunInBackground(syncJob, cmd); err != nil {
 				ErrorHandle(err)
@@ -110,58 +102,47 @@ var ghCmd = &cobra.Command{
 		for _, repo := range removeDuplicates(repos) {
 			url := repo.URL
 			des := repo.Description
+			remark := repo.Description
 			name := repo.FullName()
+			var iconPath string
 
-			// if repo.Qs != nil {
-			// 	name = name + " ⭐️"
-			// 	qx := addMarkdownListFormat(repo.Qs)
-			// 	des = fmt.Sprintf("%s \n --- \n \n%s", repo.Description, qx)
-			// }
-			//
-			// item := wf.NewItem(name).Title(name).
-			// 	Arg(url).
-			// 	Subtitle(des).
-			// 	Copytext(url).
-			// 	Valid(true).
-			// 	Autocomplete(name)
+			switch {
+			case repo.Qs != nil:
+				qx := addMarkdownListFormat(repo.Qs)
+				remark += fmt.Sprintf("--- \n \n%s", qx)
+				iconPath = "icons/star.svg"
+			case repo.Cmd != nil:
+				var cmds []string
+				for _, cmd := range repo.Cmd {
+					if len(cmd) > 1 {
+						cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
+					} else {
+						cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
+					}
+				}
+				qx := addMarkdownListFormat(cmds)
+				remark += fmt.Sprintf("--- \n \n%s", qx)
+				iconPath = "icons/star.svg"
+			case repo.Qs == nil || repo.Cmd == nil:
+				if repo.IsStar {
+					iconPath = "icons/check.svg"
+				} else {
+					iconPath = "icons/repo.svg"
+				}
+			}
 
 			item := wf.NewItem(name).Title(name).
 				Arg(url).
 				Subtitle(des).
 				Copytext(url).
 				Valid(true).
-				Autocomplete(name)
+				Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
 
-			if repo.Qs != nil {
-				qx := addMarkdownListFormat(repo.Qs)
-				des += fmt.Sprintf("--- \n \n%s", qx)
-			}
-
-			if repo.Cmd != nil {
-				var cmds []string
-				for _, cmd := range repo.Cmd {
-					if len(cmd) > 1 {
-						cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
-					} else {
-						cmds = append(cmds, cmd[0])
-					}
-				}
-				qx := addMarkdownListFormat(cmds)
-				des += fmt.Sprintf("--- \n \n%s", qx)
-			}
-
-			if repo.IsStar {
-				item.Icon(&aw.Icon{Value: "icons/check.svg"})
-			} else {
-				item.Icon(&aw.Icon{Value: "icons/repo.png"})
-			}
-
-			item.Cmd().Subtitle("Preview Description in Markdown Format").Arg(des)
+			item.Cmd().Subtitle("Preview Description in Markdown Format").Arg(remark)
 		}
 
 		if len(args) > 0 {
 			wf.Filter(args[0])
-			// wf.Feedback.Filter(args[0], fuzzy.Sorter{})
 		}
 
 		wf.NewItem("Search Github").
