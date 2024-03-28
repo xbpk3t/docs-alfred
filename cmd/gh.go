@@ -101,10 +101,18 @@ var ghCmd = &cobra.Command{
 			des := repo.Description
 			name := repo.FullName()
 
+			item := wf.NewItem(name).Title(name).
+				Arg(url).
+				Subtitle(des).
+				Copytext(url).
+				Valid(true).
+				Autocomplete(name)
+
 			if repo.Qs != nil {
 				qx := addMarkdownListFormat(repo.Qs)
 				des += fmt.Sprintf("--- \n \n%s", qx)
 			}
+
 			if repo.Cmd != nil {
 				var cmds []string
 				for _, cmd := range repo.Cmd {
@@ -117,13 +125,6 @@ var ghCmd = &cobra.Command{
 				qx := addMarkdownListFormat(cmds)
 				des += fmt.Sprintf("--- \n \n%s", qx)
 			}
-
-			item := wf.NewItem(name).Title(name).
-				Arg(url).
-				Subtitle(des).
-				Copytext(url).
-				Valid(true).
-				Autocomplete(name)
 
 			if repo.Qs != nil || repo.Cmd != nil {
 				item.Icon(&aw.Icon{Value: "icons/check.svg"})
