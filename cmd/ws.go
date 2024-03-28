@@ -4,7 +4,8 @@ import (
 	"errors"
 	"os/exec"
 
-	"github.com/91go/docs-alfred/pkg"
+	"github.com/91go/docs-alfred/pkg/ws"
+
 	aw "github.com/deanishe/awgo"
 
 	"github.com/spf13/cobra"
@@ -28,7 +29,7 @@ var wsCmd = &cobra.Command{
 			ErrorHandle(errors.New(cfgFile + " not exist"))
 		}
 
-		tks := pkg.SearchWebstack(wf.CacheDir()+"/ws.yml", args)
+		tks := ws.SearchWebstack(wf.CacheDir()+"/ws.yml", args)
 		for _, ws := range tks {
 			wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"}).Copytext(ws.URL).Cmd().Subtitle("Press Enter to copy this url to clipboard")
 		}
