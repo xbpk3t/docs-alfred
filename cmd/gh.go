@@ -8,12 +8,9 @@ import (
 	"log"
 	"os/exec"
 	"strings"
-	"time"
 
+	"github.com/91go/docs-alfred/pkg/gh"
 	"gopkg.in/yaml.v3"
-
-	gh "github.com/91go/docs-alfred/pkg/gh"
-	"github.com/google/go-github/v56/github"
 
 	aw "github.com/deanishe/awgo"
 
@@ -33,21 +30,6 @@ const (
 	FaStar     = "icons/star.svg"
 )
 
-type Repository struct {
-	LastUpdated time.Time
-	URL         string `yaml:"url"`
-	Name        string
-	User        string
-	Description string     `yaml:"des,omitempty"`
-	Qs          []string   `yaml:"qs"`
-	Cmd         [][]string `yaml:"cmd,omitempty"`
-	IsStar      bool
-}
-
-func (r Repository) FullName() string {
-	return fmt.Sprintf("%s/%s", r.User, r.Name)
-}
-
 // ghCmd represents the repo command
 var ghCmd = &cobra.Command{
 	Use:   "gh",
@@ -61,12 +43,12 @@ var ghCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		repos, err := ListRepositories()
+		repos, err := gh.NewRepos().ListRepositories(wf.CacheDir() + "/repo.db")
 		if err != nil {
 			wf.FatalError(err)
 		}
 
-		var ghs []Repository
+		var ghs []gh.Repository
 		if wf.Cache.Exists(CustomRepo) {
 
 			f, err := wf.Cache.Load(CustomRepo)
@@ -77,7 +59,7 @@ var ghCmd = &cobra.Command{
 			d := yaml.NewDecoder(bytes.NewReader(f))
 			for {
 				// create new spec here
-				spec := new([]Repository)
+				spec := new([]gh.Repository)
 				// pass a reference to spec reference
 				if err := d.Decode(&spec); err != nil {
 					// break the loop in case of EOF
@@ -103,7 +85,7 @@ var ghCmd = &cobra.Command{
 
 		repos = append(ghs, repos...)
 
-		for _, repo := range removeDuplicates(repos) {
+		for _, repo := range repos.RemoveDuplicates() {
 			url := repo.URL
 			des := repo.Description
 			remark := repo.Description
@@ -165,156 +147,4 @@ var ghCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(ghCmd)
-}
-
-// Search from sqlite
-func ListRepositories() ([]Repository, error) {
-	db, err := gh.OpenDB(wf.CacheDir() + "/repo.db")
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := db.Query("SELECT id, url,description, name,user,updated_at FROM repository")
-	if err != nil {
-		return nil, err
-	}
-
-	var repos []Repository
-
-	for rows.Next() {
-		var id, url, descr, name, user string
-		var updated time.Time
-		err = rows.Scan(&id, &url, &descr, &name, &user, &updated)
-		if err != nil {
-			return nil, err
-		}
-
-		repos = append(repos, Repository{
-			URL:         url,
-			Name:        name,
-			User:        user,
-			Description: descr,
-			LastUpdated: updated,
-			IsStar:      false,
-		})
-	}
-
-	return repos, nil
-}
-
-func removeDuplicates(ts []Repository) []Repository {
-	uniqueValues := make(map[string]bool)
-	result := make([]Repository, 0)
-
-	for _, t := range ts {
-		if !uniqueValues[t.URL] {
-			uniqueValues[t.URL] = true
-			result = append(result, t)
-		}
-	}
-
-	return result
-}
-
-// func addMarkdownListFormat(str []string) string {
-// 	var builder strings.Builder
-// 	for _, str := range str {
-// 		builder.WriteString(fmt.Sprintf("- %s\n", str))
-// 	}
-// 	return builder.String()
-// }
-
-func UpdateRepositories(token string) (int64, error) {
-	// my repos
-	userRepos, err := gh.NewGithubClient(token).ListUserRepositories()
-	if err != nil {
-		return 0, err
-	}
-
-	// starred repos
-	starredRepos, err := gh.NewGithubClient(token).ListStarredRepositories()
-	if err != nil {
-		return 0, err
-	}
-
-	db, err := gh.OpenDB(wf.CacheDir() + "/repo.db")
-	if err != nil {
-		return 0, err
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		return 0, err
-	}
-
-	found := map[string]struct{}{}
-	counter := int64(0)
-
-	for _, repo := range append(userRepos, starredRepos...) {
-		log.Printf("Updating %s/%s", *repo.Owner.Login, *repo.Name)
-
-		name := fmt.Sprintf("%s/%s", *repo.Owner.Login, *repo.Name)
-		res, err := db.Exec(
-			`INSERT OR REPLACE INTO repository (
-					id,
-					url,
-					description,
-					name, user,
-					pushed_at,
-					updated_at,
-					created_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			name,
-			nilableString(repo.HTMLURL),
-			nilableString(repo.Description),
-			*repo.Name,
-			*repo.Owner.Login,
-			githubTime(repo.PushedAt),
-			githubTime(repo.UpdatedAt),
-			githubTime(repo.CreatedAt),
-		)
-		if err != nil {
-			return counter, err
-		}
-		found[name] = struct{}{}
-		rows, _ := res.RowsAffected()
-		counter += rows
-	}
-
-	existing, err := ListRepositories()
-	if err != nil {
-		return 0, err
-	}
-
-	// purge repos that don't exit any more
-	for _, repo := range existing {
-		if _, exists := found[repo.FullName()]; !exists {
-			log.Printf("Repo %s doesn't exist, deleting", repo.FullName())
-
-			_, err := db.Exec(
-				`DELETE FROM repository WHERE id=?`,
-				repo.FullName(),
-			)
-			if err != nil {
-				return 0, err
-			}
-
-		}
-	}
-
-	return counter, tx.Commit()
-}
-
-func nilableString(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
-func githubTime(t *github.Timestamp) *time.Time {
-	if t == nil {
-		return nil
-	}
-	return &t.Time
 }

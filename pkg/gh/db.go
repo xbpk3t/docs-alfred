@@ -1,4 +1,4 @@
-package utils
+package gh
 
 import (
 	"database/sql"
