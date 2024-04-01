@@ -10,10 +10,10 @@ import (
 
 type ConfigGoods []struct {
 	Type  string   `yaml:"type"`
-	Tag   string   `yaml:"tag"`
-	Goods Goods    `yaml:"goods"`
-	Des   string   `yaml:"des"`
-	Qs    []string `yaml:"qs"`
+	Tag   string   `yaml:"tag,omitempty"`
+	Goods Goods    `yaml:"goods,omitempty"`
+	Des   string   `yaml:"des,omitempty"`
+	Qs    []string `yaml:"qs,omitempty"`
 }
 
 type Goods []struct {

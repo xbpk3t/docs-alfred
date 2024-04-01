@@ -23,16 +23,44 @@ var goodsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var gd goods.ConfigGoods
 		if wf.Cache.Exists(cfgFile) {
-
 			f, err := wf.Cache.Load(cfgFile)
 			if err != nil {
 				return
 			}
 			gd = goods.NewConfigGoods(f)
 		}
-
 		for _, s := range gd {
-			wf.NewItem(s.Type).Title(s.Type).Subtitle("#" + s.Tag).Valid(false).Arg(s.Des)
+
+			des := s.Des
+			remark := s.Des
+			if s.Goods != nil {
+
+				// var data [][]string
+				// for _, g := range s.Goods {
+				// 	data = append(data, []string{g.Name, g.Param, g.Price, g.Des})
+				// }
+
+				// tableString := &strings.Builder{}
+				// table := tablewriter.NewWriter(tableString)
+				// table.SetHeader([]string{"Name", "Param", "Price", "Des"})
+				// table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+				// table.SetCenterSeparator("|")
+				// table.AppendBulk(data) // Add Bulk Data
+				// table.Render()
+				//
+				// remark += fmt.Sprintf("\n\n --- \n \n%s", tableString)
+
+				var data []string
+				for _, g := range s.Goods {
+					data = append(data, fmt.Sprintf("%s[%s]%s: %s", g.Name, g.Param, g.Price, g.Des))
+				}
+				remark += fmt.Sprintf("\n\n --- \n \n%s", addMarkdownListFormat(data))
+			}
+			if s.Qs != nil {
+				qx := addMarkdownListFormat(s.Qs)
+				remark += fmt.Sprintf("\n\n --- \n \n%s", qx)
+			}
+			wf.NewItem(s.Type).Title(s.Type).Subtitle(fmt.Sprintf("[#%s] %s", s.Tag, des)).Valid(true).Arg(remark)
 		}
 
 		if len(args) > 0 {
