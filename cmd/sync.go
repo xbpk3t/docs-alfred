@@ -34,13 +34,13 @@ var syncCmd = &cobra.Command{
 
 		switch cfgFile {
 		case "gh.yml":
-			token := wf.Config.GetString("gh_token")
-			if _, err := UpdateRepositories(token); err != nil {
-				// wf.NewWarningItem("Sync Failed.", err.Error()).Valid(false).Title("Sync Failed.")
-				// wf.SendFeedback()
-				// slog.Error("Sync Failed.", slog.Any("err", err))
-				ErrorHandle(err)
-			}
+			// token := wf.Config.GetString("gh_token")
+			// if _, err := UpdateRepositories(token); err != nil {
+			// 	// wf.NewWarningItem("Sync Failed.", err.Error()).Valid(false).Title("Sync Failed.")
+			// 	// wf.SendFeedback()
+			// 	// slog.Error("Sync Failed.", slog.Any("err", err))
+			// 	ErrorHandle(err)
+			// }
 		default:
 
 		}
