@@ -18,7 +18,7 @@ var wsCmd = &cobra.Command{
 	Short: "A brief description of your command",
 	PostRun: func(cmd *cobra.Command, args []string) {
 		if !wf.IsRunning(syncJob) {
-			cmd := exec.Command("./exe", syncJob, fmt.Sprintf("--config=%s", ConfigWs))
+			cmd := exec.Command("./exe", syncJob, fmt.Sprintf("--config=%s", cfgFile))
 			if err := wf.RunInBackground(syncJob, cmd); err != nil {
 				ErrorHandle(err)
 			}
@@ -30,7 +30,7 @@ var wsCmd = &cobra.Command{
 			ErrorHandle(errors.New(cfgFile + " not exist"))
 		}
 
-		CacheWs := wf.CacheDir() + "/" + ConfigWs
+		CacheWs := wf.CacheDir() + "/" + cfgFile
 		tks := ws.SearchWebstack(CacheWs, args)
 		for _, ws := range tks {
 			wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"}).Copytext(ws.URL).Cmd().Subtitle("Press Enter to copy this url to clipboard")
