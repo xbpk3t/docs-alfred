@@ -30,7 +30,7 @@ var ghCmd = &cobra.Command{
 	Short: "Searching from starred repositories and my repositories",
 	PostRun: func(cmd *cobra.Command, args []string) {
 		if !wf.IsRunning(syncJob) {
-			cmd := exec.Command("./exe", syncJob, "--config=gh.yml")
+			cmd := exec.Command("./exe", syncJob, fmt.Sprintf("--config=%s", cfgFile))
 			if err := wf.RunInBackground(syncJob, cmd); err != nil {
 				ErrorHandle(err)
 			}

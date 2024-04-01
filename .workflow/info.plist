@@ -19,6 +19,19 @@
 				<false/>
 			</dict>
 		</array>
+		<key>04430665-DD6B-4196-B3E6-7E777629B626</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
 		<key>526CF41F-8FC3-49B8-85F8-BDE912B219B5</key>
 		<array>
 			<dict>
@@ -171,6 +184,55 @@
 			<string>alfred.workflow.input.scriptfilter</string>
 			<key>uid</key>
 			<string>5EE9F4A7-AC17-4312-80DB-F35F446B5E08</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<false/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>{var:goods}</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string></string>
+				<key>script</key>
+				<string>./exe goods $1 --config=goods.yml</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string></string>
+				<key>type</key>
+				<integer>0</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>04430665-DD6B-4196-B3E6-7E777629B626</string>
 			<key>version</key>
 			<integer>3</integer>
 		</dict>
@@ -373,9 +435,18 @@
 			<key>note</key>
 			<string>github.com</string>
 			<key>xpos</key>
-			<real>350</real>
+			<real>220</real>
 			<key>ypos</key>
-			<real>175</real>
+			<real>180</real>
+		</dict>
+		<key>04430665-DD6B-4196-B3E6-7E777629B626</key>
+		<dict>
+			<key>note</key>
+			<string>github.com</string>
+			<key>xpos</key>
+			<real>70</real>
+			<key>ypos</key>
+			<real>105</real>
 		</dict>
 		<key>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</key>
 		<dict>
@@ -403,9 +474,9 @@
 			<key>note</key>
 			<string>github.com</string>
 			<key>xpos</key>
-			<real>350</real>
+			<real>255</real>
 			<key>ypos</key>
-			<real>20</real>
+			<real>15</real>
 		</dict>
 		<key>AF79B5DA-CE94-4584-8A55-627B62996B65</key>
 		<dict>
@@ -553,6 +624,27 @@
 			<string>textfield</string>
 			<key>variable</key>
 			<string>gh_token</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>goods</string>
+				<key>placeholder</key>
+				<string></string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string></string>
+			<key>label</key>
+			<string></string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>goods</string>
 		</dict>
 	</array>
 	<key>version</key>
