@@ -12,16 +12,13 @@ import (
 )
 
 const (
-	ConfigGh    = "gh.yml"
-	ConfigWs    = "ws.yml"
-	ConfigGoods = "goods.yml"
-	GistSearch  = "https://gist.github.com/search?q=%s"
-	RepoSearch  = "https://github.com/search?q=%s&type=repositories"
-	FaCheck     = "icons/check.svg"
-	FaGists     = "icons/gists.png"
-	FaRepo      = "icons/repo.png"
-	FaSearch    = "icons/search.svg"
-	FaStar      = "icons/star.svg"
+	GistSearch = "https://gist.github.com/search?q=%s"
+	RepoSearch = "https://github.com/search?q=%s&type=repositories"
+	FaCheck    = "icons/check.svg"
+	FaGists    = "icons/gists.png"
+	FaRepo     = "icons/repo.png"
+	FaSearch   = "icons/search.svg"
+	FaStar     = "icons/star.svg"
 )
 
 // ghCmd represents the repo command
@@ -44,9 +41,9 @@ var ghCmd = &cobra.Command{
 		}
 
 		var ghs []gh.Repository
-		if wf.Cache.Exists(ConfigGh) {
+		if wf.Cache.Exists(cfgFile) {
 
-			f, err := wf.Cache.Load(ConfigGh)
+			f, err := wf.Cache.Load(cfgFile)
 			if err != nil {
 				return
 			}

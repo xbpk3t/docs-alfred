@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/91go/docs-alfred/pkg/gh"
+
 	"github.com/spf13/cobra"
 )
 
@@ -34,13 +36,14 @@ var syncCmd = &cobra.Command{
 
 		switch cfgFile {
 		case "gh.yml":
-			// token := wf.Config.GetString("gh_token")
-			// if _, err := UpdateRepositories(token); err != nil {
-			// 	// wf.NewWarningItem("Sync Failed.", err.Error()).Valid(false).Title("Sync Failed.")
-			// 	// wf.SendFeedback()
-			// 	// slog.Error("Sync Failed.", slog.Any("err", err))
-			// 	ErrorHandle(err)
-			// }
+			token := wf.Config.GetString("gh_token")
+			gh := gh.NewRepos()
+			if _, err := gh.UpdateRepositories(token, wf.CacheDir()+"/repo.db"); err != nil {
+				// wf.NewWarningItem("Sync Failed.", err.Error()).Valid(false).Title("Sync Failed.")
+				// wf.SendFeedback()
+				// slog.Error("Sync Failed.", slog.Any("err", err))
+				ErrorHandle(err)
+			}
 		default:
 
 		}

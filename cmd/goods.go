@@ -22,9 +22,9 @@ var goodsCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var gd goods.ConfigGoods
-		if wf.Cache.Exists(ConfigGoods) {
+		if wf.Cache.Exists(cfgFile) {
 
-			f, err := wf.Cache.Load(ConfigGoods)
+			f, err := wf.Cache.Load(cfgFile)
 			if err != nil {
 				return
 			}
