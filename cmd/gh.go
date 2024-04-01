@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	gh "github.com/91go/docs-alfred/pkg/gh"
 	"github.com/google/go-github/v56/github"
-
-	"gopkg.in/yaml.v3"
 
 	aw "github.com/deanishe/awgo"
 
@@ -26,6 +26,11 @@ const (
 	GhURL      = "https://github.com/"
 	GistSearch = "https://gist.github.com/search?q=%s"
 	RepoSearch = "https://github.com/search?q=%s&type=repositories"
+	FaCheck    = "icons/check.svg"
+	FaGists    = "icons/gists.png"
+	FaRepo     = "icons/repo.png"
+	FaSearch   = "icons/search.svg"
+	FaStar     = "icons/star.svg"
 )
 
 type Repository struct {
@@ -45,9 +50,8 @@ func (r Repository) FullName() string {
 
 // ghCmd represents the repo command
 var ghCmd = &cobra.Command{
-	Use:     "gh",
-	Short:   "Searching from starred repositories and my repositories",
-	Example: "icons/repo.png",
+	Use:   "gh",
+	Short: "Searching from starred repositories and my repositories",
 	PostRun: func(cmd *cobra.Command, args []string) {
 		if !wf.IsRunning(syncJob) {
 			cmd := exec.Command("./exe", syncJob, "--config=gh.yml")
@@ -110,7 +114,7 @@ var ghCmd = &cobra.Command{
 			case repo.Qs != nil:
 				qx := addMarkdownListFormat(repo.Qs)
 				remark += fmt.Sprintf("--- \n \n%s", qx)
-				iconPath = "icons/star.svg"
+				iconPath = FaStar
 			case repo.Cmd != nil:
 				var cmds []string
 				for _, cmd := range repo.Cmd {
@@ -122,12 +126,12 @@ var ghCmd = &cobra.Command{
 				}
 				qx := addMarkdownListFormat(cmds)
 				remark += fmt.Sprintf("--- \n \n%s", qx)
-				iconPath = "icons/star.svg"
+				iconPath = FaStar
 			case repo.Qs == nil || repo.Cmd == nil:
 				if repo.IsStar {
-					iconPath = "icons/check.svg"
+					iconPath = FaCheck
 				} else {
-					iconPath = "icons/repo.svg"
+					iconPath = FaRepo
 				}
 			}
 
@@ -148,12 +152,12 @@ var ghCmd = &cobra.Command{
 		wf.NewItem("Search Github").
 			Arg(fmt.Sprintf(RepoSearch, strings.Join(args, "+"))).
 			Valid(true).
-			Icon(&aw.Icon{Value: "icons/search.svg"}).
+			Icon(&aw.Icon{Value: FaSearch}).
 			Title(fmt.Sprintf("Search Github For '%s'", strings.Join(args, " ")))
 		wf.NewItem("Search Gist").
 			Arg(fmt.Sprintf(GistSearch, strings.Join(args, "+"))).
 			Valid(true).
-			Icon(&aw.Icon{Value: "icons/gists.png"}).
+			Icon(&aw.Icon{Value: FaGists}).
 			Title(fmt.Sprintf("Search Gist For '%s'", strings.Join(args, " ")))
 		wf.SendFeedback()
 	},

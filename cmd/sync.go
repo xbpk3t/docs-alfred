@@ -34,7 +34,7 @@ var syncCmd = &cobra.Command{
 
 		switch cfgFile {
 		case "gh.yml":
-			token := wf.Config.GetString("gh-token")
+			token := wf.Config.GetString("gh_token")
 			if _, err := UpdateRepositories(token); err != nil {
 				// wf.NewWarningItem("Sync Failed.", err.Error()).Valid(false).Title("Sync Failed.")
 				// wf.SendFeedback()
