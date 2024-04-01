@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 
 	"github.com/91go/docs-alfred/pkg/ws"
@@ -17,7 +18,7 @@ var wsCmd = &cobra.Command{
 	Short: "A brief description of your command",
 	PostRun: func(cmd *cobra.Command, args []string) {
 		if !wf.IsRunning(syncJob) {
-			cmd := exec.Command("./exe", syncJob, "--config=ws.yml")
+			cmd := exec.Command("./exe", syncJob, fmt.Sprintf("--config=%s", ConfigWs))
 			if err := wf.RunInBackground(syncJob, cmd); err != nil {
 				ErrorHandle(err)
 			}
@@ -29,7 +30,8 @@ var wsCmd = &cobra.Command{
 			ErrorHandle(errors.New(cfgFile + " not exist"))
 		}
 
-		tks := ws.SearchWebstack(wf.CacheDir()+"/ws.yml", args)
+		CacheWs := wf.CacheDir() + "/" + ConfigWs
+		tks := ws.SearchWebstack(CacheWs, args)
 		for _, ws := range tks {
 			wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"}).Copytext(ws.URL).Cmd().Subtitle("Press Enter to copy this url to clipboard")
 		}

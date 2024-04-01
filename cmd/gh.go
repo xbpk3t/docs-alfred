@@ -1,33 +1,27 @@
 package cmd
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"io"
-	"log"
 	"os/exec"
 	"strings"
 
 	"github.com/91go/docs-alfred/pkg/gh"
-	"gopkg.in/yaml.v3"
-
 	aw "github.com/deanishe/awgo"
 
 	"github.com/spf13/cobra"
 )
 
-const CustomRepo = "gh.yml"
-
 const (
-	GhURL      = "https://github.com/"
-	GistSearch = "https://gist.github.com/search?q=%s"
-	RepoSearch = "https://github.com/search?q=%s&type=repositories"
-	FaCheck    = "icons/check.svg"
-	FaGists    = "icons/gists.png"
-	FaRepo     = "icons/repo.png"
-	FaSearch   = "icons/search.svg"
-	FaStar     = "icons/star.svg"
+	ConfigGh    = "gh.yml"
+	ConfigWs    = "ws.yml"
+	ConfigGoods = "goods.yml"
+	GistSearch  = "https://gist.github.com/search?q=%s"
+	RepoSearch  = "https://github.com/search?q=%s&type=repositories"
+	FaCheck     = "icons/check.svg"
+	FaGists     = "icons/gists.png"
+	FaRepo      = "icons/repo.png"
+	FaSearch    = "icons/search.svg"
+	FaStar      = "icons/star.svg"
 )
 
 // ghCmd represents the repo command
@@ -43,52 +37,28 @@ var ghCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		repos, err := gh.NewRepos().ListRepositories(wf.CacheDir() + "/repo.db")
+		repos := gh.NewRepos()
+		err := repos.ListRepositories(wf.CacheDir() + "/repo.db")
 		if err != nil {
 			wf.FatalError(err)
 		}
 
 		var ghs []gh.Repository
-		if wf.Cache.Exists(CustomRepo) {
+		if wf.Cache.Exists(ConfigGh) {
 
-			f, err := wf.Cache.Load(CustomRepo)
+			f, err := wf.Cache.Load(ConfigGh)
 			if err != nil {
 				return
 			}
-
-			d := yaml.NewDecoder(bytes.NewReader(f))
-			for {
-				// create new spec here
-				spec := new([]gh.Repository)
-				// pass a reference to spec reference
-				if err := d.Decode(&spec); err != nil {
-					// break the loop in case of EOF
-					if errors.Is(err, io.EOF) {
-						break
-					}
-					panic(err)
-				}
-				ghs = append(ghs, *spec...)
-			}
-
-			for i, gh := range ghs {
-				if strings.Contains(gh.URL, GhURL) {
-					sx, _ := strings.CutPrefix(gh.URL, GhURL)
-					ghs[i].User = strings.Split(sx, "/")[0]
-					ghs[i].Name = strings.Split(sx, "/")[1]
-					ghs[i].IsStar = true
-				} else {
-					log.Printf("Invalid URL: %s", gh.URL)
-				}
-			}
+			ghs = gh.NewConfigRepos(f).ToRepos()
 		}
 
 		repos = append(ghs, repos...)
 
 		for _, repo := range repos.RemoveDuplicates() {
 			url := repo.URL
-			des := repo.Description
-			remark := repo.Description
+			des := repo.Des
+			remark := repo.Des
 			name := repo.FullName()
 			var iconPath string
 
