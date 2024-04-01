@@ -552,7 +552,7 @@
 			<key>type</key>
 			<string>textfield</string>
 			<key>variable</key>
-			<string>ghtoken</string>
+			<string>gh_token</string>
 		</dict>
 	</array>
 	<key>version</key>
