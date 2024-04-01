@@ -42,7 +42,6 @@ var ghCmd = &cobra.Command{
 
 		var ghs []gh.Repository
 		if wf.Cache.Exists(cfgFile) {
-
 			f, err := wf.Cache.Load(cfgFile)
 			if err != nil {
 				return
@@ -52,19 +51,45 @@ var ghCmd = &cobra.Command{
 
 		repos = append(ghs, repos...)
 
-		for _, repo := range repos.RemoveDuplicates() {
+		for _, repo := range repos {
 			url := repo.URL
 			des := repo.Des
 			remark := repo.Des
 			name := repo.FullName()
 			var iconPath string
 
-			switch {
-			case repo.Qs != nil:
+			// switch {
+			// case repo.Qs != nil:
+			// 	qx := addMarkdownListFormat(repo.Qs)
+			// 	remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
+			// 	iconPath = FaStar
+			// case repo.Cmd != nil:
+			// 	var cmds []string
+			// 	for _, cmd := range repo.Cmd {
+			// 		if len(cmd) > 1 {
+			// 			cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
+			// 		} else {
+			// 			cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
+			// 		}
+			// 	}
+			// 	qx := addMarkdownListFormat(cmds)
+			// 	remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
+			// 	iconPath = FaStar
+			// case repo.Qs == nil || repo.Cmd == nil:
+			// 	if repo.IsStar {
+			// 		iconPath = FaCheck
+			// 	} else {
+			// 		iconPath = FaRepo
+			// 	}
+			// }
+
+			if repo.Qs != nil {
 				qx := addMarkdownListFormat(repo.Qs)
-				remark += fmt.Sprintf("--- \n \n%s", qx)
+				remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
 				iconPath = FaStar
-			case repo.Cmd != nil:
+			}
+
+			if repo.Cmd != nil {
 				var cmds []string
 				for _, cmd := range repo.Cmd {
 					if len(cmd) > 1 {
@@ -74,9 +99,11 @@ var ghCmd = &cobra.Command{
 					}
 				}
 				qx := addMarkdownListFormat(cmds)
-				remark += fmt.Sprintf("--- \n \n%s", qx)
+				remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
 				iconPath = FaStar
-			case repo.Qs == nil || repo.Cmd == nil:
+			}
+
+			if repo.Qs == nil || repo.Cmd == nil {
 				if repo.IsStar {
 					iconPath = FaCheck
 				} else {
