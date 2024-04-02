@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const SyncJob = "sync"
+
 // syncCmd represents the sync command
 var syncCmd = &cobra.Command{
 	Use:   "sync",

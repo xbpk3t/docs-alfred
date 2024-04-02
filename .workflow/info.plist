@@ -166,7 +166,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./exe qs $1 --config=qs.yml</string>
+				<string>./exe f qs $1 --config=qs.yml</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -215,7 +215,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./exe goods $1 --config=goods.yml</string>
+				<string>./exe f goods $1 --config=goods.yml</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -264,7 +264,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./exe qs $1 --config=qs2.yml</string>
+				<string>./exe f qs $1 --config=qs2.yml</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -334,7 +334,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./exe gh $1 --config=gh.yml</string>
+				<string>./exe f gh $1 --config=gh.yml</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -404,7 +404,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./exe ws $1 --config=ws.yml</string>
+				<string>./exe f ws $1 --config=ws.yml</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
