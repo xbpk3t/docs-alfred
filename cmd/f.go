@@ -7,10 +7,11 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/91go/docs-alfred/pkg/qs"
+
 	"github.com/91go/docs-alfred/pkg/gh"
 	"github.com/91go/docs-alfred/pkg/goods"
 	"github.com/91go/docs-alfred/pkg/ws"
-	"github.com/91go/yaml2md/qs"
 	aw "github.com/deanishe/awgo"
 
 	"github.com/spf13/cobra"
