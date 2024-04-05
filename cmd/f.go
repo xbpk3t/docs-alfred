@@ -87,8 +87,13 @@ var ghCmd = &cobra.Command{
 
 		for _, repo := range repos {
 			url := repo.URL
-			des := repo.Des
-			remark := repo.Des
+			var des string
+			if repo.Tag != "" {
+				des = fmt.Sprintf("[#%s]  %s", repo.Tag, repo.Des)
+			} else {
+				des = repo.Des
+			}
+			remark := des
 			name := repo.FullName()
 			var iconPath string
 
