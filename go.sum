@@ -1,5 +1,3 @@
-github.com/91go/yaml2md v0.0.0-20240301122941-a72632e57d35 h1:90rXVLqjUxMEGR9eH1wpXdyFN6pL9a70g7A8aMLRHtI=
-github.com/91go/yaml2md v0.0.0-20240301122941-a72632e57d35/go.mod h1:ik/VQPSUYxX2SqX1k95BHwv1fFHAuMDygL3vjWcndkM=
 github.com/bmatcuk/doublestar v1.3.4/go.mod h1:wiQtGV+rzVYxB7WIlirSN++5HPtPlXEo9MEoZQC/PmE=
 github.com/cpuguy83/go-md2man/v2 v2.0.3/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
