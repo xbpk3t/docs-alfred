@@ -176,3 +176,4 @@ testenv
 coverage.txt
 .workflow/prefs.plist
 test
+/qs.md

@@ -5,14 +5,13 @@ import (
 	"os"
 
 	aw "github.com/deanishe/awgo"
-	"github.com/deanishe/awgo/update"
 	"github.com/spf13/cobra"
 )
 
 var (
-	repo = "91go/docs-alfred"
-	wf   *aw.Workflow
-	av   = aw.NewArgVars()
+	// repo = "91go/docs-alfred"
+	wf *aw.Workflow
+	av = aw.NewArgVars()
 )
 
 // ErrorHandle handle error
@@ -46,8 +45,8 @@ func Execute() {
 var cfgFile string
 
 func init() {
-	wf = aw.New(update.GitHub(repo), aw.HelpURL(repo+"/issues"))
-	wf.Args() // magic for "workflow:update"
+	// wf = aw.New(update.GitHub(repo), aw.HelpURL(repo+"/issues"))
+	// wf.Args() // magic for "workflow:update"
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "qs.yml", "Config File To Parse")
 	// rootCmd.MarkPersistentFlagRequired("config")

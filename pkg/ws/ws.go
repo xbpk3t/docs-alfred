@@ -21,7 +21,7 @@ type ws struct {
 	URLs [][]string `yaml:"urls"`
 }
 
-func processYaml(data []byte) []Tk {
+func NewConfigWs(data []byte) []Tk {
 	var ws []ws
 	err := yaml.Unmarshal(data, &ws)
 	if err != nil {
@@ -79,7 +79,7 @@ func SaveToLocal(URL string, dest string) error {
 }
 
 func SearchWebstack(dest string, args []string) []Tk {
-	tks := processYaml(x(dest))
+	tks := NewConfigWs(x(dest))
 	var searched []Tk
 
 	if len(args) == 0 {
