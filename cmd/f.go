@@ -210,15 +210,20 @@ var goodsCmd = &cobra.Command{
 var qsCmd = &cobra.Command{
 	Use:   "qs",
 	Short: "A brief description of your command",
-
 	Run: func(cmd *cobra.Command, args []string) {
-		docs := qs.NewDocs(wf.CacheDir() + "/" + cfgFile)
+		if !wf.Cache.Exists(cfgFile) {
+			ErrorHandle(errors.New(cfgFile + "not found"))
+		}
+		f, err := wf.Cache.Load(cfgFile)
+		if err != nil {
+			return
+		}
+		docs := qs.NewConfigQs(f)
+
 		// default: display all name
 		for _, doc := range docs {
-			for _, xxx := range doc.Xxx {
-				v := xxx.Name
-				wf.NewItem(v).Title(v).Valid(true).Arg(addMarkdownListFormat(docs.GetQsByName(v))).Autocomplete(v).Subtitle(fmt.Sprintf("#%s", doc.Cate))
-			}
+			v := doc.Type
+			wf.NewItem(v).Title(v).Valid(true).Arg(addMarkdownListFormat(docs.GetQsByName(v))).Autocomplete(v).Subtitle(fmt.Sprintf("[#%s]", doc.Tag))
 		}
 
 		if len(args) > 0 {
