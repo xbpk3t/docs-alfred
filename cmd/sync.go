@@ -1,60 +1,61 @@
 package cmd
 
 import (
+	"io"
 	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/91go/docs-alfred/pkg/gh"
 
 	"github.com/spf13/cobra"
 )
 
 const SyncJob = "sync"
 
-// const expire = 12
+const expire = 60
 
 // syncCmd represents the sync command
 var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		// url := wf.Config.GetString("url") + cfgFile
+		url := wf.Config.GetString("url") + cfgFile
 
-		// wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
-		//
-		// 	if url != "" {
-		// 		resp, err := http.Get(url)
-		// 		if err != nil {
-		// 			slog.Error("request error", slog.Any("err", err))
-		// 			return
-		// 		}
-		// 		defer resp.Body.Close()
-		//
-		// 		data, err := io.ReadAll(resp.Body)
-		// 		if err != nil {
-		// 			return
-		// 		}
-		// 		err = wf.Cache.Store(cfgFile, data)
-		// 		if err != nil {
-		// 			return
-		// 		}
-		// 	}
-		//
-		// 	switch cfgFile {
-		// 	case "gh.yml":
-		// 		token := wf.Config.GetString("gh_token")
-		// 		gh := gh.NewRepos()
-		// 		if _, err := gh.UpdateRepositories(token, wf.CacheDir()+"/repo.db"); err != nil {
-		// 			// wf.NewWarningItem("Sync Failed.", err.Error()).Valid(false).Title("Sync Failed.")
-		// 			// wf.SendFeedback()
-		// 			// slog.Error("Sync Failed.", slog.Any("err", err))
-		// 			ErrorHandle(err)
-		// 		}
-		// 	default:
-		//
-		// 	}
-		//
-		// 	return nil, nil
-		// })
+		if url != "" {
+			_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
+				resp, err := http.Get(url)
+				if err != nil {
+					slog.Error("request error", slog.Any("err", err))
+					return nil, err
+				}
+				defer resp.Body.Close()
 
-		slog.Info("Sync Repos Successfully.")
+				data, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return nil, err
+				}
+
+				switch cfgFile {
+				case "gh.yml":
+					token := wf.Config.GetString("gh_token")
+					gh := gh.NewRepos()
+					if _, err := gh.UpdateRepositories(token, wf.CacheDir()+"/repo.db"); err != nil {
+						ErrorHandle(err)
+					}
+				default:
+
+				}
+
+				return data, nil
+			})
+			if err != nil {
+				ErrorHandle(err)
+			}
+			slog.Info("Sync Repos Successfully.")
+		} else {
+			slog.Info("URL is Empty", slog.Any("url", url))
+		}
 	},
 }
 

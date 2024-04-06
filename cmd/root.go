@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"github.com/deanishe/awgo/update"
 	"log"
 	"os"
+
+	"github.com/deanishe/awgo/update"
 
 	aw "github.com/deanishe/awgo"
 	"github.com/spf13/cobra"
