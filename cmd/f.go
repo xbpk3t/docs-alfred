@@ -172,12 +172,12 @@ var goodsCmd = &cobra.Command{
 
 				// var data [][]string
 				// for _, g := range s.Goods {
-				// 	data = append(data, []string{g.Name, g.Param, g.Price, g.Des})
+				// 	data = append(data, []string{g.Type, g.Param, g.Price, g.Des})
 				// }
 
 				// tableString := &strings.Builder{}
 				// table := tablewriter.NewWriter(tableString)
-				// table.SetHeader([]string{"Name", "Param", "Price", "Des"})
+				// table.SetHeader([]string{"Type", "Param", "Price", "Des"})
 				// table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 				// table.SetCenterSeparator("|")
 				// table.AppendBulk(data) // Add Bulk Data
@@ -220,15 +220,6 @@ var qsCmd = &cobra.Command{
 			docs = qs.NewConfigQs(f)
 		}
 
-		// if !wf.Cache.Exists(cfgFile) {
-		// 	ErrorHandle(errors.New(cfgFile + "not found"))
-		// }
-		// f, err := wf.Cache.Load(cfgFile)
-		// if err != nil {
-		// 	return
-		// }
-
-		// default: display all name
 		for _, doc := range docs {
 			v := doc.Type
 			wf.NewItem(v).Title(v).Valid(true).Arg(addMarkdownListFormat(docs.GetQsByName(v))).Autocomplete(v).Subtitle(fmt.Sprintf("[#%s]", doc.Tag))
@@ -254,19 +245,19 @@ var wsCmd = &cobra.Command{
 	Use:   "ws",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		if !wf.Cache.Exists(cfgFile) {
-			ErrorHandle(errors.New(cfgFile + " not exist"))
+		var tks []ws.URL
+
+		if wf.Cache.Exists(cfgFile) {
+			wsData, err := wf.Cache.Load(cfgFile)
+			if err != nil {
+				return
+			}
+			tks = ws.NewConfigWs(wsData).SearchWs(args)
 		}
 
-		CacheWs := wf.CacheDir() + "/" + cfgFile
-		tks := ws.SearchWebstack(CacheWs, args)
 		for _, ws := range tks {
 			wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"}).Copytext(ws.URL).Cmd().Subtitle("Press Enter to copy this url to clipboard")
 		}
-
-		// if len(args) > 0 {
-		// 	wf.Filter(args[0])
-		// }
 
 		wf.SendFeedback()
 	},

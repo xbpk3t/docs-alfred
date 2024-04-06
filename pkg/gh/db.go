@@ -62,7 +62,7 @@ func (r Repository) FullName() string {
 //
 // 		rs = append(rs, Repository{
 // 			URL:         url,
-// 			Name:        name,
+// 			Type:        name,
 // 			User:        user,
 // 			Description: descr,
 // 			LastUpdated: updated,
