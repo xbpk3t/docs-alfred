@@ -43,7 +43,7 @@ func NewConfigQs(f []byte) (gk Docs) {
 func (d Docs) GetNames() (names []string) {
 	for _, doc := range d {
 		// for _, xxx := range doc.Xxx {
-		// 	names = append(names, xxx.Name)
+		// 	names = append(names, xxx.Type)
 		// }
 		names = append(names, doc.Type)
 	}
@@ -54,7 +54,7 @@ func (d Docs) GetNameByTag(tag string) (names []string) {
 	for _, doc := range d {
 		if doc.Tag == tag {
 			// for _, xxx := range doc.Xxx {
-			// 	names = append(names, xxx.Name)
+			// 	names = append(names, xxx.Type)
 			// }
 			names = append(names, doc.Type)
 		}
@@ -117,11 +117,11 @@ type DocsTemps []DocsTemp
 // 	for _, doc := range d {
 // 		if types, ok := docsTempsMap[doc.Tag]; ok {
 // 			// Append type to existing tag
-// 			types = append(types, Type{Name: doc.Type, Qs: doc.Qs})
+// 			types = append(types, Type{Type: doc.Type, Qs: doc.Qs})
 // 			docsTempsMap[doc.Tag] = types
 // 		} else {
 // 			// Create new tag entry
-// 			docsTempsMap[doc.Tag] = Types{Type{Name: doc.Type, Qs: doc.Qs}}
+// 			docsTempsMap[doc.Tag] = Types{Type{Type: doc.Type, Qs: doc.Qs}}
 // 		}
 // 	}
 //
@@ -143,11 +143,11 @@ type DocsTemps []DocsTemp
 // 		doc := d[i]
 // 		if types, ok := docsTempsMap[doc.Tag]; ok {
 // 			// Append type to existing tag
-// 			types = append(types, Type{Name: doc.Type, Qs: doc.Qs})
+// 			types = append(types, Type{Type: doc.Type, Qs: doc.Qs})
 // 			docsTempsMap[doc.Tag] = types
 // 		} else {
 // 			// Create new tag entry
-// 			docsTempsMap[doc.Tag] = Types{Type{Name: doc.Type, Qs: doc.Qs}}
+// 			docsTempsMap[doc.Tag] = Types{Type{Type: doc.Type, Qs: doc.Qs}}
 // 		}
 // 	}
 //

@@ -2,102 +2,68 @@ package ws
 
 import (
 	"fmt"
-	"io"
-	"net/http"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-type Tk struct {
-	Name string
-	URL  string
-	Des  string `json:"des,omitempty"`
+type URL struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
+	Des  string `yaml:"des,omitempty"`
 }
 
-type ws struct {
-	Feat string     `yaml:"feat"`
-	URLs [][]string `yaml:"urls"`
+type Webstack struct {
+	Type string `yaml:"type"`
+	URLs []URL  `yaml:"urls"`
 }
 
-func NewConfigWs(data []byte) []Tk {
-	var ws []ws
+type Wss []Webstack
+
+func NewConfigWs(data []byte) Wss {
+	var ws []Webstack
 	err := yaml.Unmarshal(data, &ws)
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
-	var tk []Tk
-	for _, wk := range ws {
-		for _, w := range wk.URLs {
-			if len(w) <= 2 {
-				tk = append(tk, Tk{Name: w[0], URL: w[1]})
-			} else {
-				tk = append(tk, Tk{Name: w[0], URL: w[1], Des: w[2]})
-			}
-		}
+
+	return ws
+}
+
+func (wss Wss) ExtractURLs() []URL {
+	var tk []URL
+	for _, wk := range wss {
+		tk = append(tk, wk.URLs...)
 	}
+
 	return tk
 }
 
-func x(dest string) []byte {
-	file, err := os.ReadFile(dest)
-	if err != nil {
-		return nil
+func (wss Wss) ExtractURLsCustomDes() []URL {
+	var tk []URL
+	for _, wk := range wss {
+		for _, u := range wk.URLs {
+			u.Des = fmt.Sprintf("[#%s] %s %s", wk.Type, u.Des, u.URL)
+			tk = append(tk, u)
+		}
 	}
-	return file
+
+	return tk
 }
 
-func SaveToLocal(URL string, dest string) error {
-	resp, err := http.Get(URL)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+func (wss Wss) SearchWs(args []string) []URL {
+	var searched []URL
 
-	// bt, err := io.ReadAll(resp.Body)
-	// if err != nil {
-	// 	return nil
-	// }
-	// return bt
-
-	// 创建本地文件
-	file, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// 将响应体复制到本地文件
-	_, err = io.Copy(file, resp.Body)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func SearchWebstack(dest string, args []string) []Tk {
-	tks := NewConfigWs(x(dest))
-	var searched []Tk
+	urls := wss.ExtractURLsCustomDes()
 
 	if len(args) == 0 {
-		return tks
+		return urls
 	}
 
-	// for _, tk := range tks {
-	// 	for _, arg := range args {
-	// 		if strings.Contains(strings.ToLower(tk.Name), strings.ToLower(arg)) || strings.Contains(strings.ToLower(tk.URL), strings.ToLower(arg)) {
-	// 			searched = append(searched, tk)
-	// 		}
-	// 	}
-	// }
-	// return searched
-
-	searched = tks
+	searched = urls
 	for _, arg := range args {
-		var filtered []Tk
+		var filtered []URL
 		for _, tk := range searched {
 			if strings.Contains(strings.ToLower(tk.Name), strings.ToLower(arg)) || strings.Contains(strings.ToLower(tk.URL), strings.ToLower(arg)) {
 				filtered = append(filtered, tk)
