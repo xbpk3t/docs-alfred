@@ -159,8 +159,9 @@ var goodsCmd = &cobra.Command{
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
 		if !wf.Cache.Exists(cfgFile) {
-			ErrorHandle(errors.New(cfgFile + "not found"))
+			ErrorHandle(errors.New(cfgFile + " not found"))
 		}
+
 		f, err := wf.Cache.Load(cfgFile)
 		if err != nil {
 			return
@@ -245,15 +246,14 @@ var wsCmd = &cobra.Command{
 	Use:   "ws",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		var tks []ws.URL
-
-		if wf.Cache.Exists(cfgFile) {
-			wsData, err := wf.Cache.Load(cfgFile)
-			if err != nil {
-				return
-			}
-			tks = ws.NewConfigWs(wsData).SearchWs(args)
+		if !wf.Cache.Exists(cfgFile) {
+			ErrorHandle(errors.New(cfgFile + " not found"))
 		}
+		wsData, err := wf.Cache.Load(cfgFile)
+		if err != nil {
+			return
+		}
+		tks := ws.NewConfigWs(wsData).SearchWs(args)
 
 		for _, ws := range tks {
 			wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"}).Copytext(ws.URL).Cmd().Subtitle("Press Enter to copy this url to clipboard")
