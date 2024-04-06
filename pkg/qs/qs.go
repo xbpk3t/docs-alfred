@@ -12,13 +12,11 @@ import (
 	"github.com/samber/lo"
 )
 
-type Doc struct {
+type Docs []struct {
 	Type string   `yaml:"type"`
 	Tag  string   `yaml:"tag"`
 	Qs   []string `yaml:"qs"`
 }
-
-type Docs []Doc
 
 func NewConfigQs(f []byte) (gk Docs) {
 	d := yaml.NewDecoder(bytes.NewReader(f))
