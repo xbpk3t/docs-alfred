@@ -63,7 +63,11 @@ func (ws Webstack) SearchWs(args []string) []URL {
 	for _, arg := range args {
 		var filtered []URL
 		for _, tk := range searched {
-			if strings.Contains(strings.ToLower(tk.Name), strings.ToLower(arg)) || strings.Contains(strings.ToLower(tk.URL), strings.ToLower(arg)) {
+			arg = strings.ToLower(arg)
+			name := strings.ToLower(tk.Name)
+			// url := strings.ToLower(tk.URL)
+			des := strings.ToLower(tk.Des)
+			if strings.Contains(name, arg) || strings.Contains(des, arg) {
 				filtered = append(filtered, tk)
 			}
 		}
