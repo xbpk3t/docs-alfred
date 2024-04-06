@@ -211,14 +211,22 @@ var qsCmd = &cobra.Command{
 	Use:   "qs",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		if !wf.Cache.Exists(cfgFile) {
-			ErrorHandle(errors.New(cfgFile + "not found"))
+		var docs qs.Docs
+		if wf.Cache.Exists(cfgFile) {
+			f, err := wf.Cache.Load(cfgFile)
+			if err != nil {
+				return
+			}
+			docs = qs.NewConfigQs(f)
 		}
-		f, err := wf.Cache.Load(cfgFile)
-		if err != nil {
-			return
-		}
-		docs := qs.NewConfigQs(f)
+
+		// if !wf.Cache.Exists(cfgFile) {
+		// 	ErrorHandle(errors.New(cfgFile + "not found"))
+		// }
+		// f, err := wf.Cache.Load(cfgFile)
+		// if err != nil {
+		// 	return
+		// }
 
 		// default: display all name
 		for _, doc := range docs {
