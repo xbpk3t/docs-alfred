@@ -117,7 +117,7 @@ var ghCmd = &cobra.Command{
 				iconPath = FaStar
 			}
 
-			if repo.Qs == nil || repo.Cmd == nil {
+			if repo.Qs == nil && repo.Cmd == nil {
 				if repo.IsStar {
 					iconPath = FaCheck
 				} else {
