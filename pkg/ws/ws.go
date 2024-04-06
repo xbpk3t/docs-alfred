@@ -13,15 +13,13 @@ type URL struct {
 	Des  string `yaml:"des,omitempty"`
 }
 
-type Webstack struct {
+type Webstack []struct {
 	Type string `yaml:"type"`
 	URLs []URL  `yaml:"urls"`
 }
 
-type Wss []Webstack
-
-func NewConfigWs(data []byte) Wss {
-	var ws []Webstack
+func NewConfigWs(data []byte) Webstack {
+	var ws Webstack
 	err := yaml.Unmarshal(data, &ws)
 	if err != nil {
 		fmt.Println(err)
@@ -31,18 +29,18 @@ func NewConfigWs(data []byte) Wss {
 	return ws
 }
 
-func (wss Wss) ExtractURLs() []URL {
+func (ws Webstack) ExtractURLs() []URL {
 	var tk []URL
-	for _, wk := range wss {
+	for _, wk := range ws {
 		tk = append(tk, wk.URLs...)
 	}
 
 	return tk
 }
 
-func (wss Wss) ExtractURLsCustomDes() []URL {
+func (ws Webstack) ExtractURLsCustomDes() []URL {
 	var tk []URL
-	for _, wk := range wss {
+	for _, wk := range ws {
 		for _, u := range wk.URLs {
 			u.Des = fmt.Sprintf("[#%s] %s %s", wk.Type, u.Des, u.URL)
 			tk = append(tk, u)
@@ -52,10 +50,10 @@ func (wss Wss) ExtractURLsCustomDes() []URL {
 	return tk
 }
 
-func (wss Wss) SearchWs(args []string) []URL {
+func (ws Webstack) SearchWs(args []string) []URL {
 	var searched []URL
 
-	urls := wss.ExtractURLsCustomDes()
+	urls := ws.ExtractURLsCustomDes()
 
 	if len(args) == 0 {
 		return urls
