@@ -62,9 +62,19 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>064939EF-FE9A-49CA-9041-4DCD57DC2561</string>
+				<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
 				<key>modifiers</key>
 				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>064939EF-FE9A-49CA-9041-4DCD57DC2561</string>
+				<key>modifiers</key>
+				<integer>1048576</integer>
 				<key>modifiersubtext</key>
 				<string></string>
 				<key>vitoclose</key>
@@ -77,7 +87,7 @@
 				<key>destinationuid</key>
 				<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
 				<key>modifiers</key>
-				<integer>1048576</integer>
+				<integer>0</integer>
 				<key>modifiersubtext</key>
 				<string></string>
 				<key>vitoclose</key>
@@ -87,7 +97,7 @@
 				<key>destinationuid</key>
 				<string>064939EF-FE9A-49CA-9041-4DCD57DC2561</string>
 				<key>modifiers</key>
-				<integer>0</integer>
+				<integer>1048576</integer>
 				<key>modifiersubtext</key>
 				<string></string>
 				<key>vitoclose</key>
@@ -239,6 +249,27 @@
 		<dict>
 			<key>config</key>
 			<dict>
+				<key>browser</key>
+				<string></string>
+				<key>skipqueryencode</key>
+				<false/>
+				<key>skipvarencode</key>
+				<false/>
+				<key>spaces</key>
+				<string></string>
+				<key>url</key>
+				<string></string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.openurl</string>
+			<key>uid</key>
+			<string>064939EF-FE9A-49CA-9041-4DCD57DC2561</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
 				<key>alfredfiltersresults</key>
 				<false/>
 				<key>alfredfiltersresultsmatchmode</key>
@@ -284,27 +315,6 @@
 			<string>01A7C66C-9429-410F-8D58-1576C22B8E54</string>
 			<key>version</key>
 			<integer>3</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>browser</key>
-				<string></string>
-				<key>skipqueryencode</key>
-				<false/>
-				<key>skipvarencode</key>
-				<false/>
-				<key>spaces</key>
-				<string></string>
-				<key>url</key>
-				<string></string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.action.openurl</string>
-			<key>uid</key>
-			<string>064939EF-FE9A-49CA-9041-4DCD57DC2561</string>
-			<key>version</key>
-			<integer>1</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -458,9 +468,9 @@
 		<key>064939EF-FE9A-49CA-9041-4DCD57DC2561</key>
 		<dict>
 			<key>xpos</key>
-			<real>780</real>
+			<real>1125</real>
 			<key>ypos</key>
-			<real>210</real>
+			<real>165</real>
 		</dict>
 		<key>526CF41F-8FC3-49B8-85F8-BDE912B219B5</key>
 		<dict>
