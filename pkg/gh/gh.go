@@ -64,14 +64,39 @@ func (cr ConfigRepos) ToRepos() Repos {
 	for _, config := range cr {
 		for _, repo := range config.Repos {
 			if strings.Contains(repo.URL, GhURL) {
-				sx, _ := strings.CutPrefix(repo.URL, GhURL)
-				repo.User = strings.Split(sx, "/")[0]
-				repo.Name = strings.Split(sx, "/")[1]
-				repo.IsStar = true
-				repo.Tag = config.Type
-				repos = append(repos, repo)
+				sx, found := strings.CutPrefix(repo.URL, GhURL)
+				// if !found {
+				// 	log.Printf("Invalid URL: %s", repo.URL)
+				// 	continue
+				// }
+				// splits := strings.Split(sx, "/")
+				// if len(splits) != 2 {
+				// 	log.Printf("URL Split Error: %s", repo.URL)
+				// 	continue
+				// }
+				//
+				// repo.User = splits[0]
+				// repo.Name = splits[1]
+				// repo.IsStar = true
+				// repo.Tag = config.Type
+				// repos = append(repos, repo)
+
+				if found {
+					splits := strings.Split(sx, "/")
+					if len(splits) == 2 {
+						repo.User = splits[0]
+						repo.Name = splits[1]
+						repo.IsStar = true
+						repo.Tag = config.Type
+						repos = append(repos, repo)
+					} else {
+						log.Printf("URL Split Error: %s", repo.URL)
+					}
+				} else {
+					log.Printf("CutPrefix Error URL: %s", repo.URL)
+				}
 			} else {
-				log.Printf("Invalid URL: %s", repo.URL)
+				log.Printf("URL Not Contains: %s", repo.URL)
 			}
 		}
 	}
