@@ -126,13 +126,14 @@ var ghCmd = &cobra.Command{
 			}
 
 			item := wf.NewItem(name).Title(name).
-				Arg(url).
+				Arg(remark).
 				Subtitle(des).
 				Copytext(url).
 				Valid(true).
 				Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
 
-			item.Cmd().Subtitle("Preview Description in Markdown Format").Arg(remark)
+			// item.Cmd().Subtitle("Preview Description in Markdown Format").Arg(url)
+			item.Cmd().Subtitle("Open URL").Arg(url)
 		}
 
 		if len(args) > 0 {
@@ -256,7 +257,9 @@ var wsCmd = &cobra.Command{
 		tks := ws.NewConfigWs(wsData).SearchWs(args)
 
 		for _, ws := range tks {
-			wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"}).Copytext(ws.URL).Cmd().Subtitle("Press Enter to copy this url to clipboard")
+			item := wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.Des).Icon(&aw.Icon{Value: "icons/check.svg"})
+
+			item.Cmd().Subtitle("Open URL").Arg(ws.URL)
 		}
 
 		wf.SendFeedback()
