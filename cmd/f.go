@@ -22,6 +22,13 @@ var fCmd = &cobra.Command{
 	Use:   "f",
 	Short: "A brief description of your command",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// ReadConfig Handle Config Not Exists
+		// panic not effect PreRun()
+		if !wf.Cache.Exists(cfgFile) {
+			ErrorHandle(errors.New(cfgFile + " not found"))
+		}
+		data, _ = wf.Cache.Load(cfgFile)
+
 		if !wf.IsRunning(SyncJob) {
 			cmd := exec.Command("./exe", SyncJob, fmt.Sprintf("--config=%s", cfgFile))
 			slog.Info("sync cmd: ", slog.Any("cmd", cmd.String()))
@@ -34,6 +41,8 @@ var fCmd = &cobra.Command{
 		fmt.Println("f called")
 	},
 }
+
+var data []byte
 
 func init() {
 	rootCmd.AddCommand(fCmd)
@@ -74,16 +83,7 @@ var ghCmd = &cobra.Command{
 			wf.FatalError(err)
 		}
 
-		// var ghs []gh.Repository
-		// if wf.Cache.Exists(cfgFile) {
-		// 	f, err := wf.Cache.Load(cfgFile)
-		// 	if err != nil {
-		// 		return
-		// 	}
-		// 	ghs = gh.NewConfigRepos(f).ToRepos()
-		// }
-
-		ghs := gh.NewConfigRepos(ReadConfig()).ToRepos()
+		ghs := gh.NewConfigRepos(data).ToRepos()
 
 		repos = append(ghs, repos...)
 
@@ -169,7 +169,7 @@ var goodsCmd = &cobra.Command{
 		// if err != nil {
 		// 	return
 		// }
-		for _, s := range goods.NewConfigGoods(ReadConfig()) {
+		for _, s := range goods.NewConfigGoods(data) {
 			des := s.Des
 			remark := s.Des
 			if s.Goods != nil {
@@ -223,7 +223,7 @@ var qsCmd = &cobra.Command{
 		// 	}
 		// 	docs = qs.NewConfigQs(f)
 		// }
-		docs := qs.NewConfigQs(ReadConfig())
+		docs := qs.NewConfigQs(data)
 
 		for _, doc := range docs {
 			v := doc.Type
@@ -250,7 +250,7 @@ var wsCmd = &cobra.Command{
 	Use:   "ws",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		tks := ws.NewConfigWs(ReadConfig()).SearchWs(args)
+		tks := ws.NewConfigWs(data).SearchWs(args)
 
 		for _, ws := range tks {
 			item := wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.Des).Icon(&aw.Icon{Value: "icons/check.svg"})
@@ -260,17 +260,4 @@ var wsCmd = &cobra.Command{
 
 		wf.SendFeedback()
 	},
-}
-
-// ReadConfig Handle Config Not Exists
-// panic not effect PreRun()
-func ReadConfig() []byte {
-	if !wf.Cache.Exists(cfgFile) {
-		ErrorHandle(errors.New(cfgFile + " not found"))
-	}
-	dt, err := wf.Cache.Load(cfgFile)
-	if err != nil {
-		return nil
-	}
-	return dt
 }
