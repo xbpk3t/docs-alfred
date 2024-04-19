@@ -50,6 +50,7 @@ func (ws Webstack) ExtractURLsCustomDes() []URL {
 	return tk
 }
 
+// SearchWs 无限添加args
 func (ws Webstack) SearchWs(args []string) []URL {
 	var searched []URL
 

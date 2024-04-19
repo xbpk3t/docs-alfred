@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ type ConfigRepos []struct {
 	Type  string       `yaml:"type"`
 	Repos []Repository `yaml:"repo"`
 	Qs    []string     `yaml:"qs"`
+	Md    bool         `yaml:"md,omitempty"`
 }
 
 type Repository struct {
@@ -89,8 +91,24 @@ func (cr ConfigRepos) ToRepos() Repos {
 						repo.IsStar = true
 						repo.Tag = config.Type
 						repos = append(repos, repo)
+					} else if len(splits) > 2 {
+						// 确保 splits 不是 nil 并且有足够的元素
+						if splits[0] == "golang" && splits[1] == "go" {
+							curator := slices.Index(splits, "src")
+							if curator != -1 && curator < len(splits)-1 {
+								repo.User = splits[0]
+								repo.Name = splits[1] + "/" + strings.Join(splits[curator+1:], "/")
+								repo.IsStar = true
+								repo.Tag = config.Type
+								repos = append(repos, repo)
+							} else {
+								log.Printf("Index Error: src not found in splits")
+							}
+						} else {
+							log.Printf("URL Split Error: not enough elements in splits")
+						}
 					} else {
-						log.Printf("URL Split Error: %s", repo.URL)
+						log.Printf("URL Split Error: unexpected format")
 					}
 				} else {
 					log.Printf("CutPrefix Error URL: %s", repo.URL)
