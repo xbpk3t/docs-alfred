@@ -161,14 +161,6 @@ var goodsCmd = &cobra.Command{
 	Use:   "goods",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		// if !wf.Cache.Exists(cfgFile) {
-		// 	ErrorHandle(errors.New(cfgFile + " not found"))
-		// }
-		//
-		// f, err := wf.Cache.Load(cfgFile)
-		// if err != nil {
-		// 	return
-		// }
 		for _, s := range goods.NewConfigGoods(data) {
 			des := s.Des
 			remark := s.Des
@@ -215,19 +207,12 @@ var qsCmd = &cobra.Command{
 	Use:   "qs",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		// var docs qs.Docs
-		// if wf.Cache.Exists(cfgFile) {
-		// 	f, err := wf.Cache.Load(cfgFile)
-		// 	if err != nil {
-		// 		return
-		// 	}
-		// 	docs = qs.NewConfigQs(f)
-		// }
 		docs := qs.NewConfigQs(data)
 
 		for _, doc := range docs {
 			v := doc.Type
-			wf.NewItem(v).Title(v).Valid(true).Arg(addMarkdownListFormat(docs.GetQsByName(v))).Autocomplete(v).Subtitle(fmt.Sprintf("[#%s]", doc.Tag))
+			mdList := addMarkdownListFormat(docs.GetQsByName(v))
+			wf.NewItem(v).Title(v).Valid(true).Arg(mdList).Autocomplete(v).Subtitle(fmt.Sprintf("[#%s]", doc.Tag))
 		}
 
 		if len(args) > 0 {
@@ -235,14 +220,6 @@ var qsCmd = &cobra.Command{
 		}
 		wf.SendFeedback()
 	},
-}
-
-func addMarkdownListFormat(str []string) string {
-	var builder strings.Builder
-	for _, str := range str {
-		builder.WriteString(fmt.Sprintf("- %s\n", str))
-	}
-	return builder.String()
 }
 
 // wsCmd represents the ws command
@@ -260,4 +237,12 @@ var wsCmd = &cobra.Command{
 
 		wf.SendFeedback()
 	},
+}
+
+func addMarkdownListFormat(str []string) string {
+	var builder strings.Builder
+	for _, str := range str {
+		builder.WriteString(fmt.Sprintf("- %s\n", str))
+	}
+	return builder.String()
 }
