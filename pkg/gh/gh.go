@@ -33,8 +33,11 @@ type Repository struct {
 	Tag         string     // used to mark Type
 	Qs          []string   `yaml:"qs,omitempty"`
 	Cmd         [][]string `yaml:"cmd,omitempty"`
-	Use         []string   `yaml:"use,omitempty"`
-	IsStar      bool
+	Use         []struct {
+		URL string `yaml:"url,omitempty"`
+		Des string `yaml:"des,omitempty"`
+	} `yaml:"use,omitempty"`
+	IsStar bool
 }
 
 type Repos []Repository
