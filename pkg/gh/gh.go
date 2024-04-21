@@ -20,7 +20,8 @@ type ConfigRepos []struct {
 	Type  string       `yaml:"type"`
 	Repos []Repository `yaml:"repo"`
 	Qs    []string     `yaml:"qs"`
-	Md    bool         `yaml:"md,omitempty"`
+
+	Md bool `yaml:"md,omitempty"`
 }
 
 type Repository struct {
@@ -32,6 +33,7 @@ type Repository struct {
 	Des         string     `yaml:"des,omitempty"`
 	Tag         string     // used to mark Type
 	Qs          []string   `yaml:"qs,omitempty"`
+	Pix         []string   `yaml:"pix"`
 	Cmd         [][]string `yaml:"cmd,omitempty"`
 	Use         []struct {
 		URL string `yaml:"url,omitempty"`
