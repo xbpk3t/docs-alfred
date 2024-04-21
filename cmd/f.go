@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os/exec"
+	"path"
 	"strings"
 
 	"github.com/91go/docs-alfred/pkg/qs"
@@ -99,6 +101,12 @@ var ghCmd = &cobra.Command{
 			name := repo.FullName()
 			var iconPath string
 
+			if repo.Pix != nil {
+				qx := addMarkdownPicFormat(repo.Pix)
+				remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
+				iconPath = FaStar
+			}
+
 			if repo.Qs != nil {
 				qx := addMarkdownListFormat(repo.Qs)
 				remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
@@ -134,8 +142,8 @@ var ghCmd = &cobra.Command{
 				Valid(true).
 				Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
 
-			// item.Cmd().Subtitle("Preview Description in Markdown Format").Arg(url)
-			item.Cmd().Subtitle("Open URL").Arg(url)
+			item.Cmd().Subtitle(fmt.Sprintf("Open URL: %s", url)).Arg(url)
+			item.Opt().Subtitle(fmt.Sprintf("Copy URL: %s", url)).Arg(url)
 		}
 
 		if len(args) > 0 {
@@ -232,7 +240,7 @@ var wsCmd = &cobra.Command{
 		for _, ws := range tks {
 			item := wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.Des).Icon(&aw.Icon{Value: "icons/check.svg"})
 
-			item.Cmd().Subtitle("Open URL").Arg(ws.URL)
+			item.Cmd().Subtitle(fmt.Sprintf("Open URL: %s", ws.URL)).Arg(ws.URL)
 		}
 
 		wf.SendFeedback()
@@ -243,6 +251,32 @@ func addMarkdownListFormat(str []string) string {
 	var builder strings.Builder
 	for _, str := range str {
 		builder.WriteString(fmt.Sprintf("- %s\n", str))
+	}
+	return builder.String()
+}
+
+// GetFileNameFromURL 从给定的 URL 中提取并返回文件名。
+func GetFileNameFromURL(urlString string) (string, error) {
+	// 解析 URL
+	parsedURL, err := url.Parse(urlString)
+	if err != nil {
+		return "", fmt.Errorf("error parsing URL: %v", err)
+	}
+
+	// 获取路径
+	urlPath := parsedURL.Path
+
+	// 获取文件名
+	fileName := path.Base(urlPath)
+
+	return fileName, nil
+}
+
+func addMarkdownPicFormat(URLs []string) string {
+	var builder strings.Builder
+	for _, u := range URLs {
+		name, _ := GetFileNameFromURL(u)
+		builder.WriteString(fmt.Sprintf("- [%s](%s)\n", name, u))
 	}
 	return builder.String()
 }
