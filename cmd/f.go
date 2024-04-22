@@ -113,6 +113,12 @@ var ghCmd = &cobra.Command{
 				iconPath = FaStar
 			}
 
+			if repo.Qq != nil {
+				qx := addMarkdownHeadingFormat(repo.Qq)
+				remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
+				iconPath = FaStar
+			}
+
 			if repo.Cmd != nil {
 				var cmds []string
 				for _, cmd := range repo.Cmd {
@@ -277,6 +283,25 @@ func addMarkdownPicFormat(URLs []string) string {
 	for _, u := range URLs {
 		name, _ := GetFileNameFromURL(u)
 		builder.WriteString(fmt.Sprintf("- [%s](%s)\n", name, u))
+	}
+	return builder.String()
+}
+
+func addMarkdownHeadingFormat(qq gh.Qq) string {
+	var builder strings.Builder
+	for _, q := range qq {
+		if q.Qs != nil {
+			if q.URL != "" {
+				builder.WriteString(fmt.Sprintf("#### [%s](%s)\n\n", q.Topic, q.URL))
+			} else {
+				builder.WriteString(fmt.Sprintf("#### %s\n\n", q.Topic))
+			}
+
+			for _, s := range q.Qs {
+				builder.WriteString(fmt.Sprintf("- %s\n", s))
+			}
+			builder.WriteString("\n")
+		}
 	}
 	return builder.String()
 }
