@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/91go/docs-alfred/pkg/qs"
@@ -89,6 +90,29 @@ var ghCmd = &cobra.Command{
 
 		repos = append(ghs, repos...)
 
+		if len(args) > 0 && strings.HasPrefix(args[0], "#") {
+			tags := repos.ExtractTags()
+
+			// if hit tag
+			ptag := strings.TrimPrefix(args[0], "#")
+			if slices.Contains(tags, ptag) {
+				for _, tagRepo := range repos.QueryReposByTag(ptag) {
+					name := tagRepo.FullName()
+					wf.NewItem(name).Title(name).Valid(false).Autocomplete(name)
+				}
+			} else {
+				for _, tag := range tags {
+					tag = fmt.Sprintf("#%s", tag)
+					wf.NewItem(tag).Title(tag).Valid(false).Autocomplete(tag)
+				}
+				if len(args) > 0 {
+					wf.Filter(args[0])
+				}
+			}
+
+			wf.SendFeedback()
+		}
+
 		for _, repo := range repos {
 			url := repo.URL
 			var des string
@@ -107,11 +131,11 @@ var ghCmd = &cobra.Command{
 				iconPath = FaStar
 			}
 
-			if repo.Qs != nil {
-				qx := addMarkdownListFormat(repo.Qs)
-				remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
-				iconPath = FaStar
-			}
+			// if repo.Qs != nil {
+			// 	qx := addMarkdownListFormat(repo.Qs)
+			// 	remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
+			// 	iconPath = FaStar
+			// }
 
 			if repo.Qq != nil {
 				qx := addMarkdownHeadingFormat(repo.Qq)
@@ -247,6 +271,7 @@ var wsCmd = &cobra.Command{
 			item := wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.Des).Icon(&aw.Icon{Value: "icons/check.svg"})
 
 			item.Cmd().Subtitle(fmt.Sprintf("Open URL: %s", ws.URL)).Arg(ws.URL)
+			item.Opt().Subtitle(fmt.Sprintf("Copy URL: %s", ws.URL)).Arg(ws.URL)
 		}
 
 		wf.SendFeedback()
