@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ const (
 type ConfigRepos []struct {
 	Type  string       `yaml:"type"`
 	Repos []Repository `yaml:"repo"`
-	Qs    []string     `yaml:"qs"`
+	Qs    Qs           `yaml:"qs,omitempty"`
 	Md    bool         `yaml:"md,omitempty"`
 }
 
@@ -30,7 +31,7 @@ type Repository struct {
 	User        string
 	Des         string     `yaml:"des,omitempty"`
 	Tag         string     // used to mark Type
-	Qs          []string   `yaml:"qs,omitempty"`
+	Qs          Qs         `yaml:"qs,omitempty"`
 	Pix         []string   `yaml:"pix"`
 	Cmd         [][]string `yaml:"cmd,omitempty"`
 	Use         []struct {
@@ -42,10 +43,16 @@ type Repository struct {
 }
 
 type Qq []struct {
-	Topic string   `yaml:"topic"`
-	URL   string   `yaml:"url,omitempty"`
-	Des   string   `yaml:"des,omitempty"`
-	Qs    []string `yaml:"qs,omitempty"`
+	Topic string `yaml:"topic"`
+	URL   string `yaml:"url,omitempty"`
+	Des   string `yaml:"des,omitempty"`
+	Qs    Qs     `yaml:"qs,omitempty"`
+}
+
+type Qs []struct {
+	Q string `yaml:"q,omitempty"`
+	X string `yaml:"x,omitempty"`
+	D string `yaml:"d,omitempty"`
 }
 
 type Repos []Repository
@@ -142,4 +149,26 @@ func (cr ConfigRepos) ToRepos() Repos {
 	}
 
 	return repos
+}
+
+// ExtractTags Extract tags from Repos
+func (rs Repos) ExtractTags() []string {
+	var tags []string
+	for _, repo := range rs {
+		if repo.Tag != "" && !slices.Contains(tags, repo.Tag) {
+			tags = append(tags, repo.Tag)
+		}
+	}
+	return tags
+}
+
+// QueryReposByTag Query Repos by Tag
+func (rs Repos) QueryReposByTag(tag string) Repos {
+	var res Repos
+	for _, repo := range rs {
+		if repo.Tag == tag {
+			res = append(res, repo)
+		}
+	}
+	return res
 }
