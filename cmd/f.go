@@ -96,10 +96,12 @@ var ghCmd = &cobra.Command{
 			// if hit tag
 			ptag := strings.TrimPrefix(args[0], "#")
 			if slices.Contains(tags, ptag) {
-				for _, tagRepo := range repos.QueryReposByTag(ptag) {
-					name := tagRepo.FullName()
-					wf.NewItem(name).Title(name).Valid(false).Autocomplete(name)
-				}
+				// for _, tagRepo := range  {
+				// 	name := tagRepo.FullName()
+				// 	wf.NewItem(name).Title(name).Valid(false).Autocomplete(name)
+				// }
+				repos = repos.QueryReposByTag(ptag)
+				RenderRepos(repos)
 			} else {
 				for _, tag := range tags {
 					tag = fmt.Sprintf("#%s", tag)
@@ -113,68 +115,7 @@ var ghCmd = &cobra.Command{
 			wf.SendFeedback()
 		}
 
-		for _, repo := range repos {
-			url := repo.URL
-			var des string
-			if repo.Tag != "" {
-				des = fmt.Sprintf("[#%s]  %s", repo.Tag, repo.Des)
-			} else {
-				des = repo.Des
-			}
-			remark := des
-			name := repo.FullName()
-			var iconPath string
-
-			if repo.Pix != nil {
-				qx := addMarkdownPicFormat(repo.Pix)
-				remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
-				iconPath = FaStar
-			}
-
-			// if repo.Qs != nil {
-			// 	qx := addMarkdownListFormat(repo.Qs)
-			// 	remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
-			// 	iconPath = FaStar
-			// }
-
-			if repo.Qq != nil {
-				qx := addMarkdownHeadingFormat(repo.Qq)
-				remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
-				iconPath = FaStar
-			}
-
-			if repo.Cmd != nil {
-				var cmds []string
-				for _, cmd := range repo.Cmd {
-					if len(cmd) > 1 {
-						cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
-					} else {
-						cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
-					}
-				}
-				qx := addMarkdownListFormat(cmds)
-				remark += fmt.Sprintf("\n \n --- \n \n%s", qx)
-				iconPath = FaStar
-			}
-
-			if repo.Qs == nil && repo.Cmd == nil {
-				if repo.IsStar {
-					iconPath = FaCheck
-				} else {
-					iconPath = FaRepo
-				}
-			}
-
-			item := wf.NewItem(name).Title(name).
-				Arg(remark).
-				Subtitle(des).
-				Copytext(url).
-				Valid(true).
-				Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
-
-			item.Cmd().Subtitle(fmt.Sprintf("Open URL: %s", url)).Arg(url)
-			item.Opt().Subtitle(fmt.Sprintf("Copy URL: %s", url)).Arg(url)
-		}
+		RenderRepos(repos)
 
 		if len(args) > 0 {
 			wf.Filter(args[0])
@@ -286,6 +227,26 @@ func addMarkdownListFormat(str []string) string {
 	return builder.String()
 }
 
+func addMarkdownQsFormat(qs gh.Qs) string {
+	var builder strings.Builder
+	// builder.WriteString("<dl>")
+	// for _, q := range qs {
+	//
+	// 	builder.WriteString(fmt.Sprintf("- %s \n", q.Q))
+	// 	builder.WriteString(fmt.Sprintf("\n %s \n", q.X))
+	// 	// builder.WriteString(fmt.Sprintf("<dt>%s</dt>", q.Q))
+	// 	// builder.WriteString(fmt.Sprintf("<dd>%s</dd>", q.X))
+	// }
+	// // builder.WriteString("</dl>")
+	//
+	// return builder.String()
+
+	for _, q := range qs {
+		builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
+	}
+	return builder.String()
+}
+
 // GetFileNameFromURL 从给定的 URL 中提取并返回文件名。
 func GetFileNameFromURL(urlString string) (string, error) {
 	// 解析 URL
@@ -322,11 +283,76 @@ func addMarkdownHeadingFormat(qq gh.Qq) string {
 				builder.WriteString(fmt.Sprintf("#### %s\n\n", q.Topic))
 			}
 
-			for _, s := range q.Qs {
-				builder.WriteString(fmt.Sprintf("- %s\n", s))
-			}
+			builder.WriteString(fmt.Sprintf("%s\n", addMarkdownQsFormat(q.Qs)))
 			builder.WriteString("\n")
 		}
 	}
 	return builder.String()
+}
+
+func RenderRepos(repos gh.Repos) (item *aw.Item) {
+	for _, repo := range repos {
+		repoURL := repo.URL
+		var des string
+		if repo.Tag != "" {
+			des = fmt.Sprintf("[#%s]  %s", repo.Tag, repo.Des)
+		} else {
+			des = repo.Des
+		}
+		var remark strings.Builder
+		remark.WriteString(des)
+		name := repo.FullName()
+		var iconPath string
+
+		if repo.Pix != nil {
+			qx := addMarkdownPicFormat(repo.Pix)
+			remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+			iconPath = FaStar
+		}
+
+		if repo.Qs != nil {
+			qx := addMarkdownQsFormat(repo.Qs)
+			remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+			iconPath = FaStar
+		}
+
+		if repo.Qq != nil {
+			qx := addMarkdownHeadingFormat(repo.Qq)
+			remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+			iconPath = FaStar
+		}
+
+		if repo.Cmd != nil {
+			var cmds []string
+			for _, cmd := range repo.Cmd {
+				if len(cmd) > 1 {
+					cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
+				} else {
+					cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
+				}
+			}
+			qx := addMarkdownListFormat(cmds)
+			remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+			iconPath = FaStar
+		}
+
+		if repo.Qs == nil && repo.Cmd == nil {
+			if repo.IsStar {
+				iconPath = FaCheck
+			} else {
+				iconPath = FaRepo
+			}
+		}
+
+		item = wf.NewItem(name).Title(name).
+			Arg(remark.String()).
+			Subtitle(des).
+			Copytext(repoURL).
+			Valid(true).
+			Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
+
+		item.Cmd().Subtitle(fmt.Sprintf("Open URL: %s", repoURL)).Arg(repoURL)
+		item.Opt().Subtitle(fmt.Sprintf("Copy URL: %s", repoURL)).Arg(repoURL)
+	}
+	return item
 }
