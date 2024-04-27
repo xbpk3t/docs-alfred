@@ -137,7 +137,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 						repo.Tag = config.Type
 						repos = append(repos, repo)
 					} else {
-						log.Printf("URL Split Error: unexpected format")
+						log.Printf("URL Split Error: unexpected format: %s", repo.URL)
 					}
 				} else {
 					log.Printf("CutPrefix Error URL: %s", repo.URL)
