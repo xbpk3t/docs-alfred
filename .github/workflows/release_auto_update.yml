@@ -1,8 +1,12 @@
 name: Release_auto_update
 on:
-  release:
-    types:
-      - published
+#  release:
+#    types:
+#      - published
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
