@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/91go/docs-alfred/pkg/ws"
 	"log/slog"
 	"net/url"
 	"os/exec"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/91go/docs-alfred/pkg/gh"
 	"github.com/91go/docs-alfred/pkg/goods"
-	"github.com/91go/docs-alfred/pkg/ws"
 	aw "github.com/deanishe/awgo"
 
 	"github.com/spf13/cobra"
@@ -76,6 +76,10 @@ const (
 )
 
 // ghCmd represents the repo command
+// Enter          直接打开URL
+// CMD + Enter    Markdown View
+// Ctrl + Enter   Copy URL
+// Shift + Enter  打开在docs项目对应heading的URL
 var ghCmd = &cobra.Command{
 	Use:   "gh",
 	Short: "Searching from starred repositories and my repositories",
@@ -140,7 +144,11 @@ var goodsCmd = &cobra.Command{
 	Use:   "goods",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		for _, s := range goods.NewConfigGoods(data) {
+
+		//
+		goods := goods.NewConfigGoods(data)
+
+		for _, s := range goods {
 			des := s.Des
 			remark := s.Des
 			if s.Goods != nil {
