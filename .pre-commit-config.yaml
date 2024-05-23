@@ -31,3 +31,7 @@ repos:
   #          - '-over=15'
   #      - id: go-lint
   #      - id: go-critic
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
