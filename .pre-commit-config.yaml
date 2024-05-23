@@ -1,0 +1,33 @@
+repos:
+  - repo: 'https://github.com/pre-commit/pre-commit-hooks'
+    rev: v4.4.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files  # 定义的hook脚本，在repo的.pre-commit-hooks.yaml中定义
+      - id: trailing-whitespace  # 移除尾部空格符
+        args: [--markdown-linebreak-ext=md]  # 传入参数，不处理markdown
+      - id: check-merge-conflict  # 检查是否含有合并冲突符号
+  - repo: 'https://github.com/golangci/golangci-lint'
+    rev: v1.51.1
+    hooks:
+      - id: golangci-lint
+  - repo: 'https://github.com/dnephin/pre-commit-golang'
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+      - id: go-vet
+      - id: go-imports
+      - id: validate-toml
+      - id: no-go-testing
+      - id: golangci-lint
+      - id: go-unit-tests
+      - id: go-build
+      - id: go-mod-tidy
+  #      - id: go-cyclo
+  #        args:
+  #          - '-over=15'
+  #      - id: go-lint
+  #      - id: go-critic
