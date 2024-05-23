@@ -14,7 +14,6 @@ import (
 	"github.com/91go/docs-alfred/pkg/qs"
 
 	"github.com/91go/docs-alfred/pkg/gh"
-	"github.com/91go/docs-alfred/pkg/goods"
 	aw "github.com/deanishe/awgo"
 
 	"github.com/spf13/cobra"
@@ -50,7 +49,6 @@ var data []byte
 func init() {
 	rootCmd.AddCommand(fCmd)
 	fCmd.AddCommand(ghCmd)
-	fCmd.AddCommand(goodsCmd)
 	fCmd.AddCommand(qsCmd)
 	fCmd.AddCommand(wsCmd)
 
@@ -69,6 +67,7 @@ const (
 	GistSearch = "https://gist.github.com/search?q=%s"
 	RepoSearch = "https://github.com/search?q=%s&type=repositories"
 	FaCheck    = "icons/check.svg"
+	FaDoc      = "icons/doc.svg"
 	FaGists    = "icons/gists.png"
 	FaRepo     = "icons/repo.png"
 	FaSearch   = "icons/search.svg"
@@ -139,56 +138,6 @@ var ghCmd = &cobra.Command{
 	},
 }
 
-// goodsCmd represents the goods command
-var goodsCmd = &cobra.Command{
-	Use:   "goods",
-	Short: "A brief description of your command",
-	Run: func(cmd *cobra.Command, args []string) {
-
-		//
-		goods := goods.NewConfigGoods(data)
-
-		for _, s := range goods {
-			des := s.Des
-			remark := s.Des
-			if s.Goods != nil {
-
-				// var data [][]string
-				// for _, g := range s.Goods {
-				// 	data = append(data, []string{g.Type, g.Param, g.Price, g.Des})
-				// }
-
-				// tableString := &strings.Builder{}
-				// table := tablewriter.NewWriter(tableString)
-				// table.SetHeader([]string{"Type", "Param", "Price", "Des"})
-				// table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-				// table.SetCenterSeparator("|")
-				// table.AppendBulk(data) // Add Bulk Data
-				// table.Render()
-				//
-				// remark += fmt.Sprintf("\n\n --- \n \n%s", tableString)
-
-				var data []string
-				for _, g := range s.Goods {
-					data = append(data, fmt.Sprintf("%s[%s]%s: %s", g.Name, g.Param, g.Price, g.Des))
-				}
-				remark += fmt.Sprintf("\n\n --- \n \n%s", addMarkdownListFormat(data))
-			}
-			if s.Qs != nil {
-				qx := addMarkdownListFormat(s.Qs)
-				remark += fmt.Sprintf("\n\n --- \n \n%s", qx)
-			}
-			wf.NewItem(s.Type).Title(s.Type).Subtitle(fmt.Sprintf("[#%s] %s", s.Tag, des)).Valid(true).Arg(remark)
-		}
-
-		if len(args) > 0 {
-			wf.Filter(args[0])
-		}
-
-		wf.SendFeedback()
-	},
-}
-
 // qsCmd represents the qs command
 var qsCmd = &cobra.Command{
 	Use:   "qs",
@@ -217,9 +166,9 @@ var wsCmd = &cobra.Command{
 		tks := ws.NewConfigWs(data).SearchWs(args)
 
 		for _, ws := range tks {
-			item := wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.Des).Icon(&aw.Icon{Value: "icons/check.svg"})
+			item := wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"})
 
-			item.Cmd().Subtitle(fmt.Sprintf("Open URL: %s", ws.URL)).Arg(ws.URL)
+			item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", ws.URL)).Arg(ws.Des)
 			item.Opt().Subtitle(fmt.Sprintf("Copy URL: %s", ws.URL)).Arg(ws.URL)
 		}
 
@@ -301,16 +250,24 @@ func addMarkdownHeadingFormat(qq gh.Qq) string {
 func RenderRepos(repos gh.Repos) (item *aw.Item) {
 	for _, repo := range repos {
 		repoURL := repo.URL
-		var des string
+		var des strings.Builder
 		if repo.Tag != "" {
-			des = fmt.Sprintf("[#%s]  %s", repo.Tag, repo.Des)
+			des.WriteString(fmt.Sprintf("[#%s]", repo.Tag))
 		} else {
-			des = repo.Des
+			des.WriteString(repo.Des)
 		}
+
 		var remark strings.Builder
-		remark.WriteString(des)
+		remark.WriteString(des.String())
 		name := repo.FullName()
 		var iconPath string
+
+		if repo.Doc != "" {
+			des.WriteString(" [⭐️]")
+		}
+		if repo.Des != "" {
+			des.WriteString(fmt.Sprintf(" %s", repo.Des))
+		}
 
 		if repo.Pix != nil {
 			qx := addMarkdownPicFormat(repo.Pix)
@@ -353,13 +310,13 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 		}
 
 		item = wf.NewItem(name).Title(name).
-			Arg(remark.String()).
-			Subtitle(des).
+			Arg(repoURL).
+			Subtitle(des.String()).
 			Copytext(repoURL).
 			Valid(true).
 			Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
 
-		item.Cmd().Subtitle(fmt.Sprintf("Open URL: %s", repoURL)).Arg(repoURL)
+		item.Cmd().Subtitle(fmt.Sprintf("Open URL: %s", repoURL)).Arg(remark.String())
 		item.Opt().Subtitle(fmt.Sprintf("Copy URL: %s", repoURL)).Arg(repoURL)
 	}
 	return item
