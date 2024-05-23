@@ -35,3 +35,126 @@ repos:
     rev: v0.19.1
     hooks:
       - id: gitlint
+
+
+# repos:
+#  - repo: https://github.com/pre-commit/pre-commit-hooks
+#    rev: v4.2.0
+#    hooks:
+#      #- id: check-yaml
+#      #  args: [--allow-multiple-documents]
+#      - id: check-json
+#        exclude: ^.devcontainer/devcontainer.json$
+#      - id: end-of-file-fixer
+#      - id: trailing-whitespace
+#      - id: check-symlinks
+#      - id: mixed-line-ending
+#      - id: check-case-conflict
+#      - id: check-executables-have-shebangs
+#      - id: check-shebang-scripts-are-executable
+#      - id: check-merge-conflict
+#
+#  # keep fork in sync!
+#  - repo: https://github.com/gitpod-io/pre-commit-hooks
+#    rev: "2.1.5"
+#    hooks:
+#      - id: forbid-binary
+#        exclude: |
+#          (?x)^(
+#            .*example-layer.tar.gz|
+#            .*\.(png|svg|ico|gpg|webp)|
+#            dev/version-manifest/version-manifest|
+#            .*gradle-wrapper\.jar
+#          )$
+#      - id: script-must-have-extension
+#      - id: shellcheck
+#        args: [-e, "SC1090,SC1091"]
+#        exclude: .*/gradlew$
+#
+#  - repo: https://github.com/pre-commit/mirrors-prettier
+#    rev: "v2.6.2"
+#    hooks:
+#      - id: prettier
+#        # Only enabled for WebApp components initially, to build consensus and incrementally onboard others
+#        files: ^components\/(server|gitpod-protocol|gitpod-db|dashboard|ws-manager-bridge)\/.*\.ts(x?)$
+#
+#  - repo: https://github.com/dnephin/pre-commit-golang
+#    rev: "v0.5.0"
+#    hooks:
+#      - id: go-fmt
+#      - id: go-mod-tidy
+#
+#  - repo: local
+#    hooks:
+#      - id: license-header
+#        name: license-header
+#        entry: leeway run components:update-license-header
+#        language: system
+#        pass_filenames: false
+#
+#  - repo: local
+#    hooks:
+#      - id: mocha-tests-only
+#        name: mocha-tests-only
+#        entry: leeway run components:check-mocha-no-only
+#        language: system
+#        pass_filenames: false
+#
+#  - repo: https://github.com/antonbabenko/pre-commit-terraform
+#    rev: v1.75.0
+#    hooks:
+#      - id: terraform_fmt
+#        args:
+#          - --args=-diff
+#
+#  - repo: https://github.com/zricethezav/gitleaks
+#    rev: v8.15.0
+#    hooks:
+#      - id: gitleaks
+#
+#  - repo: local
+#    hooks:
+#      - id: dashboard-linter
+#        name: dashboard-linter
+#        entry: leeway run components/dashboard:lint
+#        language: system
+#        pass_filenames: false
+#        files: ^components/dashboard/
+#  - repo: https://gitlab.com/bmares/check-json5
+#    rev: v1.0.0
+#    hooks:
+#    - id: check-json5
+#      files: ^.devcontainer/devcontainer.json$
+#
+#exclude: ^install/installer/.*/.*\.golden$
+
+
+
+
+# # 这是pre-commit的全局配置之一
+#fail_fast: false
+#
+#repos:
+## hook所在的仓库
+#- repo: https://github.com/pre-commit/pre-commit-hooks
+#  # 仓库的版本，可以直接用tag或者分支，但分支是容易发生变化的
+#  # 如果使用分支，则会在第一次安装之后不自动更新
+#  # 通过 `pre-commit autoupdate`指令可以将tag更新到默认分支的最新tag
+#  rev: v4.0.1
+#  # 仓库中的hook id
+#  hooks:
+#  # 定义的hook脚本，在repo的.pre-commit-hooks.yaml中定义
+#  - id: check-added-large-files
+#  # 移除尾部空格符
+#  - id: trailing-whitespace
+#    # 传入参数，不处理makedown
+#    args: [--markdown-linebreak-ext=md]
+#  # 检查是否含有合并冲突符号
+#  - id: check-merge-conflict
+#- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+#  rev: v2.0.0
+#  hooks:
+#  - id: pretty-format-yaml
+#    # https://github.com/macisamuele/language-formatters-pre-commit-hooks/blob/v2.0.0/language_formatters_pre_commit_hooks/pretty_format_yaml.py
+#    # hook脚本需要的参数，可以在该hook脚本文件中看到
+#    args: [--autofix, --indent, '2']
