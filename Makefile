@@ -1,11 +1,11 @@
 ENABLED_AUTO_UPDATE ?= "false"
-LDFLAGS ?= -X github.com/91go/docs-alfred/cmd.EnabledAutoUpdate=$(ENABLED_AUTO_UPDATE)
+LDFLAGS ?= -X github.com/hxhac/docs-alfred/cmd.EnabledAutoUpdate=$(ENABLED_AUTO_UPDATE)
 
 HAVE_GO_BINDATA := $(shell command -v go-bindata 2> /dev/null)
 generate: ## go generate
 ifndef HAVE_GO_BINDATA
 	@echo "requires 'go-bindata' (go get -u github.com/kevinburke/go-bindata/go-bindata)"
-	@exit 1 # fail	
+	@exit 1 # fail
 else
 	go generate ./...
 endif

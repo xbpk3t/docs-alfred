@@ -1,18 +1,18 @@
 {
-    "go_mod_package": "github.com/91go/docs-alfred",
+    "go_mod_package": "github.com/hxhac/docs-alfred",
     "workflow": {
         "folder": ".workflow",
         "name": "docs-alfred",
         "description": "",
         "category_comment": "category: Tools, Internet, Productivity, Uncategorised",
         "category": "",
-        "bundle_id": "com.91go.docs",
+        "bundle_id": "com.hxhac.docs",
         "created_by": "",
-        "web_address": "https://github.com/91go/docs-alfred",
+        "web_address": "https://github.com/hxhac/docs-alfred",
         "version": "0.1.0"
     },
     "update": {
-        "github_repo": "https://github.com/91go/docs-alfred"
+        "github_repo": "https://github.com/hxhac/docs-alfred"
     },
     "license": {
         "type_comment": "support license https://github.com/nishanths/license",
