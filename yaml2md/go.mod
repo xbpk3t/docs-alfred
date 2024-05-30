@@ -2,7 +2,7 @@ module github.com/hxhac/render-md
 
 go 1.22
 
-replace github.com/hxhac/docs-alfred => ../
+replace github.com/hxhac/docs-alfred => ../workflow
 
 require (
 	github.com/hxhac/docs-alfred v0.0.0-00010101000000-000000000000
