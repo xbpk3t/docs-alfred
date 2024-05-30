@@ -1,4 +1,4 @@
-module github.com/hxhac/render-md
+module github.com/hxhac/docs-alfred/yaml2md
 
 go 1.22
 
