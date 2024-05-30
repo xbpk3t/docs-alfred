@@ -1,0 +1,198 @@
+- type: coding
+  feeds:
+    - feed: https://www.chenshaowen.com/atom.xml
+    - feed: https://qiankunli.github.io/pages/atom.xml
+    - feed: https://i6448038.github.io/atom.xml
+    - feed: https://rsshub.app/zhihu/zhuanlan/c_1147478886047719424
+    - feed: https://go.libhunt.com/newsletter/feed
+    - feed: https://colobu.com/atom.xml
+
+    - feed: https://mytechshares.com/atom.xml
+      des: 每篇都是干货。这老哥还挺能写，从 2022/04 到现在写了大概 60 篇博客。
+    - feed: https://blog.fleeto.us/index.xml
+    - feed: https://ttys3.dev/feed.xml
+    - feed: https://rsshub.app/infoq/recommend
+
+    - feed: https://www.hitzhangjie.pro/blog/index.xml
+      des: 干货很多的，可以看看
+
+    - feed: http://mysql.taobao.org//monthly/feed.xml
+      des: 数据库内核月报
+
+    - feed: https://www.likakuli.com/posts/index.xml
+      des: k8s
+
+    - feed: https://lotabout.me/atom.xml
+    - feed: https://dev.to/feed
+
+    - feed: https://go.dev/blog/feed.atom
+      des: golang official blog
+
+    - feed: https://ruudvanasseldonk.com/feed.xml
+      des: rust大佬
+    - feed: https://xuanwo.io/index.xml
+    - feed: https://jia.je/feed.xml
+
+    - feed: https://harrychen.xyz/feed.xml
+      des: THU超算队，对kernel比较熟
+    - feed: https://tech.meituan.com/feed/
+      des: 美团技术团队
+
+
+    - feed: https://rsshub.app/zhihu/xhu/zhuanlan/c_1108400140804726784
+      des: 术道经纬
+
+    #    - feed: https://kfngxl.cn/
+    #    - feed: https://rsshub.app/hellogithub/volume
+
+#    - feed: https://youerning.top/
+#      des: rust和golang新技术介绍，很实用
+
+    #    - feed: https://rsshub.app/zhihu/people/activities/qtmuniao
+    #      des: 木鸟杂记
+
+    - feed: https://pigsty.io/zh/index.xml
+      des: pigsty作者，pgsql吹
+
+    - feed: https://www.cnblogs.com/sunsky303/rss
+
+    - feed: https://www.cyningsun.com/feed.xml
+
+    - feed: https://www.luozhiyun.com/feed
+      des: 干货很多，博客内容涉及 k8s, sentinel, kafka, TiDB, Istio, redis 之类服务的源码，之前尝试去看他的这些源码梳理文档，但是确实没看懂
+
+    - feed: https://dbwu.tech/index.xml
+      des: k8s
+    - feed: https://weekly.tw93.fun/rss.xml
+      des: tw93 潮流周刊，一个前端coder的blog
+    - feed: https://lotabout.me/atom.xml
+      des: 还不错
+    - feed: https://thiscute.world/index.xml
+      des: NixOS
+    - feed: https://rsshub.app/dbaplus
+      des: DBAPlus
+
+
+- type: gh
+  feeds:
+    - feed: https://github.com/hapihacking.private.atom?token=ACBRRBYIL6MXCS7V7JKUNB6CJPUCK
+    - feed: https://github.com/hxhac.atom
+    - feed: https://rsshub.app/github/repos/github
+
+
+- type: podcast
+  feeds:
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5e280fab418a84a0461faa3c
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5e7cccf8418a84a046c4e7f9
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5ec6105c418a84a0469e29d3
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/61dab969ab2c6dcf05d5ffdf
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/606547c8e5c273d2a3689a3e
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/61358d971c5d56efe5bcb5d2
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/6278b07ad6e7a5551f799dd0
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5ef052b5418a84a04695a9b3
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5e2864f7418a84a04628f2da
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/61933ace1b4320461e91fd55
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5e280faf418a84a0461fbd39
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5e284e0d418a84a04626974e
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/625a62613dfc70e8519d1c4c
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5f97c0bf83c34e85ddb62397
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/606fdca6b3b59ee30e7c0d13
+    - feed: https://wayofthecrab.com/rss.xml
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/613753ef23c82a9a1ccfdf35
+    - feed: https://feeds.osf2f.net/osf2f.xml
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5e4ee557418a84a0466737b7
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/62f0866a8591545f27dc71fb
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/63995a333a2b7eba5ceb4658
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/61cbaac48bb4cd867fcabe22
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/5e7c74e5418a84a046a1f26c
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/61d4278c2654166e94d07d1f
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/61d06724ee197a3aac3dab61
+    - feed: https://changelog.com/jsparty/feed
+    - feed: https://changelog.com/shipit/feed
+    - feed: https://changelog.com/jsparty/feed
+    - feed: https://changelog.com/gotime/feed
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/62c6ae08c4eaa82b112b9c84
+    - feed: https://rsshub.app/xiaoyuzhou/podcast/64936d00ffa7530981aa94b6
+
+
+
+- type: news
+  feeds:
+    - feed: https://youxiputao.com/rss/atom
+    - feed: https://rsshub.app/sspai/index
+    - feed: https://rsshub.app/telegram/channel/aboutrss
+    - feed: https://rsshub.app/latepost
+    - feed: https://xclient.info/feed/
+    - feed: https://meta.appinn.net/tag/macos.rss
+    - feed: https://meta.appinn.net/tag/chrome.rss
+    - feed: https://meta.appinn.net/tag/ios.rss
+    - feed: https://meta.appinn.net/latest.rss
+    - feed: https://rsshub.app/macmenubar/recently
+#    - feed: https://rsshub.app/zhubai/niupitools
+    - feed: https://rsshub.app/huxiu/member/291659
+      des: 经济观察报
+
+    #    - feed: https://rsshub.app/bilibili/user/dynamic/2233213
+    #    - feed: https://rsshub.app/biquge/http://www.biqu5200.net/160_160033/
+    #    - feed: https://docusaurus.io/changelog/rss.xml
+    #    - feed: https://blog.jetbrains.com/zh-hans/feed/
+    #    - feed: https://rsshub.app/weibo/user/1687813073
+
+    - feed: https://rsshub.app/qingting/channel/418553
+      des: 察话会
+#    - feed: https://rsshub.app/qingting/channel/387255
+
+
+
+- type: zhihu
+  feeds:
+    - feed: https://rsshub.app/zhihu/people/activities/cao-feng-ze-37
+      url: https://www.zhihu.com/people/cao-feng-ze-37
+    - feed: https://rsshub.app/zhihu/people/activities/ffancage
+      url: https://www.zhihu.com/people/ffancage
+    - feed: https://rsshub.app/zhihu/people/activities/bu-xiang-shang-diao-wang-cheng-en
+      url: https://www.zhihu.com/people/bu-xiang-shang-diao-wang-cheng-en
+    - feed: https://rsshub.app/zhihu/people/activities/tuo-qia-ma-ke-zhi-guan
+      url: https://www.zhihu.com/people/tuo-qia-ma-ke-zhi-guan
+    - feed: https://rsshub.app/zhihu/people/activities/liu-shu-bin-57
+      url: https://www.zhihu.com/people/liu-shu-bin-57
+    - feed: https://rsshub.app/zhihu/people/activities/hu-jing-70-38
+      url: https://www.zhihu.com/people/hu-jing-70-38
+
+
+
+
+#- type: videos
+#  feeds:
+#    - https://rsshub.app/bilibili/user/dynamic/7481602
+#    - https://rsshub.app/bilibili/user/dynamic/1140672573
+#    - https://rsshub.app/bilibili/user/dynamic/9341526
+#    - https://rsshub.app/bilibili/user/dynamic/8262377
+#    - https://rsshub.app/bilibili/user/dynamic/584762039
+#    - https://rsshub.app/bilibili/user/dynamic/107335806
+#    - https://rsshub.app/bilibili/user/dynamic/243590309
+#    - https://rsshub.app/bilibili/user/dynamic/1952812643
+#    - https://rsshub.app/bilibili/user/dynamic/482469389
+#    - https://rsshub.app/bilibili/user/dynamic/1105349912
+#    - https://rsshub.app/bilibili/user/dynamic/436386560
+#    - https://rsshub.app/bilibili/user/dynamic/1596926736
+#    - https://rsshub.app/bilibili/user/dynamic/274729325
+#    - https://rsshub.app/bilibili/user/dynamic/404449409
+#    - https://rsshub.app/bilibili/user/dynamic/6011141
+#    - https://rsshub.app/bilibili/user/dynamic/34264408
+#    - https://rsshub.app/bilibili/user/dynamic/2083634390
+#    - https://rsshub.app/bilibili/user/dynamic/1522003987
+#    - https://rsshub.app/bilibili/user/dynamic/435931665
+#    - https://rsshub.app/bilibili/user/dynamic/477433087
+#    - https://rsshub.app/bilibili/user/dynamic/23008074
+
+#    - https://rsshub.app/bilibili/user/dynamic/415200463
+#    - https://rsshub.app/bilibili/user/dynamic/525971445
+#    - https://rsshub.app/bilibili/user/dynamic/2118238
+#    - https://rsshub.app/bilibili/user/dynamic/347757653
+#    - https://rsshub.app/bilibili/user/dynamic/2125684919
+#    - https://rsshub.app/bilibili/user/dynamic/1969038632
+#    - https://rsshub.app/bilibili/user/dynamic/6011141
+#    - https://rsshub.app/bilibili/user/dynamic/21146573
+#    - https://rsshub.app/bilibili/user/dynamic/1240419702
+
