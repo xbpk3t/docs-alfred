@@ -21,8 +21,8 @@ repos:
       - id: check-symlinks
       - id: mixed-line-ending
       - id: check-case-conflict
-      - id: check-executables-have-shebangs
-      - id: check-shebang-scripts-are-executable
+#      - id: check-executables-have-shebangs
+#      - id: check-shebang-scripts-are-executable
       - id: check-merge-conflict
   #  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   #    rev: v2.0.0
@@ -40,16 +40,16 @@ repos:
         types: [go]
         language: golang
         pass_filenames: false
-      - id: gofumpt
-        name: gofumpt
-        entry: gofumpt -l -w .
-        types: [go]
-        language: golang
-      - id: go-mod-tidy
-        name: go-mod-tidy
-        entry: go mod tidy -v
-        types: [go]
-        language: golang
+#      - id: gofumpt
+#        name: gofumpt
+#        entry: gofumpt -l -w .
+#        types: [go]
+#        language: golang
+#      - id: go-mod-tidy
+#        name: go-mod-tidy
+#        entry: go mod tidy -v
+#        types: [go]
+#        language: golang
       - id: fieldalignment
         name: fieldalignment
         types: [go]

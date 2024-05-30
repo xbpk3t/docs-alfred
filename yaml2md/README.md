@@ -2,6 +2,6 @@
 
 ```shell
 
-go install github.com/91go/yaml2md
+go install github.com/hxhac/yaml2md
 
 ```

@@ -30,8 +30,8 @@ jobs:
       - name: Build and pack
         run: |
           # build package
-          GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/91go/docs-alfred/cmd.EnabledAutoUpdate=true" -o exe_amd64
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/91go/docs-alfred/cmd.EnabledAutoUpdate=true" -o exe_arm64
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/hxhac/docs-alfred/cmd.EnabledAutoUpdate=true" -o exe_amd64
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/hxhac/docs-alfred/cmd.EnabledAutoUpdate=true" -o exe_arm64
           lipo -create -output .workflow/exe exe_amd64 exe_arm64
           rm  exe_amd64
           rm  exe_arm64

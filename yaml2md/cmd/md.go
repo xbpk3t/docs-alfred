@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/91go/docs-alfred/pkg/qs"
+	"github.com/hxhac/docs-alfred/pkg/qs"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
