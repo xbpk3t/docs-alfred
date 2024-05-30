@@ -121,13 +121,13 @@ repos:
   #      - id: terraform_fmt
   #        args:
   #          - --args=-diff
-#  - repo: local
-#    hooks:
-#      - id: gitleaks
-#        name: gitleaks
-#        description: Check Secrets and Token
-#        entry: gitleaks detect --source . -v
-#        language: golang
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks
+        description: Check Secrets and Token
+        entry: gitleaks detect --source . -v
+        language: golang
 #  - repo: local
 #    hooks:
 #      - id: dashboard-linter
