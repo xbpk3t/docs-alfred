@@ -1,0 +1,1 @@
+INPUT_FEEDS_PATH="feeds.yml" go run main.go
