@@ -21,6 +21,7 @@ type Goods []struct {
 	Param string `yaml:"param"`
 	Price string `yaml:"price"`
 	Des   string `yaml:"des"`
+	Use   bool   `yaml:"use"`
 }
 
 func NewConfigGoods(f []byte) (gk ConfigGoods) {

@@ -3,8 +3,11 @@ package gh
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"net/url"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -169,6 +172,63 @@ func (rs Repos) QueryReposByTag(tag string) Repos {
 		if repo.Tag == tag {
 			res = append(res, repo)
 		}
+	}
+	return res
+}
+
+// FilterReposMD x
+func (cr *ConfigRepos) FilterReposMD() ConfigRepos {
+	var filteredConfig ConfigRepos
+	for _, crv := range *cr {
+		if crv.Md {
+			var filteredRepos []Repository
+			for _, repo := range crv.Repos {
+				if repo.Qs != nil {
+					repo.Pix = addMarkdownPicFormat(repo.Pix)
+					filteredRepos = append(filteredRepos, repo)
+				}
+			}
+			crv.Repos = filteredRepos
+			filteredConfig = append(filteredConfig, crv)
+		}
+	}
+	return filteredConfig
+}
+
+func (cr *ConfigRepos) FilterWorksMD() ConfigRepos {
+	var filteredConfig ConfigRepos
+	for _, crv := range *cr {
+		if crv.Md {
+			var filteredRepos []Repository
+			crv.Repos = filteredRepos
+			filteredConfig = append(filteredConfig, crv)
+		}
+	}
+	return filteredConfig
+}
+
+// GetFileNameFromURL 从给定的 URL 中提取并返回文件名。
+func GetFileNameFromURL(urlString string) (string, error) {
+	// 解析 URL
+	parsedURL, err := url.Parse(urlString)
+	if err != nil {
+		return "", fmt.Errorf("error parsing URL: %v", err)
+	}
+
+	// 获取路径
+	urlPath := parsedURL.Path
+
+	// 获取文件名
+	fileName := path.Base(urlPath)
+
+	return fileName, nil
+}
+
+func addMarkdownPicFormat(URLs []string) []string {
+	res := make([]string, len(URLs))
+	for _, u := range URLs {
+		name, _ := GetFileNameFromURL(u)
+		res = append(res, fmt.Sprintf("![%s](%s)\n", name, u))
 	}
 	return res
 }

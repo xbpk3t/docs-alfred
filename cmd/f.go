@@ -3,13 +3,14 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/91go/docs-alfred/pkg/ws"
 	"log/slog"
 	"net/url"
 	"os/exec"
 	"path"
 	"slices"
 	"strings"
+
+	"github.com/91go/docs-alfred/pkg/ws"
 
 	"github.com/91go/docs-alfred/pkg/qs"
 
@@ -250,64 +251,10 @@ func addMarkdownHeadingFormat(qq gh.Qq) string {
 func RenderRepos(repos gh.Repos) (item *aw.Item) {
 	for _, repo := range repos {
 		repoURL := repo.URL
-		var des strings.Builder
-		if repo.Tag != "" {
-			des.WriteString(fmt.Sprintf("[#%s]", repo.Tag))
-		} else {
-			des.WriteString(repo.Des)
-		}
-
-		var remark strings.Builder
-		remark.WriteString(des.String())
 		name := repo.FullName()
-		var iconPath string
-
-		if repo.Doc != "" {
-			des.WriteString(" [⭐️]")
-		}
-		if repo.Des != "" {
-			des.WriteString(fmt.Sprintf(" %s", repo.Des))
-		}
-
-		if repo.Pix != nil {
-			qx := addMarkdownPicFormat(repo.Pix)
-			remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
-			iconPath = FaStar
-		}
-
-		if repo.Qs != nil {
-			qx := addMarkdownQsFormat(repo.Qs)
-			remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
-			iconPath = FaStar
-		}
-
-		if repo.Qq != nil {
-			qx := addMarkdownHeadingFormat(repo.Qq)
-			remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
-			iconPath = FaStar
-		}
-
-		if repo.Cmd != nil {
-			var cmds []string
-			for _, cmd := range repo.Cmd {
-				if len(cmd) > 1 {
-					cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
-				} else {
-					cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
-				}
-			}
-			qx := addMarkdownListFormat(cmds)
-			remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
-			iconPath = FaStar
-		}
-
-		if repo.Qs == nil && repo.Cmd == nil {
-			if repo.IsStar {
-				iconPath = FaCheck
-			} else {
-				iconPath = FaRepo
-			}
-		}
+		des := renderReposDes(repo)
+		remark := renderReposRemark(repo)
+		iconPath := renderIcon(repo)
 
 		item = wf.NewItem(name).Title(name).
 			Arg(repoURL).
@@ -320,4 +267,70 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 		item.Opt().Subtitle(fmt.Sprintf("Copy URL: %s", repoURL)).Arg(repoURL)
 	}
 	return item
+}
+
+// 渲染des
+// 也就是item中的subtitle
+func renderReposDes(repo gh.Repository) (des strings.Builder) {
+	if repo.Tag != "" {
+		des.WriteString(fmt.Sprintf("[#%s]", repo.Tag))
+	} else {
+		des.WriteString(repo.Des)
+	}
+
+	if repo.Doc != "" {
+		des.WriteString(" [⭐️]")
+	}
+	if repo.Des != "" {
+		des.WriteString(fmt.Sprintf(" %s", repo.Des))
+	}
+
+	return
+}
+
+// 渲染remark
+// 也就是
+func renderReposRemark(repo gh.Repository) (remark strings.Builder) {
+	if repo.Pix != nil {
+		qx := addMarkdownPicFormat(repo.Pix)
+		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+	}
+
+	if repo.Qs != nil {
+		qx := addMarkdownQsFormat(repo.Qs)
+		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+	}
+
+	if repo.Qq != nil {
+		qx := addMarkdownHeadingFormat(repo.Qq)
+		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+	}
+
+	if repo.Cmd != nil {
+		var cmds []string
+		for _, cmd := range repo.Cmd {
+			if len(cmd) > 1 {
+				cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
+			} else {
+				cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
+			}
+		}
+		qx := addMarkdownListFormat(cmds)
+		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+	}
+	return
+}
+
+func renderIcon(repo gh.Repository) (iconPath string) {
+	if repo.Qs == nil && repo.Cmd == nil {
+		if repo.IsStar {
+			iconPath = FaCheck
+		} else {
+			iconPath = FaRepo
+		}
+	}
+	if repo.Pix != nil || repo.Qs != nil || repo.Cmd != nil {
+		iconPath = FaStar
+	}
+	return
 }
