@@ -56,7 +56,7 @@ func NewConfig() *Config {
 		}
 		Conf = &Config{
 			Path:       path,
-			Timeout:    100,
+			Timeout:    30, // 最多retry 6次，所以设置为30（第一次retry 5s，则第6次 = 5 * 2^5 = 160s，合计315s）
 			FeedLimit:  20,
 			Author:     ReadEnv("INPUT_AUTHOR_NAME", "github-actions"),
 			FeedLink:   ReadEnv("INPUT_FEED_LINK", ""),
@@ -233,12 +233,12 @@ func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) *feeds.
 			}
 
 			feed.Items = append(feed.Items, &feeds.Item{
-				Title:       item.Title,
-				Link:        &feeds.Link{Href: item.Link},
-				Description: item.Description,
-				Author:      &feeds.Author{Name: e.getAuthor(sourceFeed)},
-				Created:     created,
-				Content:     item.Content,
+				Title: item.Title,
+				Link:  &feeds.Link{Href: item.Link},
+				// Description: item.Description,
+				Author:  &feeds.Author{Name: e.getAuthor(sourceFeed)},
+				Created: created,
+				// Content:     item.Content,
 			})
 			seen[item.Link] = true
 		}
