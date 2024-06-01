@@ -1,0 +1,1075 @@
+#- url: https://github.com/sohaha/zlsgo
+#  des: 类似lancet，比较杂。支持处理JSON、字符串，还支持作为HTTP服务、DI、HTML解析、hot reload之类的。也可以参考其实现。
+#
+#- url: https://github.com/csunny/argo
+#  des: 使用go语言实现数据结构与算法，涵盖字符串、数组、链表、队列、栈、树、图等数据结构。
+#- url: https://github.com/ecodeclub/ekit
+#
+#- url: https://github.com/bytedance/gopkg
+#  des: 字节开源的，也是工具库，提供了一些std不提供，但是比较常用的操作。collection中提供了hashset, skipmap, skipset, zset等数据类型。lang对chan, string, sync添加了一些自定义方法。
+
+
+#- url: https://github.com/duke-git/lancet
+#  des: Pretty useful. LRU, sort, datetime, math, random, retry, etc. 更像是一个utils库，比较杂，可以用来看一些实现，或者直接复制其代码，没必要整个引入。
+
+# kernel
+
+
+- type: kernel
+  repo:
+    - url: https://github.com/torvalds/linux
+    - url: https://github.com/Altair-Alpha/CS144-Lab
+    - url: https://github.com/PKUFlyingPig/CS144-Computer-Network
+    - url: https://github.com/mit-pdos/xv6-public
+    - url: https://github.com/mit-pdos/xv6-riscv
+    - url: https://github.com/ranxian/xv6-chinese
+    - url: https://github.com/ti-mo/netfilter
+    - url: https://github.com/lxc/lxc
+      des: lxc, lxc其实就是进程容器嘛，
+    - url: https://github.com/lxc/lxcfs
+    - url: https://github.com/brianwatling/libfiber
+      des: A User Space Threading Library Supporting Multi-Core Systems
+    - url: https://github.com/NixOS/nix
+      des: |
+        首先要分清楚Nix和NixOS，Nix 是一个声明式的软件包管理器，而NixOS基于Nix实现（也就是"OS as Code"）
+        Distro的尽头是NixOS
+
+        可以说nixos对我们这种“对OS清洁有强迫症”的人来说是唯一选择，但是也有其相对应的代价。nixos目前很大的问题除了不兼容FHS以外，其官方倾向于使用nix管理所有pkg（也就是废掉所有语言自带的包管理工具，甚至vscode插件，而是用nix表达式来管理），以及nixos的“存储空间占用问题”。
+
+        原子化、容器化OS
+        怎么在nixos安装 golang开发环境？
+
+        nixos还有一个很酷的入门办法，先在虚拟机上安装，然后把你折腾好的配置文件拷贝出来，然后新电脑上导入配置文件生成系统，就会变成你精心调制好的虚拟机上的系统了，完全一模一样。
+
+    - url: https://github.com/NixOS/nixpkgs
+    - url: https://github.com/ryan4yin/nixos-and-flakes-book
+      des: Nix教程
+    - url: https://github.com/89luca89/distrobox
+      des: Distrobox, 简单来说就是个Wrapper，或者说Docker或Podman的前端，用来在。本质上还是要
+    - url: https://github.com/ublue-os/boxkit
+      des: 搭配 Distrobox 使用的
+
+    - url: https://github.com/DPDK/dpdk
+      des: 旁路网卡IO，绕过内核直接在用户态收发包来解决内核的瓶颈。kernel默认收发数据需要“网卡 -> 驱动 -> 协议栈 -> Socket接口 -> 业务”，而DPDK基于UIO（Userspace I/O）旁路数据，收发数据时“网卡 -> DPDK轮询模式-> DPDK基础库 -> 业务”。对我们互联网后台开发来说DPDK框架本身提供的能力还是比较裸的，比如要使用DPDK就必须实现ARP、IP层这些基础功能，有一定上手难度。如果要更高层的业务使用，还需要用户态的传输协议支持。不建议直接使用DPDK。
+      qs:
+        - q: DPDK, XDP 是啥关系
+        - q: How does DPDK works? UIO
+          x: UIO旁路了内核，主动轮询去掉硬中断，DPDK从而可以在用户态做收发包处理。带来Zero Copy、无系统调用的好处，同步处理减少上下文切换带来的Cache Miss。
+        - q: PMD (Poll Mode Driver)
+          x: DPDK的UIO驱动屏蔽了硬件发出中断，然后在用户态采用主动轮询的方式
+        - q: 在DPDK中，什么是网卡绑定（NIC bonding）
+        - q: DPDK的主要数据结构和组件
+        - q: DPDK和XDP如何与用户空间应用程序和内核空间进行交互
+        - q: 举例说明如何使用DPDK或XDP来实现数据包过滤功能
+        - q: 什么是DPDK的大页（huge page）机制？它的作用是什么？
+          x: 用HugePage(2MB)而不是默认的page(4kb)，减少TLB Miss
+        - q: 在DPDK中，什么是多队列（multi-queue）和RSS（Receive Side Scaling）？
+    - url: https://github.com/xdp-project/xdp-tutorial
+    - url: https://github.com/cloudflare/xdpcap
+      des: ??? XDP capture
+
+
+    # kernel 相关学习资料
+    - url: https://github.com/0voice/kernel_new_features
+    - url: https://github.com/seaswalker/tiny-os
+    - url: https://github.com/dibingfa/flash-linux0.11-talk
+
+
+
+- type: filesystem
+  repo:
+    - url: https://github.com/mhx/dwarfs
+      des: 高性能、高压缩比的只读文件系统，适用于Linux、Windows和macOS。该项目的目标是实现在高度冗余数据情况下的极高压缩比。
+    - url: https://github.com/maharmstone/btrfs
+      des: btrfs相比于其他fs最大的特点是COW和snapshot. 还支持透明压缩.
+    - url: https://github.com/openzfs/zfs
+      des: ZFS（Zettabyte File System）被设计用于处理大量数据，并且具有高性能、高可靠性和强大的数据保护功能。ZFS的一些关键特性包括存储池、快照、克隆、数据完整性校验和自动修复等。ARC（Adaptive Replacement Cache）是ZFS中使用的缓存算法，用于管理内存中的缓存数据，以提高文件系统的读取性能。ARC算法是一种自适应的缓存替换策略，它结合了LRU和LFU两种策略的优点，通过动态调整缓存中不同数据的保留策略，以适应不同的访问模式。ARC算法能够根据数据的访问频率和最近访问时间来优化缓存的使用，从而提高缓存命中率和系统的整体性能。简而言之，ZFS是一个功能丰富的文件系统，而ARC缓存是ZFS中用于提升读取效率的一种高级缓存管理算法。
+  des: SquashFS, zfs, btrfs, OverlayFS, BcacheFS(>kernel6.7)
+
+
+
+
+
+
+- type: DNS
+  md: false
+  repo:
+    - url: https://github.com/hashicorp/mdns
+      des: Simple mDNS client/server library in Golang. Used to optimize DNS.
+    - url: https://github.com/TencentCloud/httpdns-sdk-android
+      des: Tencent Cloud HTTPDNS SDK. HttpDNS通过HTTPS向自己的 DNS 服务器发送域名解析请求，替代了传统的基于 DNS 协议向运营商 Local DNS 发起解析请求的方式，优化了移动互联网服务中域名解析异常带来的问题。直接集成到各种client即可，跟服务端无关。
+    - url: https://github.com/TimothyYe/godns
+      des: A dynamic DNS client tool that supports AliDNS, Cloudflare, Google Domains, DNSPod, HE.net & DuckDNS & DreamHost, etc, written in Go.
+    - url: https://github.com/felixonmars/dnsmasq-china-list
+      des: Chinese-specific configuration to improve your favorite DNS server. Best partner for chnroutes.
+    - url: https://github.com/pi-hole/pi-hole
+    - url: https://github.com/nadoo/glider
+      des: glider is a forward proxy with multiple protocols support, and also a dns/dhcp server with ipset management feats(like dnsmasq).
+    - url: https://github.com/coredns/coredns
+      des: CoreDNS 是 k8s 集群默认的 DNS 服务组件，CoreDNS 主要负责为集群内的 Pod 和 Service 提供 DNS 解析能力。
+  qs:
+    - q: What's DNS? (hostname2ip) What are the cons of DNS?
+    - q: DNS解析过程? router是直接解析还是转发DNS?
+    - q: DNS zone
+
+
+
+
+- type: Protocol
+  repo:
+    - url: https://github.com/quic-go/quic-go
+      des: QUIC = Quick UDP Internet Conn
+      qs:
+        - q: How to optimize HTTP?
+          x: long conn, TFO, Domain Sharding(browser limit domain conn)
+        - q: structure of HTTP? (header, body)
+        - q: "@HTTP headers type"
+          x: general, request, response, entity
+        - q: websocket conn process? What headers are used?
+          x: (handshake, exchange data. switch protocols, similar with HTTP2.) (Connection, Upgrade)
+      qq:
+        - topic: HTTP status code
+          url: https://github.com/for-GET/http-decision-diagram
+          qs:
+            - q: HTTP status list # [HTTP Decision Diagram](https://for-get.github.io/http-decision-diagram/httpdd.fsm.html)
+            - q: common used status code? (3241x)
+            - q: How does http cache-control works in HTTP and browser? What exactly is the status code 304?
+            - q: What about 301/308, 303/307?
+              x: "redirect(permanent/temporary), qs(get/post), (browser caching) *其实所谓的`永久`和`临时`，本质上来说是`浏览器缓存`的问题*。301 会缓存该 url 到浏览器，有效期通常为 100d，请求时，会直接从缓存中取出该短链映射的 url，返回时在 header 中添加参数`Location: url`指定原链接。而 302 还是会跳转到原 url，所以被称为“临时重定向”。"
+        - topic: QUIC
+          qs:
+            - q: QUIC协议解决了哪些HTTP/2中存在的问题？有哪些性能提升？
+              x: HOL Blocking(队头阻塞head-of-line blocking)
+            - q: 为什么需要在HTTP/3中使用QUIC协议？HTTP/3是如何与QUIC协议相结合的？
+              x: 0-RTT
+            - q: HTTP2 (消除了应用层的队头阻塞，拥有header compression、二进制帧(plain text->binary)、多路复用、流量控制、服务器推送. )
+            - q: 为啥HTTP2之后应该用Domain Sharding来代替 resource merging?
+            - q: HTTP3 feats? Why high perf?
+              x: not seq(not block), UDP(QUIC)-based, CUBIC->BBR, 0-RTT()
+    - url: https://github.com/alibaba/xquic
+      des: 阿里搞的QUIC
+    - url: https://github.com/openssl/openssl
+      des: 提供了 TLS、DTLS 和 QUIC（目前仅限客户端）等协议的实现。它还包含一个通用的密码库，可独立使用。OpenSSL 是基于 SSLeay 库开发的。需要注意的是kernel的TLS协议是自己实现的，也就是Kernel TLS，它比 OpenSSL 更高效，因为它直接在内核空间中进行加密和解密操作，减少了用户空间和内核空间之间的上下文切换。说白了，应用场景不同。
+      qs:
+        - q: What happens in TLS handshake? Compares to TCP handshake process?
+          x: (RSA+AES hybrid encryption)
+        - q: TLS, OCSP stapling
+          x: (record and handshake)
+        - q: 怎么优化“TLS 握手时间”？
+    - url: https://github.com/oracle/ktls-utils
+    - url: https://github.com/jpillora/chisel
+      des: a fast TCP/UDP tunnel, transported over HTTP, secured via SSH
+    - url: https://github.com/the-tcpdump-group/tcpdump
+      des: 名为tcpdump，但是能抓所有network layer和application layer的数据包，包括但不限于TCP、UDP、ICMP、ARP、IP和Ethernet，还可以用于分析 IPv6 数据包。tcpdump 的强大之处在于其灵活性和丰富的过滤功能，用户可以根据自己的需求编写过滤表达式来捕获特定类型的数据包。例如，用户可以基于源地址、目的地址、端口号、协议类型或其他数据包内容来过滤数据包。
+      qs:
+        - q: TCP segment.
+        - q: 5-tuple in TCP?
+          x: The tuple (source IP address, source port, destination IP address, destination port, transport protocol). A 5-tuple uniquely identifies a UDP/TCP session.
+        - q: How to use nc(Netcat) to read and transfer data from TCP and UDP?
+        - q: 还是要搞清楚TCP长连接和HTTP长连接
+      qq:
+        - topic: conn
+          qs:
+            - q: 11 states of TCP?
+            - q: 三次握手 Three-Way handshake process?
+              x: (SYN queue, accept queue)
+            - q: TCP的半连接队列和全连接队列分别是啥?
+            - q: 四次挥手 close process?
+            - q: 为什么建立连接要三次握手，而断开连接要四次？
+              x: 因为 TCP 连接是全双工的，双方都需要告知对方关闭，告知时都需要经过一个来回。第二次和第三次挥手时，服务端的 ack+fin 不能一起回复，因为第一次挥手时，客户端告知了服务端要关闭连接，但是服务端可能还有数据要发给客户端处理，所以先回复一个 ack 的应答，在服务端主动关闭连接发起 fin 之前，还有剩余的数据包需要发送过。
+            - q: 服务器有大量TIME_WAIT和CLOSE_WAIT状态的TCP连接? 这些conn是怎么产生的? 为什么 TCP 四次挥手，要等待 2MSL 才能关闭? How to resolve?
+              x: TIME_WAIT 是主动断开连接的一方会出现的，与TIME_WAIT成对出现的是CLOSE_WAIT，CLOSE_WAIT出现在被动断开连接的一方，client和server都有可能出现。TIME_WAIT会持续2MSL（MSL默认2min，2MSL就是4min，但是可以自定义）之后关闭。所以在高并发场景中，一定会有大量TIME_WAIT状态。可想而知，如果大量出现这种状态，那么大量conn无法真正进入CLOSED状态，就会产生大量overhead，连接数直接被打满，无法创建新连接，导致client连接失败。解决方案也是类似的，最有效的方法当然是直接TCP长连接（而不是现在这种高并发场景导致的大量短连接）。如果无法使用长连接，那就“允许 time_wait 状态的连接可以被复用和减少 time_wait 的时间 (但是可能会存在旧连接数据包乱序和旧连接没有正常关闭的问题)”。
+            - q: TCP 四次挥手中，客户端的 FIN_WAIT_2 状态如何处理乱序的报文? fin包为什么会是乱序的? kernel怎么解决这个问题的?
+              x: 当四次挥手完成了前两次后会变成 FIN_WAIT_2 状态，服务端会把自身还在处理的数据知会给客户端后才会开始发起三次挥手 FIN。如果这个时候，服务端把剩余的数据发送给客户端的报文因为网络拥堵导致比 fin 包要晚到，这时候 fin 包的 seq 在客户端那边就会体现出是有乱序且有间隔的。内核的解决方案是，会把这些乱序报文放到乱序队列里面，等前面晚到的报文到达后才会一起执行。也就是 tcp 的超时重传，以及滑动窗口的机制去保证 TCP 四次挥手中的可靠性
+            - q: TFO (TCP-fastopen), 如果用了TFO三次握手流程?
+              x: TFO是TCP的一个可选配置项，就是通过FOC来给曾经建立过连接的conn来减少一次握手。
+        - topic: reliability
+          qs:
+            - q: "***How does TCP ensure reliability? (FC, EC, CC, ARQ)***"
+              x: |
+                EC 差错控制 (乱序问题) (checksum, seq, ack)
+                FC 流量控制 (wnd, tag flow,)
+                CC 拥塞控制 (packet-loss based, cwnd, ssthresh, slow start, fast retransmit)
+                ARQ 机制 (丢包重传) (Fast Retransmit, After 3 DACK) 丢包重传机制和拥塞控制无关，二者都属于为了保证 TCP 可靠性的机制。丢包重传机制通常会在网络拥塞时触发，所以通常会被误认为是拥塞机制的一部分，这种认知是错误的。总结来说，专人专事，拥塞控制是用来判断网络是否拥塞的，而丢包重传是用来确保数据的可靠传输，而不是主动控制网络拥塞。
+
+                如果拿微信发消息举例，EC就是首先得确保你发送的消息没有错别字、语法错误或者信息不连贯，没有颠三倒四、前言不搭后语吧。差错控制通常通过使用校验和、循环冗余校验（CRC）等技术来实现。
+
+                - CC则是限制发送方发微信的总量，不让发送方一次发送太多（如果发送太多，就随机丢弃一些信息）。
+                - FC则是来匹配发送方和接收方的处理信息能力（网络好、接收方能力强就多发，否则就少发），所以需要给重要信息打个 tag，优先处理。
+                - 滑动窗口：是一种用于流量控制和拥塞控制的技术，它允许发送方在等待确认之前发送一定数量的数据。在微信聊天中，这可以想象为一个“缓冲区”，里面包含了你已经发送但还未得到确认的消息。如果缓冲区满了，你就需要等待一些消息得到确认后再继续发送。
+                - 拥塞窗口：是拥塞控制中的一个概念，它限制了发送方在任何给定时间可以发送的数据量。在微信聊天的比喻中，这相当于你根据网络状况和对方的接收能力来调整你一次能发送的消息数量。
+
+            - q: cwnd (Congestion Window) 和 ssthresh (Slow Start Threshold) 分别是什么? 这两个参数是怎么决定使用哪种限流算法的? Why?
+              x: 当 cwnd > ssthresh 使用慢启动算法，如果相反则停用慢启动算法，使用拥塞控制算法。
+            - q: What's Relay ACK, Cumulative ACK, Duplicate ACK, Delayed ACK(延迟应答)?
+            - q: CC params
+              x: (RTT, RT0(Retransmit Timeout), cwnd)
+            - q: "***概述并且对比一下不同TCP versions的实现和性能 (Reno, Cubic, BBR, bbr2, iperf3, vegas, Westwood, BIC)***"
+              x: 如果拿用迅雷来举例，Reno/CUBIC就是勾选“下载优先”，而Vegas则是“上网优先”，那BBR就是“智能模式”。BBR算法相比Reno和CUBIC这种基于AIMD快速达到bandwidth最大流量的算法（但是这个对其他TCP连接则不利），更智能地利用网络带宽，通过实时监测网络延迟和动态调整发送速率来减少拥塞，而不是仅依赖丢包信号来调整，从而提高网络传输效率和公平性。
+            - q: TCP默认使用哪种Concurrency Control算法呢?
+              x: 我们所说的TCP Version实际上指的是Congestion Control机制，TCP本身没有默认的拥塞控制算法，我们可以在kernel中自定义。
+            - q: AIMD 线增积减
+              x: 线性增长（经过 1 个 RTT，拥塞窗口大小会加 1）、积性减少（当发送方发送的数据包丢包时，拥塞控制阈值会减半）
+        - topic: SWS (Silly Window Syndrome)
+          qs:
+            - q: What's SWS? 为什么会SWS?
+              x: 弱网环境这个经典场景所产生的现象（接收方的接收能力变差，导致窗口大小缩小，使得发送方发送的数据包中有效载荷非常小，大部分是TCP报文头部，从而造成带宽的浪费）
+            - q: How to resolve? (nagle, D-ACK)
+              x: 可以通过接收方和发送方的策略来避免SWS。接收方可以在窗口大小小于某个阈值时关闭窗口，直到有足够的缓冲区空间再打开。发送方可以使用Nagle算法，延迟发送小数据包，直到满足特定条件，如已收到先前数据的确认或有足够的数据积累。
+            - q: Nagle算法是什么，如何工作？
+              x: Nagle算法是一种发送方策略，用于减少小数据包的发送。它通过延迟发送小数据包，直到满足两个条件之一：已发送的数据都已经收到确认应答，或者积累的数据大小达到或超过最大段长度（MSS）。这样可以减少发送的总数据包数量，提高网络效率。Nagle 是 TCP 的一个配置项，用来做“小包发送的优化”，具体来说，就是让发送方累计数据，一次发送。*还是拿微信聊天举例，就是让发送方别老发“hhhh”、“然后呢？”之类的这些零碎话，或者把一整段文字一句一条发出来。让他把多条文字整合成段，再发出来。* 这样就会导致接收方出现延迟。
+            - q: 怎么判断是否要配置Nagle? 怎么给TCP配置Nagle?
+              x: 这是个取舍问题，如果默认开启 Nagle 就会导致延迟，如果禁用 Nagle 又可能导致 SWS。因此，大部分场景下都应该开启 Nagle，如果是视频通话/网游等低延迟场景，则应该关闭 Nagle。
+        - topic: UDP
+
+          qs:
+            - q: What's UDP? How does it works?
+              x: listening port, conn
+            - q: "***Compare with TCP***"
+              x: TCP和UDP的区别，归根到底是假设场景不同。从RFC 793 可知，从网络 IO 缓冲中读出来的数据必须是无损的、无冗余的、有序的、无间隔的。但是，网络环境是复杂的，默认会损坏、乱序、丢包、冗余，所以会使用一整套手段来防止这些问题发生。header struct, features, pros and cons, usage scenarios,
+            - q: 对比了一下 UDP 和 TCP 的 header segment，为啥TCP使用offset，而不是UDP那样的length?
+              x: TCP的offset就相当于UDP的length
+        - topic: ARQ
+          qs:
+            - q: How does ARQ works?
+              x: (Stop-and-Wait AQR, Go-Back-N ARQ, Selective Repeat ARQ(SACK))
+    - url: https://github.com/skywind3000/kcp
+      des: Better KCP
+      qs:
+        - q: What's' KCP? What's the feats? How does it works? KCP报文结构？
+        - q: Compare KCP and TCP? 两者最核心的区别是什么?
+          x: (FC, CC, EC) (UDP+ARQ, RT0, )
+    - url: https://github.com/HarshKapadia2/tcp-version-performance-comparison
+      des: Performance Comparison of TCP Versions. (Reno, CUBIC, Vegas, BBR). 基于Rlang实现的
+    - url: https://github.com/google/bbr
+      des: BBR, 注意需要在v2, v3下找sc.
+      doc: https://zhuanlan.zhihu.com/p/383910510
+      qs:
+        - q: BBR算法的基本原理是什么？
+          x: 利用估算的带宽bw和延迟RTT直接推测拥塞程度（而不是基于发包的AIMD）从而计算滑动窗口。BBR的目标是最大化利用网络的带宽容量（BDP），通过调整拥塞窗口（cwnd）和pacing rate来避免网络拥塞。
+        - q: BBR算法如何计算即时带宽？
+          x: 通过测量已应答的数据量（delivered）和这些数据被确认所用的时间（interval_us）来计算即时带宽。具体的计算公式为：bw = delivered / interval_us。
+        - q: BBR算法的状态机有哪些状态？
+          x: STARTUP、DRAIN、PROBE_BW和PROBE_RTT。BBR通过这些状态机来动态调整pacing rate和cwnd
+        - q: BBR算法如何处理丢包和RTT增加？
+          x: BBR算法区分了噪声丢包和拥塞丢包。对于噪声丢包，BBR不会因为丢包而降低即时带宽的计算，因此不会因为非拥塞性的丢包而减少cwnd。对于拥塞丢包，BBR会观察RTT是否持续增加，如果RTT没有达到最小值或更小，那么BBR会认为网络可能真的发生了拥塞，并相应地调整cwnd
+        - q: BBR算法如何与公平队列（FQ）协同工作？
+          x: FQ可以根据BBR设置的pacing rate将数据包平缓地发送到网络中，而不是一次性突发。这种平缓发送的方式有助于减少网络拥塞，提高整体的网络性能。
+    - url: https://github.com/DhavalKapil/icmptunnel
+      des: ICMP
+    - url: https://github.com/mpolden/echoip
+      des: IP address lookup service
+    - url: https://github.com/lwip-tcpip/lwip
+      des: lwIP
+      qs:
+        - q: IPv4和IPv6的header有啥区别
+        - q: 具体聊聊IP header每个字段的具体作用?
+        - q: IP addr, Network addr, Broadcast addr
+      qq:
+        - topic: Dynamic Routing
+          qq:
+            - q: What about 'dynamic routing protocols'?
+            - q: AS, IGP, EGP
+            - q: Compare BGP and OSPF?
+              x: (环路问题, negative weight edges) (Dijkstra) (BGP sponsor exchange msg, )
+            - q: RIP
+            - q: What's NAT?
+        - topic: NAT
+          des: NAT (Network Address Translation) 用来改我们的源 IP 地址。例如我们网络上的内部 IP 地址，并且在出 Internet 时将其替换为自己的公共 IP 地址。也就是用来吧把内网IP改成公网IP。
+    - url: https://github.com/insomniacslk/dhcp
+      des: DHCPv6 and DHCPv4 packet library, client and server written in Go
+      qs:
+        - q: How does DHCP allocate IP on the LAN?
+          x: (discover, offer)
+    - url: https://github.com/beevik/ntp
+      des: SNTP = Simple Network Time Protocol
+      qs:
+        - q: How does NTP works? work mode?
+    - url: https://github.com/mdlayher/icmpx
+      des: ICMP，需要注意的是kernel默认的conn中并不会使用ICMP进行网络诊断（虽然ICMP是IP的附属协议）
+      qs:
+        - q: What's ICMP? struct?
+          x: unreachable, redirect msg, source quench, time exceeded
+        - q: "***traceroute 的原理?***"
+          x: (ttl=1/2/.../n, invalid UDP port(unreachable), MTU?) 设置TTL递增的（非法端口号的）UDP包，直到返回“端口不可达”错误的ICMP报文。之所以这么搞，是因为UDP是无连接的，它允许我们即使在没有建立连接的情况下也能发送数据包并接收错误响应，从而探测网络环境。如果不报错就无法真正探测网络环境。类比一下就是给佛祖送《道德经》，肯定会被打回来，这下就知道target机器的IP了。如果送《金刚经》，人家直接遁入空门了。
+
+        - q: "***ping 的原理?***"
+          x: |
+            (ECHO REQUEST, ECHO REPLY) flag和seq，具体就是三部分
+            1 构建数据包并发送：机器 A构建一个`ICMP 回送请求报文`+`IP 头`+`MAC 头`的数据包，并发送出去，其中 IP 头包含了`源 IP 地址`和`目标 IP 地址`，MAC 头包含了`源 MAC 地址`和`目标 MAC 地址`(通过 ARP 协议获得)
+            2 对比 MAC 头并发送应答包：机器 B 收到数据包后，对比其中的`目标 MAC 地址`是否与本机相同，相同则接受，不同则丢弃，如果接受到的话，会构建一个`ICMP 回送响应报文`，再发送给机器 A
+            3 接收应答包：在规定时间内，机器 A 如果收到 ICMP 的应答包，则说明机器 B 可达，否则不可达
+        - q: How does MTR works?
+          x: MTR 相当于 traceroute + ping，traceroute 无法获取精确的延迟数据，所以我们通常都会像 MTR 这样组合使用，在 traceroute 的每个节点持续进行 ping 操作，来获取更精确的延迟数据。
+    - url: https://github.com/cloudflare/pmtud
+      des: PMTUD = Path MTU Discover. MTU是网络层协议，所以当然也是IP协议的附属协议，MTU是用来确保IP数据包不需要在传输过程中被分片，从而提高网络效率和避免分片带来的问题。PMTUD通常依赖于ICMP消息来检测路径上是否存在更小的MTU，并相应地调整数据包大小。
+  qs:
+    - q: "***数据包在TCP/IP中流转的大概流程? 数据包怎么产生? 每一层怎么处理?***"
+      x: |
+        DNS 协议，把我们的 url 解析成 IP
+        ARP 负责解决下一跳网关 IP 的 MAC 地址，让网关能够得到目标 MAC，从而完成以太网帧的封装
+
+        TCP 确保数据包的可靠传输
+        IP 可以想象成一个门牌号
+        HTTP 则是快递包里的具体数据
+
+        *物理层：因为基于物理电路，所以需要一个将数据转化为物理信号的层*
+
+        数据链路层的主协议是 ARP 协议 *用来实现 IP 地址到 MAC 地址的映射* (物理地址（MAC 地址）是数据链路层和物理层使用的地址，IP 地址是网络层和以上各层使用的地址，是一种逻辑地址)
+
+        *网络层负责`ip 数据包的产生`以及`ip 数据包在逻辑网络上的路由转发`。网络层的主协议是 IP 协议。* 网络层的其他协议均为 IP 协议的附属协议，比如`BGP 等路由协议族`保证最短路径。`ICMP/IGMP`则保证包在网络上的正常传输 (给传输层以保障，如果错误则直接返回错误)。
+
+        *网络层已经解决了基本的发送数据包的问题，传输层的目的则是，针对不同的需求，产生了不同的传输层协议*（比如有一些特殊的需求，有的人想要连接快，不介意丢包，有的人想要连接稳定）。
+
+        *传输层已经根据各种需求，封装了不同的传输层协议*。应用层将需求细化，根据我们的实际使用封装了各种供我们直接使用的协议。
+
+        可以用“邮局收发邮件来通信”来类比网络中数据包的收发。具体来说，向顺丰下单（第一次请求），顺丰接单（应答)，你向快递小哥联系 (回应应答)，你将消息放进盒子里 (开始封装请求，会话层)，快递小哥封装 一层盒子贴上快递单带回网店 (传输层），到快递点检查是否区域快件（网络层)，将 快件交给运输车 (链路层)，各个快递转运 中心（物理层），快件到达收件市转运中心 (物理层），转运输车（链路层），到达区 域分发（网络层)，网点派送（传输层)，快递员方面签收（会话层），拆开检查（表示层)，收到快递（应用层）。总结一下，下单、揽件、运输、派送、签收，就可以分别看作是应用层、传输层、网络层、链路层、物理层。
+
+    - q: (segment, packet, frame, stream)
+      x: |
+        - 以太网数据包的大小是固定的，1500 字节的负载 +22 个字节的头信息=1522 字节
+        - IP 数据包在以太网数据包的负载里面，它也有自己的头信息，最少需要 20 个字节，所以 IP 数据包的负载最多为 1480 字节
+        - TCP 数据包在 IP 数据包里面。除去头信息，它的最大负载是 1460，如果超过最大负载，就需要在发送两个 TCP 数据包
+
+
+- type: alfred
+  #  feats:
+  #    - feat: 剪贴板
+  #      des: Pin
+  #    - feat: snippets
+  #      des: SnippetsLab, Lepton, CodeExpander
+  repo:
+    - url: https://github.com/deanishe/awgo
+      key: true
+      des: = js的alfy, 用来实现alfred workflow
+      qs:
+        - q: 怎么设置给alfred的workflow设置proxy
+        - q: alfred 怎么在后台执行耗时程序？
+        - q: 怎么在awgo中实现输入主命令直接获取全部child commands？ # valid: false
+        - q: 回显，并且按照child command继续执行？或者说，怎么在 alfred 中实现链式操作？就是把选定的 item 作为 workflow 的命令执行，继续执行
+        - q: 使用 script filter 时，怎么把某个 item 始终置顶？fuzzy filter时会被滤掉，怎么处理？
+
+        - q: workflow中item的icon的选择？ # 不要透明背景icon
+        - q: How to add warning item in script filter? # wf.NewWarningItem()
+        - q: Which methods are required in item? # NewItem().Title().Valid()
+        - q: MagicAction
+        - q: 什么情况下使用fuzzy filter？怎么自定义fuzzy filter的field？
+        - q: 怎么在选中item后执行自定义outputs的方法？
+        - q: Env和Config有啥区别？
+          x: |
+            **Env 通常是 wf 执行的必填项，比如说各种 token，比较隐私，默认是不导出的。并且一定是必填的，如果不填写会直接报错。Config 则是各种附加配置，默认是导出的，所以通常用来存一些不敏感的数据** Config 则如果没有规定必填，则可以选填，也不影响执行。
+        - q: query和argv有啥区别？
+        - q: workflow通常设计几个参数比较合理？ # arg最多1个，不要child commands
+        - q: How to update config directly, other than use cache? Config.Set()
+        - q: External Trigger
+        - q: NewModifier
+        - q: awgo搭配cobra使用时，使用哪个args
+          x: 对于 cobra 来说，subcommand 并不是 args，但是对于awgo来说这些都是args，所以这里是有错位的。建议使用 cobra 提供的 args，因为它还提供了一些 args 的验证方法，可以直接使用，非常方便，使用参数要统一。
+        - q: Automation 预制件
+        - q: golang 调用 applescript
+        - q: wf.Cache, wf.CacheDir()
+        - q: 字符串被换行的问题？ #  script操作中使用 echo -n 输出，否则会换行
+        - q: 怎么使用“Arg and Vars操作”
+          x: Var(nextActionKey, nextActionCopy) 这个写法很有用，在items的每个item中都添加一个var返回，方便进行后续 filter/if 处理时通过 var 进行分支处理 copy或者open URL/play sound之类的操作。之前确实没搞过这种写法。
+        - q: 怎么在 script 操作之后不需要选择 item，直接进行“输出操作”呢？ # 直接使用`script操作`，而非`script filter操作`（这个必须返回 item 作为展示项）
+        - q: process input in alfred, utilities (transform, replace, ...)
+
+    - url: https://github.com/cage1016/ak
+      des: cli工具，基于awgo+cobra实现，用来初始化workflow，提高开发效率。
+      qs:
+        - q: ak的使用流程
+          x: 开发阶段，不需要手动替换bin了，直接make build即可。发布阶段，不需要在本地打包、导出再上传，直接在cicd打包，非常简单。
+      cmd:
+        - ["ak add ga", "ak add githubAction"]
+        - ["ak add ga -s", "ci中添加 Code Sign 及 Notarization 功能。如果没有苹果开发者账号的话，就不需要加 -s 参数。正常使用，毫无问题。"]
+        - ["ak add ga -c", "ci中添加 Go test Codecov"]
+    #    - des: CASK. 常用 APP 快捷键. used to replace Hyperdock, DockMate, Manico... nf.
+    - url: https://github.com/hxhac/docs-alfred
+      des: qs 快捷操作，并且代替掉之前的chrome-workflow, gh-workflow
+    - url: https://github.com/hxhac/pwgen-alfredworkflow
+      des: 密码生成工具 pwgen
+    - url: https://github.com/hxhac/pix-alfredworkflow
+      des: 全局图床工具，上传图片到cloudflare R2
+    - url: https://github.com/vitorgalvao/shrieking-chimes-workflow
+      des: 倒计时工具
+    - url: https://github.com/roele/alfred-nosleep
+      des: 相当于CoffeeCoffee或者Caffeinated APP。用来让 mac 扣盖后，继续播放音乐（也就是防止 mac 进入睡眠状态）。但是用了一年多之后，发现这种低频需求，实际上可能隔几个月才要用一次，所以还是用 shell 实现更好
+
+
+
+- type: Security
+  repo:
+    - url: https://github.com/MatrixTM/MHDDoS
+      des: DDos Attack Tools.
+    - url: https://github.com/nmap/nmap
+    - url: https://github.com/rapid7/metasploit-framework
+    - url: https://github.com/robertdavidgraham/masscan
+    - url: https://github.com/Ettercap/ettercap
+    - url: https://github.com/shadow1ng/fscan
+      des: 内网扫描工具
+    - url: https://github.com/owasp-amass/amass
+    - url: https://github.com/vidar-team/Cardinal
+    - url: https://github.com/We5ter/Scanners-Box
+    - url: https://github.com/RaiMan/SikuliX1
+    - url: https://github.com/gophish/gophish
+    - url: https://github.com/c0ny1/upload-labs
+      des: 一个想帮你总结所有类型的上传漏洞的靶场
+    - url: https://github.com/vulhub/vulhub
+    - url: https://github.com/kismetwireless/kismet
+  qs:
+    - q: What about web security? 有哪些常见的 web 攻击手段？ # (SQL injection, XSS, CSRF, DDos, ARP attack, )
+    - q: "***拿到一个待检测的站或给你一个网站，你觉得应该先做什么？***"
+    - q: What's Sniffing and How To Prevent it? Why can't we capture Baidu's data? (SSL-pining, HPKP, HSTS, Expect-CT)
+    - q: How to identify whether ddos? How to check if the server is DDosed?
+    - q: Tell me in detail how to "monitor DDos attack + automatically apply for new VPS"?
+    - q: (poc, vul, exp, payload, shellcode, cve, cvnd, 0day, APT)
+    - q: (size, filetype(!js, !exe), rename)
+    - q: 内网扫描器是啥？通常支持哪些功能？ # 端口扫描, 探测存活 IP, 漏洞检测, 其他功能如信息收集/存活主机/端口扫描/服务识别/密码爆破/漏洞检测/漏洞利用/远程执行命令/降权提权
+    - q: 什么是文件上传攻击？ # 文件名（目录穿越）、文件路径、文件后缀、文件大小、文件内容（图片木马）
+    - q: 文件上传攻击的原理？
+    - q: 有哪些文件上传攻击？对应的防止方法？
+    - q: DDos 有哪些类型？ #传输层、反射型
+    - q: 详细说说怎么“监控 DDos 攻击 + 自动申请新 VPS”？ # 用一台服务器监控服务是否被 DDos，一旦被攻击，通过这台服务器，自动申请新的 ECS，自动加监控，自动响应攻击生成新的配置文件。把域名解析到新服务器。
+    - q: pwn 专业术语 # poc, vul, exp, payload, shellcode, cve, cvnd, 0day, apt
+
+
+
+- type: Browser
+  md: true
+  repo:
+    - url: https://github.com/chromium/chromium
+      des: Chrome Chromium.
+    - url: https://github.com/WebKit/WebKit
+      des: WebKit, Render Engine. WebCore 是 WebKit 的核心部分，它负责处理 HTML、CSS 和 XML 等标记语言的解析，以及布局和绘制等工作。JavaScriptCore 是 WebKit 中用于执行 JavaScript 代码的部分，它是一个独立的 JavaScript 引擎，负责将 JavaScript 代码编译成字节码并执行。因此，WebKit 可以被视为一个渲染引擎，而 JavaScriptCore 是它内部的 JavaScript 引擎。
+    - url: https://github.com/mozilla/geckodriver
+    - url: https://github.com/mozilla/gecko-dev
+      des: js Engine for firefox.
+    - url: https://github.com/v8/v8
+      des: v8, 需要注意的是v8是js engine，而不仅仅是interpreter或者compiler. v8解析代码的具体流程是 Parser -> AST -> Interpreter -> Profiler -> Compiler -> Optimized Code.
+    - url: https://github.com/v8/v8.dev
+      des: js Engine for chrome.
+    - url: https://github.com/ChromeDevTools/awesome-chrome-devtools
+    - url: https://github.com/CN-Chrome-DevTools/CN-Chrome-DevTools
+  qs:
+    - q: "***How does browser rendering works?***"
+      x: |
+        js被webpack之类的compiler打包成静态资源，browser负责解析这些静态资源，render engine负责把html和css渲染成页面，js引擎负责解析和执行js代码。
+
+        再具体一点来说，render engine的整个渲染过程由上面说的解析html为DOM树、解析css为构建渲染树、计算布局、绘制和合成展示这几步构成。而js引擎则负责所有交互时间，比如我们点击按钮时，browser就会通过js listen event，并在触发时执行相应的js函数。
+
+        浏览器就是两部分，js引擎和渲染引擎
+
+        渲染引擎就比如blink（负责整个渲染管道，包括 DOM 树、样式、事件和 V8 集成。它解析 DOM 树，解决样式问题，并确定所有元素的视觉几何）
+
+        js引擎则是v8或者Gecko之类的，可以通常认为v8的核心就是Ignition这个interpreter，实际上v8还需要TurboFan 优化编译器、垃圾回收机制、内存管理等机制共同实现。是不是感觉这些东西跟一门编程语言需要实现的机制也差不多？换句话说，可以认为v8是js的一个实现，也就是clang之于cpp，pypy之于python。
+
+    - q: CORS 跨域，怎么优化跨域？怎么优化CORS OPTIONS预检请求？
+    - q: Cookie的SameSite策略
+    - q: browser maxmum conn limit, same domain? # RFC2616, HTTP spec, six conns
+    - q: render engine # blink(webkit, skia)
+    - q: js engine # gecko, v8(Ignition)
+    - q: 浏览器将标签转成 DOM 的过程
+    - q: "*the process of page resource? (resouce-scheduling, conn-start, request/response) What does each of the include? (queueing, stalled, TTFB)*"
+    - q: page loading lag, how to troubleshot the problem?
+
+    - q: "*Browser Cache: Is there a relationship between browser cache and HTTP cache?*"
+      x: (Cache-Control) (force cache (200, from-cache), negotiation cache (304))
+
+    - q: How to validate TTL? # Last-Modified/If-Modified-since, ETag/If-None-Match
+    - q: (max-age, private, ...)
+    - q: (compare If-Modified-Since and If-None-Match, if equal 304, if not 200(, and reset Last-Modified and ETag))
+    - q: chrome怎么做性能分析？ # disable cache, 模拟弱网条件, 模拟移动端 CPU 效果,
+
+
+
+#- type: java
+#  repo:
+#    - url: https://github.com/dromara/hutool
+#      des: java utils pkg
+
+
+
+
+- type: Low-Code
+  repo:
+    - url: https://github.com/nocodb/nocodb
+    - url: https://github.com/baidu/amis
+      des: 之前用过
+    - url: https://github.com/open-webui/open-webui
+      des: 基于LLM的low-code工具，支持本地RAG集成、RLHF注释、对话标记、GGUF文件模型创建、多模型支持、多模态支持等功能
+    - url: https://github.com/wandb/openui
+      des: 类似open-webui，也是基于LLM的low-code工具
+  des: low-code/no-code 没啥用，实际上使用场景相当受限，无非是后台页面这种高度规范化的页面，或者活动页这种既高度规范化，又用完即抛的页面。应该说，但凡是注意代码质量和后续需要维护的，就不应该，也不能用low-code生成。
+
+
+
+
+
+
+
+- type: vps-libs
+  repo:
+    - url: https://github.com/awesome-selfhosted/awesome-selfhosted
+    - url: https://github.com/typst/typst
+      des: Typst 可以理解为更好用的 LaTeX，支持各种样式和排版。直接用在线编辑器，编译和响应速度还行，不算太慢。直接把简历存到typst上就可以了，也挺省心。
+    - url: https://github.com/DIYgod/RSSHub
+      des: rsshub
+    - url: https://github.com/alist-org/alist
+      des: alist, Better than Cloudreve. 我们可以把alist作为网盘文件管理工具或者图床使用。
+    - url: https://github.com/ArchiveBox/ArchiveBox
+      des: 网页存档 ArchiveBox
+    - url: https://github.com/usememos/memos
+      des: 更好用的开源的 flomo
+    - url: https://github.com/koodo-reader/koodo-reader
+      des: 在线电子书网站，类似的还有calibre或者talebook，很好用。但是我真用不到这东西。如果看小说，我还是喜欢直接下载到手机上，用手机看。微信读书支持 txt epub mobi azw3 pdf 常用格式。漫画我不看，kindle 我没有，pdf、富文本和超文本我用 chrome 看。
+    - url: https://github.com/mastodon/mastodon
+      des: 某种twitter或者微博嘛，但是其去中心化特征，与社交网络本身要求的规模效应是冲突的。我的评价是，不如“知识星球”和“小蜜圈”。
+    - url: https://github.com/syncthing/syncthing
+      des: |
+        一个基于P2P实现的“远程同步文件”工具
+        提供GUI和CLI（通过web操作）两种下载方式，用homebrew安装，默认CLI。用这个就可以代替之前用的坚果云了
+    - url: https://github.com/navidrome/navidrome
+      des: Music Server. 不太好用，内置的刮削器metadata-scraper/tagger非常难用，几乎是完全不可用状态，后来用alist替代掉了。
+    - url: https://github.com/dushixiang/next-terminal
+      des: Bastion Server
+      doc: https://wiki-power.com/Homelab-%E6%94%AF%E6%8C%81%E5%A4%9A%E7%A7%8D%E5%8D%8F%E8%AE%AE%E7%9A%84%E5%A0%A1%E5%9E%92%E6%9C%BANextTerminal/
+
+
+
+
+
+
+- type: crawler
+  repo:
+    - url: https://github.com/scrapy/scrapy
+      qs:
+        - q: scrapy, config (AUTOTHROTTLE, HTTPCACHE, LOG, FEED)
+        - q: scrapy arch? (schduler, downloader, spider, pipeline, engine, download middleware, crawler middleware)
+      cmd:
+        - ["scrapy fetch", "查看爬取过程，生成日志"]
+        - ["scrapy run", "运行一个单独的爬虫程序"]
+        - ["scrapy shell", "启动shell交互终端"]
+        - ["scrapy startproject", "创建项目"]
+        - ["scrapy version"]
+        - ["scrapy view <url>", "非常实用的命令"]
+        - ["scrapy settings"]
+        - ["scrapy genspider -l", "创建爬虫文件，可以选择basic，crawl，csvfeed，xmlfeed"]
+        - ["scrapy check", "用来测试某个爬虫"]
+        - ["scrapy crawl", "运行某个爬虫"]
+        - ["scrapy list", "显示当前可用的所有爬虫"]
+        - ["scrapy parse", "获取给定的URL并使用处理它的爬虫解析它，使用通过--callback选项传递的方法，或者parse如果没有给出"]
+        - ["scrapy bench", "测试本地硬件性能"]
+    - url: https://github.com/gocolly/colly
+      des: crawler
+    - url: https://github.com/projectdiscovery/katana
+      des: = scrapy for python.
+    - url: https://github.com/PuerkitoBio/goquery
+      des: = bs for python.
+      doc: https://juejin.cn/post/7145373304117788708
+    - url: https://github.com/crawlab-team/crawlab
+      des: 分布式爬虫管理平台
+    - url: https://github.com/salesforce/ja3
+      des: browser fingerprint
+      qs:
+        - q: ja3 fingerprint () ja3s
+        - q: 怎么解决`JA3指纹`？解决 ja3 指纹的原理？
+          x: ja3transport, CycleTLS (ja3transport 库会在三次握手后，即将发起 client hello 数据包时，拦截该包并用自定义 ja3 替换掉原有的)
+        - q: 有哪些靠谱的 ja3 黑名单/已收录指纹？
+    - url: https://github.com/CUCyber/ja3transport
+    - url: https://github.com/Danny-Dasilva/CycleTLS
+    - url: https://github.com/dgtlmoon/changedetection.io
+      des: webpage changes detection. Better than LogicJake/WebMonitor. 但是这两个各有问题WebMonitor的notify有问题，changedetection又有中文乱码问题。
+    - url: https://github.com/LoseNine/Restore-JS
+      des: 反爬虫JS破解与混淆还原
+    - url: https://github.com/apify/crawlee
+    - url: https://github.com/slotix/dataflowkit
+    - url: https://github.com/MontFerret/ferret
+    - url: https://github.com/yields/ant
+    - url: https://github.com/NaiboWang/EasySpider
+    - url: https://github.com/go-rod/stealth
+      des: 可以理解为stealth.js的golang实现？就是那个之前用selenium做crawler时防止直接被ban掉的pkg
+    - url: https://github.com/pppscn/SmsForwarder
+      des: ??? 短信转发器，一个Android APP，可以监听监听收到短信的事件，获取到短信的来源号码、接受卡槽、短信内容、接收时间等内容，然后将其通过一定的规则转发。转发渠道包括钉钉群自定义机器人、钉钉企业内机器人、企业微信群机器人、飞书机器人、企业微信应用消息、邮箱、bark、webhook、Telegram机器人、Server酱、PushPlus、手机短信等。搭配卡池设备就可以实现短信群发。
+  qs:
+    - q: crawler common questions? # BE, FE
+    - q: headers (IP, UA, cookie(x-zse-86), referer), captcha(slider captcha, ReCaptcha)
+    - q: PathMarker
+    - q: webdriver feats
+    - q: What about headless browser? What's CDP?
+    - q: What's render-engine and js-engine? How does it works?
+    - q: mock login
+    - q: How does the crawler automatically accept SMS verification codes?
+    - q: 怎么判断网页是否更新？?  # (HTTP code(304/200), LSH, WebMonitor)
+    - q: How to monitor crawler is dead?
+    - q: js 反调试
+    - q: ast 混淆 花指令 流程平坦化
+    - q: ast 反混淆 解密大数组
+    - q: AST 嵌套解密函数：传参数量混淆 + 传参乱序混淆 + 传参加入运算符混淆
+    - q: cloudflare 五秒盾
+    - q: 爬虫怎么自动化接受手机短信验证码？ # SmsForwarder
+
+
+- type: mitmproxy
+  repo:
+    - url: https://github.com/mitmproxy/mitmproxy
+      qs:
+        - q: How to use mitmproxy?
+    - url: https://github.com/microsoft/playwright
+    - url: https://github.com/playwright-community/playwright-go
+    - url: https://github.com/alibaba/anyproxy
+  qs:
+    - q: jsrpc, mitmproxy, anyproxy, playwright
+    - q: 怎么破解 js 反爬（混淆加密）？ # playwright
+
+
+
+- type: headless
+  repo:
+    - url: https://github.com/dhamaniasad/HeadlessBrowsers
+      des: 各种headless多如牛毛
+    - url: https://github.com/go-rod/rod
+    - url: https://github.com/chromedp/chromedp
+    - url: https://github.com/SeleniumHQ/selenium
+      qs:
+        - q: selenium的changelog? 从selenium1到selenium4分别有哪些feat?
+          x: 浏览器插件、webdriver、grid(selenium 的分布式部署)、bidi (selenium IDE(跨浏览器支持）)
+        - q: selenium4之后使用bidi，但是应该从可用性、features以及开销各方面，仍然不如CDP
+          x: selenium没有使用CDP，而是使用webdriver protocol，所以其跨平台性确实更好。但是如果只是搞crawler的话，则大可不必使用selenium。
+    - url: https://github.com/puppeteer/puppeteer
+      des: python 版本的 puppeteer 已经很久不更新了，现在最好使用 nodejs 的 puppeteer，是 chrome 官方团队维护的，生态很好。
+    - url: https://github.com/cypress-io/cypress
+      des: cypress 是基于 CDP 协议实现的 web 端的 E2E 测试框架。所以他支持所有测试框架的基本功能，比如断言、白页等待、重试，以及可视化调试、并发测试等附加功能。相比于UI测试，E2E测试更侧重业务逻辑。广义上的 UI 测试就包括 E2E。相比于selenium之类的headless browser，cypress则可以理解为headless+测试feats。
+    - url: https://github.com/g1879/DrissionPage
+      des: 相当于内置了stealth.js之类的反爬服务，但是服务端部署稳定性（保活之类的）不如selenium。据说能绕过cloudflare五秒盾、RS、AKM、jsvmp
+  qs:
+    - q: 对比一下 puppeteer, playwright, rod, selenium, chromedp这些headless
+
+
+
+
+- type: cross-platform
+  repo:
+    - url: https://github.com/dcloudio/uni-app
+    - url: https://github.com/flutter/flutter
+    - url: https://github.com/facebook/react-native
+  des: |
+    *[跨平台开发该不该用Flutter？2023年版Flutter全面解析_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1D8411o71k/)* 视频不错，很喜欢这种娓娓道来的感觉
+
+    看这个视频时，我想到了两个问题：
+
+    - 这几种移动端跨平台方案，从现在的视角来看是一地鸡毛。大家还是转回移动端原生语言的方案。但是那个时候我们是真心认为“js统一大前端”的。
+    - dart和ts都是对js类型支持的解决方案，那么为啥dart在和ts的竞争中失败了？
+
+    这个视频也一下子把我拉回到6、7年前我刚刚入行的时候，那个时候移动端余温尚存，各种移动端跨平台方案层出不穷，大家都在讨论各种“三端一致”的方案。实话说如果不是这个视频，这部分记忆都要淡忘了。几种主流方案：
+
+    - 移动端打包浏览器跨平台（比如Hbuilder, AppCan, Cordova）
+    - react-native, uniapp(相当于vue的react-native)
+    - flutter
+
+    这三种方案各有优劣，第一种方案是最早的跨端方案，主打快糙猛，很快就被淘汰了。后两种方案，react-native以及uniapp这种就是用js来调用各种原生移动端语言的API的，可想而知，一定会存在适配问题，并且会很慢（因为走了两层，并且无论是js还是swift, OC, java, kotlin性能都不算很好）。flutter则使用dart实现，dart可以理解为某种js方言，flutter则是吸取了以上教训，直接自己（通过chrome的render engine, skia）实现各种移动端的UI，那么这种方案的问题也同样可想而知，生态问题！如果使用flutter就不能使用。
+
+    *所以通过这两种解决方案，可以看到是左右为难，用粘合层来实现就会有性能问题，用类似flutter自己实现的方案则无法使用移动端现有生态。并且二者都会存在很多适配问题。*
+
+    *至于为啥到最后一地鸡毛，大概还是因为跨平台本身可能还是个伪需求*。某种开发者认为很重要，技术管理者认为一般重要，但是老板认为不重要的东西。并且确实以上三种方案从开发角度，也都离原生应用差的有点远，可能会有各种延迟、不适配之类的bug。总结来说就是老板认为不重要，开发者认为重要但是实现不了。最后一地鸡毛也就不奇怪了。
+
+
+
+
+
+
+- type: clash
+  repo:
+    - url: https://github.com/Kuingsmile/clash-core
+      des: backup of clash core. 尝试了一下stash，clash套了个surge的壳，每年12英镑，离谱。
+    - url: https://github.com/haishanh/yacd
+      des: web 端 clash
+    - url: https://github.com/XTLS/Trojan-killer
+    - url: https://github.com/XTLS/Xray-core
+    - url: https://github.com/surgioproject/surgio
+      des: 各类代理规则生成器. Generating rules for Surge, Clash, Quantumult.
+    - url: https://github.com/CareyWang/sub-web
+      des: subscriber-converter
+    - url: https://github.com/tindy2013/subconverter
+    - url: https://github.com/ginuerzh/gost
+      des: 网络代理服务，实现各种网络代理和转发功能，支持多种协议和加密方式。clash, v2ray, surge都是基于gost实现的。
+    - url: https://github.com/go-gost/gost
+      des: latest version
+    - url: https://github.com/cloudflare/cloudflared
+      des: 也是类似gost这样的tunnel proxy，但是cfd是专用于cf网络的，而gost则可以自己配置。cfd几个常用场景就是，把流量通过cf做forward到自己的VPS上，以实现反代或者WAF的作用。
+    - url: https://github.com/mzz2017/gg
+      des: 备用
+    - url: https://github.com/apernet/hysteria
+    - url: https://github.com/clash-verge-rev/clash-verge-rev
+      des: 基于Tauri实现的GUI，服务端还是clash core。看了一下，一般般吧。
+    - url: https://github.com/tailscale/tailscale
+      des: 据说很牛逼的，Tailscale 提供了一种简单且安全的方式来使用 WireGuard VPN 和双因素认证（2FA）。它允许用户轻松创建一个私有的WireGuard网络，并通过命令行工具或守护进程管理网络连接。
+    - url: https://github.com/juanfont/headscale
+      des: Headscale 是 Tailscale 控制服务器的开源、自托管实现。它旨在为自托管用户和爱好者提供一个他们可以用于自己项目和实验室的开源服务器。
+  qs:
+    - q: Clash Relay 套壳 （链式代理）
+    - q: Clash 还有三种分组：负载均衡、故障转移、⾃动选择
+    - q: 比较几种mac端proxy软件 clashX, cp(clash-pro), cfw(clash-for-windows), ShadowsocksX-NG, QuantumultX, Gost （价格、增强模式（系统代理，网页代理））
+    - q: “增强模式”的原理？
+      x: 创建TUN虚拟网卡，并配置路由表，目的是将数据转发到TUN设备上，但是由于TUN模式处于网络层，需要通过gVisor/System网络栈来获取传输层的数据，经过本地端处理后，将数据转发到服务节点。
+    - q: What feats does surge support?  # 增强模式, 抓包(MitM), DHCP server,
+    - q: GFW 流量探测的具体原理？
+    - q: 怎么解决clashx开启之后hosts失效的问题？
+      x: proxyIgnoreList没用，直接在mac的Proxies里添加该域名即可
+
+
+
+- type: PHP
+  repo:
+    - url: https://github.com/php/php-src
+      des: The PHP Interpreter
+      qs:
+        - q: 怎么评价PHP # 有效负载
+        - q: How does PHP works? PHP components? # Zend, Extensions, sapi, Application 如果 PHP 是一辆车，那么车的框架就是 PHP 本身，Zend 是车的引擎（发动机），Ext 下面的各种组件就是车的轮子，Sapi 可以看做是公路，车可以跑在不同类型的公路上，而一次 PHP 程序的执行就是汽车跑在公路上。因此，我们需要：性能优异的引擎 + 合适的车轮 + 正确的跑道。
+        - q: PHP interpreter? # PHP code -> Token -> AST -> Opcodes -> Execute Opcodes
+        - q: 默认的 PHP interpreter(sapi)，使用 OPcache，使用 JIT 动态编译，这三者有什么区别？
+        - q: "***How to optimize PHP? Why has PHP7 perf improved so much?***"
+        - q: 几种PSR规范 # Code Spec(PSR1, PSR2, 内容很多，但是无须注意直接用cs-fixer即可), logging(PSR3), Autoload(PSR4)
+        - q: PHP 操作指针函数
+        - q: PHP 数组函数 # 取差集和交集 diff函数, intersect
+        - q: PHP 数组回调函数 # array_reduce(), array_map(), array_filter(), array_walk()
+        - q: PHP 排序函数 # sort()/rsort(), asort()/arsort()
+        - q: array_search(), in_array(), array_key_exists() 的区别？
+        - q: array+array 和 array_merge()？
+        - q: PHP 字符串函数 # pos, replace, slashes, cmp, 打印输出
+        - q: strtr() 和 str_replace() 的区别 # perf, is case sensitive
+        - q: PHP 文件相关函数
+        - q: php 如何保留两位小数？
+        - q: php 如何返回随机小数？
+        - q: 类型声明（type hint）有哪些？
+        - q: PHP的OOP语法
+        - q: php 自动加载的演进过程？
+        - q: PHP 的异常处理？PHP有哪些预定义Exception? # 错误和异常是两码事, try-catch, throwable(php7 之后才有的)
+        - q: PHP 有哪些预定义接口类？ # Iterator, Generator, Closure, JsonSerializable, ...
+        - q: PHP 闭包(Closure) # use, bindTo
+        - q: PHP 魔术方法 # 4*2 + 2*4 = 16
+        - q: PHP Attributes?
+        - q: PHP 预定义变量
+        - q: PHP 全局变量 (全局预定义变量) # $_GET, $_POST, $_COOKIE, ...
+        - q: PHP 魔术常量都有哪些？
+        - q: PHP 预定义常量都有哪些？
+        - q: 怎么定义常量？ #（const 和 define）Const 关键字在类内定义常量，define 在类外定义常量
+        - q: public, private, protected, final, static 各自的使用场景？
+        - q: “三元运算符”的几种写法？tricks写法？ # ($a = $a ?: 1) ($a = $a ?? 1) ($a = $a ? $a : 1) ($len = $type == 'year' ? 4 : 2;)
+        - q: instanceof
+        - q: $data as &$key 是什么意思？
+        - q: php的xdebug断点调试怎么搞？
+          x: 其实php的xdebug断点调试也很简单，pecl install xdebug之后，把对应的 # [[php.ini] xdebug](https://gist.github.com/hxhac/4596477bd95bd797e5cb582d5f60abf4)
+      qq:
+        - topic: class
+          qs:
+            - q: 抽象类里可以没有抽象方法吗？ # 抽象类中可以没有抽象方法（全部都是普通方法），那么，抽象类和普通类的区别就在于：抽象类只能继承，不能实例化。
+            - q: 抽象类和接口类的区别？ # 接口类是特殊的抽象类。接口类不能声明变量，只能声明常量。抽象类可以声明变量。接口类没有构造方法，抽象类可以有。接口类就是一个类的领导者，指明方向，子类必须完成他指定的方向，就是要实现什么都已经规定好了。抽象类就是把相同的抽出来了，不需要必须使用，继承的时候使用 extends 继承。
+            - q: implements, extends # 接口继承用 implements，抽象类继承用 extends
+            - q: trait # Trait 解决了 PHP 不能多继承的问题，“看起来像 interface，但是用起来像 class 的东西”
+            - q: 如果两个 trait 里有同名方法或者属性怎么办？ # 使用 instanceof() 和 as 来解决。instanceof() 关键字用前者取代了后者，as 关键字给被取代的方法起了一个别名。
+    - url: https://github.com/composer/composer
+      des: PHP PKG Manager
+      qs:
+        - q: "**composer 自动加载原理？(有时间自己实现一下自动加载) 把 composer 包名字写到 require 里，执行 update，具体是怎么把包自动加载到 laravel 里的？能不能说一下？**"
+        - q: composer.json 文件里都有什么？
+        - q: PSR规范 (PSR-4)
+        - q: composer SemVer
+        - q: composer commands (remove/show/update/self-update/dump-autoload)
+        - q: 怎么开发 Composer 包？实战
+    - url: https://github.com/PHP-CS-Fixer/PHP-CS-Fixer
+      des: 代码规范工具
+      cmd:
+        - ["php-cs-fixer fix $PWD --config=cs.php"]
+      use:
+        - url: https://gist.github.com/hxhac/8ba0b43a6d38906c12825d5dede1e22a
+          des: PHP Linters
+    - url: https://github.com/phpstan/phpstan
+      des: 静态检查工具Static Analysis Tool，和 cs-fixer 一样，一种是作为服务，一种是作为一个 laravel 的 composer 包。建议作为服务使用，以免影响生产环境性能，当然作为包使用更方便。如果laravel项目可以使用larastan。除此之外，其他工具还有 phplint、phpqa、grumPHP。需要注意PHP作为Dynamic-Lang，SAT工具实际上很鸡肋。
+    - url: https://github.com/larastan/larastan
+      cmd:
+        - ["php artisan code:analyse --level=4"]
+    - url: https://github.com/laravel/laravel
+      qs:
+        - q: "***How to optimize laravel?***" # no way
+        - q: laravel 里使用了哪些设计模式？
+        - q: laravel 文件夹结构
+        - q: laravel 的工作原理？laravel 路由加载原理？
+        - q: laravel 不读某个字段？ # 用$hidden 属性在 model 里设置隐藏字段和安全字段
+        - q: laravel 里 model 属性的隐藏，展示和临时隐藏？ # $hidden, $visible, 临时隐藏：return $user->makeVisible('attribute')->toArray();
+        - q: laravel 的$appends 属性怎么用？ # appends 属性用来临时添加某个数据库里没有的字段，实现动态修改模型，使用 getColumnAttribute() 来定义字段数据
+        - q: 同一个 model 使用不同 connections 连接不同数据库，使用事务时，即使报错也无法回滚，怎么处理？  # DB::connection('some_connection')->beginTransaction();
+        - q: laravel 单元测试的文件上传？ # $fakeImg = UploadedFile::fake()->image('temp.jpg');
+        - q: laravel 里多对多的写入和查询怎么做？
+        - q: laravel 里服务容器的工作原理？
+        - q: laravel 的 elq 关联关系中的 loadMissing() 和 getDirty() 方法的区别？
+        - q: laravel 里多态关系的表单验证
+        - q: laravel 怎么添加自定义校验规则？ # 在 AppServiceProvider 里通过 Validator::extend 注册自定义规则，如果规则比较复杂，也课可以通过 make:rule 生成一个对应的自定义规则类。
+        - q: 为什么要用 service-container 呢？
+      qq:
+        - topic: service-provider
+          qs:
+            - q: laravel 为什么需要 service-provider # register() 就是 service-provider 用来往 service-container 里注册服务的
+            - q: service-provider 的加载和执行过程
+            - q: service-provider 的boot(), provides() 和$defer
+        - topic: facade
+          qs:
+            - q: facade 是什么？
+            - q: facade 的工作原理？
+            - q: laravel 是怎么实现 facade 的？
+        - topic: queue
+          qs:
+            - q: 多个 laravel 同时运行时，队列互串的问题，怎么解决？
+            - q: laravel 里如何限制队列执行频率和队列长度？
+            - q: laravel 里队列，如何给不同的队列设置不同的 list？如何修改某个队列的 driver？ # 这块还要注意 trait 属性不能通过重新定义直接重写的问题，最好在构造方法里重写
+            - q: 消息推送是否应该放到队列里？队列里应该放什么逻辑？ # 应该放耗时任务，一些逻辑无关的业务，一些错误容忍性高的业务。比如一些使用了与逻辑无关的第三方应用（比如消息推送，一次两次的失败是可以接收的；当然，一些与逻辑有关的第三方应用应该做好容错）
+            - q: laravel 队列的 fail, retry, delay
+      cmd:
+        - ["composer dump-autoload & php artisan optimize & php artisan cache:clear & php artisan config:clear & php artisan route:clear & php artisan view:clear & php artisan api:cache & php artisan config:clear"]
+        - ["php artisan horizon", horizon是laravel提供的background job工具，用来管理laravel的MQ，支持各种MQ服务包括beanstalked、redis、RabbitMQ之类的]
+        - ["php artisan serve --host=局域网ip --port=", "怎么把laravel服务暴露在局域网?"]
+
+    - url: https://github.com/laravel/valet
+      des: |
+        大概是最好用的laravel开发环境部署工具，比 Vagrant 和 Homestead 之类的都更易用。实话说PHP开发环境确实挺难搞的，要弄一堆东西，如果用valet的话，就舒服很多。另外，valet除了原生支持laravel以外，还支持slim, symfony, wordpress以及Drupal, CakePHP之类很多国外比较常用的PHP框架，如果官方不支持也可以从gh搜到类似 ThinkPHP5ValetDriver 这样的driver，非常实用，可以免受各种安装PHP环境之苦。
+
+        吐槽一下valet，不得不说虽然已经，但是使用流程仍然很别扭，最核心的问题就是，不应该用composer来安装valet（而是应该用）。可以理解为层级问题，依赖关系为php -> composer -> valet，然后需要用valet再
+
+        需要先park再link，park本身就可以给该dir下的所有
+
+        pecl install igbinary
+
+        pecl install redis
+
+        我不理解，为啥用valet提供的虚拟域名，就会报“不支持: redis”的bug，用 run启动built-in的server，就没有这个问题。有点离谱，就这个问题至少搞了1h。
+      cmd:
+        - [valet park]
+        - [valet link <service>]
+        - [valet forget]
+        - [valet paths, 用来查看所有link的服务]
+        - [valet log, 用来查看valet日志]
+        - [valet start/restart/stop/]
+        - [valet uninstall, 需要先用这个命令卸载valet，再在composer全局卸载]
+
+    - url: https://github.com/shivammathur/homebrew-php
+      des: 这个就是valet在用的用来切换PHP版本的repo，因为homebrew对
+    - url: https://github.com/shivammathur/setup-php
+      des: homebrew-php作者搞的，类似actions/setup-node这样的，用来在actions中打包PHP环境
+
+    - url: https://github.com/dingo/api
+      des: 已经EOL了。用来实现接口的路由版本管理，dingo 内置的异常处理（Http Exception）、多种认证方式、接口限流，以及最常用的 transformer
+    - url: https://github.com/tymondesigns/jwt-auth
+      des: JWT Token for laravel. 用来实现用户认证
+      qs:
+        - q: jwt 是什么？ # header(加密算法), payload(exp 过期时间，sub 是 jwt 的主体，通常是用户的 id), sign(保证 token 不被篡改)
+        - q: 安装 jwt 以及配置
+        - q: 为什么需要刷新 token？ # *因为设置有效期后，token 会失效，所以需要刷新 token*
+        - q: 怎么使用刷新 token？
+        - q: 如果 jwt 被截取了，怎么办？假设一个场景，黑客抓到了用户 a 的 jwt，使用用户 a 的 jwt 进行各种操作，怎么办？
+        - q: token 的验证流程？要看源码
+        - q: 如果刷新 token 过期了，怎么办？
+        - q: 如果 refresh token 过期，就需要用户重新登录了
+        - q: 当然还可以把这个机制设计得更复杂一些，比如，Refresh Token 每次使用的时候，都更新它的过期时间，直到与它的创建时间相比，已经超过了非常长的一段时间（比如三个月），这等于是在相当长一段时间内允许 Refresh Token 自动续期。
+        - q: jwt-auth 黑名单
+        - q: laravel+dingo 的第三方登录
+        - q: jwt 怎么实现多表多用户系统的隔离？
+    - url: https://github.com/thephpleague/fractal
+      des: Used To Return RESTful API Data Format(JSON). 实际上就是 dingo 默认的 transformer 层
+      qs:
+        - q: fractal 的基本使用？ # DAS>AS>JAS
+        - q: 怎么直接切换 fractal 提供给我们的三种数据结构？
+        - q: 如何返回自定义格式的接口？ # CustomSerializer
+
+    # [一份经过时间检验的 Laravel PHPUnit 测试经验分享 | Laravel China 社区](https://learnku.com/articles/44675)
+    - url: https://github.com/sebastianbergmann/phpunit
+      qs:
+        - q: 断言有哪几种？
+        - q: "**phpunit.xml 文件说明**" # 需要现在 phpunit.xml 里预定义各项配置
+        - q: laravel 的 tests 文件夹的结构？ # tests 的两个子目录，Feature 用来功能测试，Unit 用来单元测试
+        - q: "*多环境下，怎么使用对应环境的 phpunit？*" # 添加 .env.dev, .env.prod 之类的env文件
+        - q: 怎么模拟认证用户？
+        - q: 文件上传怎么单测？
+        - q: 有哪些对于 phpunit 的增强方案？
+        - q: phpunit 测试覆盖率
+        - q: 怎么用单元测试来测试 laravel 中间件？
+    - url: https://github.com/mikeerickson/phpunit-pretty-result-printer
+      des: phpunit 美化
+    - url: https://github.com/mockery/mockery
+      des: Mock Test For PHP
+      qs:
+        - q: php 有哪些 stub 库？
+    - url: https://github.com/spatie/laravel-query-builder
+      des: query-builder嘛
+    - url: https://github.com/orchestral/testbench
+      des: benchmark test for PHP
+    - url: https://github.com/DarkaOnLine/L5-Swagger
+      des: swagger for laravel
+      cmd:
+        - ["php artisan l5-swagger:generate"]
+    - url: https://github.com/perftools/xhgui
+      des: PHP的性能分析工具都不太靠谱，差不多能用的只有只有这个了，其他的blackfire、z-ray、oneapm、new-relic都不太行。xhgui是基于tideways和xhprof实现的。
+    - url: https://github.com/Jiannei/lumen-api-starter
+      des: 非常完善的api-starter，可以参考，不逊于我的laravel-starter
+    - url: https://github.com/z-song/laravel-admin
+      des: 曾经
+    - url: https://github.com/jqhph/dcat-admin
+    - url: https://github.com/strapi/strapi
+      des: 非常好用的后台，可以理解为某种js生态下的laravel-admin，通过定义一些schema或者meta数据，通过在该平台上点击就可以生成API，也内置了low-code来生成页面，通过后台操作把二者串起来就ok了。
+
+
+
+
+- type: chrome
+  repo:
+    - url: https://github.com/AdguardTeam/AdguardBrowserExtension
+      des: 广告拦截器 AdGuard
+    - url: https://github.com/sergcen/recent-tabs
+      des: Switch Recent Tabs
+    - url: https://github.com/DIYgod/RSSHub-Radar
+      des: RSSHub-Radar
+    - url: https://github.com/ClearURLs/Addon
+      des: ClearURLs. 用来清理 URL 无用参数。ClearURLS 目前还能用，但是无法自定义添加 url。Neat URL作者不更新了。我用来搭配快捷键获取URL的markdown格式来用，所以对我来说很重要。
+    - url: https://github.com/Simple-Allow-Copy/chrome-extension-allow-copy
+      des: Simple-Allow-Copy
+    - url: https://github.com/Authenticator-Extension/Authenticator
+      des: 非常牛逼，且好用的chrome插件，支持同账户下多端同步，支持Microsoft-Authenticator/Authy/1Password。远远比之前一直用的 https://github.com/gphper/toolbox (Developed by wails & TOTP auth & vue) 要好用很多。
+
+
+- type: Mac
+  repo:
+    - url: https://github.com/jaywcjlove/awesome-mac
+    - url: https://github.com/wireshark/wireshark
+      des: |
+        HTTP Sniffer/Capture
+        还是得学学Wireshark，mac上 charles $50/license, proxyman $69/license, Fiddler $12/Month, 太离谱了，我还以为免费的呢。相比之下surge都不算贵了。
+      qs:
+        - q: wireshark不支持使用代理，那么怎么才能在使用clashx的情况下，使用wireshark抓包呢？
+        - q: wireshark怎么抓HTTPS的包？
+          x: |
+            wireshark支持两种方式来解密SSL/TLS报文：
+
+            通过网站的私钥
+            通过浏览器的将 TLS 对称加密秘保存在外部文件中，以供 wireshark 加解密
+          u: https://monkeywie.cn/2020/08/07/wireshark-capture-https/
+    - url: https://github.com/tmux/tmux
+
+
+- type: goland
+  repo:
+    - url: https://github.com/subtheme-dev/monokai-pro
+      des: Monokai Pro Theme
+    - url: https://github.com/zeromicro/goctl-intellij
+      des: goctl-plugins “Caret going back to the beginning of the line when line feed in .api files”
+
+
+- type: User-Tracking
+  repo:
+    - url: https://github.com/mixpanel/mixpanel-js
+      des: 用户数据的前端打点数据，这个repo是js的，另外还有iphone和android的repo。Mixpanel是一个用于用户分析和产品优化的平台。它提供了深入的用户行为分析，例如漏斗分析、事件跟踪和更复杂的用户细分。Mixpanel还提供了实时数据和A/B测试等功能。
+    - url: https://github.com/PostHog/posthog
+      doc: https://juejin.cn/post/7336973329429118985
+
+- type: Linters
+  repo:
+    - url: https://github.com/pre-commit/pre-commit
+      doc: https://pre-commit.com/hooks.html
+      cmd:
+        - ["pre-commit install", "用来生成pre-commit的git hook"]
+        - ["pre-commit autoupdate", "升级配置文件中工具版本（执行之后，会自动修改config.yaml中该repo的version，这个命令仅限于使用remote（而不是local）的情况）"]
+        - ["pre-commit run --all-files", "提交前执行该命令，查看是否可以提交成功"]
+        - ["pre-commit clean"]
+        - ["pre-commit gc"]
+        - ["pre-commit init-templatedir"]
+        - ["pre-commit uninstall"]
+        - ["pre-commit install-hooks"]
+        - ["pre-commit migrate-config"]
+        - ["pre-commit sample-config"]
+        - ["pre-commit try-repo"]
+      qs:
+        - q: 怎么用？基本使用流程？pre-commit-config.yaml 和 pre-commit-hooks.yaml 有啥区别？配置文件中怎么使用本地服务，而不是远程 repo？
+          x: |
+            其实只需要config.yaml就足够了
+            如果使用remote的话，pre-commit会在第一次执行时安装到本地，但是安装时经常会出现各种问题，所以推荐使用local
+
+            - 直接在entry中使用该命令的参数
+        - q: "***怎么自己实现 pre-commit 脚本？***"
+      des: pre-commit是比husky更通用也更强大的选择
+    - url: https://github.com/pre-commit/pre-commit-hooks
+      des: pre-commit的一些OOTB的hooks
+    - url: https://github.com/filyp/autocorrect
+      des: 更好用的pangu，实际上一坨狗屎。主命令 autocorrect --fix，用来 Fix Chinese and English typesetting。
+    - url: https://github.com/golangci/golangci-lint
+    - url: https://github.com/mvdan/gofumpt
+      des: go install mvdan.cc/gofumpt@latest
+
+
+
+- type: Python
+  repo:
+    - url: https://github.com/python/cpython
+      qs:
+        - q: python, What's GIL? pseudo multithreading
+        - q: python, magic methods? datatype? `*args` and `**kwargs`? yield?
+        - q: Compare event-driven network libs, twisted(python), golang(gnet, netpoll), java(netty, guava, akka)
+        - q: pipenv = pip + pyenv + virtualenv
+        - q: Why choose pytest instead of unittest that comes with python?
+        - q: Compare the coroutine between python and golang? (scheduler, mapping)
+    - url: https://github.com/PyO3/pyo3
+      des: Rust bindings for the Python interpreter
+    - url: https://github.com/pypa/pip
+      cmd:
+        - ["pip list", "查看所有本地的pip包"]
+        - ["pip freeze > requirements.txt", "记录依赖"]
+        - ["pip install -r requirements.txt", "怎么通过`requirements.txt`安装拓展包？"]
+        - ["pip uninstall"]
+    - url: https://github.com/pypa/pipenv
+      cmd:
+        - ["pipenv install", "安装虚拟环境或者第三方库，如果没有pipenv环境，就会创建环境"]
+        - ["pipenv install <service>", "如果已经有pipenv环境，则直接安装拓展包。比如 pipenv install scrapy。也可以直接安装多个pkg，比如 pipenv install flask flask-wtf"]
+        - ["pipenv shell", "激活虚拟环境"]
+        - ["pipenv lock", "锁定并生成Pipfile.lock文件"]
+        - ["pipenv lock -r", "生成requirements.txt文件"]
+        - ["pipenv uninstall --all", "卸载全部包并从Pipfile中移除"]
+        - ["pipenv lock -r --dev > requirements.txt", "生成requirements.txt文件"]
+        - ["pipenv install -r requirements.txt", "在pipenv下通过requirements.txt安装拓展包"]
+        - ["pipenv open <xxx>", "在浏览器中查看对应拓展包"]
+        - ["pipenv graph", "显示当前依赖关系图信息"]
+        - ["pipenv check", "检查安全漏洞"]
+        - ["pipenv update", "升级所有拓展"]
+        - ["pipenv update <pkg>", "升级某个拓展"]
+    - url: https://github.com/conda/conda
+      qs:
+        - q: "@miniconda"
+      cmd:
+        - ["conda init zsh"]
+        - ["conda config --show"]
+        - ["conda create -n newenv python=3.9"]
+        - ["conda env list"]
+        - ["conda search/update/remove <pkg>"]
+        - ["conda list"]
+    - url: https://github.com/encode/starlette
+      des: |
+        和FastAPI一样，也是支持ASGI的python生态下的web框架，不同于比较常见的Django和Flask之类的WSGI框架，
+
+        ASGI, WSGI, uWSGI
+
+        FastCGI
+
+        说白了都是Gateway Interface是吧，其实这个概念如果跟k8s串起来的话，就类似CNI, Container Network Interface这样的东西，相当于istio, apisix, linkerd之类的gateway的一个interface，这两个从功能上来说，给我的感觉很相近，但是具体有啥区别呢？
+
+        各种的语言的GI只是用来包一个指定application的，但是CNI则可以用来包k8s的node（虽然本质上也是application）
+    - url: https://github.com/hhatto/autopep8
+      cmd:
+        - ["autopep8 --in-place --recursive .", "autopep8 怎么格式化整个项目？"]
+
+- type: 内网穿透
+  repo:
+    - url: https://github.com/amalshaji/portr
+      des: Portr是一个开源的ngrok替代品，它允许用户将本地的HTTP、TCP或WebSocket连接公开到公网。提供了管理团队和用户的管理员仪表板。包含Portr检查器，用于检查和重放请求。
+    - url: https://github.com/fatedier/frp
+
+
+
+- type: web3
+  repo:
+    - url: https://github.com/ethereum/solidity
+    - url: https://github.com/AmazingAng/WTF-Solidity

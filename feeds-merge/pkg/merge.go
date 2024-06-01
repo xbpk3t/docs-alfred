@@ -1,14 +1,15 @@
 package pkg
 
 import (
-	"github.com/avast/retry-go"
-	"gopkg.in/yaml.v3"
 	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/avast/retry-go"
+	"gopkg.in/yaml.v3"
 
 	"github.com/gorilla/feeds"
 	"github.com/mmcdole/gofeed"
@@ -83,21 +84,21 @@ func EnvStrToInt(envKey string, def int) int {
 	return ti
 }
 
-// 直接获取
-func (e Config) fetchURL(url string, ch chan<- *gofeed.Feed) {
-	// core.Infof("Fetching URL: %v\n", url)
-	fp := gofeed.NewParser()
-	fp.Client = &http.Client{
-		Timeout: time.Duration(e.Timeout) * time.Second,
-	}
-	feed, err := fp.ParseURL(url)
-	if err == nil {
-		ch <- feed
-	} else {
-		slog.Info("fetchURL Error:", slog.String("URL", url), slog.Any("Error", err))
-		ch <- nil
-	}
-}
+// // fetchURL 直接获取
+// func (e Config) fetchURL(url string, ch chan<- *gofeed.Feed) {
+// 	// core.Infof("Fetching URL: %v\n", url)
+// 	fp := gofeed.NewParser()
+// 	fp.Client = &http.Client{
+// 		Timeout: time.Duration(e.Timeout) * time.Second,
+// 	}
+// 	feed, err := fp.ParseURL(url)
+// 	if err == nil {
+// 		ch <- feed
+// 	} else {
+// 		slog.Info("fetchURL Error:", slog.String("URL", url), slog.Any("Error", err))
+// 		ch <- nil
+// 	}
+// }
 
 // 尝试retry获取
 func (e Config) FetchURLWithRetry(url string, ch chan<- *gofeed.Feed) {
@@ -127,7 +128,6 @@ func (e Config) FetchURLWithRetry(url string, ch chan<- *gofeed.Feed) {
 			slog.Info("Retry Parse Feed:", slog.String("URL", url), slog.Int("Tries", int(attempts)))
 		}),
 	)
-
 	if err != nil {
 		slog.Info("Parse Feed Error:", slog.String("URL", url), slog.Any("Error", err))
 		ch <- nil // 发送 nil 表示获取失败

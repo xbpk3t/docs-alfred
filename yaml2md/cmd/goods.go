@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/hxhac/docs-alfred/workflow/pkg/goods"
+	"github.com/hxhac/docs-alfred/pkg/goods"
 	"github.com/spf13/cobra"
 )
 
@@ -111,7 +111,7 @@ var goodsCmd = &cobra.Command{
 			return
 		}
 
-		slog.Info("Markdown output has been written to goods.md")
+		slog.Info("Markdown output has been written to", slog.String("File", targetFile))
 	},
 }
 

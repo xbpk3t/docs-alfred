@@ -1,12 +1,13 @@
 package cmd
 
 import (
-	"github.com/hxhac/docs-alfred/feeds-merge/pkg"
-	"github.com/samber/lo"
-	"github.com/spf13/cobra"
 	"log/slog"
 	"os"
 	"sync"
+
+	"github.com/hxhac/docs-alfred/feeds-merge/pkg"
+	"github.com/samber/lo"
+	"github.com/spf13/cobra"
 )
 
 var wg sync.WaitGroup

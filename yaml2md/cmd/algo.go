@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/hxhac/docs-alfred/workflow/pkg/algo"
-	"github.com/spf13/cobra"
 	"log/slog"
 	"os"
 	"slices"
 	"strings"
+
+	"github.com/hxhac/docs-alfred/pkg/algo"
+	"github.com/spf13/cobra"
 )
 
 // algoCmd represents the algo command
@@ -15,7 +16,6 @@ var algoCmd = &cobra.Command{
 	Use:   "algo",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		f, err := os.ReadFile(cfgFile)
 		if err != nil {
 			return
@@ -45,7 +45,7 @@ var algoCmd = &cobra.Command{
 			return
 		}
 
-		slog.Info("Markdown output has been written to algo.md")
+		slog.Info("Markdown output has been written to", slog.String("File", targetFile))
 	},
 }
 

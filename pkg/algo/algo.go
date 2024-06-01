@@ -3,8 +3,9 @@ package algo
 import (
 	"bytes"
 	"errors"
-	"gopkg.in/yaml.v3"
 	"io"
+
+	"gopkg.in/yaml.v3"
 )
 
 type ConfigAlgo []struct {

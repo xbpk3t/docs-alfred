@@ -3,7 +3,7 @@ package gh
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/google/go-github/v56/github"
@@ -80,11 +80,13 @@ func NewRepos() Repos {
 func (rs *Repos) ListRepositories(localDB string) error {
 	db, err := OpenDB(localDB)
 	if err != nil {
+		slog.Error("Failed to Open DB", slog.Any("Error", err))
 		return err
 	}
 
 	rows, err := db.Query("SELECT id, url, description, name, user, updated_at FROM repository")
 	if err != nil {
+		slog.Error("Failed to Query", slog.Any("Error", err))
 		return err
 	}
 
@@ -134,17 +136,20 @@ func (rs Repos) UpdateRepositories(token, localDB string) (int64, error) {
 	// my rs
 	userRepos, err := NewGithubClient(token).ListUserRepositories()
 	if err != nil {
+		slog.Error("Failed to list my github repositories", slog.Any("Error", err))
 		return 0, err
 	}
 
 	// starred rs
 	starredRepos, err := NewGithubClient(token).ListStarredRepositories()
 	if err != nil {
+		slog.Error("Failed to list my starred github repositories", slog.Any("Error", err))
 		return 0, err
 	}
 
 	db, err := OpenDB(localDB)
 	if err != nil {
+		slog.Error("Failed to open database", slog.Any("Error", err))
 		return 0, err
 	}
 
@@ -157,7 +162,7 @@ func (rs Repos) UpdateRepositories(token, localDB string) (int64, error) {
 	counter := int64(0)
 
 	for _, repo := range append(userRepos, starredRepos...) {
-		log.Printf("Updating %s/%s", *repo.Owner.Login, *repo.Name)
+		slog.Info("Updating", slog.Any("Repo", fmt.Sprintf("%s/%s", *repo.Owner.Login, *repo.Name)))
 
 		name := fmt.Sprintf("%s/%s", *repo.Owner.Login, *repo.Name)
 		res, err := db.Exec(
@@ -180,6 +185,7 @@ func (rs Repos) UpdateRepositories(token, localDB string) (int64, error) {
 			githubTime(repo.CreatedAt),
 		)
 		if err != nil {
+			slog.Error("Failed to Insert repository", slog.Any("Error", err))
 			return counter, err
 		}
 		found[name] = struct{}{}
@@ -189,13 +195,14 @@ func (rs Repos) UpdateRepositories(token, localDB string) (int64, error) {
 
 	err = rs.ListRepositories(localDB)
 	if err != nil {
+		slog.Error("Failed to ListRepositories()", slog.Any("Error", err))
 		return 0, err
 	}
 
 	// purge rs that don't exit any more
 	for _, repo := range rs {
 		if _, exists := found[repo.FullName()]; !exists {
-			log.Printf("Repo %s doesn't exist, deleting", repo.FullName())
+			slog.Info("Repo not exist, deleting", slog.Any("Repo", repo.FullName()))
 
 			_, err := db.Exec(
 				`DELETE FROM repository WHERE id=?`,

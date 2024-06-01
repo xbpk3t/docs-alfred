@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/hxhac/docs-alfred/workflow/pkg/qs"
+	"github.com/hxhac/docs-alfred/pkg/qs"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -47,7 +47,7 @@ var mdCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		slog.Info("Markdown output has been written to qs.md")
+		slog.Info("Markdown output has been written to", slog.String("File", targetFile))
 	},
 }
 

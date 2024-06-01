@@ -10,14 +10,19 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/hxhac/docs-alfred/workflow/pkg/ws"
+	"github.com/hxhac/docs-alfred/pkg/ws"
 
-	"github.com/hxhac/docs-alfred/workflow/pkg/qs"
+	"github.com/hxhac/docs-alfred/pkg/qs"
 
 	aw "github.com/deanishe/awgo"
-	"github.com/hxhac/docs-alfred/workflow/pkg/gh"
+	"github.com/hxhac/docs-alfred/pkg/gh"
 
 	"github.com/spf13/cobra"
+)
+
+const (
+	ConfigGithub = "gh.yml"
+	RepoDB       = "/repo.db"
 )
 
 // fCmd represents the f command
@@ -85,7 +90,7 @@ var ghCmd = &cobra.Command{
 	Short: "Searching from starred repositories and my repositories",
 	Run: func(cmd *cobra.Command, args []string) {
 		repos := gh.NewRepos()
-		err := repos.ListRepositories(wf.CacheDir() + "/repo.db")
+		err := repos.ListRepositories(wf.CacheDir() + RepoDB)
 		if err != nil {
 			wf.FatalError(err)
 		}

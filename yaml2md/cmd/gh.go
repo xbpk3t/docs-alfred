@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hxhac/docs-alfred/workflow/pkg/gh"
+	"github.com/hxhac/docs-alfred/pkg/gh"
 
 	"github.com/spf13/cobra"
 )
@@ -140,7 +140,7 @@ var ghCmd = &cobra.Command{
 			return
 		}
 
-		slog.Info(fmt.Sprintf("Markdown output has been written to %s", targetFile))
+		slog.Info("Markdown output has been written to", slog.String("File", targetFile))
 	},
 }
 

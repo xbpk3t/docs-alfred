@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/hxhac/docs-alfred/workflow/pkg/gh"
+	"github.com/hxhac/docs-alfred/pkg/gh"
 
 	"github.com/spf13/cobra"
 )
@@ -26,7 +26,7 @@ var syncCmd = &cobra.Command{
 			_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
 				resp, err := http.Get(url)
 				if err != nil {
-					slog.Error("request error", slog.Any("err", err))
+					slog.Error("request error", slog.Any("Error", err))
 					return nil, err
 				}
 				defer resp.Body.Close()
@@ -37,10 +37,11 @@ var syncCmd = &cobra.Command{
 				}
 
 				switch cfgFile {
-				case "gh.yml":
+				case ConfigGithub:
 					token := wf.Config.GetString("gh_token")
 					gh := gh.NewRepos()
-					if _, err := gh.UpdateRepositories(token, wf.CacheDir()+"/repo.db"); err != nil {
+					if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
+						slog.Error("failed to update repo by token", slog.Any("Error", err))
 						ErrorHandle(err)
 					}
 				default:
@@ -54,7 +55,7 @@ var syncCmd = &cobra.Command{
 			}
 			slog.Info("Sync Repos Successfully.")
 		} else {
-			slog.Info("URL is Empty", slog.Any("url", url))
+			slog.Info("URL is Empty", slog.Any("URL", url))
 		}
 	},
 }
