@@ -32,11 +32,11 @@ type Repository struct {
 	URL         string `yaml:"url"`
 	Name        string `yaml:"name,omitempty"`
 	User        string
-	Des         string     `yaml:"des,omitempty"`
-	Tag         string     // used to mark Type
-	Qs          Qs         `yaml:"qs,omitempty"`
-	Pix         []string   `yaml:"pix"`
-	Cmd         [][]string `yaml:"cmd,omitempty"`
+	Des         string   `yaml:"des,omitempty"`
+	Tag         string   // used to mark Type
+	Qs          Qs       `yaml:"qs,omitempty"`
+	Cmd         Cmd      `yaml:"cmd,omitempty"`
+	Pix         []string `yaml:"pix"`
 	Use         []struct {
 		URL string `yaml:"url,omitempty"`
 		Des string `yaml:"des,omitempty"`
@@ -56,6 +56,12 @@ type Qs []struct {
 	Q string `yaml:"q,omitempty"`
 	X string `yaml:"x,omitempty"`
 	D string `yaml:"d,omitempty"`
+}
+
+type Cmd []struct {
+	C string `yaml:"c"`
+	X string `yaml:"x,omitempty"` // 该命令的描述
+	K bool   `yaml:"k,omitempty"` // 该命令是否重要 default: false
 }
 
 type Repos []Repository

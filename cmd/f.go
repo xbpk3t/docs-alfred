@@ -190,6 +190,21 @@ func addMarkdownListFormat(str []string) string {
 	return builder.String()
 }
 
+// 渲染命令行
+func addMarkdownCmd(cmds gh.Cmd) string {
+	var builder strings.Builder
+	for _, cmd := range cmds {
+
+		if cmd.K == true {
+			// TODO alfred markdown 渲染有问题，无法渲染 ***``***
+			builder.WriteString(fmt.Sprintf("- ***%s*** %s\n", cmd.C, cmd.X))
+		} else {
+			builder.WriteString(fmt.Sprintf("- `%s` %s\n", cmd.C, cmd.X))
+		}
+	}
+	return builder.String()
+}
+
 func addMarkdownQsFormat(qs gh.Qs) string {
 	var builder strings.Builder
 	// builder.WriteString("<dl>")
@@ -312,15 +327,16 @@ func renderReposRemark(repo gh.Repository) (remark strings.Builder) {
 	}
 
 	if repo.Cmd != nil {
-		var cmds []string
-		for _, cmd := range repo.Cmd {
-			if len(cmd) > 1 {
-				cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
-			} else {
-				cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
-			}
-		}
-		qx := addMarkdownListFormat(cmds)
+		// var cmds []string
+		// for _, cmd := range repo.Cmd {
+		// 	// if len(cmd) > 1 {
+		// 	// 	cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
+		// 	// } else {
+		// 	// 	cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
+		// 	// }
+		//
+		// }
+		qx := addMarkdownCmd(repo.Cmd)
 		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
 	}
 	return
