@@ -1,143 +1,131 @@
-# 这是pre-commit的全局配置之一
 fail_fast: true
-exclude: ^install/installer/.*/.*\.golden$
-
 repos:
-  - repo: 'https://github.com/pre-commit/pre-commit-hooks'
-    rev: v4.4.0
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
     hooks:
       - id: check-yaml
         args: [--allow-multiple-documents]
       - id: check-toml
-      #      - id: end-of-file-fixer
+      - id: end-of-file-fixer # Makes sure files end in a newline and only a newline.
       - id: trailing-whitespace # 移除尾部空格符
         args: [--markdown-linebreak-ext=md]
       - id: check-added-large-files  # 定义的hook脚本，在repo的.pre-commit-hooks.yaml中定义
+        args: ['--maxkb=4096']
+      - id: trailing-whitespace  # 移除尾部空格符
+        args: [--markdown-linebreak-ext=md]  # 传入参数，不处理markdown
       - id: check-merge-conflict  # 检查是否含有合并冲突符号
+      #- id: check-yaml
+      #  args: [--allow-multiple-documents]
       - id: check-json
         exclude: ^.devcontainer/devcontainer.json$
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
       - id: check-symlinks
       - id: mixed-line-ending
       - id: check-case-conflict
-#      - id: check-executables-have-shebangs
-#      - id: check-shebang-scripts-are-executable
-      - id: check-merge-conflict
-  #  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  #    rev: v2.0.0
-  #    hooks:
-  #      - id: pretty-format-yaml
-  #        # https://github.com/macisamuele/language-formatters-pre-commit-hooks/blob/v2.0.0/language_formatters_pre_commit_hooks/pretty_format_yaml.py
-  #        # hook脚本需要的参数，可以在该hook脚本文件中看到
-  #        args: [--autofix, --indent, '2']
-  - repo: local
-    hooks:
-      - id: golangci-lint
-        name: golangci-lint
-        description: Fast linters runner for Go.
-        entry: golangci-lint run --fix
-        types: [go]
-        language: golang
-        pass_filenames: false
-#      - id: gofumpt
-#        name: gofumpt
-#        entry: gofumpt -l -w .
-#        types: [go]
-#        language: golang
-#      - id: go-mod-tidy
-#        name: go-mod-tidy
-#        entry: go mod tidy -v
-#        types: [go]
-#        language: golang
-      - id: fieldalignment
-        name: fieldalignment
-        types: [go]
-        entry: fieldalignment -fix ./...
-        language: golang
-#      - id: go-test
-#        name: go-test
-#        entry: go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
-#        language: golang
-#      - id: go-vet
-#        name: go-vet
-#        entry: go vet -vettool=$(which shadow) -strict
-#        language: golang
-#      - id: nilaway
-#        name: nilaway
-#        entry: nilaway ./...
-#        language: golang
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
 
-  #  - repo: https://github.com/gitpod-io/pre-commit-hooks
-  #    rev: "2.1.5"
-  #    hooks:
-  #      - id: forbid-binary
-  #        exclude: |
-  #          (?x)^(
-  #            .*example-layer.tar.gz|
-  #            .*\.(png|svg|ico|gpg|webp)|
-  #            dev/version-manifest/version-manifest|
-  #            .*gradle-wrapper\.jar
-  #          )$
-  #      - id: script-must-have-extension
-  #      - id: shellcheck
-  #        args: [-e, "SC1090,SC1091"]
-  #        exclude: .*/gradlew$
-  #  - repo: 'https://github.com/dnephin/pre-commit-golang'
-  #    rev: v0.5.1
-  #    hooks:
-  #      - id: go-fmt
-  #      - id: go-imports
-  #      - id: validate-toml
-  #      - id: no-go-testing
-  #      - id: golangci-lint
-  #      - id: go-unit-tests
-  #      - id: go-build
-  #      - id: go-mod-tidy
-  - repo: local
+  - repo: https://github.com/pre-commit-ci/pre-commit-ci-config
+    rev: v1.6.1
+    hooks:
+      - id: check-pre-commit-ci-config
+
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
     hooks:
       - id: gitlint
         name: Git Commit Message Linter
         entry: gitlint
         types: [gitlint]
         language: python
-  #  - repo: local
-  #    hooks:
-  #      - id: license-header
-  #        name: license-header
-  #        entry: leeway run components:update-license-header
-  #        language: system
-  #        pass_filenames: false
-  #  - repo: local
-  #    hooks:
-  #      - id: mocha-tests-only
-  #        name: mocha-tests-only
-  #        entry: leeway run components:check-mocha-no-only
-  #        language: system
-  #        pass_filenames: false
-  #  - repo: https://github.com/antonbabenko/pre-commit-terraform
-  #    rev: v1.75.0
-  #    hooks:
-  #      - id: terraform_fmt
-  #        args:
-  #          - --args=-diff
-  - repo: local
+      - id: gitlint-ci
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.41.0
+    hooks:
+      - id: markdownlint
+        alias: md
+        name: Lint Markdown files
+        #        args:
+        #          - -f -c .github/linters/markdownlint.yml -i node_modules .
+        entry: markdownlint -f -c .github/linters/markdownlint.yml -i node_modules .
+        types: [markdown]
+        language: node
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        name: Lint YAML files
+        entry: yamllint -c .github/linters/yamllint.yml .
+        types: [yaml]
+        language: python
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.3
     hooks:
       - id: gitleaks
-        name: gitleaks
-        description: Check Secrets and Token
+        name: Scan Secrets
         entry: gitleaks detect --source . -v
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.90.0
+    hooks:
+      - id: terraform_fmt
+        args:
+          - --args=-diff
+      - id: terraform_docs
+      - id: terraform_tflint
+
+  #  - repo: local
+  #    hooks:
+  #      - id: dashboard-linter
+  #        name: dashboard-linter
+  #        entry: leeway run components/dashboard:lint
+  #        language: system
+  #        pass_filenames: false
+  #        files: ^components/dashboard/
+
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.59.0
+    hooks:
+      - id: golangci-lint-config-verify
+      - id: golangci-lint
+        entry: golangci-lint run --fix
+        types: [go]
         language: golang
+      - id: golangci-lint-full
+
+
+#  - repo: https://github.com/lietu/go-pre-commit
+#    rev: v0.1.0
+#    hooks:
+#      - id: errcheck
+#      - id: go-fmt-goimports
+#      - id: go-test
+#      - id: go-vet
+#        entry: go vet -vettool=$(which shadow) -strict
+#      - id: gofumpt
+#        entry: gofumpt -l -w .
+#      - id: golangci-lint
+#      - id: golint
+#      - id: staticcheck
+#      - id: go-mod-tidy
+
+
 #  - repo: local
 #    hooks:
-#      - id: dashboard-linter
-#        name: dashboard-linter
-#        entry: leeway run components/dashboard:lint
-#        language: system
-#        pass_filenames: false
-#        files: ^components/dashboard/
-#  - repo: https://gitlab.com/bmares/check-json5
-#    rev: v1.0.0
-#    hooks:
-#      - id: check-json5
-#        files: ^.devcontainer/devcontainer.json$
+#      - id: fieldalignment
+#        name: fieldalignment
+#        types: [go]
+#        entry: fieldalignment -fix ./...
+#        language: golang
+#      - id: betteralign
+#        entry: betteralign -apply ./...
+#      - id: go-test
+#        name: go-test
+#        entry: go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
+#        language: golang
+#      - id: nilaway
+#        name: nilaway
+#        entry: nilaway ./...
+#        language: golang

@@ -1,12 +1,13 @@
 package cmd
 
 import (
+	"fmt"
+	"github.com/hxhac/docs-alfred/pkg/gh"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
-
-	"github.com/hxhac/docs-alfred/pkg/gh"
 
 	"github.com/spf13/cobra"
 )
@@ -15,13 +16,17 @@ const SyncJob = "sync"
 
 const expire = 60
 
+const (
+	// KeyGithubAPIToken /* #nosec */
+	KeyGithubAPIToken = "github-api-token"
+)
+
 // syncCmd represents the sync command
 var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
 		url := wf.Config.GetString("url") + cfgFile
-
 		if url != "" {
 			_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
 				resp, err := http.Get(url)
@@ -36,16 +41,20 @@ var syncCmd = &cobra.Command{
 					return nil, err
 				}
 
+				fmt.Println(strings.EqualFold(cfgFile, ConfigGithub))
+
 				switch cfgFile {
 				case ConfigGithub:
-					token := wf.Config.GetString("gh_token")
+					token, err := wf.Keychain.Get(KeyGithubAPIToken)
+					if err != nil {
+						slog.Error("get github token error", slog.Any("Error", err))
+						return nil, err
+					}
 					gh := gh.NewRepos()
 					if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
 						slog.Error("failed to update repo by token", slog.Any("Error", err))
 						ErrorHandle(err)
 					}
-				default:
-
 				}
 
 				return data, nil
