@@ -195,7 +195,7 @@ func addMarkdownCmd(cmds gh.Cmd) string {
 	var builder strings.Builder
 	for _, cmd := range cmds {
 
-		if cmd.K == true {
+		if cmd.K {
 			// TODO alfred markdown 渲染有问题，无法渲染 ***``***
 			builder.WriteString(fmt.Sprintf("- ***%s*** %s\n", cmd.C, cmd.X))
 		} else {
@@ -311,6 +311,10 @@ func renderReposDes(repo gh.Repository) (des strings.Builder) {
 // 渲染remark
 // 也就是
 func renderReposRemark(repo gh.Repository) (remark strings.Builder) {
+	if repo.Des != "" {
+		remark.WriteString(fmt.Sprintf(" %s", repo.Des))
+	}
+
 	if repo.Pix != nil {
 		qx := addMarkdownPicFormat(repo.Pix)
 		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))

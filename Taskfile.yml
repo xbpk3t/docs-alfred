@@ -1,57 +1,18 @@
 version: "3"
 
 tasks:
-  install-deps:
-    cmds:
-      - go mod tidy
-
   default:
-    desc: "Build the app"
-    deps: [install-deps]
+    - task: yaml2md
+      vars:
+        CMD: gh
+
+  feeds-merge:
+    dir: feeds-merge
     cmds:
-      - go build -o bin/api-o11y-gcp cmd/api/main.go
+      - INPUT_FEEDS_PATH="feeds.yml" go run main.go
 
-  build-linux:
-    deps: [install-deps]
-    desc: "Build for Linux"
+  yaml2md:
+    dir: yaml2md
     cmds:
-      - go build -a -installsuffix cgo -tags "netgo" -installsuffix netgo -o bin/api-o11y-gcp cmd/api/main.go
-    env:
-      CGO_ENABLED: 0
-      GOOS: linux
-
-  build-docker:
-    desc: "Build a docker image"
-    cmds:
-      - docker build -t api-o11y-gcp -f Dockerfile .
-
-  generate-mocks:
-    desc: "Generate mocks"
-    cmds:
-      - go install github.com/vektra/mockery/v2@v2.43.1
-      - mockery --output user/mocks --dir user --all
-      - mockery --output internal/telemetry/mocks --dir internal/telemetry --all
-
-  test:
-    deps:
-      - install-deps
-      - generate-mocks
-    desc: "Run tests"
-    cmds:
-      - go test ./...
-
-  clean:
-    desc: "Clean up"
-    prompt: This is a dangerous command... Do you want to continue?
-    cmds:
-      - rm -f bin/*
-      - rm -rf user/mocks/*
-      - rm -rf internal/telemetry/mocks/mocks/*
-
-  run-docker:
-    desc: "Run the docker image"
-    deps: [build-docker]
-    cmds:
-      - docker run -d -p 8080:8080 api-o11y-gcp
-
-
+      - echo "Running command {{.CMD}}"
+      - sh -c "go run main.go {{.CMD}} --config {{.CMD}}.yml --target {{.CMD}}.md"
