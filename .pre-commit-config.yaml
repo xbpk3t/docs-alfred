@@ -61,14 +61,14 @@ repos:
         language: python
 
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.3
+    rev: v8.18.4
     hooks:
       - id: gitleaks
         name: Scan Secrets
         entry: gitleaks detect --source . -v
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.91.0
+    rev: v1.92.0
     hooks:
       - id: terraform_fmt
         args:
