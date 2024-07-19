@@ -30,8 +30,14 @@ var workCmd = &cobra.Command{
 		for _, d := range dfo {
 			if !slices.Contains(ss, d.Tag) {
 				ss = append(ss, d.Tag)
-				res.WriteString(fmt.Sprintf("## %s \n", d.Tag))
-				res.WriteString(fmt.Sprintf("### %s \n", d.Type))
+
+				if strings.EqualFold(d.Tag, d.Type) {
+					res.WriteString(fmt.Sprintf("## %s \n", d.Tag))
+				} else {
+					res.WriteString(fmt.Sprintf("## %s \n", d.Tag))
+					res.WriteString(fmt.Sprintf("### %s \n", d.Type))
+				}
+
 				if d.Qs != nil {
 					res.WriteString(addMarkdownQsFormatWorks(d.Qs))
 				}
