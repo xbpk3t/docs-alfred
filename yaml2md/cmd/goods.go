@@ -87,7 +87,7 @@ var goodsCmd = &cobra.Command{
 				} else {
 					mark = "~~"
 				}
-				res.WriteString(fmt.Sprintf("- %s[%s]%s\n", mark, gi.Goods[0].Name, mark))
+				res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, gi.Goods[0].Name, mark))
 			} else {
 				res.WriteString(fmt.Sprintf("### %s \n", gi.Type))
 				for _, g := range gi.Goods {
@@ -97,11 +97,20 @@ var goodsCmd = &cobra.Command{
 					} else {
 						mark = "~~"
 					}
-					res.WriteString(fmt.Sprintf("- %s[%s]%s\n", mark, g.Name, mark))
+					res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, g.Name, mark))
 				}
+
+				if gi.Qs != nil {
+					res.WriteString("--- \n")
+				}
+
 				// qs
 				for _, q := range gi.Qs {
-					res.WriteString(fmt.Sprintf("- %s \n", q))
+					if q.X != "" {
+						res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+					} else {
+						res.WriteString(fmt.Sprintf("- %s \n", q.Q))
+					}
 				}
 			}
 		}
