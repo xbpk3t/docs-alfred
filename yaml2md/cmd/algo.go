@@ -30,8 +30,12 @@ var algoCmd = &cobra.Command{
 				if strings.EqualFold(ad.Tag, ad.Type) {
 					res.WriteString(fmt.Sprintf("## %s \n", ad.Tag))
 				} else {
-					res.WriteString(fmt.Sprintf("## %s \n", ad.Tag))
-					res.WriteString(fmt.Sprintf("### %s \n", ad.Type))
+					if strings.EqualFold(ad.Tag, ad.Type) {
+						res.WriteString(fmt.Sprintf("## %s \n", ad.Tag))
+					} else {
+						res.WriteString(fmt.Sprintf("## %s \n", ad.Tag))
+						res.WriteString(fmt.Sprintf("### %s \n", ad.Type))
+					}
 				}
 				if ad.Repos != nil {
 					res.WriteString(addMarkdownQsFormatAlgo(ad.Repos))
