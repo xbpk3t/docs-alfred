@@ -56,6 +56,7 @@ type Qs []struct {
 	Q string `yaml:"q,omitempty"`
 	X string `yaml:"x,omitempty"`
 	D string `yaml:"d,omitempty"`
+	U string `yaml:"u,omitempty"`
 }
 
 type Cmd []struct {

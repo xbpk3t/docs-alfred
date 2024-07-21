@@ -21,7 +21,8 @@ type Goods []struct {
 	Param string `yaml:"param"`
 	Price string `yaml:"price"`
 	Des   string `yaml:"des"`
-	Use   bool   `yaml:"use"`
+	Use   bool   `yaml:"use"` // 是否正在使用
+	URL   string `yaml:"url"` // 我对该商品的评测
 }
 
 type Qs struct {
