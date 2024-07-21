@@ -77,6 +77,7 @@ var goodsCmd = &cobra.Command{
 		var ss []string
 
 		for _, gi := range configGoods {
+			// 顺序渲染
 			if !slices.Contains(ss, gi.Tag) {
 				ss = append(ss, gi.Tag)
 				res.WriteString(fmt.Sprintf("## %s \n", gi.Tag))
@@ -87,7 +88,12 @@ var goodsCmd = &cobra.Command{
 				} else {
 					mark = "~~"
 				}
-				res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, gi.Goods[0].Name, mark))
+				if gi.Goods[0].Des != "" {
+					res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s%s</summary>\n\n%s\n\n</details>\n\n", mark, gi.Goods[0].Name, mark, gi.Goods[0].Des))
+				} else {
+					res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, gi.Goods[0].Name, mark))
+				}
+
 			} else {
 				res.WriteString(fmt.Sprintf("### %s \n", gi.Type))
 				for _, g := range gi.Goods {
@@ -97,7 +103,11 @@ var goodsCmd = &cobra.Command{
 					} else {
 						mark = "~~"
 					}
-					res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, g.Name, mark))
+					if g.Des != "" {
+						res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s%s</summary>\n\n%s\n\n</details>\n\n", mark, g.Name, mark, g.Des))
+					} else {
+						res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, g.Name, mark))
+					}
 				}
 
 				if gi.Qs != nil {

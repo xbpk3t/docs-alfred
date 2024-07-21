@@ -149,9 +149,17 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 	// builder.WriteString("<dl>")
 	for _, q := range qs {
 		if q.X == "" {
-			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
+			if q.U != "" {
+				builder.WriteString(fmt.Sprintf("- %s%s\n", q.Q, q.U))
+			} else {
+				builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
+			}
 		} else {
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+			if q.U != "" {
+				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
+			} else {
+				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+			}
 		}
 	}
 	// builder.WriteString("</dl>")
