@@ -10,19 +10,19 @@ import (
 
 type ConfigGoods []struct {
 	Type  string `yaml:"type"`
-	Tag   string `yaml:"tag,omitempty"`
-	Goods Goods  `yaml:"goods,omitempty"`
+	Tag   string `yaml:"tag"`
+	Goods Goods  `yaml:"goods"`
 	Des   string `yaml:"des,omitempty"`
 	Qs    []Qs   `yaml:"qs,omitempty"`
 }
 
 type Goods []struct {
 	Name  string `yaml:"name"`
-	Param string `yaml:"param"`
-	Price string `yaml:"price"`
-	Des   string `yaml:"des"`
-	Use   bool   `yaml:"use"` // 是否正在使用
-	URL   string `yaml:"url"` // 我对该商品的评测
+	Param string `yaml:"param,omitempty"`
+	Price string `yaml:"price,omitempty"`
+	Des   string `yaml:"des,omitempty"`
+	Use   bool   `yaml:"use,omitempty"` // 是否正在使用
+	URL   string `yaml:"url,omitempty"` // 我对该商品的评测
 }
 
 type Qs struct {
