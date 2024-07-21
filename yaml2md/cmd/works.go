@@ -100,7 +100,7 @@ func addMarkdownQsFormatWorks(qs work.Qs) string {
 			}
 		} else {
 			if q.U != "" {
-				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
+				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
 			} else {
 				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
 			}
