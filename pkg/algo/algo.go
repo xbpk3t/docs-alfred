@@ -15,11 +15,11 @@ type ConfigAlgo []struct {
 }
 
 type Repo []struct {
-	Qs  string `yaml:"qs"`  // 算法题
-	URL string `yaml:"url"` // 该题目的题解
+	Qs  string `yaml:"qs"`            // 算法题
+	URL string `yaml:"url,omitempty"` // 该题目的题解
+	Sol string `yaml:"sol,omitempty"` // des & 思路
 	// Des string `yaml:"des"`
-	Sol string `yaml:"sol"` // 思路
-	Doc string `yaml:"doc"` // 不同于url，doc通常是blog的url
+	// Doc string `yaml:"doc,omitempty"` // 不同于url，doc通常是blog的url
 }
 
 func NewConfigAlgo(f []byte) (ga ConfigAlgo) {
