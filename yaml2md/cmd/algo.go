@@ -74,26 +74,41 @@ func init() {
 func addMarkdownQsFormatAlgo(repo algo.Repo) string {
 	var builder strings.Builder
 	// builder.WriteString("<dl>")
+	// for _, r := range repo {
+	// 	if r.Sol == "" {
+	// 		if r.URL != "" && r.Qs != "" {
+	// 			builder.WriteString(fmt.Sprintf("- [%s](%s)\n", r.Qs, r.URL))
+	// 		} else if r.Qs != "" {
+	// 			builder.WriteString(fmt.Sprintf("- %s\n", r.Qs))
+	// 		} else if r.URL != "" {
+	// 			builder.WriteString(fmt.Sprintf("- %s\n", r.URL))
+	// 		}
+	// 	} else {
+	// 		if r.URL != "" && r.Doc != "" {
+	// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\nURL: %s\n\nDoc: %s\n\n%s\n\n</details>\n\n", r.Qs, r.URL, r.Doc, r.Sol))
+	// 		} else if r.URL != "" {
+	// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\nURL: %s\n\n%s\n\n</details>\n\n", r.Qs, r.URL, r.Sol))
+	// 		} else if r.Doc != "" {
+	// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\nDoc: %s\n\n%s\n\n</details>\n\n", r.Qs, r.Doc, r.Sol))
+	// 		}
+	// 	}
+	// }
+
 	for _, r := range repo {
 		if r.Sol == "" {
-			if r.URL != "" && r.Qs != "" {
+			if r.URL != "" {
 				builder.WriteString(fmt.Sprintf("- [%s](%s)\n", r.Qs, r.URL))
-			} else if r.Qs != "" {
+			} else {
 				builder.WriteString(fmt.Sprintf("- %s\n", r.Qs))
-			} else if r.URL != "" {
-				builder.WriteString(fmt.Sprintf("- %s\n", r.URL))
 			}
 		} else {
-			if r.URL != "" && r.Doc != "" {
-				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\nURL: %s\n\nDoc: %s\n\n%s\n\n</details>\n\n", r.Qs, r.URL, r.Doc, r.Sol))
-			} else if r.URL != "" {
-				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\nURL: %s\n\n%s\n\n</details>\n\n", r.Qs, r.URL, r.Sol))
-			} else if r.Doc != "" {
-				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\nDoc: %s\n\n%s\n\n</details>\n\n", r.Qs, r.Doc, r.Sol))
+			if r.URL != "" {
+				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", r.Qs, r.URL, r.Sol))
+			} else {
+				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", r.Qs, r.Sol))
 			}
 		}
 	}
-	// builder.WriteString("</dl>")
 
 	return builder.String()
 }
