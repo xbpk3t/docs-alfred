@@ -89,7 +89,11 @@ var goodsCmd = &cobra.Command{
 					mark = "~~"
 				}
 				if gi.Goods[0].Des != "" {
-					res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s[%s](%s)%s</summary>\n\n%s\n\n</details>\n\n", mark, gi.Goods[0].Name, gi.Goods[0].URL, mark, gi.Goods[0].Des))
+					if gi.Goods[0].URL == "" {
+						res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s%s</summary>\n\n%s\n\n</details>\n\n", mark, gi.Goods[0].Name, mark, gi.Goods[0].Des))
+					} else {
+						res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s[%s](%s)%s</summary>\n\n%s\n\n</details>\n\n", mark, gi.Goods[0].Name, gi.Goods[0].URL, mark, gi.Goods[0].Des))
+					}
 				} else {
 					res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, gi.Goods[0].Name, mark))
 				}
@@ -104,7 +108,12 @@ var goodsCmd = &cobra.Command{
 						mark = "~~"
 					}
 					if g.Des != "" {
-						res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s[%s](%s)%s</summary>\n\n%s\n\n</details>\n\n", mark, g.Name, g.URL, mark, g.Des))
+						if g.URL == "" {
+							res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s%s</summary>\n\n%s\n\n</details>\n\n", mark, g.Name, mark, g.Des))
+						} else {
+							res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s[%s](%s)%s</summary>\n\n%s\n\n</details>\n\n", mark, g.Name, g.URL, mark, g.Des))
+						}
+
 					} else {
 						res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, g.Name, mark))
 					}
