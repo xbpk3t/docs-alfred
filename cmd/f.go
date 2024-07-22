@@ -247,14 +247,14 @@ func GetFileNameFromURL(urlString string) (string, error) {
 	return fileName, nil
 }
 
-func addMarkdownPicFormat(URLs []string) string {
-	var builder strings.Builder
-	for _, u := range URLs {
-		name, _ := GetFileNameFromURL(u)
-		builder.WriteString(fmt.Sprintf("- [%s](%s)\n", name, u))
-	}
-	return builder.String()
-}
+// func addMarkdownPicFormat(URLs []string) string {
+// 	var builder strings.Builder
+// 	for _, u := range URLs {
+// 		name, _ := GetFileNameFromURL(u)
+// 		builder.WriteString(fmt.Sprintf("- [%s](%s)\n", name, u))
+// 	}
+// 	return builder.String()
+// }
 
 func addMarkdownHeadingFormat(qq gh.Qq) string {
 	var builder strings.Builder
@@ -320,10 +320,10 @@ func renderReposRemark(repo gh.Repository) (remark strings.Builder) {
 		remark.WriteString(fmt.Sprintf(" %s", repo.Des))
 	}
 
-	if repo.Pix != nil {
-		qx := addMarkdownPicFormat(repo.Pix)
-		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
-	}
+	// if repo.Pix != nil {
+	// 	qx := addMarkdownPicFormat(repo.Pix)
+	// 	remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+	// }
 
 	if repo.Qs != nil {
 		qx := addMarkdownQsFormat(repo.Qs)
@@ -359,7 +359,7 @@ func renderIcon(repo gh.Repository) (iconPath string) {
 			iconPath = FaRepo
 		}
 	}
-	if repo.Pix != nil || repo.Qs != nil || repo.Cmd != nil {
+	if repo.Qs != nil || repo.Cmd != nil {
 		iconPath = FaStar
 	}
 	return

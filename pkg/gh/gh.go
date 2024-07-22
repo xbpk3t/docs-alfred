@@ -32,15 +32,15 @@ type Repository struct {
 	URL         string `yaml:"url"`
 	Name        string `yaml:"name,omitempty"`
 	User        string
-	Des         string   `yaml:"des,omitempty"`
-	Tag         string   // used to mark Type
-	Qs          Qs       `yaml:"qs,omitempty"`
-	Cmd         Cmd      `yaml:"cmd,omitempty"`
-	Pix         []string `yaml:"pix"`
-	Use         []struct {
-		URL string `yaml:"url,omitempty"`
-		Des string `yaml:"des,omitempty"`
-	} `yaml:"use,omitempty"`
+	Des         string `yaml:"des,omitempty"`
+	Tag         string // used to mark Type
+	Qs          Qs     `yaml:"qs,omitempty"`
+	Cmd         Cmd    `yaml:"cmd,omitempty"`
+	// Pix         []string `yaml:"pix"`
+	// Use         []struct {
+	// 	URL string `yaml:"url,omitempty"`
+	// 	Des string `yaml:"des,omitempty"`
+	// } `yaml:"use,omitempty"`
 	Qq     `yaml:"qq,omitempty"`
 	IsStar bool
 }
@@ -191,7 +191,7 @@ func (cr *ConfigRepos) FilterReposMD() ConfigRepos {
 			var filteredRepos []Repository
 			for _, repo := range crv.Repos {
 				if repo.Qs != nil {
-					repo.Pix = addMarkdownPicFormat(repo.Pix)
+					// repo.Pix = addMarkdownPicFormat(repo.Pix)
 					filteredRepos = append(filteredRepos, repo)
 				}
 			}
@@ -231,11 +231,12 @@ func GetFileNameFromURL(urlString string) (string, error) {
 	return fileName, nil
 }
 
-func addMarkdownPicFormat(URLs []string) []string {
-	res := make([]string, len(URLs))
-	for _, u := range URLs {
-		name, _ := GetFileNameFromURL(u)
-		res = append(res, fmt.Sprintf("![%s](%s)\n", name, u))
-	}
-	return res
-}
+// 用来渲染pic
+// func addMarkdownPicFormat(URLs []string) []string {
+// 	res := make([]string, len(URLs))
+// 	for _, u := range URLs {
+// 		name, _ := GetFileNameFromURL(u)
+// 		res = append(res, fmt.Sprintf("![%s](%s)\n", name, u))
+// 	}
+// 	return res
+// }
