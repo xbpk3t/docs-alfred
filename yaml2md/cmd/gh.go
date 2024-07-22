@@ -150,7 +150,7 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 	for _, q := range qs {
 		if q.X == "" {
 			if q.U != "" {
-				builder.WriteString(fmt.Sprintf("- %s%s\n", q.Q, q.U))
+				builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
 			} else {
 				builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
 			}
