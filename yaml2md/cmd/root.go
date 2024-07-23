@@ -8,7 +8,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "render-md",
+	Use:   "yaml2md",
 	Short: "A brief description of your application",
 	// Uncomment the following line if your bare application
 	// has an action associated with it:

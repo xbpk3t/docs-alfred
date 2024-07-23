@@ -20,62 +20,9 @@ var goodsCmd = &cobra.Command{
 		if err != nil {
 			return
 		}
-
 		configGoods := goods.NewConfigGoods(f)
-
 		var res strings.Builder
-
-		// goodsMap := make(map[string]goods.ConfigGoods)
-
-		// for _, g := range configGoods {
-		//
-		// 	if _, exists := goodsMap[g.Tag]; !exists {
-		// 		goodsMap[g.Tag] = goods.ConfigGoods{g}
-		// 	} else {
-		// 		goodsMap[g.Tag] = append(goodsMap[g.Tag], g)
-		// 	}
-		// }
-		//
-		// for tag, goodsInfo := range goodsMap {
-		// 	res.WriteString(fmt.Sprintf("## %s \n", tag))
-		//
-		// 	for _, gi := range goodsInfo {
-		// 		res.WriteString(fmt.Sprintf("\n ### %s \n", gi.Type))
-		//
-		// 		// data := make([][]string, len(gi.Goods))
-		// 		// for _, g := range gi.Goods {
-		// 		// 	data = append(data, []string{g.Name, g.Param, g.Price, g.Des})
-		// 		// }
-		//
-		// 		// tableString := &strings.Builder{}
-		// 		// table := tablewriter.NewWriter(tableString)
-		// 		// table.SetHeader([]string{"Name", "Param", "Price", "Des"})
-		// 		// table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-		// 		// table.SetCenterSeparator("|")
-		// 		// table.AppendBulk(data)
-		// 		// table.Render()
-		// 		//
-		// 		// res.WriteString(fmt.Sprintf("\n\n%s \n", tableString))
-		//
-		// 		for _, g := range gi.Goods {
-		// 			name := ""
-		// 			if g.Use {
-		// 				name = fmt.Sprintf("- ***%s*** \n", g.Name)
-		// 			} else {
-		// 				name = fmt.Sprintf("- %s \n", g.Name)
-		// 			}
-		// 			res.WriteString(name)
-		// 		}
-		//
-		// 		// qs
-		// 		for _, q := range gi.Qs {
-		// 			res.WriteString(fmt.Sprintf("- %s \n", q))
-		// 		}
-		// 	}
-		// }
-
 		var ss []string
-
 		for _, gi := range configGoods {
 			// 顺序渲染
 			if !slices.Contains(ss, gi.Tag) {
@@ -83,19 +30,23 @@ var goodsCmd = &cobra.Command{
 				res.WriteString(fmt.Sprintf("## %s \n", gi.Tag))
 				res.WriteString(fmt.Sprintf("### %s \n", gi.Type))
 				mark := ""
-				if gi.Goods[0].Use {
-					mark = "***"
-				} else {
-					mark = "~~"
-				}
-				if gi.Goods[0].Des != "" {
-					if gi.Goods[0].URL == "" {
-						res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s%s</summary>\n\n%s\n\n</details>\n\n", mark, gi.Goods[0].Name, mark, gi.Goods[0].Des))
+
+				for _, gd := range gi.Goods {
+
+					if gd.Use {
+						mark = "***"
 					} else {
-						res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s[%s](%s)%s</summary>\n\n%s\n\n</details>\n\n", mark, gi.Goods[0].Name, gi.Goods[0].URL, mark, gi.Goods[0].Des))
+						mark = "~~"
 					}
-				} else {
-					res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, gi.Goods[0].Name, mark))
+					if gd.Des != "" {
+						if gd.URL == "" {
+							res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s%s</summary>\n\n%s\n\n</details>\n\n", mark, gd.Name, mark, gd.Des))
+						} else {
+							res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s[%s](%s)%s</summary>\n\n%s\n\n</details>\n\n", mark, gd.Name, gd.URL, mark, gd.Des))
+						}
+					} else {
+						res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, gd.Name, mark))
+					}
 				}
 
 			} else {
