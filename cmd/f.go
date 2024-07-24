@@ -81,10 +81,11 @@ const (
 )
 
 // ghCmd represents the repo command
-// Enter          直接打开URL
-// CMD + Enter    Markdown View
-// Ctrl + Enter   Copy URL
-// Shift + Enter  打开在docs项目对应heading的URL
+// Enter            直接打开URL
+// CMD + Enter      Markdown View
+// Option + Enter   Copy URL
+// Ctrl + Enter     打开文档
+// Shift + Enter    打开在docs项目对应heading的URL
 var ghCmd = &cobra.Command{
 	Use:   "gh",
 	Short: "Searching from starred repositories and my repositories",
@@ -96,19 +97,13 @@ var ghCmd = &cobra.Command{
 		}
 
 		ghs := gh.NewConfigRepos(data).ToRepos()
-
 		repos = append(ghs, repos...)
-
 		if len(args) > 0 && strings.HasPrefix(args[0], "#") {
 			tags := repos.ExtractTags()
 
 			// if hit tag
 			ptag := strings.TrimPrefix(args[0], "#")
 			if slices.Contains(tags, ptag) {
-				// for _, tagRepo := range  {
-				// 	name := tagRepo.FullName()
-				// 	wf.NewItem(name).Title(name).Valid(false).Autocomplete(name)
-				// }
 				repos = repos.QueryReposByTag(ptag)
 				RenderRepos(repos)
 			} else {
@@ -288,8 +283,12 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 			Valid(true).
 			Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
 
-		item.Cmd().Subtitle(fmt.Sprintf("Open URL: %s", repoURL)).Arg(remark.String())
-		item.Opt().Subtitle(fmt.Sprintf("Copy URL: %s", repoURL)).Arg(repoURL)
+		docsURL := fmt.Sprintf("%s#%s", wf.Config.GetString("docs"), strings.ToLower(repo.Tag))
+
+		item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
+		item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
+		item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
+		item.Shift().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
 	}
 	return item
 }
