@@ -96,6 +96,26 @@
 				<key>vitoclose</key>
 				<false/>
 			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>18D6F575-4589-45B7-827B-B182C18E240A</string>
+				<key>modifiers</key>
+				<integer>131072</integer>
+				<key>modifiersubtext</key>
+				<string>打开Docs中该Repo的qs</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>B53BF6E6-F247-47F7-976E-2AB8E78A683E</string>
+				<key>modifiers</key>
+				<integer>262144</integer>
+				<key>modifiersubtext</key>
+				<string>打开文档</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
 		</array>
 	</dict>
 	<key>createdby</key>
@@ -370,6 +390,48 @@
 			<key>version</key>
 			<integer>1</integer>
 		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>browser</key>
+				<string></string>
+				<key>skipqueryencode</key>
+				<false/>
+				<key>skipvarencode</key>
+				<false/>
+				<key>spaces</key>
+				<string></string>
+				<key>url</key>
+				<string></string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.openurl</string>
+			<key>uid</key>
+			<string>18D6F575-4589-45B7-827B-B182C18E240A</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>browser</key>
+				<string></string>
+				<key>skipqueryencode</key>
+				<false/>
+				<key>skipvarencode</key>
+				<false/>
+				<key>spaces</key>
+				<string></string>
+				<key>url</key>
+				<string></string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.openurl</string>
+			<key>uid</key>
+			<string>B53BF6E6-F247-47F7-976E-2AB8E78A683E</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
 	</array>
 	<key>readme</key>
 	<string></string>
@@ -378,7 +440,7 @@
 		<key>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</key>
 		<dict>
 			<key>xpos</key>
-			<real>775</real>
+			<real>820</real>
 			<key>ypos</key>
 			<real>15</real>
 		</dict>
@@ -388,6 +450,13 @@
 			<real>1145</real>
 			<key>ypos</key>
 			<real>365</real>
+		</dict>
+		<key>18D6F575-4589-45B7-827B-B182C18E240A</key>
+		<dict>
+			<key>xpos</key>
+			<real>730</real>
+			<key>ypos</key>
+			<real>720</real>
 		</dict>
 		<key>526CF41F-8FC3-49B8-85F8-BDE912B219B5</key>
 		<dict>
@@ -428,6 +497,13 @@
 			<key>ypos</key>
 			<real>505</real>
 		</dict>
+		<key>B53BF6E6-F247-47F7-976E-2AB8E78A683E</key>
+		<dict>
+			<key>xpos</key>
+			<real>1075</real>
+			<key>ypos</key>
+			<real>745</real>
+		</dict>
 		<key>E90320D8-B030-405D-A597-184E2218A0BA</key>
 		<dict>
 			<key>note</key>
@@ -440,48 +516,6 @@
 	</dict>
 	<key>userconfigurationconfig</key>
 	<array>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>default</key>
-				<string>ff</string>
-				<key>placeholder</key>
-				<string></string>
-				<key>required</key>
-				<true/>
-				<key>trim</key>
-				<true/>
-			</dict>
-			<key>description</key>
-			<string></string>
-			<key>label</key>
-			<string>Keyword</string>
-			<key>type</key>
-			<string>textfield</string>
-			<key>variable</key>
-			<string>qs</string>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>default</key>
-				<string>fc</string>
-				<key>placeholder</key>
-				<string></string>
-				<key>required</key>
-				<true/>
-				<key>trim</key>
-				<true/>
-			</dict>
-			<key>description</key>
-			<string></string>
-			<key>label</key>
-			<string>Keyword</string>
-			<key>type</key>
-			<string>textfield</string>
-			<key>variable</key>
-			<string>qs2</string>
-		</dict>
 		<dict>
 			<key>config</key>
 			<dict>
@@ -507,6 +541,27 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
+				<string>https://docs.hxha.xyz/x/gh/</string>
+				<key>placeholder</key>
+				<string></string>
+				<key>required</key>
+				<false/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string>Docs URL</string>
+			<key>label</key>
+			<string>Docs URL</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>docs</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
 				<string>gh</string>
 				<key>placeholder</key>
 				<string></string>
@@ -516,9 +571,9 @@
 				<true/>
 			</dict>
 			<key>description</key>
-			<string></string>
+			<string>Custom Key for gh.yml</string>
 			<key>label</key>
-			<string></string>
+			<string>gh.yml</string>
 			<key>type</key>
 			<string>textfield</string>
 			<key>variable</key>
@@ -537,38 +592,17 @@
 				<true/>
 			</dict>
 			<key>description</key>
-			<string></string>
+			<string>Custom Key for ws.yml</string>
 			<key>label</key>
-			<string></string>
+			<string>ws.yml</string>
 			<key>type</key>
 			<string>textfield</string>
 			<key>variable</key>
 			<string>ch</string>
 		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>default</key>
-				<string>goods</string>
-				<key>placeholder</key>
-				<string></string>
-				<key>required</key>
-				<false/>
-				<key>trim</key>
-				<true/>
-			</dict>
-			<key>description</key>
-			<string></string>
-			<key>label</key>
-			<string></string>
-			<key>type</key>
-			<string>textfield</string>
-			<key>variable</key>
-			<string>goods</string>
-		</dict>
 	</array>
 	<key>version</key>
-	<string>1.1.0</string>
+	<string>1.4.0</string>
 	<key>webaddress</key>
 	<string>https://github.com/91go/docs-alfred</string>
 </dict>
