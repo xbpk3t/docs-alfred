@@ -3,11 +3,8 @@ package gh
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"log"
-	"net/url"
-	"path"
 	"slices"
 	"strings"
 	"time"
@@ -19,21 +16,23 @@ const (
 	GhURL = "https://github.com/"
 )
 
-type ConfigRepos []struct {
+type ConfigRepos []ConfigRepo
+
+type ConfigRepo struct {
 	Type  string       `yaml:"type"`
 	Repos []Repository `yaml:"repo"`
 	Qs    Qs           `yaml:"qs,omitempty"`
-	Md    bool         `yaml:"md,omitempty"`
+	// Md    bool         `yaml:"md,omitempty"`
 }
 
 type Repository struct {
 	LastUpdated time.Time
-	Doc         string `yaml:"doc,omitempty"`
-	URL         string `yaml:"url"`
+	Doc         string `yaml:"doc,omitempty"` // 该repo的官方文档URL
+	URL         string `yaml:"url"`           // 该repo的gh URL
 	Name        string `yaml:"name,omitempty"`
 	User        string
-	Des         string `yaml:"des,omitempty"`
-	Tag         string // used to mark Type
+	Des         string `yaml:"des,omitempty"` // 描述
+	Tag         string `yaml:"tag"`           // used to mark Type
 	Qs          Qs     `yaml:"qs,omitempty"`
 	Cmd         Cmd    `yaml:"cmd,omitempty"`
 	// Pix         []string `yaml:"pix"`
@@ -42,7 +41,7 @@ type Repository struct {
 	// 	Des string `yaml:"des,omitempty"`
 	// } `yaml:"use,omitempty"`
 	Qq     `yaml:"qq,omitempty"`
-	IsStar bool
+	IsStar bool // 用来标识gh上star的repo
 }
 
 type Qq []struct {
@@ -187,49 +186,49 @@ func (rs Repos) QueryReposByTag(tag string) Repos {
 func (cr *ConfigRepos) FilterReposMD() ConfigRepos {
 	var filteredConfig ConfigRepos
 	for _, crv := range *cr {
-		if crv.Md {
-			var filteredRepos []Repository
-			for _, repo := range crv.Repos {
-				if repo.Qs != nil {
-					// repo.Pix = addMarkdownPicFormat(repo.Pix)
-					filteredRepos = append(filteredRepos, repo)
-				}
+		// if crv.Md {
+		var filteredRepos []Repository
+		for _, repo := range crv.Repos {
+			if repo.Qs != nil {
+				// repo.Pix = addMarkdownPicFormat(repo.Pix)
+				filteredRepos = append(filteredRepos, repo)
 			}
-			crv.Repos = filteredRepos
-			filteredConfig = append(filteredConfig, crv)
 		}
+		crv.Repos = filteredRepos
+		filteredConfig = append(filteredConfig, crv)
+		// }
 	}
 	return filteredConfig
 }
 
-func (cr *ConfigRepos) FilterWorksMD() ConfigRepos {
-	var filteredConfig ConfigRepos
-	for _, crv := range *cr {
-		if crv.Md {
-			var filteredRepos []Repository
-			crv.Repos = filteredRepos
-			filteredConfig = append(filteredConfig, crv)
-		}
-	}
-	return filteredConfig
-}
+// func (cr *ConfigRepos) FilterWorksMD() ConfigRepos {
+// 	var filteredConfig ConfigRepos
+// 	for _, crv := range *cr {
+// 		// if crv.Md {
+// 		var filteredRepos []Repository
+// 		crv.Repos = filteredRepos
+// 		filteredConfig = append(filteredConfig, crv)
+// 		// }
+// 	}
+// 	return filteredConfig
+// }
 
 // GetFileNameFromURL 从给定的 URL 中提取并返回文件名。
-func GetFileNameFromURL(urlString string) (string, error) {
-	// 解析 URL
-	parsedURL, err := url.Parse(urlString)
-	if err != nil {
-		return "", fmt.Errorf("error parsing URL: %v", err)
-	}
-
-	// 获取路径
-	urlPath := parsedURL.Path
-
-	// 获取文件名
-	fileName := path.Base(urlPath)
-
-	return fileName, nil
-}
+// func GetFileNameFromURL(urlString string) (string, error) {
+// 	// 解析 URL
+// 	parsedURL, err := url.Parse(urlString)
+// 	if err != nil {
+// 		return "", fmt.Errorf("error parsing URL: %v", err)
+// 	}
+//
+// 	// 获取路径
+// 	urlPath := parsedURL.Path
+//
+// 	// 获取文件名
+// 	fileName := path.Base(urlPath)
+//
+// 	return fileName, nil
+// }
 
 // 用来渲染pic
 // func addMarkdownPicFormat(URLs []string) []string {

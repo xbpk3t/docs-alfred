@@ -95,43 +95,37 @@ var ghCmd = &cobra.Command{
 
 		dfo := gh.NewConfigRepos(f)
 		df := dfo.FilterReposMD()
-		// tmpl := template.Must(template.New("").Parse(ghTpl))
-		//
-		// file, err := os.Create(targetFile)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		// defer file.Close()
-		//
-		// err = tmpl.Execute(file, df)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
+
+		// 清理掉 Qs == nil 的 Type
+		dfr := FilterRepos(df)
 
 		var res strings.Builder
 
-		for _, d := range df {
-			if d.Md {
-				res.WriteString(fmt.Sprintf("## %s \n", d.Type))
-				if d.Qs != nil {
-					res.WriteString(addMarkdownQsFormat(d.Qs))
+		for _, d := range dfr {
+
+			res.WriteString(fmt.Sprintf("## %s \n", d.Type))
+			if d.Qs != nil {
+				res.WriteString(addMarkdownQsFormat(d.Qs))
+			}
+
+			for _, repo := range d.Repos {
+				repoName, f := strings.CutPrefix(repo.URL, gh.GhURL)
+				if !f {
+					repoName = ""
 				}
 
-				for _, repo := range d.Repos {
-					res.WriteString(fmt.Sprintf("\n\n### %s\n\n", repo.URL))
-					if repo.Qs != nil {
-						res.WriteString(addMarkdownQsFormat(repo.Qs))
-					}
-					if repo.Qq != nil {
-						for _, s := range repo.Qq {
-							if s.Qs != nil {
-								res.WriteString(fmt.Sprintf("\n\n#### %s \n\n", s.Topic))
-								res.WriteString(addMarkdownQsFormat(s.Qs))
-							}
+				res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
+				if repo.Qs != nil {
+					res.WriteString(addMarkdownQsFormat(repo.Qs))
+				}
+				if repo.Qq != nil {
+					for _, s := range repo.Qq {
+						if s.Qs != nil {
+							res.WriteString(fmt.Sprintf("\n\n#### %s \n\n", s.Topic))
+							res.WriteString(addMarkdownQsFormat(s.Qs))
 						}
 					}
 				}
-
 			}
 		}
 
@@ -165,6 +159,29 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 	// builder.WriteString("</dl>")
 
 	return builder.String()
+}
+
+// FilterRepos 过滤掉Repo中Qs为nil的ConfigRepos
+func FilterRepos(configRepos gh.ConfigRepos) (filteredRepos gh.ConfigRepos) {
+	for _, repoGroup := range configRepos {
+		// 过滤掉qs为nil的Repository
+		filteredGroup := gh.ConfigRepo{
+			Type:  repoGroup.Type,
+			Repos: make([]gh.Repository, 0),
+			Qs:    make(gh.Qs, 0),
+		}
+		filteredGroup.Type = repoGroup.Type
+		for _, repo := range repoGroup.Repos {
+			if repo.Qs != nil { // 假设Qs的零值是Qs{}
+				filteredGroup.Repos = append(filteredGroup.Repos, repo)
+			}
+		}
+		if len(filteredGroup.Repos) > 0 {
+			// 只有当过滤后的Repositories不为空时，才添加到结果中
+			filteredRepos = append(filteredRepos, filteredGroup)
+		}
+	}
+	return filteredRepos
 }
 
 func init() {
