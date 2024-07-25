@@ -3,8 +3,10 @@ package gh
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -66,7 +68,30 @@ type Cmd []struct {
 
 type Repos []Repository
 
-func NewConfigRepos(f []byte) ConfigRepos {
+type Gh []string
+
+// 从gh.yml中fetch全部repo数据，并拼装
+// https://cdn.hxha.xyz/f/gh/gh.yml
+// https://cdn.hxha.xyz/f/gh/ms.yml
+func NewConfigRepos(f []byte) (cr ConfigRepos) {
+	var gh Gh
+	err := yaml.Unmarshal(f, &gh)
+	if err != nil {
+		return nil
+	}
+
+	for _, s := range gh {
+		fp := fmt.Sprintf("data/gh/%s", s)
+		fx, err := os.ReadFile(fp)
+		if err != nil {
+			return nil
+		}
+		cr = append(cr, NewConfigRepoFile(fx)...)
+	}
+	return cr
+}
+
+func NewConfigRepoFile(f []byte) ConfigRepos {
 	var ghs ConfigRepos
 
 	d := yaml.NewDecoder(bytes.NewReader(f))
@@ -86,6 +111,19 @@ func NewConfigRepos(f []byte) ConfigRepos {
 
 	return ghs
 }
+
+// MergeConfigs 将多个 ConfigRepos 合并为一个
+// func MergeConfigs(in <-chan ConfigRepos) ConfigRepos {
+// 	merged := make(ConfigRepos)
+//
+// 	for repo := range in {
+// 		for k, v := range repo {
+// 			merged[k] = v
+// 		}
+// 	}
+//
+// 	return merged
+// }
 
 // ToRepos Convert Type to Repo
 func (cr ConfigRepos) ToRepos() Repos {
