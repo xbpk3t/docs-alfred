@@ -129,7 +129,8 @@ var ghCmd = &cobra.Command{
 			}
 		}
 
-		targetFile, _ = strings.CutSuffix(cfgFile, ".yml")
+		tf, _ := strings.CutSuffix(cfgFile, ".yml")
+		targetFile := fmt.Sprintf("%s.md", tf)
 		err = os.WriteFile(fmt.Sprintf("%s.md", targetFile), []byte(res.String()), os.ModePerm)
 		if err != nil {
 			return
