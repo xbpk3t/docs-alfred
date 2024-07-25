@@ -27,8 +27,7 @@ func Execute() {
 }
 
 var (
-	cfgFile    string
-	targetFile string
+	cfgFile string
 )
 
 func init() {
