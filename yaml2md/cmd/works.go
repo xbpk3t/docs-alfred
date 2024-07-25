@@ -49,9 +49,7 @@ var workCmd = &cobra.Command{
 			}
 		}
 
-		tf, _ := strings.CutSuffix(cfgFile, ".yml")
-		targetFile := fmt.Sprintf("%s.md", tf)
-		err = os.WriteFile(fmt.Sprintf("%s.md", targetFile), []byte(res.String()), os.ModePerm)
+		err = os.WriteFile(targetFile, []byte(res.String()), os.ModePerm)
 		if err != nil {
 			return
 		}
