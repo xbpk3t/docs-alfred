@@ -33,6 +33,7 @@ var fCmd = &cobra.Command{
 		if !wf.Cache.Exists(cfgFile) {
 			ErrorHandle(errors.New(cfgFile + " not found"))
 		}
+		// fetch gh.yml, 再根据内容fetch数据
 		data, _ = wf.Cache.Load(cfgFile)
 
 		if !wf.IsRunning(SyncJob) {
