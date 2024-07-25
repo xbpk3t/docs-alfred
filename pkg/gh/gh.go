@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/hxhac/docs-alfred/utils"
 	"io"
 	"log"
 	"os"
@@ -70,10 +71,7 @@ type Repos []Repository
 
 type Gh []string
 
-// 从gh.yml中fetch全部repo数据，并拼装
-// https://cdn.hxha.xyz/f/gh/gh.yml
-// https://cdn.hxha.xyz/f/gh/ms.yml
-func NewConfigRepos(f []byte) (cr ConfigRepos) {
+func NewConfigRepos(f []byte, isLocal bool) (cr ConfigRepos) {
 	var gh Gh
 	err := yaml.Unmarshal(f, &gh)
 	if err != nil {
@@ -81,11 +79,20 @@ func NewConfigRepos(f []byte) (cr ConfigRepos) {
 	}
 
 	for _, s := range gh {
-		fp := fmt.Sprintf("data/gh/%s", s)
-		fx, err := os.ReadFile(fp)
-		if err != nil {
-			return nil
+		var fx []byte
+		if isLocal {
+			fp := fmt.Sprintf("data/gh/%s", s)
+			fx, err = os.ReadFile(fp)
+			if err != nil {
+				return nil
+			}
+		} else {
+			fx, err = utils.Fetch(fmt.Sprintf("https://cdn.hxha.xyz/f/gh/%s", s))
+			if err != nil {
+				return nil
+			}
 		}
+
 		cr = append(cr, NewConfigRepoFile(fx)...)
 	}
 	return cr

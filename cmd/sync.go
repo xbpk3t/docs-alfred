@@ -1,12 +1,9 @@
 package cmd
 
 import (
-	"fmt"
 	"github.com/hxhac/docs-alfred/pkg/gh"
-	"io"
+	"github.com/hxhac/docs-alfred/utils"
 	"log/slog"
-	"net/http"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -29,19 +26,7 @@ var syncCmd = &cobra.Command{
 		url := wf.Config.GetString("url") + cfgFile
 		if url != "" {
 			_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
-				resp, err := http.Get(url)
-				if err != nil {
-					slog.Error("request error", slog.Any("Error", err))
-					return nil, err
-				}
-				defer resp.Body.Close()
-
-				data, err := io.ReadAll(resp.Body)
-				if err != nil {
-					return nil, err
-				}
-
-				fmt.Println(strings.EqualFold(cfgFile, ConfigGithub))
+				data, _ = utils.Fetch(url)
 
 				switch cfgFile {
 				case ConfigGithub:
@@ -56,7 +41,6 @@ var syncCmd = &cobra.Command{
 						ErrorHandle(err)
 					}
 				}
-
 				return data, nil
 			})
 			if err != nil {
