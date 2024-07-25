@@ -93,7 +93,7 @@ var ghCmd = &cobra.Command{
 			return
 		}
 
-		dfo := gh.NewConfigRepos(f, true)
+		dfo := gh.NewConfigRepoFile(f)
 		df := dfo.FilterReposMD()
 
 		// 清理掉 Qs == nil 的 Type

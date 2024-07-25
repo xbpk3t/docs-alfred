@@ -27,7 +27,7 @@ var mergeCmd = &cobra.Command{
 
 		// cr = append(cr, gh.NewConfigRepoFile(gf)...)
 
-		cr = gh.NewConfigRepos(gf, false)
+		cr = gh.NewConfigRepos(gf)
 
 		// 定义输出文件路径
 		outputPath := "gh.yml"

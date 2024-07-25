@@ -7,7 +7,6 @@ import (
 	"github.com/hxhac/docs-alfred/utils"
 	"io"
 	"log"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -71,7 +70,7 @@ type Repos []Repository
 
 type Gh []string
 
-func NewConfigRepos(f []byte, isLocal bool) (cr ConfigRepos) {
+func NewConfigRepos(f []byte) (cr ConfigRepos) {
 	var gh Gh
 	err := yaml.Unmarshal(f, &gh)
 	if err != nil {
@@ -80,17 +79,13 @@ func NewConfigRepos(f []byte, isLocal bool) (cr ConfigRepos) {
 
 	for _, s := range gh {
 		var fx []byte
-		if isLocal {
-			fp := fmt.Sprintf("data/gh/%s", s)
-			fx, err = os.ReadFile(fp)
-			if err != nil {
-				return nil
-			}
-		} else {
-			fx, err = utils.Fetch(fmt.Sprintf("https://cdn.hxha.xyz/f/gh/%s", s))
-			if err != nil {
-				return nil
-			}
+
+		// fp := fmt.Sprintf("data/gh/%s", s)
+		// fx, err = os.ReadFile(fp)
+
+		fx, err = utils.Fetch(fmt.Sprintf("https://cdn.hxha.xyz/f/gh/%s", s))
+		if err != nil {
+			return nil
 		}
 
 		cr = append(cr, NewConfigRepoFile(fx)...)
