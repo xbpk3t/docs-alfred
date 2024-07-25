@@ -12,8 +12,6 @@ import (
 
 	"github.com/hxhac/docs-alfred/pkg/ws"
 
-	"github.com/hxhac/docs-alfred/pkg/qs"
-
 	aw "github.com/deanishe/awgo"
 	"github.com/hxhac/docs-alfred/pkg/gh"
 
@@ -55,7 +53,6 @@ var data []byte
 func init() {
 	rootCmd.AddCommand(fCmd)
 	fCmd.AddCommand(ghCmd)
-	fCmd.AddCommand(qsCmd)
 	fCmd.AddCommand(wsCmd)
 
 	// Here you will define your flags and configuration settings.
@@ -139,26 +136,6 @@ var ghCmd = &cobra.Command{
 	},
 }
 
-// qsCmd represents the qs command
-var qsCmd = &cobra.Command{
-	Use:   "qs",
-	Short: "A brief description of your command",
-	Run: func(cmd *cobra.Command, args []string) {
-		docs := qs.NewConfigQs(data)
-
-		for _, doc := range docs {
-			v := doc.Type
-			mdList := addMarkdownListFormat(docs.GetQsByName(v))
-			wf.NewItem(v).Title(v).Valid(true).Arg(mdList).Autocomplete(v).Subtitle(fmt.Sprintf("[#%s]", doc.Tag))
-		}
-
-		if len(args) > 0 {
-			wf.Filter(args[0])
-		}
-		wf.SendFeedback()
-	},
-}
-
 // wsCmd represents the ws command
 var wsCmd = &cobra.Command{
 	Use:   "ws",
@@ -175,14 +152,6 @@ var wsCmd = &cobra.Command{
 
 		wf.SendFeedback()
 	},
-}
-
-func addMarkdownListFormat(str []string) string {
-	var builder strings.Builder
-	for _, str := range str {
-		builder.WriteString(fmt.Sprintf("- %s\n", str))
-	}
-	return builder.String()
 }
 
 // 渲染命令行

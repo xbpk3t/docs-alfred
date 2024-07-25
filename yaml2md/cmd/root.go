@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"github.com/spf13/viper"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -24,7 +26,14 @@ func Execute() {
 	}
 }
 
+var (
+	cfgFile    string
+	targetFile string
+)
+
 func init() {
+	cobra.OnInitialize(initConfig)
+
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
@@ -34,4 +43,24 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "src/data/qs.yml", "config file (default is src/data/qs.yml)")
+	// rootCmd.PersistentFlags().StringVar(&targetFile, "target", "qs.md", "target file (default is qs.md)")
+}
+
+func initConfig() {
+	if cfgFile != "" {
+		// Use config file from the flag.
+		viper.SetConfigFile(cfgFile)
+	} else {
+		viper.AddConfigPath("src/data/")
+		viper.SetConfigName("qs")
+	}
+
+	viper.AutomaticEnv() // read in environment variables that match
+
+	// If a config file is found, read it in.
+	if err := viper.ReadInConfig(); err == nil {
+		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	}
 }

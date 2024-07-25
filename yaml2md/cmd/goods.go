@@ -85,7 +85,8 @@ var goodsCmd = &cobra.Command{
 			}
 		}
 
-		err = os.WriteFile(targetFile, []byte(res.String()), os.ModePerm)
+		targetFile, _ = strings.CutSuffix(cfgFile, ".yml")
+		err = os.WriteFile(fmt.Sprintf("%s.md", targetFile), []byte(res.String()), os.ModePerm)
 		if err != nil {
 			return
 		}
