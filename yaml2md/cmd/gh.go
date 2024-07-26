@@ -96,24 +96,24 @@ var ghCmd = &cobra.Command{
 		dfo := gh.NewConfigRepoFile(f)
 		df := dfo.FilterReposMD()
 
+		// dfo.IsTypeQsEmpty()
 		// 清理掉 Qs == nil 的 Type
-		dfr := FilterRepos(df)
+		// dfr := FilterRepos(df)
 
 		var res strings.Builder
 
-		for _, d := range dfr {
-
-			res.WriteString(fmt.Sprintf("## %s \n", d.Type))
+		for _, d := range df {
+			if d.Qs != nil || d.Repos != nil {
+				res.WriteString(fmt.Sprintf("## %s \n", d.Type))
+			}
 			if d.Qs != nil {
 				res.WriteString(addMarkdownQsFormat(d.Qs))
 			}
-
 			for _, repo := range d.Repos {
 				repoName, f := strings.CutPrefix(repo.URL, gh.GhURL)
 				if !f {
 					repoName = ""
 				}
-
 				res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
 				if repo.Qs != nil {
 					res.WriteString(addMarkdownQsFormat(repo.Qs))
@@ -171,13 +171,14 @@ func FilterRepos(configRepos gh.ConfigRepos) (filteredRepos gh.ConfigRepos) {
 			Qs:    make(gh.Qs, 0),
 		}
 		filteredGroup.Type = repoGroup.Type
+		filteredGroup.Qs = repoGroup.Qs
 		for _, repo := range repoGroup.Repos {
-			if repo.Qs != nil { // 假设Qs的零值是Qs{}
+			if repo.Qs != nil {
 				filteredGroup.Repos = append(filteredGroup.Repos, repo)
 			}
 		}
+		// 只有当过滤后的Repositories不为空时，才添加到结果中
 		if len(filteredGroup.Repos) > 0 {
-			// 只有当过滤后的Repositories不为空时，才添加到结果中
 			filteredRepos = append(filteredRepos, filteredGroup)
 		}
 	}
