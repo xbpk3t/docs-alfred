@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hxhac/docs-alfred/utils"
+	"gopkg.in/yaml.v3"
 	"io"
 	"log"
 	"slices"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -24,7 +23,6 @@ type ConfigRepo struct {
 	Type  string       `yaml:"type"`
 	Repos []Repository `yaml:"repo"`
 	Qs    Qs           `yaml:"qs,omitempty"`
-	// Md    bool         `yaml:"md,omitempty"`
 }
 
 type Repository struct {
@@ -239,6 +237,16 @@ func (cr *ConfigRepos) FilterReposMD() ConfigRepos {
 		// }
 	}
 	return filteredConfig
+}
+
+// IsTypeQsEmpty 判断该type是否为空
+func (cr *ConfigRepos) IsTypeQsEmpty() bool {
+	for _, crv := range *cr {
+		if crv.Qs == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // func (cr *ConfigRepos) FilterWorksMD() ConfigRepos {
