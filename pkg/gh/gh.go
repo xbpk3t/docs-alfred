@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"log"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -80,9 +81,10 @@ func NewConfigRepos(f []byte) (cr ConfigRepos) {
 
 		// fp := fmt.Sprintf("data/gh/%s", s)
 		// fx, err = os.ReadFile(fp)
-
-		fx, err = utils.Fetch(fmt.Sprintf("https://cdn.hxha.xyz/f/gh/%s", s))
+		url := fmt.Sprintf("https://cdn.hxha.xyz/f/gh/%s", s)
+		fx, err = utils.Fetch(url)
 		if err != nil {
+			slog.Error("Fetch Error: %s", slog.Any("URL", url))
 			return nil
 		}
 
