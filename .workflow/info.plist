@@ -541,7 +541,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://docs.hxha.xyz/x/gh/</string>
+				<string>https://docs.hxha.xyz/gh/</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>
@@ -602,7 +602,7 @@
 		</dict>
 	</array>
 	<key>version</key>
-	<string>1.4.0</string>
+	<string>1.5.0</string>
 	<key>webaddress</key>
 	<string>https://github.com/91go/docs-alfred</string>
 </dict>
