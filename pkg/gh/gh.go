@@ -32,8 +32,9 @@ type Repository struct {
 	URL         string `yaml:"url"`           // 该repo的gh URL
 	Name        string `yaml:"name,omitempty"`
 	User        string
-	Des         string `yaml:"des,omitempty"` // 描述
-	Tag         string `yaml:"tag"`           // used to mark Type
+	Des         string `yaml:"des,omitempty"`   // 描述
+	Tag         string `yaml:"tag"`             // used to mark Type
+	Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为alias，而不是[User/Name](URL)
 	Qs          Qs     `yaml:"qs,omitempty"`
 	Cmd         Cmd    `yaml:"cmd,omitempty"`
 	// Pix         []string `yaml:"pix"`

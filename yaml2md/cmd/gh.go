@@ -114,7 +114,12 @@ var ghCmd = &cobra.Command{
 				if !f {
 					repoName = ""
 				}
-				res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
+				if repo.Alias != "" {
+					res.WriteString(fmt.Sprintf("### [%s](%s)\n\n", repo.Alias, repo.URL))
+				} else {
+					res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
+				}
+
 				if repo.Qs != nil {
 					res.WriteString(addMarkdownQsFormat(repo.Qs))
 				}
