@@ -3,12 +3,9 @@ package gh
 import (
 	"bytes"
 	"errors"
-	"fmt"
-	"github.com/hxhac/docs-alfred/utils"
 	"gopkg.in/yaml.v3"
 	"io"
 	"log"
-	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -33,8 +30,9 @@ type Repository struct {
 	Name        string `yaml:"name,omitempty"`
 	User        string
 	Des         string `yaml:"des,omitempty"`   // 描述
-	Tag         string `yaml:"tag"`             // used to mark Type
-	Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为alias，而不是[User/Name](URL)
+	Type        string `yaml:"type"`            // used to mark Type
+	Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为[alias](URL)，而不是[User/Name](URL)
+	Tag         string `yaml:"file,omitempty"`  // 原本的文件名
 	Qs          Qs     `yaml:"qs,omitempty"`
 	Cmd         Cmd    `yaml:"cmd,omitempty"`
 	// Pix         []string `yaml:"pix"`
@@ -70,31 +68,7 @@ type Repos []Repository
 
 type Gh []string
 
-func NewConfigRepos(f []byte) (cr ConfigRepos) {
-	var gh Gh
-	err := yaml.Unmarshal(f, &gh)
-	if err != nil {
-		return nil
-	}
-
-	for _, s := range gh {
-		var fx []byte
-
-		// fp := fmt.Sprintf("data/gh/%s", s)
-		// fx, err = os.ReadFile(fp)
-		url := fmt.Sprintf("https://cdn.hxha.xyz/f/gh/%s", s)
-		fx, err = utils.Fetch(url)
-		if err != nil {
-			slog.Error("Fetch Error: %s", slog.Any("URL", url))
-			return nil
-		}
-
-		cr = append(cr, NewConfigRepoFile(fx)...)
-	}
-	return cr
-}
-
-func NewConfigRepoFile(f []byte) ConfigRepos {
+func NewConfigRepos(f []byte) ConfigRepos {
 	var ghs ConfigRepos
 
 	d := yaml.NewDecoder(bytes.NewReader(f))
@@ -148,7 +122,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 				// repo.User = splits[0]
 				// repo.Name = splits[1]
 				// repo.IsStar = true
-				// repo.Tag = config.Type
+				// repo.Type = config.Type
 				// repos = append(repos, repo)
 
 				if found {
@@ -157,7 +131,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 					// 	repo.User = splits[0]
 					// 	repo.Name = splits[1]
 					// 	repo.IsStar = true
-					// 	repo.Tag = config.Type
+					// 	repo.Type = config.Type
 					// 	repos = append(repos, repo)
 					// } else if len(splits) > 2 {
 					// 	// 确保 splits 不是 nil 并且有足够的元素
@@ -167,7 +141,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 					// 			repo.User = splits[0]
 					// 			repo.Name = splits[1] + "/" + strings.Join(splits[curator+1:], "/")
 					// 			repo.IsStar = true
-					// 			repo.Tag = config.Type
+					// 			repo.Type = config.Type
 					// 			repos = append(repos, repo)
 					// 		} else {
 					// 			log.Printf("Index Error: src not found in splits")
@@ -184,7 +158,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 						repo.User = splits[0]
 						repo.Name = splits[1]
 						repo.IsStar = true
-						repo.Tag = config.Type
+						repo.Type = config.Type
 						repos = append(repos, repo)
 					} else {
 						log.Printf("URL Split Error: unexpected format: %s", repo.URL)
@@ -205,18 +179,18 @@ func (cr ConfigRepos) ToRepos() Repos {
 func (rs Repos) ExtractTags() []string {
 	var tags []string
 	for _, repo := range rs {
-		if repo.Tag != "" && !slices.Contains(tags, repo.Tag) {
-			tags = append(tags, repo.Tag)
+		if repo.Type != "" && !slices.Contains(tags, repo.Type) {
+			tags = append(tags, repo.Type)
 		}
 	}
 	return tags
 }
 
-// QueryReposByTag Query Repos by Tag
+// QueryReposByTag Query Repos by Type
 func (rs Repos) QueryReposByTag(tag string) Repos {
 	var res Repos
 	for _, repo := range rs {
-		if repo.Tag == tag {
+		if repo.Type == tag {
 			res = append(res, repo)
 		}
 	}

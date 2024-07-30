@@ -94,7 +94,7 @@ var ghCmd = &cobra.Command{
 			wf.FatalError(err)
 		}
 
-		ghs := gh.NewConfigRepoFile(data).ToRepos()
+		ghs := gh.NewConfigRepos(data).ToRepos()
 		repos = append(ghs, repos...)
 		if len(args) > 0 && strings.HasPrefix(args[0], "#") {
 			tags := repos.ExtractTags()
@@ -253,7 +253,7 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 			Valid(true).
 			Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
 
-		docsURL := fmt.Sprintf("%s#%s", wf.Config.GetString("docs"), strings.ToLower(repo.Tag))
+		docsURL := fmt.Sprintf("%s/%s#%s", wf.Config.GetString("docs"), strings.ToLower(repo.Tag), strings.ToLower(repo.Type))
 
 		item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
 		item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
@@ -266,8 +266,8 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 // 渲染des
 // 也就是item中的subtitle
 func renderReposDes(repo gh.Repository) (des strings.Builder) {
-	if repo.Tag != "" {
-		des.WriteString(fmt.Sprintf("[#%s]", repo.Tag))
+	if repo.Type != "" {
+		des.WriteString(fmt.Sprintf("[#%s]", repo.Type))
 	} else {
 		des.WriteString(repo.Des)
 	}

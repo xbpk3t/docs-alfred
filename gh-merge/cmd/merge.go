@@ -6,6 +6,7 @@ import (
 	"github.com/hxhac/docs-alfred/utils"
 	"gopkg.in/yaml.v3"
 	"log"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -20,14 +21,14 @@ var mergeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var cr gh.ConfigRepos
 
-		gf, err2 := utils.Fetch("https://cdn.hxha.xyz/f/gh/gh.yml")
-		if err2 != nil {
-			return
+		for _, fn := range ghFiles {
+			url := fmt.Sprintf("%s%s", URL, fn)
+			fx, err := utils.Fetch(url)
+			if err != nil {
+				slog.Error("Fetch Error: %s", slog.Any("URL", url))
+			}
+			cr = append(cr, gh.NewConfigRepos(fx)...)
 		}
-
-		// cr = append(cr, gh.NewConfigRepoFile(gf)...)
-
-		cr = gh.NewConfigRepos(gf)
 
 		// 定义输出文件路径
 		outputPath := "gh.yml"
@@ -58,6 +59,11 @@ func WriteYAMLToFile(data gh.ConfigRepos, outputPath string) error {
 	return nil
 }
 
+var (
+	URL     string
+	ghFiles []string
+)
+
 func init() {
 	rootCmd.AddCommand(mergeCmd)
 
@@ -70,4 +76,6 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// mergeCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	mergeCmd.Flags().StringVar(&URL, "url", "", "CDN Base URL")
+	mergeCmd.Flags().StringSliceVar(&ghFiles, "yf", []string{}, "gh.yml files")
 }

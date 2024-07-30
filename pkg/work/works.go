@@ -95,7 +95,7 @@ type DocsTemps []DocsTemp
 // 		types :=
 //
 // 		dc = append(dc, DocsTemp{
-// 			Tag: doc.Tag,
+// 			Type: doc.Type,
 // 			Types: make(Types, len(doc.Type)),
 // 		})
 //
@@ -110,20 +110,20 @@ type DocsTemps []DocsTemp
 //
 // 	// Extract types for each tag
 // 	for _, doc := range d {
-// 		if types, ok := docsTempsMap[doc.Tag]; ok {
+// 		if types, ok := docsTempsMap[doc.Type]; ok {
 // 			// Append type to existing tag
 // 			types = append(types, Type{Name: doc.Type, Qs: doc.Qs})
-// 			docsTempsMap[doc.Tag] = types
+// 			docsTempsMap[doc.Type] = types
 // 		} else {
 // 			// Create new tag entry
-// 			docsTempsMap[doc.Tag] = Types{Type{Name: doc.Type, Qs: doc.Qs}}
+// 			docsTempsMap[doc.Type] = Types{Type{Name: doc.Type, Qs: doc.Qs}}
 // 		}
 // 	}
 //
 // 	// Convert map to slice
 // 	docsTemps := make(DocsTemps, 0, len(docsTempsMap))
 // 	for tag, types := range docsTempsMap {
-// 		docsTemp := DocsTemp{Tag: tag, Types: types}
+// 		docsTemp := DocsTemp{Type: tag, Types: types}
 // 		docsTemps = append(docsTemps, docsTemp)
 // 	}
 //
@@ -136,13 +136,13 @@ type DocsTemps []DocsTemp
 // 	// Extract types for each tag
 // 	for i := 0; i < len(d); i++ {
 // 		doc := d[i]
-// 		if types, ok := docsTempsMap[doc.Tag]; ok {
+// 		if types, ok := docsTempsMap[doc.Type]; ok {
 // 			// Append type to existing tag
 // 			types = append(types, Type{Name: doc.Type, Qs: doc.Qs})
-// 			docsTempsMap[doc.Tag] = types
+// 			docsTempsMap[doc.Type] = types
 // 		} else {
 // 			// Create new tag entry
-// 			docsTempsMap[doc.Tag] = Types{Type{Name: doc.Type, Qs: doc.Qs}}
+// 			docsTempsMap[doc.Type] = Types{Type{Name: doc.Type, Qs: doc.Qs}}
 // 		}
 // 	}
 //
@@ -150,8 +150,8 @@ type DocsTemps []DocsTemp
 // 	docsTemps := make(DocsTemps, len(docsTempsMap))
 // 	for i := 0; i < len(d); i++ {
 // 		doc := d[i]
-// 		if types, ok := docsTempsMap[doc.Tag]; ok {
-// 			docsTemp := DocsTemp{Tag: doc.Tag, Types: types}
+// 		if types, ok := docsTempsMap[doc.Type]; ok {
+// 			docsTemp := DocsTemp{Type: doc.Type, Types: types}
 // 			docsTemps[i] = docsTemp
 // 		}
 // 	}
