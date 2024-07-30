@@ -93,7 +93,7 @@ var ghCmd = &cobra.Command{
 			return
 		}
 
-		dfo := gh.NewConfigRepoFile(f)
+		dfo := gh.NewConfigRepos(f)
 		df := dfo.FilterReposMD()
 
 		// dfo.IsTypeQsEmpty()
