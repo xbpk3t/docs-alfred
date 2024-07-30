@@ -8,6 +8,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -27,7 +28,8 @@ var mergeCmd = &cobra.Command{
 			if err != nil {
 				slog.Error("Fetch Error: %s", slog.Any("URL", url))
 			}
-			cr = append(cr, gh.NewConfigRepos(fx)...)
+
+			cr = append(cr, gh.NewConfigRepos(fx).WithTag(strings.TrimSuffix(fn, ".yml"))...)
 		}
 
 		// 定义输出文件路径

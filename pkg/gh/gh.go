@@ -32,7 +32,7 @@ type Repository struct {
 	Des         string `yaml:"des,omitempty"`   // 描述
 	Type        string `yaml:"type"`            // used to mark Type
 	Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为[alias](URL)，而不是[User/Name](URL)
-	Tag         string `yaml:"file,omitempty"`  // 原本的文件名
+	Tag         string `yaml:"tag,omitempty"`   // 原本的文件名，比如说 db.yml, db.yml, ...
 	Qs          Qs     `yaml:"qs,omitempty"`
 	Cmd         Cmd    `yaml:"cmd,omitempty"`
 	// Pix         []string `yaml:"pix"`
@@ -83,10 +83,20 @@ func NewConfigRepos(f []byte) ConfigRepos {
 			}
 			panic(err)
 		}
+
 		ghs = append(ghs, *spec...)
 	}
-
 	return ghs
+}
+
+// 给Repo的Tag字段赋值，否则为空字符串
+func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
+	for _, repo := range cr {
+		for i := range repo.Repos {
+			repo.Repos[i].Tag = tag
+		}
+	}
+	return cr
 }
 
 // MergeConfigs 将多个 ConfigRepos 合并为一个
