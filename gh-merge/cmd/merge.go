@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -22,7 +23,7 @@ var mergeCmd = &cobra.Command{
 		var cr gh.ConfigRepos
 
 		err := filepath.WalkDir(folderName, func(path string, d fs.DirEntry, err error) error {
-			if !d.IsDir() {
+			if !d.IsDir() && slices.Contains(ghFiles, d.Name()) {
 				fmt.Println(d.Name())
 				fx, err := os.ReadFile(path)
 				if err != nil {
@@ -68,7 +69,7 @@ func WriteYAMLToFile(data gh.ConfigRepos, outputPath string) error {
 
 var (
 	// URL     string
-	// ghFiles []string
+	ghFiles    []string
 	folderName string
 )
 
@@ -88,5 +89,5 @@ func init() {
 	mergeCmd.Flags().StringVar(&folderName, "folder", "data/x", "Folder Name")
 
 	// mergeCmd.Flags().StringVar(&URL, "url", "", "CDN Base URL")
-	// mergeCmd.Flags().StringSliceVar(&ghFiles, "yf", []string{}, "gh.yml files")
+	mergeCmd.Flags().StringSliceVar(&ghFiles, "yf", []string{}, "gh.yml files")
 }
