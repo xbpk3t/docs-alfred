@@ -3,14 +3,13 @@ package cmd
 import (
 	"fmt"
 	"github.com/hxhac/docs-alfred/pkg/gh"
-	"github.com/hxhac/docs-alfred/utils"
-	"gopkg.in/yaml.v3"
-	"log"
-	"log/slog"
-	"os"
-	"strings"
-
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
+	"io/fs"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type Gh []string
@@ -22,14 +21,20 @@ var mergeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var cr gh.ConfigRepos
 
-		for _, fn := range ghFiles {
-			url := fmt.Sprintf("%s%s", URL, fn)
-			fx, err := utils.Fetch(url)
-			if err != nil {
-				slog.Error("Fetch Error: %s", slog.Any("URL", url))
+		err := filepath.WalkDir(folderName, func(path string, d fs.DirEntry, err error) error {
+			if !d.IsDir() {
+				fmt.Println(d.Name())
+				fx, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				cr = append(cr, gh.NewConfigRepos(fx).WithTag(strings.TrimSuffix(d.Name(), ".yml"))...)
 			}
 
-			cr = append(cr, gh.NewConfigRepos(fx).WithTag(strings.TrimSuffix(fn, ".yml"))...)
+			return nil
+		})
+		if err != nil {
+			return
 		}
 
 		// 定义输出文件路径
@@ -62,8 +67,9 @@ func WriteYAMLToFile(data gh.ConfigRepos, outputPath string) error {
 }
 
 var (
-	URL     string
-	ghFiles []string
+	// URL     string
+	// ghFiles []string
+	folderName string
 )
 
 func init() {
@@ -78,6 +84,9 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// mergeCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	mergeCmd.Flags().StringVar(&URL, "url", "", "CDN Base URL")
-	mergeCmd.Flags().StringSliceVar(&ghFiles, "yf", []string{}, "gh.yml files")
+
+	mergeCmd.Flags().StringVar(&folderName, "folder", "data/x", "Folder Name")
+
+	// mergeCmd.Flags().StringVar(&URL, "url", "", "CDN Base URL")
+	// mergeCmd.Flags().StringSliceVar(&ghFiles, "yf", []string{}, "gh.yml files")
 }
