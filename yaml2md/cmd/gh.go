@@ -161,39 +161,23 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 		// 	}
 		// }
 
-		// switch {
-		// case q.X == "" && q.U == "" && q.P == "":
-		// 	builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-		// case q.X == "" && q.U != "" && q.P == "":
-		// 	builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-		// case q.X != "" && q.U == "" && q.P == "":
-		// 	builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-		// case q.X == "" && q.U == "" && q.P != "":
-		// 	builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, "image", q.P))
-		// case q.X == "" && q.U != "" && q.P != "":
-		// 	builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, q.U, "image", q.P))
-		// case q.X != "" && q.U == "" && q.P != "":
-		// 	builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, "image", q.P, q.X))
-		// default: // q.X != "" && q.U != "" && q.P != ""
-		// 	builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, q.U, "image", q.P, q.X))
-		// }
-
 		switch {
-		case q.X == "" && q.U == "":
+		case q.X == "" && q.U == "" && q.P == "":
 			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-		case q.X == "" && q.U != "":
+		case q.X == "" && q.U != "" && q.P == "":
 			builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-		case q.X != "" && q.U == "":
+		case q.X != "" && q.U == "" && q.P == "":
 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-		default: // q.X != "" && q.U != ""
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
-		}
-
-		if q.P != "" {
-			builder.WriteString(fmt.Sprintf("\n\n![%s](%s)\n", "image", q.P))
+		case q.X == "" && q.U == "" && q.P != "":
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, "image", q.P))
+		case q.X == "" && q.U != "" && q.P != "":
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, q.U, "image", q.P))
+		case q.X != "" && q.U == "" && q.P != "":
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, "image", q.P, q.X))
+		default: // q.X != "" && q.U != "" && q.P != ""
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, q.U, "image", q.P, q.X))
 		}
 	}
-	// builder.WriteString("</dl>")
 
 	return builder.String()
 }
