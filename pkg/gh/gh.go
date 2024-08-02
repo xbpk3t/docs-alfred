@@ -41,7 +41,7 @@ type Repository struct {
 	// 	Des string `yaml:"des,omitempty"`
 	// } `yaml:"use,omitempty"`
 	Qq     `yaml:"qq,omitempty"`
-	IsStar bool // 用来标识gh上star的repo
+	IsStar bool // 用来标识该repo是否在gh.yml中
 }
 
 type Qq []struct {
