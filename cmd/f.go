@@ -267,14 +267,17 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 // 也就是item中的subtitle
 func renderReposDes(repo gh.Repository) (des strings.Builder) {
 	if repo.Type != "" {
-		des.WriteString(fmt.Sprintf("[#%s]", repo.Type))
+		// des.WriteString(fmt.Sprintf("[#%s]", repo.Type))
+
+		des.WriteString(fmt.Sprintf("【#%s】", repo.Type))
 	} else {
 		des.WriteString(repo.Des)
 	}
 
-	if repo.Doc != "" {
-		des.WriteString(" [⭐️]")
-	}
+	// if repo.Doc != "" {
+	// 	des.WriteString("⭐")
+	// }
+
 	if repo.Des != "" {
 		des.WriteString(fmt.Sprintf(" %s", repo.Des))
 	}
@@ -321,15 +324,27 @@ func renderReposRemark(repo gh.Repository) (remark strings.Builder) {
 }
 
 func renderIcon(repo gh.Repository) (iconPath string) {
-	if repo.Qs == nil && repo.Cmd == nil {
-		if repo.IsStar {
-			iconPath = FaCheck
-		} else {
-			iconPath = FaRepo
-		}
-	}
-	if repo.Qs != nil || repo.Cmd != nil {
+	// if repo.Qs == nil && repo.Cmd == nil {
+	// 	if repo.IsStar {
+	// 		iconPath = FaCheck
+	// 	} else {
+	// 		iconPath = FaRepo
+	// 	}
+	// }
+	// if repo.Qs != nil || repo.Cmd != nil {
+	// 	iconPath = FaStar
+	// }
+
+	switch {
+	case repo.Qs == nil && repo.Cmd == nil && repo.IsStar:
+		iconPath = FaCheck
+	case repo.Qs == nil && repo.Cmd == nil && !repo.IsStar:
+		iconPath = FaRepo
+	case repo.Doc != "":
+		iconPath = FaDoc
+	default:
 		iconPath = FaStar
 	}
+
 	return
 }
