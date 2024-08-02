@@ -52,10 +52,10 @@ type Qq []struct {
 }
 
 type Qs []struct {
-	Q string `yaml:"q,omitempty"`
-	X string `yaml:"x,omitempty"`
-	D string `yaml:"d,omitempty"`
-	U string `yaml:"u,omitempty"`
+	Q string `yaml:"q,omitempty"` // 问题
+	X string `yaml:"x,omitempty"` // 简要回答
+	P string `yaml:"p,omitempty"`
+	U string `yaml:"u,omitempty"` // url
 }
 
 type Cmd []struct {
