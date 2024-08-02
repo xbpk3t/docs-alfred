@@ -147,18 +147,35 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 	var builder strings.Builder
 	// builder.WriteString("<dl>")
 	for _, q := range qs {
-		if q.X == "" {
-			if q.U != "" {
-				builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-			} else {
-				builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-			}
-		} else {
-			if q.U != "" {
-				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
-			} else {
-				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-			}
+		// if q.X == "" {
+		// 	if q.U != "" {
+		// 		builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
+		// 	} else {
+		// 		builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
+		// 	}
+		// } else {
+		// 	if q.U != "" {
+		// 		builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
+		// 	} else {
+		// 		builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+		// 	}
+		// }
+
+		switch {
+		case q.X == "" && q.U == "" && q.P == "":
+			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
+		case q.X == "" && q.U != "" && q.P == "":
+			builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
+		case q.X != "" && q.U == "" && q.P == "":
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+		case q.X == "" && q.U == "" && q.P != "":
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, "image", q.P))
+		case q.X == "" && q.U != "" && q.P != "":
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, q.U, "image", q.P))
+		case q.X != "" && q.U == "" && q.P != "":
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, "image", q.P, q.X))
+		default: // q.X != "" && q.U != "" && q.P != ""
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, q.U, "image", q.P, q.X))
 		}
 	}
 	// builder.WriteString("</dl>")
