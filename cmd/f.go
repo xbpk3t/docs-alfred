@@ -159,7 +159,6 @@ var wsCmd = &cobra.Command{
 func addMarkdownCmd(cmds gh.Cmd) string {
 	var builder strings.Builder
 	for _, cmd := range cmds {
-
 		if cmd.K {
 			// TODO alfred markdown 渲染有问题，无法渲染 ***``***
 			builder.WriteString(fmt.Sprintf("- ***%s*** %s\n", cmd.C, cmd.X))
@@ -190,7 +189,6 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 		} else {
 			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
 		}
-
 	}
 	return builder.String()
 }
@@ -255,10 +253,10 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 
 		docsURL := fmt.Sprintf("%s/%s#%s", wf.Config.GetString("docs"), strings.ToLower(repo.Tag), strings.ToLower(repo.Type))
 
+		item.Shift().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
 		item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
 		item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
 		item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
-		item.Shift().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
 	}
 	return item
 }

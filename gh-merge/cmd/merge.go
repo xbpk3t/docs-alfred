@@ -2,15 +2,16 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/hxhac/docs-alfred/pkg/gh"
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/hxhac/docs-alfred/pkg/gh"
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 type Gh []string

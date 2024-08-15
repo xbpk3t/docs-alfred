@@ -64,7 +64,6 @@ var goodsCmd = &cobra.Command{
 						} else {
 							res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s[%s](%s)%s</summary>\n\n%s\n\n</details>\n\n", mark, g.Name, g.URL, mark, g.Des))
 						}
-
 					} else {
 						res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, g.Name, mark))
 					}
