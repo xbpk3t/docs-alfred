@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"github.com/hxhac/docs-alfred/pkg/gh"
-	"github.com/hxhac/docs-alfred/utils"
 	"log/slog"
 	"time"
+
+	"github.com/hxhac/docs-alfred/pkg/gh"
+	"github.com/hxhac/docs-alfred/utils"
 
 	"github.com/spf13/cobra"
 )

@@ -3,12 +3,13 @@ package gh
 import (
 	"bytes"
 	"errors"
-	"gopkg.in/yaml.v3"
 	"io"
 	"log"
 	"slices"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
