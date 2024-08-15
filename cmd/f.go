@@ -155,43 +155,43 @@ var wsCmd = &cobra.Command{
 	},
 }
 
-// 渲染命令行
-func addMarkdownCmd(cmds gh.Cmd) string {
-	var builder strings.Builder
-	for _, cmd := range cmds {
-		if cmd.K {
-			// TODO alfred markdown 渲染有问题，无法渲染 ***``***
-			builder.WriteString(fmt.Sprintf("- ***%s*** %s\n", cmd.C, cmd.X))
-		} else {
-			builder.WriteString(fmt.Sprintf("- `%s` %s\n", cmd.C, cmd.X))
-		}
-	}
-	return builder.String()
-}
+// // 渲染命令行
+// func addMarkdownCmd(cmds gh.Cmd) string {
+// 	var builder strings.Builder
+// 	for _, cmd := range cmds {
+// 		if cmd.K {
+// 			// TODO alfred markdown 渲染有问题，无法渲染 ***``***
+// 			builder.WriteString(fmt.Sprintf("- ***%s*** %s\n", cmd.C, cmd.X))
+// 		} else {
+// 			builder.WriteString(fmt.Sprintf("- `%s` %s\n", cmd.C, cmd.X))
+// 		}
+// 	}
+// 	return builder.String()
+// }
 
-func addMarkdownQsFormat(qs gh.Qs) string {
-	var builder strings.Builder
-	// builder.WriteString("<dl>")
-	// for _, q := range qs {
-	//
-	// 	builder.WriteString(fmt.Sprintf("- %s \n", q.Q))
-	// 	builder.WriteString(fmt.Sprintf("\n %s \n", q.X))
-	// 	// builder.WriteString(fmt.Sprintf("<dt>%s</dt>", q.Q))
-	// 	// builder.WriteString(fmt.Sprintf("<dd>%s</dd>", q.X))
-	// }
-	// // builder.WriteString("</dl>")
-	//
-	// return builder.String()
-
-	for _, q := range qs {
-		if q.U != "" {
-			builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-		} else {
-			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-		}
-	}
-	return builder.String()
-}
+// func addMarkdownQsFormat(qs gh.Qs) string {
+// 	var builder strings.Builder
+// 	// builder.WriteString("<dl>")
+// 	// for _, q := range qs {
+// 	//
+// 	// 	builder.WriteString(fmt.Sprintf("- %s \n", q.Q))
+// 	// 	builder.WriteString(fmt.Sprintf("\n %s \n", q.X))
+// 	// 	// builder.WriteString(fmt.Sprintf("<dt>%s</dt>", q.Q))
+// 	// 	// builder.WriteString(fmt.Sprintf("<dd>%s</dd>", q.X))
+// 	// }
+// 	// // builder.WriteString("</dl>")
+// 	//
+// 	// return builder.String()
+//
+// 	for _, q := range qs {
+// 		if q.U != "" {
+// 			builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
+// 		} else {
+// 			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
+// 		}
+// 	}
+// 	return builder.String()
+// }
 
 // GetFileNameFromURL 从给定的 URL 中提取并返回文件名。
 func GetFileNameFromURL(urlString string) (string, error) {
@@ -219,29 +219,29 @@ func GetFileNameFromURL(urlString string) (string, error) {
 // 	return builder.String()
 // }
 
-func addMarkdownHeadingFormat(qq gh.Qq) string {
-	var builder strings.Builder
-	for _, q := range qq {
-		if q.Qs != nil {
-			if q.URL != "" {
-				builder.WriteString(fmt.Sprintf("#### [%s](%s)\n\n", q.Topic, q.URL))
-			} else {
-				builder.WriteString(fmt.Sprintf("#### %s\n\n", q.Topic))
-			}
-
-			builder.WriteString(fmt.Sprintf("%s\n", addMarkdownQsFormat(q.Qs)))
-			builder.WriteString("\n")
-		}
-	}
-	return builder.String()
-}
+// func addMarkdownHeadingFormat(qq gh.Qq) string {
+// 	var builder strings.Builder
+// 	for _, q := range qq {
+// 		if q.Qs != nil {
+// 			if q.URL != "" {
+// 				builder.WriteString(fmt.Sprintf("#### [%s](%s)\n\n", q.Topic, q.URL))
+// 			} else {
+// 				builder.WriteString(fmt.Sprintf("#### %s\n\n", q.Topic))
+// 			}
+//
+// 			builder.WriteString(fmt.Sprintf("%s\n", addMarkdownQsFormat(q.Qs)))
+// 			builder.WriteString("\n")
+// 		}
+// 	}
+// 	return builder.String()
+// }
 
 func RenderRepos(repos gh.Repos) (item *aw.Item) {
 	for _, repo := range repos {
 		repoURL := repo.URL
 		name := repo.FullName()
 		des := renderReposDes(repo)
-		remark := renderReposRemark(repo)
+		// remark := renderReposRemark(repo)
 		iconPath := renderIcon(repo)
 
 		item = wf.NewItem(name).Title(name).
@@ -253,8 +253,8 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 
 		docsURL := fmt.Sprintf("%s/%s#%s", wf.Config.GetString("docs"), strings.ToLower(repo.Tag), strings.ToLower(repo.Type))
 
-		item.Shift().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
-		item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
+		item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
+		// item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
 		item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
 		item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
 	}
@@ -285,41 +285,41 @@ func renderReposDes(repo gh.Repository) (des strings.Builder) {
 
 // 渲染remark
 // 也就是
-func renderReposRemark(repo gh.Repository) (remark strings.Builder) {
-	if repo.Des != "" {
-		remark.WriteString(fmt.Sprintf(" %s", repo.Des))
-	}
-
-	// if repo.Pix != nil {
-	// 	qx := addMarkdownPicFormat(repo.Pix)
-	// 	remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
-	// }
-
-	if repo.Qs != nil {
-		qx := addMarkdownQsFormat(repo.Qs)
-		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
-	}
-
-	if repo.Qq != nil {
-		qx := addMarkdownHeadingFormat(repo.Qq)
-		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
-	}
-
-	if repo.Cmd != nil {
-		// var cmds []string
-		// for _, cmd := range repo.Cmd {
-		// 	// if len(cmd) > 1 {
-		// 	// 	cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
-		// 	// } else {
-		// 	// 	cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
-		// 	// }
-		//
-		// }
-		qx := addMarkdownCmd(repo.Cmd)
-		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
-	}
-	return
-}
+// func renderReposRemark(repo gh.Repository) (remark strings.Builder) {
+// 	if repo.Des != "" {
+// 		remark.WriteString(fmt.Sprintf(" %s", repo.Des))
+// 	}
+//
+// 	// if repo.Pix != nil {
+// 	// 	qx := addMarkdownPicFormat(repo.Pix)
+// 	// 	remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+// 	// }
+//
+// 	if repo.Qs != nil {
+// 		qx := addMarkdownQsFormat(repo.Qs)
+// 		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+// 	}
+//
+// 	if repo.Qq != nil {
+// 		qx := addMarkdownHeadingFormat(repo.Qq)
+// 		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+// 	}
+//
+// 	if repo.Cmd != nil {
+// 		// var cmds []string
+// 		// for _, cmd := range repo.Cmd {
+// 		// 	// if len(cmd) > 1 {
+// 		// 	// 	cmds = append(cmds, fmt.Sprintf("`%s` %s", cmd[0], cmd[1]))
+// 		// 	// } else {
+// 		// 	// 	cmds = append(cmds, fmt.Sprintf("`%s`", cmd[0]))
+// 		// 	// }
+// 		//
+// 		// }
+// 		qx := addMarkdownCmd(repo.Cmd)
+// 		remark.WriteString(fmt.Sprintf("\n \n --- \n \n%s", qx))
+// 	}
+// 	return
+// }
 
 func renderIcon(repo gh.Repository) (iconPath string) {
 	// if repo.Qs == nil && repo.Cmd == nil {
