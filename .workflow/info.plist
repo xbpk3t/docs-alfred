@@ -68,16 +68,6 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>04D6D214-AEBC-4782-BC3F-E2EB3AED641C</string>
-				<key>modifiers</key>
-				<integer>1048576</integer>
-				<key>modifiersubtext</key>
-				<string></string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-			<dict>
-				<key>destinationuid</key>
 				<string>9B0707BD-6307-4CFB-AE42-098705A508C0</string>
 				<key>modifiers</key>
 				<integer>524288</integer>
@@ -100,7 +90,7 @@
 				<key>destinationuid</key>
 				<string>18D6F575-4589-45B7-827B-B182C18E240A</string>
 				<key>modifiers</key>
-				<integer>131072</integer>
+				<integer>1048576</integer>
 				<key>modifiersubtext</key>
 				<string>打开Docs中该Repo的qs</string>
 				<key>vitoclose</key>
@@ -541,7 +531,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://docs.hxha.xyz/gh/</string>
+				<string>https://docs.hxha.xyz/x</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>
