@@ -1,13 +1,9 @@
 package secret
 
-import (
-	aw "github.com/deanishe/awgo"
-)
-
 // Store describe a store to manage secret values.
-type Store struct {
-	wf *aw.Workflow
-}
+// type Store struct {
+// 	wf *aw.Workflow
+// }
 
 // func accountKey(key string) (string, error) {
 // 	me, err := user.Current()
@@ -19,11 +15,11 @@ type Store struct {
 // }
 
 // NewStore return an instance of Store
-func NewStore(wf *aw.Workflow) *Store {
-	return &Store{
-		wf: wf,
-	}
-}
+// func NewStore(wf *aw.Workflow) *Store {
+// 	return &Store{
+// 		wf: wf,
+// 	}
+// }
 
 // // Store save the secret
 // func (s *Store) Store(key string, secret string) error {
