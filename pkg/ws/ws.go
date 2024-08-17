@@ -18,15 +18,14 @@ type Webstack []struct {
 	URLs []URL  `yaml:"urls"`
 }
 
-func NewConfigWs(data []byte) Webstack {
+func NewConfigWs(data []byte) (Webstack, error) {
 	var ws Webstack
 	err := yaml.Unmarshal(data, &ws)
 	if err != nil {
-		fmt.Println(err)
-		return nil
+		return nil, err
 	}
 
-	return ws
+	return ws, nil
 }
 
 func (ws Webstack) ExtractURLs() []URL {

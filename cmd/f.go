@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -9,6 +8,8 @@ import (
 	"path"
 	"slices"
 	"strings"
+
+	"github.com/hxhac/docs-alfred/utils"
 
 	"github.com/hxhac/docs-alfred/pkg/ws"
 
@@ -31,8 +32,10 @@ var fCmd = &cobra.Command{
 		// ReadConfig Handle Config Not Exists
 		// panic not effect PreRun()
 		if !wf.Cache.Exists(cfgFile) {
-			ErrorHandle(errors.New(cfgFile + " not found"))
+			// ErrorHandle(errors.New(cfgFile + " not found"))
+			ErrorHandle(&utils.DocsAlfredError{Err: utils.ErrConfigNotFound})
 		}
+
 		// fetch gh.yml, 再根据内容fetch数据
 		data, _ = wf.Cache.Load(cfgFile)
 
@@ -142,7 +145,11 @@ var wsCmd = &cobra.Command{
 	Use:   "ws",
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
-		tks := ws.NewConfigWs(data).SearchWs(args)
+		ws, err := ws.NewConfigWs(data)
+		if err != nil {
+			wf.FatalError(err)
+		}
+		tks := ws.SearchWs(args)
 
 		for _, ws := range tks {
 			item := wf.NewItem(ws.Name).Title(ws.Name).Subtitle(ws.Des).Valid(true).Quicklook(ws.URL).Autocomplete(ws.Name).Arg(ws.URL).Icon(&aw.Icon{Value: "icons/check.svg"})
