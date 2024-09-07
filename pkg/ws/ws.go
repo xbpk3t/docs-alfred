@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,7 +24,7 @@ func NewConfigWs(data []byte) (Webstack, error) {
 	var ws Webstack
 	err := yaml.Unmarshal(data, &ws)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "")
 	}
 
 	return ws, nil
