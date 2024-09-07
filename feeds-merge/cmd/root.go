@@ -35,17 +35,23 @@ var rootCmd = &cobra.Command{
 					return item.Feed
 				})
 
+				// 移除一些feed为空字符串的item
+				urls = lo.WithoutEmpty(urls)
+
 				allFeeds := pkg.Conf.FetchURLs(urls)
-				combinedFeed := pkg.Conf.MergeAllFeeds(feedsTitle, allFeeds)
-				atom, err := combinedFeed.ToAtom()
-				if err != nil {
-					slog.Info("Render RSS Error:", slog.Any("Error", err))
-					return
-				}
-				err = os.WriteFile(feedsTitle+".atom", []byte(atom), os.ModePerm)
-				if err != nil {
-					slog.Info("Write file Error:", slog.Any("Error", err))
-					return
+				if combinedFeed, err := pkg.Conf.MergeAllFeeds(feedsTitle, allFeeds); err != nil {
+					slog.Info("No feed Found:", slog.Any("Error", err))
+				} else {
+					atom, err := combinedFeed.ToAtom()
+					if err != nil {
+						slog.Info("Render RSS Error:", slog.Any("Error", err))
+						return
+					}
+					err = os.WriteFile(feedsTitle+".atom", []byte(atom), os.ModePerm)
+					if err != nil {
+						slog.Info("Write file Error:", slog.Any("Error", err))
+						return
+					}
 				}
 			}(cate)
 		}

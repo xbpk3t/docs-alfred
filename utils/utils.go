@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,4 +52,9 @@ func GetFilesOfFolder(dir, fileType string) ([]string, error) {
 	//
 	// }
 	return files, nil
+}
+
+func IsURL(str string) bool {
+	u, err := url.ParseRequestURI(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
 }
