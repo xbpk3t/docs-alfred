@@ -33,6 +33,7 @@ type Feed struct {
 	Feed string `yaml:"feed"`
 	Des  string `yaml:"des"`
 	URL  string `yaml:"url"`
+	Name string `yaml:"name"`
 }
 
 var (
