@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -196,7 +197,11 @@ func (e Config) getAuthor(feed *gofeed.Feed) string {
 	return e.Author
 }
 
-func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) *feeds.Feed {
+func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) (*feeds.Feed, error) {
+	if len(allFeeds) == 0 {
+		return nil, errors.New("no Feeds Found")
+	}
+
 	feed := &feeds.Feed{
 		Title:       feedTitle,
 		Link:        &feeds.Link{Href: e.FeedLink},
@@ -244,7 +249,7 @@ func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) *feeds.
 			seen[item.Link] = true
 		}
 	}
-	return feed
+	return feed, nil
 }
 
 func GetToday() time.Time {
