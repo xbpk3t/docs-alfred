@@ -27,10 +27,13 @@ var feedsCmd = &cobra.Command{
 		for _, feeds := range dfo {
 			res.WriteString(fmt.Sprintf("\n## %s \n\n", feeds.Type))
 			for _, feed := range feeds.Feeds {
-				if feed.Name != "" {
+				if feed.Name == "" {
+					feed.Name = feed.URL
+				}
+				if feed.URL != "" {
 					res.WriteString(fmt.Sprintf("- [%s](%s) %s\n", feed.Name, feed.URL, feed.Des))
 				} else {
-					res.WriteString(fmt.Sprintf("- %s %s\n", feed.URL, feed.Des))
+					res.WriteString(fmt.Sprintf("- [%s](%s) %s\n", feed.Name, feed.Feed, feed.Des))
 				}
 			}
 		}
