@@ -26,8 +26,8 @@ type Config struct {
 }
 
 type Categories struct {
-	Type  string `yaml:"type"`
-	Feeds []Feed
+	Type string `yaml:"type"`
+	URLs []Feed `yaml:"urls"`
 }
 
 type Feed struct {
@@ -199,7 +199,7 @@ func (e Config) getAuthor(feed *gofeed.Feed) string {
 
 func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) (*feeds.Feed, error) {
 	if len(allFeeds) == 0 {
-		return nil, errors.New("no Feeds Found")
+		return nil, errors.New("no feeds Found")
 	}
 
 	feed := &feeds.Feed{
