@@ -243,55 +243,6 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>alfredfiltersresults</key>
-				<false/>
-				<key>alfredfiltersresultsmatchmode</key>
-				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
-				<false/>
-				<key>argumenttrimmode</key>
-				<integer>0</integer>
-				<key>argumenttype</key>
-				<integer>1</integer>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>keyword</key>
-				<string>syncd</string>
-				<key>queuedelaycustom</key>
-				<integer>3</integer>
-				<key>queuedelayimmediatelyinitially</key>
-				<true/>
-				<key>queuedelaymode</key>
-				<integer>0</integer>
-				<key>queuemode</key>
-				<integer>1</integer>
-				<key>runningsubtext</key>
-				<string></string>
-				<key>script</key>
-				<string>./exe sync --config=gh.yml</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>subtext</key>
-				<string></string>
-				<key>title</key>
-				<string></string>
-				<key>type</key>
-				<integer>0</integer>
-				<key>withspace</key>
-				<true/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
-			<key>uid</key>
-			<string>5EEED0F0-F9CF-4330-8E0D-9616E633AE8C</string>
-			<key>version</key>
-			<integer>3</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
 				<key>browser</key>
 				<string></string>
 				<key>skipqueryencode</key>
@@ -455,15 +406,6 @@
 			<key>ypos</key>
 			<real>120</real>
 		</dict>
-		<key>5EEED0F0-F9CF-4330-8E0D-9616E633AE8C</key>
-		<dict>
-			<key>note</key>
-			<string>github.com</string>
-			<key>xpos</key>
-			<real>200</real>
-			<key>ypos</key>
-			<real>295</real>
-		</dict>
 		<key>9B0707BD-6307-4CFB-AE42-098705A508C0</key>
 		<dict>
 			<key>xpos</key>
@@ -483,9 +425,9 @@
 			<key>note</key>
 			<string>github.com</string>
 			<key>xpos</key>
-			<real>275</real>
+			<real>115</real>
 			<key>ypos</key>
-			<real>505</real>
+			<real>390</real>
 		</dict>
 		<key>B53BF6E6-F247-47F7-976E-2AB8E78A683E</key>
 		<dict>

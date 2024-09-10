@@ -26,7 +26,7 @@ var rootCmd = &cobra.Command{
 			go func(cate pkg.Categories) {
 				defer wg.Done()
 				feedsTitle := cate.Type
-				feeds := cate.Feeds
+				feeds := cate.URLs
 
 				// TODO check feed is valid
 
@@ -40,7 +40,7 @@ var rootCmd = &cobra.Command{
 
 				allFeeds := pkg.Conf.FetchURLs(urls)
 				if combinedFeed, err := pkg.Conf.MergeAllFeeds(feedsTitle, allFeeds); err != nil {
-					slog.Info("No feed Found:", slog.Any("Error", err))
+					slog.Info("No feed Found:", slog.String("Feed Type", feedsTitle), slog.Any("Error", err))
 				} else {
 					atom, err := combinedFeed.ToAtom()
 					if err != nil {
