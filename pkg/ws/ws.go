@@ -13,6 +13,7 @@ type URL struct {
 	Name string `yaml:"name"`
 	URL  string `yaml:"url"`
 	Des  string `yaml:"des,omitempty"`
+	Feed string `yaml:"feed"`
 }
 
 type Webstack []struct {

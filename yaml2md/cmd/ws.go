@@ -30,7 +30,12 @@ var wsCmd = &cobra.Command{
 				if url.Name == "" {
 					url.Name = url.URL
 				}
-				res.WriteString(fmt.Sprintf("- [%s](%s) %s\n", url.Name, url.URL, url.Des))
+				// res.WriteString(fmt.Sprintf("- [%s](%s) %s\n", url.Name, url.URL, url.Des))
+				if url.URL != "" {
+					res.WriteString(fmt.Sprintf("- [%s](%s) %s\n", url.Name, url.URL, url.Des))
+				} else {
+					res.WriteString(fmt.Sprintf("- [%s](%s) %s\n", url.Name, url.Feed, url.Des))
+				}
 			}
 		}
 
