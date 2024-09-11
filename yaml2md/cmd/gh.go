@@ -119,11 +119,11 @@ var ghCmd = &cobra.Command{
 			})
 
 			table := tablewriter.NewWriter(&res)
+			table.SetAutoWrapText(false)
 			table.SetHeader([]string{"Repo", "Des"})
 			table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 			table.SetCenterSeparator("|")
 			table.AppendBulk(data) // Add Bulk Data
-			table.SetAutoWrapText(true)
 			table.Render()
 
 			// type对应的qs
