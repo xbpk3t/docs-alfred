@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/olekukonko/tablewriter"
-	"github.com/samber/lo"
 	"log/slog"
 	"os"
 	"strings"
+
+	"github.com/olekukonko/tablewriter"
+	"github.com/samber/lo"
 
 	"github.com/hxhac/docs-alfred/pkg/gh"
 
