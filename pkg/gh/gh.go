@@ -209,6 +209,24 @@ func (rs Repos) QueryReposByTag(tag string) Repos {
 }
 
 // FilterReposMD x
+// func (cr *ConfigRepos) FilterReposMD() ConfigRepos {
+// 	var filteredConfig ConfigRepos
+// 	for _, crv := range *cr {
+// 		// if crv.Md {
+// 		var filteredRepos []Repository
+// 		for _, repo := range crv.Repos {
+// 			if repo.Qs != nil {
+// 				// repo.Pix = addMarkdownPicFormat(repo.Pix)
+// 				filteredRepos = append(filteredRepos, repo)
+// 			}
+// 		}
+// 		crv.Repos = filteredRepos
+// 		filteredConfig = append(filteredConfig, crv)
+// 		// }
+// 	}
+// 	return filteredConfig
+// }
+
 func (cr *ConfigRepos) FilterReposMD() ConfigRepos {
 	var filteredConfig ConfigRepos
 	for _, crv := range *cr {

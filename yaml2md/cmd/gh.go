@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/olekukonko/tablewriter"
+	"github.com/samber/lo"
 	"log/slog"
 	"os"
 	"strings"
@@ -90,11 +92,13 @@ var ghCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		f, err := os.ReadFile(cfgFile)
 		if err != nil {
+			slog.Error(err.Error())
 			return
 		}
 
-		dfo := gh.NewConfigRepos(f)
-		df := dfo.FilterReposMD()
+		df := gh.NewConfigRepos(f)
+		// dfo := gh.NewConfigRepos(f)
+		// df := dfo.FilterReposMD()
 
 		// dfo.IsTypeQsEmpty()
 		// 清理掉 Qs == nil 的 Type
@@ -106,28 +110,46 @@ var ghCmd = &cobra.Command{
 			if d.Qs != nil || d.Repos != nil {
 				res.WriteString(fmt.Sprintf("## %s \n", d.Type))
 			}
+
+			// type下的所有repo列表
+			data := lo.Map(d.Repos, func(item gh.Repository, index int) []string {
+				repoName, _ := strings.CutPrefix(item.URL, gh.GhURL)
+				return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
+			})
+
+			table := tablewriter.NewWriter(&res)
+			table.SetHeader([]string{"Repo", "Des"})
+			table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+			table.SetCenterSeparator("|")
+			table.AppendBulk(data) // Add Bulk Data
+			table.SetAutoWrapText(true)
+			table.Render()
+
+			// type对应的qs
 			if d.Qs != nil {
 				res.WriteString(addMarkdownQsFormat(d.Qs))
 			}
 			for _, repo := range d.Repos {
-				repoName, f := strings.CutPrefix(repo.URL, gh.GhURL)
-				if !f {
-					repoName = ""
-				}
-				if repo.Alias != "" {
-					res.WriteString(fmt.Sprintf("### [%s](%s)\n\n", repo.Alias, repo.URL))
-				} else {
-					res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
-				}
-
 				if repo.Qs != nil {
-					res.WriteString(addMarkdownQsFormat(repo.Qs))
-				}
-				if repo.Qq != nil {
-					for _, s := range repo.Qq {
-						if s.Qs != nil {
-							res.WriteString(fmt.Sprintf("\n\n#### %s \n\n", s.Topic))
-							res.WriteString(addMarkdownQsFormat(s.Qs))
+					repoName, f := strings.CutPrefix(repo.URL, gh.GhURL)
+					if !f {
+						repoName = ""
+					}
+					if repo.Alias != "" {
+						res.WriteString(fmt.Sprintf("### [%s](%s)\n\n", repo.Alias, repo.URL))
+					} else {
+						res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
+					}
+
+					if repo.Qs != nil {
+						res.WriteString(addMarkdownQsFormat(repo.Qs))
+					}
+					if repo.Qq != nil {
+						for _, s := range repo.Qq {
+							if s.Qs != nil {
+								res.WriteString(fmt.Sprintf("\n\n#### %s \n\n", s.Topic))
+								res.WriteString(addMarkdownQsFormat(s.Qs))
+							}
 						}
 					}
 				}
