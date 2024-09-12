@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"github.com/olekukonko/tablewriter"
 	"io"
 	"log/slog"
 	"net/http"
@@ -57,4 +58,18 @@ func GetFilesOfFolder(dir, fileType string) ([]string, error) {
 func IsURL(str string) bool {
 	u, err := url.ParseRequestURI(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
+}
+
+// RenderMarkdownTable 封装了创建和渲染Markdown表格的逻辑
+func RenderMarkdownTable(res *strings.Builder, data [][]string) {
+	if data == nil || len(data) == 0 {
+		return
+	}
+	table := tablewriter.NewWriter(res)
+	table.SetAutoWrapText(false)
+	table.SetHeader([]string{"Repo", "Des"})
+	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+	table.SetCenterSeparator("|")
+	table.AppendBulk(data) // 添加大量数据
+	table.Render()
 }
