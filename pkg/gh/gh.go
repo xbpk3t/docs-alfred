@@ -52,10 +52,11 @@ type Repository struct {
 }
 
 type Qq []struct {
-	Topic string `yaml:"topic"`
-	URL   string `yaml:"url,omitempty"`
-	Des   string `yaml:"des,omitempty"`
-	Qs    Qs     `yaml:"qs,omitempty"`
+	Topic string       `yaml:"topic"`
+	URL   string       `yaml:"url,omitempty"`
+	Des   string       `yaml:"des,omitempty"`
+	Qs    Qs           `yaml:"qs,omitempty"`
+	Sub   []Repository `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
 }
 
 type Qs []Qt
