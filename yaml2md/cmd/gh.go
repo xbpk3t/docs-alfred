@@ -166,45 +166,96 @@ var ghCmd = &cobra.Command{
 	},
 }
 
+// func addMarkdownQsFormat(qs gh.Qs) string {
+// 	var builder strings.Builder
+// 	// builder.WriteString("<dl>")
+// 	for _, q := range qs {
+// 		// if q.X == "" {
+// 		// 	if q.U != "" {
+// 		// 		builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
+// 		// 	} else {
+// 		// 		builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
+// 		// 	}
+// 		// } else {
+// 		// 	if q.U != "" {
+// 		// 		builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
+// 		// 	} else {
+// 		// 		builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+// 		// 	}
+// 		// }
+//
+// 		switch {
+// 		case q.X == "" && q.U == "" && q.P == "":
+// 			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
+// 		case q.X == "" && q.U != "" && q.P == "":
+// 			builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
+// 		case q.X == "" && q.U == "" && q.P != "":
+// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, "image", q.P))
+//
+// 		case q.X != "" && q.U == "" && q.P == "":
+// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+// 		case q.X != "" && q.U != "" && q.P == "":
+// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
+// 		case q.X != "" && q.U == "" && q.P != "":
+// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, "image", q.P, q.X))
+//
+//
+// 		case q.X == "" && q.U != "" && q.P != "":
+// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, q.U, "image", q.P))
+// 		case q.X != "" && q.U != "" && q.P != "":
+// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, q.U, "image", q.P, q.X))
+//
+// 		default:
+// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
+// 		}
+// 	}
+//
+// 	return builder.String()
+// }
+
 func addMarkdownQsFormat(qs gh.Qs) string {
 	var builder strings.Builder
-	// builder.WriteString("<dl>")
-	for _, q := range qs {
-		// if q.X == "" {
-		// 	if q.U != "" {
-		// 		builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-		// 	} else {
-		// 		builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-		// 	}
-		// } else {
-		// 	if q.U != "" {
-		// 		builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
-		// 	} else {
-		// 		builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-		// 	}
-		// }
 
-		switch {
-		case q.X == "" && q.U == "" && q.P == "":
-			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-		case q.X == "" && q.U != "" && q.P == "":
-			builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-		case q.X != "" && q.U == "" && q.P == "":
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-		case q.X == "" && q.U == "" && q.P != "":
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, "image", q.P))
-		case q.X == "" && q.U != "" && q.P != "":
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, q.U, "image", q.P))
-		case q.X != "" && q.U == "" && q.P != "":
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, "image", q.P, q.X))
-		case q.X != "" && q.U != "" && q.P != "":
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, q.U, "image", q.P, q.X))
-		default:
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
+	for _, q := range qs {
+		summary := formatSummary(q)
+		details := formatDetails(q)
+		if details == "" {
+			builder.WriteString(fmt.Sprintf("- %s\n", summary))
+		} else {
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details))
 		}
+		// if q.X == "" && q.P == "" && len(q.S) == 0 {
+		//
+		// }
 	}
 
 	return builder.String()
+}
+
+func formatSummary(q gh.Qt) string {
+	if q.U != "" {
+		return fmt.Sprintf("[%s](%s)", q.Q, q.U)
+	}
+	return q.Q
+}
+
+func formatDetails(q gh.Qt) string {
+	var parts []string
+	if len(q.S) != 0 {
+		var b strings.Builder
+		for _, t := range q.S {
+			b.WriteString(fmt.Sprintf("- %s\n", t))
+		}
+		b.WriteString("---")
+		parts = append(parts, b.String())
+	}
+	if q.X != "" {
+		parts = append(parts, q.X)
+	}
+	if q.P != "" {
+		parts = append(parts, fmt.Sprintf("![%s](%s)", "image", q.P))
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // FilterRepos 过滤掉Repo中Qs为nil的ConfigRepos
