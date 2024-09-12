@@ -112,13 +112,8 @@ var ghCmd = &cobra.Command{
 				res.WriteString(fmt.Sprintf("## %s \n", d.Type))
 			}
 
-			// type下的所有repo列表
-			data := lo.Map(d.Repos, func(item gh.Repository, index int) []string {
-				repoName, _ := strings.CutPrefix(item.URL, gh.GhURL)
-				return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
-			})
-
-			utils.RenderMarkdownTable(&res, data)
+			// repo下的所有repo列表
+			RenderRepositoriesAsMarkdownTable(d.Repos, &res)
 
 			// type对应的qs
 			if d.Qs != nil {
@@ -133,11 +128,7 @@ var ghCmd = &cobra.Command{
 					res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
 
 					// 渲染该repo的sub repo
-					data := lo.Map(repo.Sub, func(item gh.Repository, index int) []string {
-						repoName, _ := strings.CutPrefix(item.URL, gh.GhURL)
-						return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
-					})
-					utils.RenderMarkdownTable(&res, data)
+					RenderRepositoriesAsMarkdownTable(repo.Sub, &res)
 
 					if repo.Qs != nil {
 						res.WriteString(addMarkdownQsFormat(repo.Qs))
@@ -146,6 +137,9 @@ var ghCmd = &cobra.Command{
 						for _, s := range repo.Qq {
 							if s.Qs != nil {
 								res.WriteString(fmt.Sprintf("\n\n#### %s \n\n", s.Topic))
+
+								RenderRepositoriesAsMarkdownTable(s.Sub, &res)
+
 								res.WriteString(addMarkdownQsFormat(s.Qs))
 							}
 						}
@@ -227,6 +221,23 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 	}
 
 	return builder.String()
+}
+
+// RenderRepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
+func RenderRepositoriesAsMarkdownTable(repos []gh.Repository, res *strings.Builder) {
+	// 检查repos是否为nil或空，如果是，则不渲染表格
+	if repos == nil || len(repos) == 0 {
+		return
+	}
+
+	// 准备表格数据
+	data := lo.Map(repos, func(item gh.Repository, index int) []string {
+		repoName, _ := strings.CutPrefix(item.URL, gh.GhURL)
+		return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
+	})
+
+	// 渲染Markdown表格
+	utils.RenderMarkdownTable(res, data)
 }
 
 func formatSummary(q gh.Qt) string {
