@@ -30,19 +30,25 @@ type Repository struct {
 	URL         string `yaml:"url"`           // 该repo的gh URL
 	Name        string `yaml:"name,omitempty"`
 	User        string
-	Des         string `yaml:"des,omitempty"`   // 描述
-	Type        string `yaml:"type"`            // used to mark Type
-	Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为[alias](URL)，而不是[User/Name](URL)
-	Tag         string `yaml:"tag,omitempty"`   // 原本的文件名，比如说 db.yml, db.yml, ...
-	Qs          Qs     `yaml:"qs,omitempty"`
-	Cmd         Cmd    `yaml:"cmd,omitempty"`
+	Des         string `yaml:"des,omitempty"` // 描述
+	Type        string `yaml:"type"`          // used to mark Type
+
+	Tag string `yaml:"tag,omitempty"` // 原本的文件名，比如说 db.yml, db.yml, ...
+	Qs  Qs     `yaml:"qs,omitempty"`
+	Cmd Cmd    `yaml:"cmd,omitempty"`
+
+	Qq     `yaml:"qq,omitempty"`
+	IsStar bool         // 用来标识该repo是否在gh.yml中
+	Sub    []Repository `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
+	Dep    []Repository `yaml:"dep,omitempty"` // 用来标识可以被改repo替代的一些repo
+
+	// Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为[alias](URL)，而不是[User/Name](URL)
+
 	// Pix         []string `yaml:"pix"`
 	// Use         []struct {
 	// 	URL string `yaml:"url,omitempty"`
 	// 	Des string `yaml:"des,omitempty"`
 	// } `yaml:"use,omitempty"`
-	Qq     `yaml:"qq,omitempty"`
-	IsStar bool // 用来标识该repo是否在gh.yml中
 }
 
 type Qq []struct {

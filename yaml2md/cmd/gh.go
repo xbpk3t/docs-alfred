@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/hxhac/docs-alfred/utils"
 	"log/slog"
 	"os"
 	"strings"
 
-	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 
 	"github.com/hxhac/docs-alfred/pkg/gh"
@@ -118,13 +118,7 @@ var ghCmd = &cobra.Command{
 				return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
 			})
 
-			table := tablewriter.NewWriter(&res)
-			table.SetAutoWrapText(false)
-			table.SetHeader([]string{"Repo", "Des"})
-			table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-			table.SetCenterSeparator("|")
-			table.AppendBulk(data) // Add Bulk Data
-			table.Render()
+			utils.RenderMarkdownTable(&res, data)
 
 			// type对应的qs
 			if d.Qs != nil {
@@ -136,11 +130,14 @@ var ghCmd = &cobra.Command{
 					if !f {
 						repoName = ""
 					}
-					if repo.Alias != "" {
-						res.WriteString(fmt.Sprintf("### [%s](%s)\n\n", repo.Alias, repo.URL))
-					} else {
-						res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
-					}
+					res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
+
+					// 渲染该repo的sub repo
+					data := lo.Map(repo.Sub, func(item gh.Repository, index int) []string {
+						repoName, _ := strings.CutPrefix(item.URL, gh.GhURL)
+						return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
+					})
+					utils.RenderMarkdownTable(&res, data)
 
 					if repo.Qs != nil {
 						res.WriteString(addMarkdownQsFormat(repo.Qs))
