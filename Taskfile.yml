@@ -1,23 +1,30 @@
 version: "3"
 
 tasks:
-
   feeds-merge:
     dir: feeds-merge
     cmds:
       - INPUT_FEEDS_PATH="feeds.yml" go run main.go
-
   gh:
-    des: yaml2md gh
+    desc: 【yaml2md gh】生成gh.yml对应的markdown
     dir: yaml2md
     cmds:
 #      - echo "Running command {{.CMD}}"
 #      - sh -c "go run main.go {{.CMD}} --config {{.CMD}}.yml --target {{.CMD}}.md"
       - sh -c "go run main.go gh --config {{.CMD}}.yml --target {{.CMD}}.md"
-
-
   ws:
-    des: yaml2md ws
+    desc: 【yaml2md ws】生成ws.yml对应的markdown
     dir: yaml2md
     cmds:
-      - sh -c "go run main.go ws --config {{.CMD}}.yml --target {{.CMD}}.md"
+      - sh -c "go run main.go ws --config ws.yml --target ws.md"
+
+  works:
+    desc: 【yaml2md works】生成ss.yml对应的markdown
+    dir: yaml2md
+    cmds:
+      - sh -c "go run main.go works --config {{.CMD}}.yml --target {{.CMD}}.md"
+
+
+  pre-commit:
+    cmds:
+      - pre-commit run --all-files

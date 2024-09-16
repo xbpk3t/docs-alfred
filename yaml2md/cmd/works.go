@@ -88,25 +88,69 @@ func init() {
 }
 
 // 用来渲染qs
+// func addMarkdownQsFormatWorks(qs work.Qs) string {
+// 	var builder strings.Builder
+// 	// builder.WriteString("<dl>")
+// 	for _, q := range qs {
+// 		if q.X == "" {
+// 			if q.U != "" {
+// 				builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
+// 			} else {
+// 				builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
+// 			}
+// 		} else {
+// 			if q.U != "" {
+// 				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
+// 			} else {
+// 				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+// 			}
+// 		}
+// 	}
+// 	// builder.WriteString("</dl>")
+//
+// 	return builder.String()
+// }
+
 func addMarkdownQsFormatWorks(qs work.Qs) string {
 	var builder strings.Builder
-	// builder.WriteString("<dl>")
+
 	for _, q := range qs {
-		if q.X == "" {
-			if q.U != "" {
-				builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-			} else {
-				builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-			}
+		summary := formatSummaryWithWs(q)
+		details := formatDetailsWithWs(q)
+		if details == "" {
+			builder.WriteString(fmt.Sprintf("- %s\n", summary))
 		} else {
-			if q.U != "" {
-				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
-			} else {
-				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-			}
+			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details))
 		}
 	}
-	// builder.WriteString("</dl>")
 
 	return builder.String()
+}
+
+// formatSummary 格式化摘要
+func formatSummaryWithWs(q work.QsN) string {
+	if q.U != "" {
+		return fmt.Sprintf("[%s](%s)", q.Q, q.U)
+	}
+	return q.Q
+}
+
+// formatDetails 格式化详情
+func formatDetailsWithWs(q work.QsN) string {
+	var parts []string
+
+	if len(q.S) != 0 {
+		var b strings.Builder
+		for _, t := range q.S {
+			b.WriteString(fmt.Sprintf("- %s\n", t))
+		}
+		b.WriteString("---")
+		parts = append(parts, b.String())
+	}
+
+	if q.X != "" {
+		parts = append(parts, q.X)
+	}
+
+	return strings.Join(parts, "\n\n")
 }

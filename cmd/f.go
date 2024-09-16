@@ -264,6 +264,50 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 		// item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
 		item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
 		item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
+
+		for _, sre := range repo.Sub {
+			repoURL := sre.URL
+			subName := sre.FullName()
+			des := renderReposDes(sre)
+			// remark := renderReposRemark(sre)
+			iconPath := renderIcon(sre)
+
+			item = wf.NewItem(subName).Title(subName).
+				Arg(repoURL).
+				Subtitle(fmt.Sprintf("【sub: %s】%s", name, des.String())).
+				Copytext(repoURL).
+				Valid(true).
+				Autocomplete(subName).Icon(&aw.Icon{Value: iconPath})
+
+			docsURL := fmt.Sprintf("%s/%s#%s", wf.Config.GetString("docs"), strings.ToLower(sre.Tag), strings.ToLower(sre.Type))
+
+			item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
+			// item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
+			item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
+			item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", sre.Doc)).Arg(sre.Doc)
+		}
+
+		for _, dre := range repo.Dep {
+			repoURL := dre.URL
+			depName := dre.FullName()
+			des := renderReposDes(dre)
+			// remark := renderReposRemark(sre)
+			iconPath := renderIcon(dre)
+
+			item = wf.NewItem(depName).Title(depName).
+				Arg(repoURL).
+				Subtitle(fmt.Sprintf("【dep: %s】%s", name, des.String())).
+				Copytext(repoURL).
+				Valid(true).
+				Autocomplete(depName).Icon(&aw.Icon{Value: iconPath})
+
+			docsURL := fmt.Sprintf("%s/%s#%s", wf.Config.GetString("docs"), strings.ToLower(dre.Tag), strings.ToLower(dre.Type))
+
+			item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
+			// item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
+			item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
+			item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", dre.Doc)).Arg(dre.Doc)
+		}
 	}
 	return item
 }
