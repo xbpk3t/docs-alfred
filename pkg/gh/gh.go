@@ -37,10 +37,9 @@ type Repository struct {
 	Qs  Qs     `yaml:"qs,omitempty"`
 	Cmd Cmd    `yaml:"cmd,omitempty"`
 
-	Qq     `yaml:"qq,omitempty"`
-	IsStar bool         // 用来标识该repo是否在gh.yml中
-	Sub    []Repository `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
-	Dep    []Repository `yaml:"dep,omitempty"` // 用来标识可以被改repo替代的一些repo
+	Qq  `yaml:"qq,omitempty"`
+	Sub []Repository `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
+	Dep []Repository `yaml:"dep,omitempty"` // 用来标识可以被改repo替代的一些repo
 
 	// Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为[alias](URL)，而不是[User/Name](URL)
 
@@ -49,6 +48,7 @@ type Repository struct {
 	// 	URL string `yaml:"url,omitempty"`
 	// 	Des string `yaml:"des,omitempty"`
 	// } `yaml:"use,omitempty"`
+	IsStar bool // 用来标识该repo是否在gh.yml中
 }
 
 type Qq []struct {

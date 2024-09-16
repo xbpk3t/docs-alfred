@@ -215,9 +215,6 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 		} else {
 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details))
 		}
-		// if q.X == "" && q.P == "" && len(q.S) == 0 {
-		//
-		// }
 	}
 
 	return builder.String()

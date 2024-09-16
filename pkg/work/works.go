@@ -16,11 +16,14 @@ type Doc struct {
 	Qs   Qs     `yaml:"qs"`
 }
 
-type Qs []struct {
-	Q string `yaml:"q"` // 问题
-	X string `yaml:"x"` // 答案
-	U string `yaml:"u"` // url
-	P string `yaml:"p"` // 图片
+type Qs []QsN
+
+type QsN struct {
+	Q string   `yaml:"q"` // 问题
+	X string   `yaml:"x"` // 答案
+	U string   `yaml:"u"` // url
+	P string   `yaml:"p"` // 图片
+	S []string `yaml:"s"` // sub问题
 }
 
 type Docs []Doc
