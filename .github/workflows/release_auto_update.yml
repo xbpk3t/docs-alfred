@@ -16,12 +16,17 @@ jobs:
         platform: [macOS-latest]
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@main
       - name: Install Go
         if: success()
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@main
         with:
           go-version: ${{ matrix.go-version }}
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run unit tests
         run: go test -v -race -cover -coverprofile coverage.txt -covermode=atomic ./...
       - name: Parse Event
@@ -30,8 +35,8 @@ jobs:
       - name: Build and pack
         run: |
           # build package
-          GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/hxhac/docs-alfred/cmd.EnabledAutoUpdate=true" -o exe_amd64
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/hxhac/docs-alfred/cmd.EnabledAutoUpdate=true" -o exe_arm64
+          task build:release ARCH=amd64
+          task build:release ARCH=arm64
           lipo -create -output .workflow/exe exe_amd64 exe_arm64
           rm  exe_amd64
           rm  exe_arm64
