@@ -3,6 +3,7 @@ package gh
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"slices"
@@ -19,9 +20,9 @@ const (
 type ConfigRepos []ConfigRepo
 
 type ConfigRepo struct {
-	Type  string       `yaml:"type"`
-	Repos []Repository `yaml:"repo"`
-	Qs    Qs           `yaml:"qs,omitempty"`
+	Type  string `yaml:"type"`
+	Repos `yaml:"repo"`
+	Qs    Qs `yaml:"qs,omitempty"`
 }
 
 type Repository struct {
@@ -38,8 +39,10 @@ type Repository struct {
 	Cmd Cmd    `yaml:"cmd,omitempty"`
 
 	Qq  `yaml:"qq,omitempty"`
-	Sub []Repository `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
-	Dep []Repository `yaml:"dep,omitempty"` // 用来标识可以被改repo替代的一些repo
+	Sub Repos `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
+	Dep Repos `yaml:"dep,omitempty"` // 用来标识可以被改repo替代的一些repo
+
+	IsStar bool // 用来标识该repo是否在gh.yml中
 
 	// Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为[alias](URL)，而不是[User/Name](URL)
 
@@ -48,7 +51,6 @@ type Repository struct {
 	// 	URL string `yaml:"url,omitempty"`
 	// 	Des string `yaml:"des,omitempty"`
 	// } `yaml:"use,omitempty"`
-	IsStar bool // 用来标识该repo是否在gh.yml中
 }
 
 type Qq []struct {
@@ -126,75 +128,172 @@ func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
 // ToRepos Convert Type to Repo
 func (cr ConfigRepos) ToRepos() Repos {
 	repos := make(Repos, 0)
+	// for _, config := range cr {
+	// 	rec(config.Repos, config.Type, &repos)
+	// }
 	for _, config := range cr {
 		for _, repo := range config.Repos {
-			if strings.Contains(repo.URL, GhURL) {
-				sx, found := strings.CutPrefix(repo.URL, GhURL)
-				// if !found {
-				// 	log.Printf("Invalid URL: %s", repo.URL)
-				// 	continue
-				// }
-				// splits := strings.Split(sx, "/")
-				// if len(splits) != 2 {
-				// 	log.Printf("URL Split Error: %s", repo.URL)
-				// 	continue
-				// }
-				//
-				// repo.User = splits[0]
-				// repo.Name = splits[1]
-				// repo.IsStar = true
-				// repo.Type = config.Type
-				// repos = append(repos, repo)
-
-				if found {
-					// splits := strings.Split(sx, "/")
-					// if len(splits) == 2 {
-					// 	repo.User = splits[0]
-					// 	repo.Name = splits[1]
-					// 	repo.IsStar = true
-					// 	repo.Type = config.Type
-					// 	repos = append(repos, repo)
-					// } else if len(splits) > 2 {
-					// 	// 确保 splits 不是 nil 并且有足够的元素
-					// 	if splits[0] == "golang" && splits[1] == "go" {
-					// 		curator := slices.Index(splits, "src")
-					// 		if curator != -1 && curator < len(splits)-1 {
-					// 			repo.User = splits[0]
-					// 			repo.Name = splits[1] + "/" + strings.Join(splits[curator+1:], "/")
-					// 			repo.IsStar = true
-					// 			repo.Type = config.Type
-					// 			repos = append(repos, repo)
-					// 		} else {
-					// 			log.Printf("Index Error: src not found in splits")
-					// 		}
-					// 	} else {
-					// 		log.Printf("URL Split Error: not enough elements in splits")
-					// 	}
-					// } else {
-					// 	log.Printf("URL Split Error: unexpected format")
-					// }
-
-					splits := strings.Split(sx, "/")
-					if len(splits) == 2 {
-						repo.User = splits[0]
-						repo.Name = splits[1]
-						repo.IsStar = true
-						repo.Type = config.Type
-						repos = append(repos, repo)
-					} else {
-						log.Printf("URL Split Error: unexpected format: %s", repo.URL)
-					}
-				} else {
-					log.Printf("CutPrefix Error URL: %s", repo.URL)
-				}
-			} else {
-				log.Printf("URL Not Contains: %s", repo.URL)
-			}
+			repos = append(repos, processRepo(repo, config.Type)...)
 		}
 	}
-
 	return repos
 }
+
+// func rec(rs Repos, t string, allRepos *Repos) {
+// 	repos := make(Repos, 0)
+//
+// 	for _, repo := range rs {
+// 		if strings.Contains(repo.URL, GhURL) {
+// 			sx, found := strings.CutPrefix(repo.URL, GhURL)
+// 			if found {
+// 				splits := strings.Split(sx, "/")
+// 				if len(splits) == 2 {
+// 					repo.User = splits[0]
+// 					repo.Name = splits[1]
+// 					repo.IsStar = true
+// 					// repo.Type = config.Type
+// 					repo.Type = t
+// 					repos = append(repos, repo)
+//
+//
+// 				} else {
+// 					log.Printf("URL Split Error: unexpected format: %s", repo.URL)
+// 				}
+// 			} else {
+// 				log.Printf("CutPrefix Error URL: %s", repo.URL)
+// 			}
+// 		} else {
+// 			log.Printf("URL Not Contains: %s", repo.URL)
+// 		}
+//
+// 		// 递归处理 Sub 字段
+// 		rec(repo.Sub, repo.Type, allRepos)
+//
+// 		// 递归处理 Dep 字段
+// 		rec(repo.Dep, repo.Type, allRepos)
+//
+// 		allRepos = append(allRepos, repos...)
+// 	}
+// 	// return repos
+// }
+
+// // processRepo 处理单个仓库，包括递归处理子仓库和依赖仓库
+// func processRepo(repo Repository, configType string) Repos {
+// 	repos := make(Repos, 0)
+// 	if strings.Contains(repo.URL, GhURL) {
+// 		sx, found := strings.CutPrefix(repo.URL, GhURL)
+// 		if found {
+// 			splits := strings.Split(sx, "/")
+// 			if len(splits) == 2 {
+// 				repo.User = splits[0]
+// 				repo.Name = splits[1]
+// 				repo.IsStar = true
+// 				repo.Type = configType
+// 				repos = append(repos, repo)
+// 				// 递归处理子仓库
+// 				repos = append(repos, processSubRepos(repo.Sub, configType)...)
+// 				// 递归处理依赖仓库
+// 				repos = append(repos, processDepRepos(repo.Dep, configType)...)
+// 			} else {
+// 				log.Printf("URL Split Error: unexpected format: %s", repo.URL)
+// 			}
+// 		} else {
+// 			log.Printf("CutPrefix Error URL: %s", repo.URL)
+// 		}
+// 	} else {
+// 		log.Printf("URL Not Contains: %s", repo.URL)
+// 	}
+// 	return repos
+// }
+//
+// // processSubRepos 递归处理子仓库
+// func processSubRepos(subRepos []Repository, configType string) Repos {
+// 	repos := make(Repos, 0)
+// 	for _, subRepo := range subRepos {
+// 		repos = append(repos, processRepo(subRepo, configType)...)
+// 	}
+// 	return repos
+// }
+//
+// // processDepRepos 递归处理依赖仓库
+// func processDepRepos(depRepos []Repository, configType string) Repos {
+// 	repos := make(Repos, 0)
+// 	for _, depRepo := range depRepos {
+// 		repos = append(repos, processRepo(depRepo, configType)...)
+// 	}
+// 	return repos
+// }
+
+// processRepo 递归处理单个仓库
+func processRepo(repo Repository, configType string) Repos {
+	repos := make(Repos, 0)
+	if strings.Contains(repo.URL, GhURL) {
+		sx, found := strings.CutPrefix(repo.URL, GhURL)
+		if found {
+			splits := strings.Split(sx, "/")
+			if len(splits) == 2 {
+				repo.User = splits[0]
+				repo.Name = splits[1]
+				repo.IsStar = true
+				repo.Type = configType
+				repos = append(repos, repo)
+			} else {
+				log.Printf("URL Split Error: unexpected format: %s", repo.URL)
+			}
+		} else {
+			log.Printf("CutPrefix Error URL: %s", repo.URL)
+		}
+	} else {
+		log.Printf("URL Not Contains: %s", repo.URL)
+	}
+	for _, subRepo := range repo.Sub {
+		repos = append(repos, processRepo(subRepo, fmt.Sprintf("%s [SUB: %s]", configType, repo.FullName()))...)
+	}
+	for _, depRepo := range repo.Dep {
+		repos = append(repos, processRepo(depRepo, fmt.Sprintf("%s [DEP: %s]", configType, repo.FullName()))...)
+	}
+	return repos
+}
+
+//
+// // 为 Repository 类型添加 ToRepos 方法，以便递归调用
+// func (repo Repository) ToRepos() Repos {
+// 	repos := make(Repos, 0)
+// 	// 处理当前仓库
+// 	// ...（这里可以添加处理当前仓库的逻辑，如果需要的话）
+// 	// 递归处理子仓库
+// 	if len(repo.Sub) > 0 {
+// 		for _, subRepo := range repo.Sub {
+// 			repos = append(repos, subRepo.ToRepos()...)
+// 		}
+// 	}
+// 	// 递归处理依赖仓库
+// 	if len(repo.Dep) > 0 {
+// 		for _, depRepo := range repo.Dep {
+// 			repos = append(repos, depRepo.ToRepos()...)
+// 		}
+// 	}
+// 	return repos
+// }
+//
+// func (rs Repos) ToRepos() Repos {
+// 	result := make(Repos, 0)
+// 	for _, repo := range rs {
+// 		// 添加当前仓库
+// 		result = append(result, repo)
+//
+// 		// 递归处理子仓库
+// 		for _, subRepo := range repo.Sub {
+// 			result = append(result, subRepo.ToRepos()...)
+// 		}
+//
+// 		// 递归处理依赖仓库
+// 		for _, depRepo := range repo.Dep {
+// 			result = append(result, depRepo.ToRepos()...)
+// 		}
+// 	}
+// 	return result
+// }
 
 // ExtractTags Extract tags from Repos
 func (rs Repos) ExtractTags() []string {

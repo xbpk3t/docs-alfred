@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/hxhac/docs-alfred/pkg/gh"
 	"log/slog"
 	"time"
 
@@ -28,19 +29,19 @@ var syncCmd = &cobra.Command{
 			_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
 				data, _ = utils.Fetch(url)
 
-				// switch cfgFile {
-				// case ConfigGithub:
-				// 	token, err := wf.Keychain.Get(KeyGithubAPIToken)
-				// 	if err != nil {
-				// 		slog.Error("get github token error", slog.Any("Error", err))
-				// 		return nil, err
-				// 	}
-				// 	gh := gh.NewRepos()
-				// 	if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
-				// 		slog.Error("failed to update repo by token", slog.Any("Error", err))
-				// 		ErrorHandle(err)
-				// 	}
-				// }
+				switch cfgFile {
+				case ConfigGithub:
+					token, err := wf.Keychain.Get(KeyGithubAPIToken)
+					if err != nil {
+						slog.Error("get github token error", slog.Any("Error", err))
+						return nil, err
+					}
+					gh := gh.NewRepos()
+					if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
+						slog.Error("failed to update repo by token", slog.Any("Error", err))
+						ErrorHandle(err)
+					}
+				}
 				return data, nil
 			})
 			if err != nil {
