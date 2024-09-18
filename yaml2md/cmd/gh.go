@@ -251,9 +251,13 @@ func formatDetails(q gh.Qt) string {
 		for _, t := range q.S {
 			b.WriteString(fmt.Sprintf("- %s\n", t))
 		}
-		b.WriteString("---")
 		parts = append(parts, b.String())
 	}
+	// 在s和x之间插入分隔符
+	if len(q.S) != 0 && q.X != "" {
+		parts = append(parts, "---")
+	}
+
 	if q.X != "" {
 		parts = append(parts, q.X)
 	}
