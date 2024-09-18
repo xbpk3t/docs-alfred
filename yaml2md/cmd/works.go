@@ -144,8 +144,11 @@ func formatDetailsWithWs(q work.QsN) string {
 		for _, t := range q.S {
 			b.WriteString(fmt.Sprintf("- %s\n", t))
 		}
-		b.WriteString("---")
 		parts = append(parts, b.String())
+	}
+
+	if len(q.S) != 0 && q.X != "" {
+		parts = append(parts, "---")
 	}
 
 	if q.X != "" {
