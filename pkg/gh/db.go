@@ -110,28 +110,6 @@ func (rs *Repos) ListRepositories(localDB string) error {
 	return nil
 }
 
-// func (rs Repos) RemoveDuplicates() Repos {
-// 	uniqueValues := make(map[string]bool)
-// 	// result := make([]Repository, 0)
-//
-// 	for _, t := range rs {
-// 		if !uniqueValues[t.URL] {
-// 			uniqueValues[t.URL] = true
-// 			rs = append(rs, t)
-// 		}
-// 	}
-//
-// 	return rs
-// }
-
-// func addMarkdownListFormat(str []string) string {
-// 	var builder strings.Builder
-// 	for _, str := range str {
-// 		builder.WriteString(fmt.Sprintf("- %s\n", str))
-// 	}
-// 	return builder.String()
-// }
-
 func (rs Repos) UpdateRepositories(token, localDB string) (int64, error) {
 	// my rs
 	userRepos, err := NewGithubClient(token).ListUserRepositories()

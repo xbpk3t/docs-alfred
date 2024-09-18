@@ -1,13 +1,12 @@
 package cmd
 
 import (
+	"errors"
 	"github.com/hxhac/docs-alfred/pkg/gh"
+	"github.com/hxhac/docs-alfred/utils"
+	"github.com/spf13/cobra"
 	"log/slog"
 	"time"
-
-	"github.com/hxhac/docs-alfred/utils"
-
-	"github.com/spf13/cobra"
 )
 
 const SyncJob = "sync"
@@ -25,32 +24,34 @@ var syncCmd = &cobra.Command{
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
 		url := wf.Config.GetString("url") + cfgFile
-		if url != "" {
-			_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
-				data, _ = utils.Fetch(url)
 
-				switch cfgFile {
-				case ConfigGithub:
-					token, err := wf.Keychain.Get(KeyGithubAPIToken)
-					if err != nil {
-						slog.Error("get github token error", slog.Any("Error", err))
-						return nil, err
-					}
-					gh := gh.NewRepos()
-					if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
-						slog.Error("failed to update repo by token", slog.Any("Error", err))
-						ErrorHandle(err)
-					}
-				}
-				return data, nil
-			})
-			if err != nil {
-				ErrorHandle(err)
-			}
-			slog.Info("Sync Repos Successfully.")
-		} else {
+		if url == "" {
 			slog.Info("URL is Empty", slog.Any("URL", url))
+			ErrorHandle(errors.New("URL is Empty"))
 		}
+
+		_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
+			data, _ = utils.Fetch(url)
+
+			switch cfgFile {
+			case ConfigGithub:
+				token, err := wf.Keychain.Get(KeyGithubAPIToken)
+				if err != nil {
+					slog.Error("get github token error", slog.Any("Error", err))
+					return nil, err
+				}
+				gh := gh.NewRepos()
+				if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
+					slog.Error("failed to update repo by token", slog.Any("Error", err))
+					ErrorHandle(err)
+				}
+			}
+			return data, nil
+		})
+		if err != nil {
+			ErrorHandle(err)
+		}
+		slog.Info("Sync Repos Successfully.")
 	},
 }
 
