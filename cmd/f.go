@@ -75,10 +75,10 @@ const (
 	RepoSearch = "https://github.com/search?q=%s&type=repositories"
 	FaCheck    = "icons/check.svg"
 	FaDoc      = "icons/doc.svg"
-	FaGists    = "icons/gists.png"
-	FaRepo     = "icons/repo.png"
-	FaSearch   = "icons/search.svg"
-	FaStar     = "icons/star.svg"
+	// FaGists    = "icons/gists.png"
+	FaRepo   = "icons/repo.png"
+	FaSearch = "icons/search.svg"
+	FaStar   = "icons/star.svg"
 )
 
 // ghCmd represents the repo command
@@ -131,11 +131,11 @@ var ghCmd = &cobra.Command{
 			Valid(true).
 			Icon(&aw.Icon{Value: FaSearch}).
 			Title(fmt.Sprintf("Search Github For '%s'", strings.Join(args, " ")))
-		wf.NewItem("Search Gist").
-			Arg(fmt.Sprintf(GistSearch, strings.Join(args, "+"))).
-			Valid(true).
-			Icon(&aw.Icon{Value: FaGists}).
-			Title(fmt.Sprintf("Search Gist For '%s'", strings.Join(args, " ")))
+		// wf.NewItem("Search Gist").
+		// 	Arg(fmt.Sprintf(GistSearch, strings.Join(args, "+"))).
+		// 	Valid(true).
+		// 	Icon(&aw.Icon{Value: FaGists}).
+		// 	Title(fmt.Sprintf("Search Gist For '%s'", strings.Join(args, " ")))
 		wf.SendFeedback()
 	},
 }
@@ -264,50 +264,6 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 		// item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
 		item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
 		item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
-
-		for _, sre := range repo.Sub {
-			repoURL := sre.URL
-			subName := sre.FullName()
-			des := renderReposDes(sre)
-			// remark := renderReposRemark(sre)
-			iconPath := renderIcon(sre)
-
-			item = wf.NewItem(subName).Title(subName).
-				Arg(repoURL).
-				Subtitle(fmt.Sprintf("【sub: %s】%s", name, des.String())).
-				Copytext(repoURL).
-				Valid(true).
-				Autocomplete(subName).Icon(&aw.Icon{Value: iconPath})
-
-			docsURL := fmt.Sprintf("%s/%s#%s", wf.Config.GetString("docs"), strings.ToLower(sre.Tag), strings.ToLower(sre.Type))
-
-			item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
-			// item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
-			item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
-			item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", sre.Doc)).Arg(sre.Doc)
-		}
-
-		for _, dre := range repo.Dep {
-			repoURL := dre.URL
-			depName := dre.FullName()
-			des := renderReposDes(dre)
-			// remark := renderReposRemark(sre)
-			iconPath := renderIcon(dre)
-
-			item = wf.NewItem(depName).Title(depName).
-				Arg(repoURL).
-				Subtitle(fmt.Sprintf("【dep: %s】%s", name, des.String())).
-				Copytext(repoURL).
-				Valid(true).
-				Autocomplete(depName).Icon(&aw.Icon{Value: iconPath})
-
-			docsURL := fmt.Sprintf("%s/%s#%s", wf.Config.GetString("docs"), strings.ToLower(dre.Tag), strings.ToLower(dre.Type))
-
-			item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
-			// item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
-			item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
-			item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", dre.Doc)).Arg(dre.Doc)
-		}
 	}
 	return item
 }
@@ -373,17 +329,6 @@ func renderReposDes(repo gh.Repository) (des strings.Builder) {
 // }
 
 func renderIcon(repo gh.Repository) (iconPath string) {
-	// if repo.Qs == nil && repo.Cmd == nil {
-	// 	if repo.IsStar {
-	// 		iconPath = FaCheck
-	// 	} else {
-	// 		iconPath = FaRepo
-	// 	}
-	// }
-	// if repo.Qs != nil || repo.Cmd != nil {
-	// 	iconPath = FaStar
-	// }
-
 	switch {
 	case repo.Qs == nil && repo.Cmd == nil && repo.IsStar:
 		iconPath = FaCheck
@@ -396,4 +341,19 @@ func renderIcon(repo gh.Repository) (iconPath string) {
 	}
 
 	return
+
+	// switch {
+	// // case repo.Qs != nil && repo.IsStar:
+	// // 	iconPath = FaStar
+	// case repo.Qs != nil:
+	// 	iconPath = FaStar
+	// case !repo.IsStar:
+	// 	iconPath = FaRepo
+	// case repo.Doc != "":
+	// 	iconPath = FaDoc
+	// default:
+	// 	iconPath = FaCheck
+	// }
+	//
+	// return
 }
