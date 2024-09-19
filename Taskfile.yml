@@ -12,8 +12,8 @@ tasks:
     desc: 【yaml2md gh】生成gh.yml对应的markdown
     dir: yaml2md
     cmds:
-#      - echo "Running command {{.CMD}}"
-#      - sh -c "go run main.go {{.CMD}} --config {{.CMD}}.yml --target {{.CMD}}.md"
+      #      - echo "Running command {{.CMD}}"
+      #      - sh -c "go run main.go {{.CMD}} --config {{.CMD}}.yml --target {{.CMD}}.md"
       - sh -c "go run main.go gh --config {{.CMD}}.yml --target {{.CMD}}.md"
   ws:
     desc: 【yaml2md ws】生成ws.yml对应的markdown
@@ -31,3 +31,16 @@ tasks:
   pre-commit:
     cmds:
       - pre-commit run --all-files
+
+  lint:
+    cmds:
+      - golangci-lint run --fix && gofumpt -l -w .
+      - go mod tidy -v
+      - fieldalignment -fix ./...
+      - go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
+      - task: pre-commit
+
+#      - go vet -vettool=$(which shadow) -strict
+#      - nilaway ./...
+#      - # go build -race cmd
+#      - # hadolint --config </path/to/config.yaml> Dockerfile

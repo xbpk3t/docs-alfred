@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"errors"
+	"log/slog"
+	"time"
+
 	"github.com/hxhac/docs-alfred/pkg/gh"
 	"github.com/hxhac/docs-alfred/utils"
 	"github.com/spf13/cobra"
-	"log/slog"
-	"time"
 )
 
 const SyncJob = "sync"

@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"github.com/olekukonko/tablewriter"
 	"io"
 	"log/slog"
 	"net/http"
@@ -9,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/olekukonko/tablewriter"
 )
 
 func Fetch(url string) ([]byte, error) {
@@ -62,9 +63,6 @@ func IsURL(str string) bool {
 
 // RenderMarkdownTable 封装了创建和渲染Markdown表格的逻辑
 func RenderMarkdownTable(res *strings.Builder, data [][]string) {
-	if data == nil || len(data) == 0 {
-		return
-	}
 	table := tablewriter.NewWriter(res)
 	table.SetAutoWrapText(false)
 	table.SetHeader([]string{"Repo", "Des"})

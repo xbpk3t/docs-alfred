@@ -36,7 +36,6 @@ type Repository struct {
 
 	Tag string `yaml:"tag,omitempty"` // 原本的文件名，比如说 db.yml, db.yml, ...
 	Qs  Qs     `yaml:"qs,omitempty"`
-	Cmd Cmd    `yaml:"cmd,omitempty"`
 
 	Qq  `yaml:"qq,omitempty"`
 	Sub Repos `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo

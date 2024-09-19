@@ -330,9 +330,9 @@ func renderReposDes(repo gh.Repository) (des strings.Builder) {
 
 func renderIcon(repo gh.Repository) (iconPath string) {
 	switch {
-	case repo.Qs == nil && repo.Cmd == nil && repo.IsStar:
+	case repo.Qs == nil && repo.IsStar:
 		iconPath = FaCheck
-	case repo.Qs == nil && repo.Cmd == nil && !repo.IsStar:
+	case repo.Qs == nil && !repo.IsStar:
 		iconPath = FaRepo
 	case repo.Doc != "":
 		iconPath = FaDoc
