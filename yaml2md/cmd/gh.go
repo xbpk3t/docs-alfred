@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/hxhac/docs-alfred/utils"
 	"log/slog"
 	"os"
 	"strings"
+
+	"github.com/hxhac/docs-alfred/utils"
 
 	"github.com/samber/lo"
 
@@ -222,11 +223,6 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 
 // RenderRepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
 func RenderRepositoriesAsMarkdownTable(repos []gh.Repository, res *strings.Builder) {
-	// 检查repos是否为nil或空，如果是，则不渲染表格
-	if repos == nil || len(repos) == 0 {
-		return
-	}
-
 	// 准备表格数据
 	data := lo.Map(repos, func(item gh.Repository, index int) []string {
 		repoName, _ := strings.CutPrefix(item.URL, gh.GhURL)
