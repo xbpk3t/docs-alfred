@@ -134,17 +134,17 @@ var ghCmd = &cobra.Command{
 					if repo.Qs != nil {
 						res.WriteString(addMarkdownQsFormat(repo.Qs))
 					}
-					if repo.Qq != nil {
-						for _, s := range repo.Qq {
-							if s.Qs != nil {
-								res.WriteString(fmt.Sprintf("\n\n#### %s \n\n", s.Topic))
-
-								RenderRepositoriesAsMarkdownTable(s.Sub, &res)
-
-								res.WriteString(addMarkdownQsFormat(s.Qs))
-							}
-						}
-					}
+					// if repo.Qq != nil {
+					// 	for _, s := range repo.Qq {
+					// 		if s.Qs != nil {
+					// 			res.WriteString(fmt.Sprintf("\n\n#### %s \n\n", s.Topic))
+					//
+					// 			RenderRepositoriesAsMarkdownTable(s.Sub, &res)
+					//
+					// 			res.WriteString(addMarkdownQsFormat(s.Qs))
+					// 		}
+					// 	}
+					// }
 				}
 			}
 		}

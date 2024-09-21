@@ -37,11 +37,12 @@ type Repository struct {
 	Tag string `yaml:"tag,omitempty"` // 原本的文件名，比如说 db.yml, db.yml, ...
 	Qs  Qs     `yaml:"qs,omitempty"`
 
-	Qq  `yaml:"qq,omitempty"`
 	Sub Repos `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
 	Dep Repos `yaml:"dep,omitempty"` // 用来标识可以被改repo替代的一些repo
 
 	IsStar bool // 用来标识该repo是否在gh.yml中
+
+	// Qq  `yaml:"qq,omitempty"`
 
 	// Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为[alias](URL)，而不是[User/Name](URL)
 
@@ -52,13 +53,13 @@ type Repository struct {
 	// } `yaml:"use,omitempty"`
 }
 
-type Qq []struct {
-	Topic string       `yaml:"topic"`
-	URL   string       `yaml:"url,omitempty"`
-	Des   string       `yaml:"des,omitempty"`
-	Qs    Qs           `yaml:"qs,omitempty"`
-	Sub   []Repository `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
-}
+// type Qq []struct {
+// 	Topic string       `yaml:"topic"`
+// 	URL   string       `yaml:"url,omitempty"`
+// 	Des   string       `yaml:"des,omitempty"`
+// 	Qs    Qs           `yaml:"qs,omitempty"`
+// 	Sub   []Repository `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
+// }
 
 type Qs []Qt
 
@@ -70,11 +71,11 @@ type Qt struct {
 	S []string `yaml:"s,omitempty"` // 该问题的一些发散问题
 }
 
-type Cmd []struct {
-	C string `yaml:"c"`
-	X string `yaml:"x,omitempty"` // 该命令的描述
-	K bool   `yaml:"k,omitempty"` // 该命令是否重要 default: false
-}
+// type Cmd []struct {
+// 	C string `yaml:"c"`
+// 	X string `yaml:"x,omitempty"` // 该命令的描述
+// 	K bool   `yaml:"k,omitempty"` // 该命令是否重要 default: false
+// }
 
 type Repos []Repository
 
