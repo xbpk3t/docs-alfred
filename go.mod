@@ -1,6 +1,6 @@
 module github.com/XBPk3T/docs-alfred
 
-go 1.23
+go 1.23.1
 
 require (
 	github.com/avast/retry-go v3.0.0+incompatible
