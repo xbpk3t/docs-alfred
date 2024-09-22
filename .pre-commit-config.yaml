@@ -21,8 +21,8 @@ repos:
       - id: check-symlinks
       - id: mixed-line-ending
       - id: check-case-conflict
-#      - id: check-executables-have-shebangs
-#      - id: check-shebang-scripts-are-executable
+  #      - id: check-executables-have-shebangs
+  #      - id: check-shebang-scripts-are-executable
 
   - repo: https://github.com/pre-commit-ci/pre-commit-ci-config
     rev: v1.6.1
@@ -61,20 +61,30 @@ repos:
         language: python
 
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.4
+    rev: v8.19.2
     hooks:
       - id: gitleaks
         name: Scan Secrets
         entry: gitleaks detect --source . -v
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.92.0
+    rev: v1.96.1
     hooks:
       - id: terraform_fmt
         args:
           - --args=-diff
       - id: terraform_docs
       - id: terraform_tflint
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint
+        args:
+          - --config=.hadolint.yaml
+        files: 'Dockerfile|Dockerfile.release'
+
+
 
   #  - repo: local
   #    hooks:
@@ -86,46 +96,69 @@ repos:
   #        files: ^components/dashboard/
 
   - repo: https://github.com/golangci/golangci-lint
-    rev: v1.59.1
+    rev: v1.61.0
     hooks:
       - id: golangci-lint-config-verify
-#      - id: golangci-lint
-#        entry: golangci-lint run --fix
-#        types: [go]
-#        language: golang
+      - id: golangci-lint
+        entry: golangci-lint run --fix
+        types: [go]
+        language: golang
 #      - id: golangci-lint-full
 
 
-#  - repo: https://github.com/lietu/go-pre-commit
-#    rev: v0.1.0
-#    hooks:
-#      - id: errcheck
-#      - id: go-fmt-goimports
-#      - id: go-test
-#      - id: go-vet
-#        entry: go vet -vettool=$(which shadow) -strict
-#      - id: gofumpt
-#        entry: gofumpt -l -w .
-#      - id: golangci-lint
-#      - id: golint
-#      - id: staticcheck
-#      - id: go-mod-tidy
+  #  - repo: https://github.com/lietu/go-pre-commit
+  #    rev: v0.1.0
+  #    hooks:
+  #      - id: errcheck
+  #      - id: go-fmt-goimports
+  #      - id: go-test
+  #      - id: go-vet
+  #        entry: go vet -vettool=$(which shadow) -strict
+  #      - id: gofumpt
+  #        entry: gofumpt -l -w .
+  #      - id: golangci-lint
+  #      - id: golint
+  #      - id: staticcheck
+  #      - id: go-mod-tidy
 
 
-#  - repo: local
-#    hooks:
-#      - id: fieldalignment
-#        name: fieldalignment
-#        types: [go]
-#        entry: fieldalignment -fix ./...
+  - repo: local
+    hooks:
+      - name: gofumpt
+        id: gofumpt
+        entry: gofumpt -l -w .
+        language: golang
+        types: [go]
+
+#      - name: go-mod-tidy
+#        id: go-mod-tidy
+#        entry: go mod tidy -v
 #        language: golang
-#      - id: betteralign
+
+#      - name: betteralign
+#        id: betteralign # go install github.com/dkorunic/betteralign/cmd/betteralign@latest
 #        entry: betteralign -apply ./...
+#        language: system
+#        types: [go]
+#        pass_filenames: false
+
 #      - id: go-test
 #        name: go-test
 #        entry: go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
 #        language: golang
+
+#      - id: go-vet
+#        name: go-vet
+#        entry: go vet -vettool=$(which shadow) -strict
+#        language: golang
+
 #      - id: nilaway
 #        name: nilaway
 #        entry: nilaway ./...
+#        language: golang
+#        pass_filenames: false
+
+#      - id: race-test
+#        name: race-test
+#        entry: go build -race cmd
 #        language: golang

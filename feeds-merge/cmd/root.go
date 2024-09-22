@@ -36,7 +36,7 @@ var rootCmd = &cobra.Command{
 				})
 
 				// 移除一些feed为空字符串的item
-				urls = lo.WithoutEmpty(urls)
+				urls = lo.Compact(urls)
 
 				allFeeds := pkg.Conf.FetchURLs(urls)
 				if combinedFeed, err := pkg.Conf.MergeAllFeeds(feedsTitle, allFeeds); err != nil {
