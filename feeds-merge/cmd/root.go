@@ -5,7 +5,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/hxhac/docs-alfred/feeds-merge/pkg"
+	"github.com/XBPk3T/docs-alfred/feeds-merge/pkg"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )

@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/hxhac/docs-alfred/pkg/gh"
+	"github.com/XBPk3T/docs-alfred/pkg/gh"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

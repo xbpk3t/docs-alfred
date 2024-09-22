@@ -1,5 +1,5 @@
 ENABLED_AUTO_UPDATE ?= "false"
-LDFLAGS ?= -X github.com/hxhac/docs-alfred/cmd.EnabledAutoUpdate=$(ENABLED_AUTO_UPDATE)
+LDFLAGS ?= -X github.com/XBPk3T/docs-alfred/cmd.EnabledAutoUpdate=$(ENABLED_AUTO_UPDATE)
 
 HAVE_GO_BINDATA := $(shell command -v go-bindata 2> /dev/null)
 generate: ## go generate

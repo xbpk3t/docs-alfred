@@ -1,4 +1,4 @@
-module github.com/hxhac/docs-alfred
+module github.com/XBPk3T/docs-alfred
 
 go 1.23
 

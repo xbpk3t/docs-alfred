@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/hxhac/docs-alfred/pkg/goods"
+	"github.com/XBPk3T/docs-alfred/pkg/goods"
 	"github.com/spf13/cobra"
 )
 
