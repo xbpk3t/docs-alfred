@@ -1,6 +1,6 @@
 #!/bin/bash
 
-org="hxhac"
+org="XBPk3T"
 repo="docs-alfred"
 
 # Update ak
@@ -9,11 +9,11 @@ repo="docs-alfred"
 
 
 # Modify various fixed strings in the template
-grep -rl "github.com.hxhac.docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#github.com.hxhac.docs-alfred#github.com/$org/$repo#g"
+grep -rl "github.com.XBPk3T.docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#github.com.XBPk3T.docs-alfred#github.com/$org/$repo#g"
 
 grep -rl "docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#docs-alfred#$repo#g"
 
-grep -rl "com.hxhac.docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#com.hxhac.docs-alfred#com.$org.$repo#g"
-grep -rl "hxhac/docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#hxhac/docs-alfred#$org/$repo#g"
+grep -rl "com.XBPk3T.docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#com.XBPk3T.docs-alfred#com.$org.$repo#g"
+grep -rl "XBPk3T/docs-alfred" --exclude-dir=.workflow "$PWD" | xargs sed -i "" "s#XBPk3T/docs-alfred#$org/$repo#g"
 
 echo "success !!!"

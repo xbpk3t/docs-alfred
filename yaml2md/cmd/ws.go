@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hxhac/docs-alfred/pkg/ws"
+	"github.com/XBPk3T/docs-alfred/pkg/ws"
 
 	"github.com/spf13/cobra"
 )

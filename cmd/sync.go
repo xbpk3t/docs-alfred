@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/hxhac/docs-alfred/pkg/gh"
-	"github.com/hxhac/docs-alfred/utils"
+	"github.com/XBPk3T/docs-alfred/pkg/gh"
+	"github.com/XBPk3T/docs-alfred/utils"
 	"github.com/spf13/cobra"
 )
 

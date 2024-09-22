@@ -9,12 +9,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/hxhac/docs-alfred/utils"
+	"github.com/XBPk3T/docs-alfred/utils"
 
-	"github.com/hxhac/docs-alfred/pkg/ws"
+	"github.com/XBPk3T/docs-alfred/pkg/ws"
 
+	"github.com/XBPk3T/docs-alfred/pkg/gh"
 	aw "github.com/deanishe/awgo"
-	"github.com/hxhac/docs-alfred/pkg/gh"
 
 	"github.com/spf13/cobra"
 )

@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	repo = "hxhac/docs-alfred"
+	repo = "XBPk3T/docs-alfred"
 	wf   *aw.Workflow
 	av   = aw.NewArgVars()
 )
