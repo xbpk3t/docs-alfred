@@ -79,6 +79,12 @@ const (
 	FaRepo   = "icons/repo.png"
 	FaSearch = "icons/search.svg"
 	FaStar   = "icons/star.svg"
+	FaOne    = "icons/one.png"
+	FaTwo    = "icons/two.png"
+	FaThree  = "icons/three.png"
+	FaA      = "icons/a.svg"
+	FaAB     = "icons/ab.svg"
+	FaABC    = "icons/abc.svg"
 )
 
 // ghCmd represents the repo command
@@ -329,17 +335,41 @@ func renderReposDes(repo gh.Repository) (des strings.Builder) {
 // }
 
 func renderIcon(repo gh.Repository) (iconPath string) {
-	switch {
-	case repo.Qs == nil && repo.IsStar:
-		iconPath = FaCheck
-	case repo.Qs == nil && !repo.IsStar:
-		iconPath = FaRepo
-	case repo.Doc != "":
-		iconPath = FaDoc
-	default:
-		iconPath = FaStar
-	}
+	// switch {
+	// case repo.Qs == nil && repo.IsStar:
+	// 	iconPath = FaCheck
+	// case repo.Qs == nil && !repo.IsStar:
+	// 	iconPath = FaRepo
+	// case repo.Doc != "":
+	// 	iconPath = FaDoc
+	// default:
+	// 	iconPath = FaStar
+	// }
+	//
+	// return
 
+	// switch {
+	// case repo.Qs != nil && repo.Doc != "" && repo.IsStar:
+	// 	iconPath = FaABC
+	// case repo.Qs != nil && repo.IsStar:
+	// 	iconPath = FaAB
+	// case repo.IsStar:
+	// 	iconPath = FaA
+	// default:
+	// 	iconPath = FaRepo
+	// }
+	// return
+
+	switch {
+	case repo.Qs != nil && repo.Doc != "" && repo.IsStar:
+		iconPath = FaAB
+	case repo.Qs != nil && repo.IsStar:
+		iconPath = FaA
+	case repo.IsStar:
+		iconPath = FaCheck
+	default:
+		iconPath = FaRepo
+	}
 	return
 
 	// switch {
