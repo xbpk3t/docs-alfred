@@ -91,8 +91,7 @@ const (
 // Enter            直接打开URL
 // CMD + Enter      Markdown View
 // Option + Enter   Copy URL
-// Ctrl + Enter     打开文档
-// Shift + Enter    打开在docs项目对应heading的URL
+// Shift + Enter    跳转到该repo的doc
 var ghCmd = &cobra.Command{
 	Use:   "gh",
 	Short: "Searching from starred repositories and my repositories",
@@ -264,12 +263,19 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 			Valid(true).
 			Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
 
-		docsURL := fmt.Sprintf("%s/%s#%s", wf.Config.GetString("docs"), strings.ToLower(repo.Tag), strings.ToLower(repo.Type))
+		docsURL := strings.Builder{}
+		docsURL.WriteString(fmt.Sprintf("%s/%s#", wf.Config.GetString("docs"), strings.ToLower(repo.Tag)))
+		if repo.Qs == nil {
+			docsURL.WriteString(strings.ToLower(repo.Type))
+		} else {
+			docsURL.WriteString(strings.ToLower(utils.JoinSlashParts(name)))
+		}
+		du := docsURL.String()
 
-		item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", docsURL)).Arg(docsURL)
+		item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", du)).Arg(du)
 		// item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
 		item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
-		item.Ctrl().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
+		item.Shift().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
 	}
 	return item
 }

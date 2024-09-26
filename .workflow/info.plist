@@ -100,7 +100,7 @@
 				<key>destinationuid</key>
 				<string>B53BF6E6-F247-47F7-976E-2AB8E78A683E</string>
 				<key>modifiers</key>
-				<integer>262144</integer>
+				<integer>131072</integer>
 				<key>modifiersubtext</key>
 				<string>打开文档</string>
 				<key>vitoclose</key>
