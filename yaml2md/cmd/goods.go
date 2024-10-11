@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/XBPk3T/docs-alfred/pkg/goods"
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/goods"
 )
 
 // goodsCmd represents the goods command

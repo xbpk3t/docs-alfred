@@ -1,6 +1,6 @@
 package main
 
-import "github.com/XBPk3T/docs-alfred/gh-merge/cmd"
+import "github.com/xbpk3t/docs-alfred/gh-merge/cmd"
 
 func main() {
 	cmd.Execute()

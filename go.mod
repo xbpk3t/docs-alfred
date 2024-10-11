@@ -1,4 +1,4 @@
-module github.com/XBPk3T/docs-alfred
+module github.com/xbpk3t/docs-alfred
 
 go 1.23.1
 
