@@ -6,11 +6,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/XBPk3T/docs-alfred/utils"
+	"github.com/xbpk3t/docs-alfred/utils"
 
 	"github.com/samber/lo"
 
-	"github.com/XBPk3T/docs-alfred/pkg/gh"
+	"github.com/xbpk3t/docs-alfred/pkg/gh"
 
 	"github.com/spf13/cobra"
 )

@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/XBPk3T/docs-alfred/pkg/work"
+	"github.com/xbpk3t/docs-alfred/pkg/work"
 
 	"github.com/spf13/cobra"
 )

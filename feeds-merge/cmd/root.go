@@ -5,9 +5,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/XBPk3T/docs-alfred/feeds-merge/pkg"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/feeds-merge/pkg"
 )
 
 var wg sync.WaitGroup

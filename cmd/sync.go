@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/XBPk3T/docs-alfred/pkg/gh"
-	"github.com/XBPk3T/docs-alfred/utils"
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/gh"
+	"github.com/xbpk3t/docs-alfred/utils"
 )
 
 const SyncJob = "sync"
