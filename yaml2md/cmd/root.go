@@ -28,8 +28,7 @@ func Execute() {
 }
 
 var (
-	cfgFile    string
-	targetFile string
+	cfgFile string
 )
 
 func init() {
@@ -46,7 +45,6 @@ func init() {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "src/data/qs.yml", "config file (default is src/data/qs.yml)")
-	rootCmd.PersistentFlags().StringVar(&targetFile, "target", "qs.md", "target file (default is qs.md)")
 }
 
 func initConfig() {
