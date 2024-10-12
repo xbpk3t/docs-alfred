@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"log/slog"
 	"os"
 	"slices"
@@ -84,6 +85,7 @@ var goodsCmd = &cobra.Command{
 			}
 		}
 
+		targetFile := utils.ChangeFileExtFromYamlToMd(cfgFile)
 		err = os.WriteFile(targetFile, []byte(res.String()), os.ModePerm)
 		if err != nil {
 			return
