@@ -31,7 +31,8 @@ var ghCmd = &cobra.Command{
 		var res strings.Builder
 
 		for _, d := range df {
-			res = RenderTypeRepos(d)
+			repos := RenderTypeRepos(d)
+			res.WriteString(repos.String())
 		}
 
 		targetFile := utils.ChangeFileExtFromYamlToMd(cfgFile)
