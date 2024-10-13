@@ -27,9 +27,7 @@ func Execute() {
 	}
 }
 
-var (
-	cfgFile string
-)
+var cfgFile string
 
 func init() {
 	cobra.OnInitialize(initConfig)

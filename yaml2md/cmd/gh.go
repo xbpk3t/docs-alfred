@@ -15,78 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// const ghTpl = `
-// {{- each .}}
-// ## {{.Type}}
-// {{- each .Qs}}
-// * {{.}}
-// {{- end}}
-// {{- each .Repos}}
-// ### {{.URL}}
-// {{- each .Qs}}
-// * {{.}}
-// {{- end}}
-// {{- end}}
-// `
-
-// const ghTpl = `
-// {{- range . -}}
-// ## {{.Type}}
-//
-// {{- if .Qs -}}
-// - {{ range .Qs }}{{ . }}
-// {{- end -}}
-// {{- end }}
-//
-// {{- range .Repos -}}
-// ### {{.URL}}
-//
-// {{- range .Qs -}}
-// - {{ . }}
-// {{- end -}}
-// {{- end -}}
-// {{- end -}}
-// `
-
-// const ghTpl = `
-// {{- range . -}}
-// {{"\n"}}
-// ## {{.Type}}
-// {{"\n"}}
-//
-// {{- if .Qs -}}
-// {{- range .Qs}}
-// - {{.}}
-// {{- end}}
-// {{- end }}
-//
-// {{- range .Repos -}}
-// {{"\n"}}
-// ### {{.URL}}
-// {{"\n"}}
-//
-// {{- range .Pix}}
-// {{.}}
-// {{- end}}
-//
-// {{- range .Qs}}
-// - {{.}}
-// {{- end}}
-//
-// {{- if .Qq -}}
-// {{- range .Qq -}}
-// {{"\n"}}
-// #### {{.Topic}}
-// {{- range .Qs}}
-// - {{.}}
-// {{- end}}
-// {{- end}}
-// {{- end }}
-//
-// {{- end -}}
-// {{- end -}}
-// `
-
 // ghCmd represents the gh command
 var ghCmd = &cobra.Command{
 	Use:   "gh",
@@ -99,54 +27,11 @@ var ghCmd = &cobra.Command{
 		}
 
 		df := gh.NewConfigRepos(f)
-		// dfo := gh.NewConfigRepos(f)
-		// df := dfo.FilterReposMD()
-
-		// dfo.IsTypeQsEmpty()
-		// 清理掉 Qs == nil 的 Type
-		// dfr := FilterRepos(df)
 
 		var res strings.Builder
 
 		for _, d := range df {
-			if d.Qs != nil || d.Repos != nil {
-				res.WriteString(fmt.Sprintf("## %s \n", d.Type))
-			}
-
-			// repo下的所有repo列表
-			RenderRepositoriesAsMarkdownTable(d.Repos, &res)
-
-			// type对应的qs
-			if d.Qs != nil {
-				res.WriteString(addMarkdownQsFormat(d.Qs))
-			}
-			for _, repo := range d.Repos {
-				if repo.Qs != nil {
-					repoName, f := strings.CutPrefix(repo.URL, gh.GhURL)
-					if !f {
-						repoName = ""
-					}
-					res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
-
-					// 渲染该repo的sub repo
-					RenderRepositoriesAsMarkdownTable(repo.Sub, &res)
-
-					if repo.Qs != nil {
-						res.WriteString(addMarkdownQsFormat(repo.Qs))
-					}
-					// if repo.Qq != nil {
-					// 	for _, s := range repo.Qq {
-					// 		if s.Qs != nil {
-					// 			res.WriteString(fmt.Sprintf("\n\n#### %s \n\n", s.Topic))
-					//
-					// 			RenderRepositoriesAsMarkdownTable(s.Sub, &res)
-					//
-					// 			res.WriteString(addMarkdownQsFormat(s.Qs))
-					// 		}
-					// 	}
-					// }
-				}
-			}
+			res = RenderTypeRepos(d)
 		}
 
 		targetFile := utils.ChangeFileExtFromYamlToMd(cfgFile)
@@ -159,53 +44,8 @@ var ghCmd = &cobra.Command{
 	},
 }
 
-// func addMarkdownQsFormat(qs gh.Qs) string {
-// 	var builder strings.Builder
-// 	// builder.WriteString("<dl>")
-// 	for _, q := range qs {
-// 		// if q.X == "" {
-// 		// 	if q.U != "" {
-// 		// 		builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-// 		// 	} else {
-// 		// 		builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-// 		// 	}
-// 		// } else {
-// 		// 	if q.U != "" {
-// 		// 		builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
-// 		// 	} else {
-// 		// 		builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-// 		// 	}
-// 		// }
-//
-// 		switch {
-// 		case q.X == "" && q.U == "" && q.P == "":
-// 			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-// 		case q.X == "" && q.U != "" && q.P == "":
-// 			builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-// 		case q.X == "" && q.U == "" && q.P != "":
-// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, "image", q.P))
-//
-// 		case q.X != "" && q.U == "" && q.P == "":
-// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-// 		case q.X != "" && q.U != "" && q.P == "":
-// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
-// 		case q.X != "" && q.U == "" && q.P != "":
-// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, "image", q.P, q.X))
-//
-//
-// 		case q.X == "" && q.U != "" && q.P != "":
-// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n</details>\n\n", q.Q, q.U, "image", q.P))
-// 		case q.X != "" && q.U != "" && q.P != "":
-// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n![%s](%s)\n\n%s\n\n</details>\n\n", q.Q, q.U, "image", q.P, q.X))
-//
-// 		default:
-// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
-// 		}
-// 	}
-//
-// 	return builder.String()
-// }
-
+// addMarkdownQsFormat 渲染qs
+// 分别渲染 summary 和 details，来替换之前 switch...case 写法
 func addMarkdownQsFormat(qs gh.Qs) string {
 	var builder strings.Builder
 
@@ -292,6 +132,47 @@ func FilterRepos(configRepos gh.ConfigRepos) (filteredRepos gh.ConfigRepos) {
 		}
 	}
 	return filteredRepos
+}
+
+// RenderTypeRepos 渲染整个type
+func RenderTypeRepos(d gh.ConfigRepo) (res strings.Builder) {
+	if d.Qs != nil || d.Repos != nil {
+		res.WriteString(fmt.Sprintf("## %s \n", d.Type))
+	}
+
+	// repo下的所有repo列表
+	RenderRepositoriesAsMarkdownTable(d.Repos, &res)
+
+	// type对应的qs
+	// TODO 之后要把 type对应的qs 删掉
+	if d.Qs != nil {
+		res.WriteString(addMarkdownQsFormat(d.Qs))
+	}
+	repos := RenderRepos(d.Repos)
+	res.WriteString(repos.String())
+
+	return
+}
+
+func RenderRepos(repos gh.Repos) (res strings.Builder) {
+	for _, repo := range repos {
+		if repo.Qs != nil {
+			repoName, f := strings.CutPrefix(repo.URL, gh.GhURL)
+			if !f {
+				repoName = ""
+			}
+			res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
+
+			// 渲染该repo的sub repo
+			RenderRepositoriesAsMarkdownTable(repo.Sub, &res)
+
+			if repo.Qs != nil {
+				res.WriteString(addMarkdownQsFormat(repo.Qs))
+			}
+		}
+	}
+
+	return
 }
 
 func init() {
