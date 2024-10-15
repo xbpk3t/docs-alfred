@@ -38,7 +38,7 @@ type Repository struct {
 	Qs  Qs     `yaml:"qs,omitempty"`
 
 	Sub Repos `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
-	Dep Repos `yaml:"dep,omitempty"` // 用来标识可以被改repo替代的一些repo
+	Rep Repos `yaml:"rep,omitempty"` // 用来标识可以被改repo替代的一些repo
 
 	IsStar bool // 用来标识该repo是否在gh.yml中
 
@@ -169,8 +169,8 @@ func (cr ConfigRepos) ToRepos() Repos {
 // 		// 递归处理 Sub 字段
 // 		rec(repo.Sub, repo.Type, allRepos)
 //
-// 		// 递归处理 Dep 字段
-// 		rec(repo.Dep, repo.Type, allRepos)
+// 		// 递归处理 Rep 字段
+// 		rec(repo.Rep, repo.Type, allRepos)
 //
 // 		allRepos = append(allRepos, repos...)
 // 	}
@@ -193,7 +193,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 // 				// 递归处理子仓库
 // 				repos = append(repos, processSubRepos(repo.Sub, configType)...)
 // 				// 递归处理依赖仓库
-// 				repos = append(repos, processDepRepos(repo.Dep, configType)...)
+// 				repos = append(repos, processDepRepos(repo.Rep, configType)...)
 // 			} else {
 // 				log.Printf("URL Split Error: unexpected format: %s", repo.URL)
 // 			}
@@ -249,7 +249,7 @@ func processRepo(repo Repository, configType string) Repos {
 	for _, subRepo := range repo.Sub {
 		repos = append(repos, processRepo(subRepo, fmt.Sprintf("%s [SUB: %s]", configType, repo.FullName()))...)
 	}
-	for _, depRepo := range repo.Dep {
+	for _, depRepo := range repo.Rep {
 		repos = append(repos, processRepo(depRepo, fmt.Sprintf("%s [DEP: %s]", configType, repo.FullName()))...)
 	}
 	return repos
@@ -268,8 +268,8 @@ func processRepo(repo Repository, configType string) Repos {
 // 		}
 // 	}
 // 	// 递归处理依赖仓库
-// 	if len(repo.Dep) > 0 {
-// 		for _, depRepo := range repo.Dep {
+// 	if len(repo.Rep) > 0 {
+// 		for _, depRepo := range repo.Rep {
 // 			repos = append(repos, depRepo.ToRepos()...)
 // 		}
 // 	}
@@ -288,7 +288,7 @@ func processRepo(repo Repository, configType string) Repos {
 // 		}
 //
 // 		// 递归处理依赖仓库
-// 		for _, depRepo := range repo.Dep {
+// 		for _, depRepo := range repo.Rep {
 // 			result = append(result, depRepo.ToRepos()...)
 // 		}
 // 	}
