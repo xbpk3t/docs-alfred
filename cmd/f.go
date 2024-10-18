@@ -71,20 +71,13 @@ func init() {
 }
 
 const (
-	GistSearch = "https://gist.github.com/search?q=%s"
 	RepoSearch = "https://github.com/search?q=%s&type=repositories"
-	FaCheck    = "icons/check.svg"
-	FaDoc      = "icons/doc.svg"
-	// FaGists    = "icons/gists.png"
-	FaRepo   = "icons/repo.png"
-	FaSearch = "icons/search.svg"
-	FaStar   = "icons/star.svg"
-	FaOne    = "icons/one.png"
-	FaTwo    = "icons/two.png"
-	FaThree  = "icons/three.png"
-	FaA      = "icons/a.svg"
-	FaAB     = "icons/ab.svg"
-	FaABC    = "icons/abc.svg"
+	FaStar     = "icons/check.svg"
+	FaRepo     = "icons/repo.png"
+	FaSearch   = "icons/search.svg"
+	FaQs       = "icons/a.svg"
+	FaDoc      = "icons/b.svg"
+	FaQsAndDoc = "icons/ab.svg"
 )
 
 // ghCmd represents the repo command
@@ -343,7 +336,7 @@ func renderReposDes(repo gh.Repository) (des strings.Builder) {
 func renderIcon(repo gh.Repository) (iconPath string) {
 	// switch {
 	// case repo.Qs == nil && repo.IsStar:
-	// 	iconPath = FaCheck
+	// 	iconPath = FaStar
 	// case repo.Qs == nil && !repo.IsStar:
 	// 	iconPath = FaRepo
 	// case repo.Doc != "":
@@ -358,21 +351,23 @@ func renderIcon(repo gh.Repository) (iconPath string) {
 	// case repo.Qs != nil && repo.Doc != "" && repo.IsStar:
 	// 	iconPath = FaABC
 	// case repo.Qs != nil && repo.IsStar:
-	// 	iconPath = FaAB
+	// 	iconPath = FaQsAndDoc
 	// case repo.IsStar:
-	// 	iconPath = FaA
+	// 	iconPath = FaQs
 	// default:
 	// 	iconPath = FaRepo
 	// }
 	// return
 
 	switch {
-	case repo.Qs != nil && repo.Doc != "" && repo.IsStar:
-		iconPath = FaAB
-	case repo.Qs != nil && repo.IsStar:
-		iconPath = FaA
+	case repo.IsStar && repo.Qs != nil && repo.Doc != "":
+		iconPath = FaQsAndDoc
+	case repo.IsStar && repo.Qs != nil:
+		iconPath = FaQs
+	case repo.IsStar && repo.Doc != "":
+		iconPath = FaDoc
 	case repo.IsStar:
-		iconPath = FaCheck
+		iconPath = FaStar
 	default:
 		iconPath = FaRepo
 	}
@@ -388,7 +383,7 @@ func renderIcon(repo gh.Repository) (iconPath string) {
 	// case repo.Doc != "":
 	// 	iconPath = FaDoc
 	// default:
-	// 	iconPath = FaCheck
+	// 	iconPath = FaStar
 	// }
 	//
 	// return
