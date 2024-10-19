@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"github.com/golang-module/carbon/v2"
 	"html/template"
 	"log"
 	"log/slog"
@@ -147,7 +148,7 @@ func sendMailByResend(token, renderedString string) {
 	params := &resend.SendEmailRequest{
 		From:    "Acme <onboarding@resend.dev>",
 		To:      []string{"jeffcottlu@gmail.com"},
-		Subject: fmt.Sprintf("new items on %s (w%d)", pkg.GetToday(), utils.WeekNumOfYear()),
+		Subject: fmt.Sprintf("new items on %s (w%d)", carbon.Now().ToDateString(), utils.WeekNumOfYear()),
 		Html:    renderedString,
 	}
 
