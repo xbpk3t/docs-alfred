@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/olekukonko/tablewriter"
 )
@@ -93,4 +94,15 @@ func ChangeFileExtFromYamlToMd(fp string) string {
 	}
 	// 如果不是 .yml 或 .yaml 文件，返回原文件名
 	return filename
+}
+
+// FormatDate 函数用于将 time.Time 格式化为 "2006-01-02 15:04:05" 形式的字符串
+func FormatDate(t time.Time) string {
+	return t.Format("2006-01-02 15:04:05")
+}
+
+func WeekNumOfYear() int {
+	_, weekNum := time.Now().ISOWeek()
+
+	return weekNum
 }

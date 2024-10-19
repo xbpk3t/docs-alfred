@@ -6,12 +6,13 @@ includes:
 
 tasks:
   feeds-merge:
+    desc: feeds-merge
     dir: feeds-merge
     cmds:
-      - INPUT_FEEDS_PATH="feeds.yml" go run main.go
+      - go run main.go
 
   pre-commit:
-    des: pre-commit
+    desc: pre-commit
     cmds:
       - pre-commit run --all-files
 
