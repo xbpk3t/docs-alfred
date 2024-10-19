@@ -37,6 +37,10 @@
             font-size: 15px;
             margin-bottom: 15px;
         }
+
+        a {
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>

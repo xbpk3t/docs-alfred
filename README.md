@@ -5,6 +5,7 @@
 ```shell
 
 go install github.com/xbpk3t/docs-alfred/yaml2md@main
+
 ```
 
 ## gh-merge
