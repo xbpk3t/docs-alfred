@@ -6,17 +6,18 @@ import (
 	"embed"
 	"fmt"
 	"github.com/golang-module/carbon/v2"
+	feeds2 "github.com/gorilla/feeds"
+	"github.com/resend/resend-go/v2"
+	"github.com/samber/lo"
+	"github.com/xbpk3t/docs-alfred/rss2newsletter/pkg"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"html/template"
 	"log"
 	"log/slog"
 	"os"
 	"sync"
 
-	"github.com/resend/resend-go/v2"
-	"github.com/samber/lo"
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/feeds-merge/pkg"
-	"github.com/xbpk3t/docs-alfred/utils"
 )
 
 var wg sync.WaitGroup
@@ -26,24 +27,22 @@ var newsletterTpl embed.FS
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "rss2newsletter-bak",
-	Short: "merge rss feeds and send newsletter",
+	Use:   "rss2newsletter",
+	Short: "A brief description of your application",
 	Run: func(cmd *cobra.Command, args []string) {
-		f := pkg.NewConfig(cfgFile, feedFile)
+		f := pkg.NewConfig(cfgFile)
 
-		var res pkg.Categories
+		var res []feeds2.RssFeed
 
-		for _, cate := range f.Categories {
+		for _, feed := range f.Feeds {
 			wg.Add(1)
-			go func(cate pkg.Category) {
+			go func(feed pkg.FeedsDetail) {
 				defer wg.Done()
-				TypeName := cate.Type
-				feeds := cate.URLs
+				TypeName := feed.Type
+				feeds := feed.Urls
 
 				// 拼接urls
-				urls := lo.Map(feeds, func(item pkg.Feed, index int) string {
-					return item.Feed
-				})
+				urls := feeds
 
 				// 移除一些feed为空字符串的item
 				urls = lo.Compact(urls)
@@ -62,9 +61,8 @@ var rootCmd = &cobra.Command{
 				}
 
 				// 将合并后的Feed转换为所需的Feed格式，并填充Des和URL字段
-				newFeeds := make([]pkg.Feed, len(combinedFeed.Items))
+				newFeeds := make([]*feeds2.RssItem, len(combinedFeed.Items))
 				for i, item := range combinedFeed.Items {
-
 					var title string
 					if !f.Newsletter.IsHideAuthorInTitle && item.Author.Name != "" {
 						title = fmt.Sprintf("[%s] %s", item.Author.Name, item.Title)
@@ -72,21 +70,20 @@ var rootCmd = &cobra.Command{
 						title = item.Title
 					}
 
-					newFeeds[i] = pkg.Feed{
-						Feed: title,
-						Des:  title, // 这里假设描述就是标题，你可以根据实际情况调整
-						URL:  item.Link.Href,
-						Name: TypeName, // 使用分类的Type作为Name
-						Date: utils.FormatDate(item.Created),
+					newFeeds[i] = &feeds2.RssItem{
+						Title:    title,
+						Link:     item.Link.Href,
+						Category: TypeName, // 使用分类的Type作为Name
+						PubDate:  utils.FormatDate(item.Created),
 					}
 				}
 
 				// 将新的Feeds添加到结果中
-				res = append(res, pkg.Category{
-					Type: TypeName,
-					URLs: newFeeds,
+				res = append(res, feeds2.RssFeed{
+					Category: TypeName,
+					Items:    newFeeds,
 				})
-			}(cate)
+			}(feed)
 		}
 		wg.Wait()
 
@@ -106,7 +103,7 @@ var rootCmd = &cobra.Command{
 		renderedString := tplBytes.String()
 
 		// 打印出渲染后的字符串，或者根据需要进行其他操作
-		fmt.Println(renderedString)
+		// fmt.Println(renderedString)
 
 		sendMailByResend(f.Resend.Token, renderedString)
 	},
@@ -122,8 +119,7 @@ func Execute() {
 }
 
 var (
-	cfgFile  string
-	feedFile string
+	cfgFile string
 )
 
 func init() {
@@ -136,9 +132,7 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "rss2newsletter.yml", "config file path")
-	rootCmd.PersistentFlags().StringVar(&feedFile, "feed", "ws.yml", "feed file path")
 }
 
 func sendMailByResend(token, renderedString string) {
