@@ -336,36 +336,26 @@ func renderReposDes(repo gh.Repository) (des strings.Builder) {
 
 func renderIcon(repo gh.Repository) (iconPath string) {
 	// switch {
-	// case repo.Qs == nil && repo.IsStar:
-	// 	iconPath = FaStar
-	// case repo.Qs == nil && !repo.IsStar:
-	// 	iconPath = FaRepo
-	// case repo.Doc != "":
-	// 	iconPath = FaDoc
-	// default:
-	// 	iconPath = FaStar
-	// }
-	//
-	// return
-
-	// switch {
-	// case repo.Qs != nil && repo.Doc != "" && repo.IsStar:
-	// 	iconPath = FaABC
-	// case repo.Qs != nil && repo.IsStar:
+	// case repo.IsStar && repo.Qs != nil && repo.Doc != "":
 	// 	iconPath = FaQsAndDoc
-	// case repo.IsStar:
+	// case repo.IsStar && repo.Qs != nil:
 	// 	iconPath = FaQs
+	// case repo.IsStar && repo.Doc != "":
+	// 	iconPath = FaDoc
+	// case repo.IsStar:
+	// 	iconPath = FaStar
 	// default:
 	// 	iconPath = FaRepo
 	// }
 	// return
 
+	// 因为需要处理有Doc的未加入gh.yml的repo，所以不再判断IsStar
 	switch {
-	case repo.IsStar && repo.Qs != nil && repo.Doc != "":
+	case repo.Qs != nil && repo.Doc != "":
 		iconPath = FaQsAndDoc
-	case repo.IsStar && repo.Qs != nil:
+	case repo.Qs != nil:
 		iconPath = FaQs
-	case repo.IsStar && repo.Doc != "":
+	case repo.Doc != "":
 		iconPath = FaDoc
 	case repo.IsStar:
 		iconPath = FaStar
@@ -373,19 +363,4 @@ func renderIcon(repo gh.Repository) (iconPath string) {
 		iconPath = FaRepo
 	}
 	return
-
-	// switch {
-	// // case repo.Qs != nil && repo.IsStar:
-	// // 	iconPath = FaStar
-	// case repo.Qs != nil:
-	// 	iconPath = FaStar
-	// case !repo.IsStar:
-	// 	iconPath = FaRepo
-	// case repo.Doc != "":
-	// 	iconPath = FaDoc
-	// default:
-	// 	iconPath = FaStar
-	// }
-	//
-	// return
 }
