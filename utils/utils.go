@@ -106,3 +106,29 @@ func WeekNumOfYear() int {
 
 	return weekNum
 }
+
+// EnsureBaseURL 检查给定的相对URL是否包含基础URL，如果没有，则将其拼接
+func EnsureBaseURL(baseUrl, relativeUrl string) (string, error) {
+	// 解析基础URL
+	base, err := url.Parse(baseUrl)
+	if err != nil {
+		return "", err
+	}
+
+	// 解析相对URL
+	relative, err := url.Parse(relativeUrl)
+	if err != nil {
+		return "", err
+	}
+
+	// 如果相对URL已经包含方案（如http或https），则不需要拼接基础URL
+	if relative.Scheme != "" && relative.Host != "" {
+		return relativeUrl, nil
+	}
+
+	// 将相对URL拼接到基础URL
+	base.ResolveReference(relative)
+
+	// 返回拼接后的URL
+	return base.String(), nil
+}
