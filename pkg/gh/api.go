@@ -18,30 +18,30 @@ func NewGithubClient(token string) *GithubClient {
 }
 
 // github API
-func (client *GithubClient) ListStarredRepositories() ([]*github.Repository, error) {
-	opt := &github.ActivityListStarredOptions{
-		ListOptions: github.ListOptions{PerPage: 30},
-		Sort:        "pushed",
-	}
-
-	var repos []*github.Repository
-
-	for {
-		result, resp, err := client.c.Activity.ListStarred(context.Background(), "", opt)
-		if err != nil {
-			return repos, err
-		}
-		for _, starred := range result {
-			repos = append(repos, starred.Repository)
-		}
-		if resp.NextPage == 0 {
-			break
-		}
-		opt.ListOptions.Page = resp.NextPage
-	}
-
-	return repos, nil
-}
+// func (client *GithubClient) ListStarredRepositories() ([]*github.Repository, error) {
+// 	opt := &github.ActivityListStarredOptions{
+// 		ListOptions: github.ListOptions{PerPage: 30},
+// 		Sort:        "pushed",
+// 	}
+//
+// 	var repos []*github.Repository
+//
+// 	for {
+// 		result, resp, err := client.c.Activity.ListStarred(context.Background(), "", opt)
+// 		if err != nil {
+// 			return repos, err
+// 		}
+// 		for _, starred := range result {
+// 			repos = append(repos, starred.Repository)
+// 		}
+// 		if resp.NextPage == 0 {
+// 			break
+// 		}
+// 		opt.ListOptions.Page = resp.NextPage
+// 	}
+//
+// 	return repos, nil
+// }
 
 func (client *GithubClient) ListUserRepositories() ([]*github.Repository, error) {
 	opt := &github.RepositoryListOptions{

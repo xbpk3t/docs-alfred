@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"errors"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"log/slog"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/gh"
-	"github.com/xbpk3t/docs-alfred/utils"
 )
 
 const SyncJob = "sync"
@@ -25,6 +25,7 @@ var syncCmd = &cobra.Command{
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
 		url := wf.Config.GetString("url") + cfgFile
+		slog.Info("Fetching URL...", slog.String("URL", url))
 
 		if url == "" {
 			slog.Info("URL is Empty", slog.Any("URL", url))
@@ -37,9 +38,9 @@ var syncCmd = &cobra.Command{
 			switch cfgFile {
 			case ConfigGithub:
 				token, err := wf.Keychain.Get(KeyGithubAPIToken)
-				if err != nil {
+				if token == "" || err != nil {
 					slog.Error("get github token error", slog.Any("Error", err))
-					return nil, err
+					ErrorHandle(err)
 				}
 				gh := gh.NewRepos()
 				if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
@@ -47,12 +48,12 @@ var syncCmd = &cobra.Command{
 					ErrorHandle(err)
 				}
 			}
+			slog.Info("Sync Repos Successfully.")
 			return data, nil
 		})
 		if err != nil {
 			ErrorHandle(err)
 		}
-		slog.Info("Sync Repos Successfully.")
 	},
 }
 

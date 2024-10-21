@@ -97,6 +97,7 @@ var ghCmd = &cobra.Command{
 
 		ghs := gh.NewConfigRepos(data).ToRepos()
 		repos = append(ghs, repos...)
+
 		if len(args) > 0 && strings.HasPrefix(args[0], "#") {
 			tags := repos.ExtractTags()
 
