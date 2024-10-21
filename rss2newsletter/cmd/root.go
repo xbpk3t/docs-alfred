@@ -5,17 +5,18 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"html/template"
+	"log"
+	"log/slog"
+	"os"
+	"sync"
+
 	"github.com/golang-module/carbon/v2"
 	feeds2 "github.com/gorilla/feeds"
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/rss2newsletter/pkg"
 	"github.com/xbpk3t/docs-alfred/utils"
-	"html/template"
-	"log"
-	"log/slog"
-	"os"
-	"sync"
 
 	"github.com/spf13/cobra"
 )
@@ -118,9 +119,7 @@ func Execute() {
 	}
 }
 
-var (
-	cfgFile string
-)
+var cfgFile string
 
 func init() {
 	// Here you will define your flags and configuration settings.
