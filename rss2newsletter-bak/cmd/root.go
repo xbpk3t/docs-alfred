@@ -5,12 +5,13 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"github.com/golang-module/carbon/v2"
 	"html/template"
 	"log"
 	"log/slog"
 	"os"
 	"sync"
+
+	"github.com/golang-module/carbon/v2"
 
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"

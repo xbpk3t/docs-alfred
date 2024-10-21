@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"errors"
-	"github.com/xbpk3t/docs-alfred/utils"
 	"log/slog"
 	"time"
+
+	"github.com/xbpk3t/docs-alfred/utils"
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/gh"
