@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS repository (
     url varchar(255) NOT NULL,
     user varchar(255) NOT NULL,
     name varchar(255) NOT NULL,
+    homepage varchar(255) NOT NULL,
     description text,
     pushed_at timestamp,
     created_at timestamp,
@@ -84,16 +85,16 @@ func (rs *Repos) ListRepositories(localDB string) error {
 		return err
 	}
 
-	rows, err := db.Query("SELECT id, url, description, name, user, updated_at FROM repository")
+	rows, err := db.Query("SELECT id, url, description, name, user, homepage, updated_at FROM repository")
 	if err != nil {
 		slog.Error("Failed to Query", slog.Any("Error", err))
 		return err
 	}
 
 	for rows.Next() {
-		var id, url, descr, name, user string
+		var id, url, descr, name, user, homepage string
 		var updated time.Time
-		err = rows.Scan(&id, &url, &descr, &name, &user, &updated)
+		err = rows.Scan(&id, &url, &descr, &name, &user, &homepage, &updated)
 		if err != nil {
 			return err
 		}
@@ -102,6 +103,7 @@ func (rs *Repos) ListRepositories(localDB string) error {
 			Name:        name,
 			User:        user,
 			Des:         descr,
+			Doc:         homepage,
 			LastUpdated: updated,
 			IsStar:      false,
 		})
@@ -119,11 +121,11 @@ func (rs Repos) UpdateRepositories(token, localDB string) (int64, error) {
 	}
 
 	// starred rs
-	starredRepos, err := NewGithubClient(token).ListStarredRepositories()
-	if err != nil {
-		slog.Error("Failed to list my starred github repositories", slog.Any("Error", err))
-		return 0, err
-	}
+	// starredRepos, err := NewGithubClient(token).ListStarredRepositories()
+	// if err != nil {
+	// 	slog.Error("Failed to list my starred github repositories", slog.Any("Error", err))
+	// 	return 0, err
+	// }
 
 	db, err := OpenDB(localDB)
 	if err != nil {
@@ -139,7 +141,7 @@ func (rs Repos) UpdateRepositories(token, localDB string) (int64, error) {
 	found := map[string]struct{}{}
 	counter := int64(0)
 
-	for _, repo := range append(userRepos, starredRepos...) {
+	for _, repo := range userRepos {
 		slog.Info("Updating", slog.Any("Repo", fmt.Sprintf("%s/%s", *repo.Owner.Login, *repo.Name)))
 
 		name := fmt.Sprintf("%s/%s", *repo.Owner.Login, *repo.Name)
@@ -149,15 +151,17 @@ func (rs Repos) UpdateRepositories(token, localDB string) (int64, error) {
 					url,
 					description,
 					name, user,
+				    homepage,
 					pushed_at,
 					updated_at,
 					created_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			name,
 			nilableString(repo.HTMLURL),
 			nilableString(repo.Description),
 			*repo.Name,
 			*repo.Owner.Login,
+			nilableString(repo.Homepage),
 			githubTime(repo.PushedAt),
 			githubTime(repo.UpdatedAt),
 			githubTime(repo.CreatedAt),
