@@ -43,7 +43,9 @@ var rootCmd = &cobra.Command{
 				feeds := feed.Urls
 
 				// 拼接urls
-				urls := feeds
+				urls := lo.Map(feeds, func(item pkg.Feeds, index int) string {
+					return item.Feed
+				})
 
 				// 移除一些feed为空字符串的item
 				urls = lo.Compact(urls)

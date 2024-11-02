@@ -16,7 +16,7 @@ import (
 
 type Config struct {
 	Feed struct {
-		Timeout   int `yaml:"timeout"`
+		// Timeout   int `yaml:"timeout"`
 		MaxTries  int `yaml:"maxTries"`
 		FeedLimit int `yaml:"feedLimit"`
 	} `yaml:"feed"`
@@ -31,8 +31,12 @@ type Config struct {
 }
 
 type FeedsDetail struct {
-	Type string   `yaml:"type"`
-	Urls []string `yaml:"urls"`
+	Type string  `yaml:"type"`
+	Urls []Feeds `yaml:"urls"`
+}
+
+type Feeds struct {
+	Feed string `yaml:"feed"`
 }
 
 const (
@@ -99,9 +103,11 @@ func NewConfig(cfgFile string) *Config {
 func (e Config) FetchURLWithRetry(url string, ch chan<- *gofeed.Feed) {
 	// core.Infof("Fetching URL: %v\n", url)
 	fp := gofeed.NewParser()
-	fp.Client = &http.Client{
-		Timeout: time.Duration(e.Feed.Timeout) * time.Second,
-	}
+	// fp.Client = &http.Client{
+	// 	Timeout: time.Duration(e.Feed.Timeout) * time.Second,
+	// }
+
+	fp.Client = &http.Client{}
 
 	var attempts uint = 0
 
@@ -120,11 +126,11 @@ func (e Config) FetchURLWithRetry(url string, ch chan<- *gofeed.Feed) {
 		retry.LastErrorOnly(true),             // 只返回最后一个错误
 		retry.OnRetry(func(n uint, err error) {
 			attempts = n
-			slog.Info("Retry Parse FeedCfg:", slog.String("URL", url), slog.Int("Tries", int(attempts)))
+			slog.Info("Retry Parse Feed:", slog.String("URL", url), slog.Int("Tries", int(attempts)))
 		}),
 	)
 	if err != nil {
-		slog.Info("Parse FeedCfg Error:", slog.String("URL", url), slog.Any("Error", err))
+		slog.Info("Parse Feed Error:", slog.String("URL", url), slog.Any("Error", err))
 		ch <- nil // 发送 nil 表示获取失败
 	}
 

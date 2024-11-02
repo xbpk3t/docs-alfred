@@ -25,6 +25,11 @@ tasks:
           -H "X-GitHub-Api-Version: 2022-11-28" \
           /user/repos
 
+  rss2newsletter:
+    dir: rss2newsletter
+    cmds:
+      - go run main.go --config rss2newsletter.yml
+
 
 #  lint:
 #    des: golang linter

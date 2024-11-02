@@ -31,45 +31,11 @@ var goodsCmd = &cobra.Command{
 				ss = append(ss, gi.Tag)
 				res.WriteString(fmt.Sprintf("## %s \n", gi.Tag))
 				res.WriteString(fmt.Sprintf("### %s \n", gi.Type))
-				mark := ""
-
-				for _, gd := range gi.Goods {
-
-					if gd.Use {
-						mark = "***"
-					} else {
-						mark = "~~"
-					}
-					if gd.Des != "" {
-						if gd.URL == "" {
-							res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s%s</summary>\n\n%s\n\n</details>\n\n", mark, gd.Name, mark, gd.Des))
-						} else {
-							res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s[%s](%s)%s</summary>\n\n%s\n\n</details>\n\n", mark, gd.Name, gd.URL, mark, gd.Des))
-						}
-					} else {
-						res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, gd.Name, mark))
-					}
-				}
+				res.WriteString(addMarkdownFormat(gi, &res))
 
 			} else {
 				res.WriteString(fmt.Sprintf("### %s \n", gi.Type))
-				for _, g := range gi.Goods {
-					mark := ""
-					if g.Use {
-						mark = "***"
-					} else {
-						mark = "~~"
-					}
-					if g.Des != "" {
-						if g.URL == "" {
-							res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s%s%s</summary>\n\n%s\n\n</details>\n\n", mark, g.Name, mark, g.Des))
-						} else {
-							res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s[%s](%s)%s</summary>\n\n%s\n\n</details>\n\n", mark, g.Name, g.URL, mark, g.Des))
-						}
-					} else {
-						res.WriteString(fmt.Sprintf("- %s%s%s\n", mark, g.Name, mark))
-					}
-				}
+				res.WriteString(addMarkdownFormat(gi, &res))
 
 				if gi.Qs != nil {
 					res.WriteString("--- \n")
@@ -108,4 +74,57 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// goodsCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
+
+// addMarkdownFormat 将ConfigGoodsX中的GoodItem转换为Markdown格式的字符串
+func addMarkdownFormat(goodsX goods.ConfigGoodsX, res *strings.Builder) string {
+
+	for _, gd := range goodsX.Goods {
+
+		summary := formatSummaryForGoods(gd)
+		// details := gd.Des
+		details := formatDetailsForGoods(gd)
+
+		if details == "" {
+			res.WriteString(fmt.Sprintf("- %s\n", summary))
+		} else {
+			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details))
+		}
+	}
+
+	return res.String()
+}
+
+// formatSummaryForGoods 格式化摘要
+func formatSummaryForGoods(gd goods.GoodsX) string {
+	var mark string
+
+	if gd.Use {
+		mark = "***"
+	} else {
+		mark = "~~"
+	}
+
+	if gd.URL != "" {
+		return fmt.Sprintf("%s[%s](%s)%s", mark, gd.Name, gd.URL, mark)
+	}
+	return fmt.Sprintf("%s%s%s", mark, gd.Name, mark)
+}
+
+func formatDetailsForGoods(gd goods.GoodsX) (res string) {
+	if gd.Param != "" {
+		res += fmt.Sprintf("【Param】%s", gd.Param)
+	}
+	if gd.Price != "" {
+		res += fmt.Sprintf("【Price】%s", gd.Price)
+	}
+	if gd.Date != nil {
+		res += fmt.Sprintf("【购买时间】%s", strings.Join(gd.Date, ","))
+	}
+	if gd.Des != "" {
+		res += "---"
+		res += gd.Des
+	}
+
+	return res
 }

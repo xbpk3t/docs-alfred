@@ -3,26 +3,28 @@ package goods
 import (
 	"bytes"
 	"errors"
-	"io"
-
 	"gopkg.in/yaml.v3"
+	"io"
 )
 
-type ConfigGoods []struct {
-	Type  string `yaml:"type"`
-	Tag   string `yaml:"tag"`
-	Goods Goods  `yaml:"goods"`
-	Des   string `yaml:"des,omitempty"`
-	Qs    []Qs   `yaml:"qs,omitempty"`
+type ConfigGoods []ConfigGoodsX
+
+type ConfigGoodsX struct {
+	Type  string   `yaml:"type"`
+	Tag   string   `yaml:"tag"`
+	Goods []GoodsX `yaml:"goods"`
+	Des   string   `yaml:"des,omitempty"`
+	Qs    []Qs     `yaml:"qs,omitempty"`
 }
 
-type Goods []struct {
-	Name  string `yaml:"name"`
-	Param string `yaml:"param,omitempty"`
-	Price string `yaml:"price,omitempty"`
-	Des   string `yaml:"des,omitempty"`
-	URL   string `yaml:"url,omitempty"`
-	Use   bool   `yaml:"use,omitempty"`
+type GoodsX struct {
+	Name  string   `yaml:"name"`
+	Param string   `yaml:"param,omitempty"`
+	Price string   `yaml:"price,omitempty"`
+	Date  []string `yaml:"date,omitempty"`
+	Des   string   `yaml:"des,omitempty"`
+	URL   string   `yaml:"url,omitempty"`
+	Use   bool     `yaml:"use,omitempty"`
 }
 
 type Qs struct {
