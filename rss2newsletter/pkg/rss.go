@@ -15,11 +15,6 @@ import (
 )
 
 type Config struct {
-	Feed struct {
-		// Timeout   int `yaml:"timeout"`
-		MaxTries  int `yaml:"maxTries"`
-		FeedLimit int `yaml:"feedLimit"`
-	} `yaml:"feed"`
 	Resend struct {
 		Token string `yaml:"token"`
 	} `yaml:"resend"`
@@ -28,6 +23,10 @@ type Config struct {
 		IsHideAuthorInTitle bool   `yaml:"isHideAuthorInTitle"`
 	} `yaml:"newsletter"`
 	Feeds []FeedsDetail `yaml:"feeds"`
+	Feed  struct {
+		MaxTries  int `yaml:"maxTries"`
+		FeedLimit int `yaml:"feedLimit"`
+	} `yaml:"feed"` // Timeout   int `yaml:"timeout"`
 }
 
 type FeedsDetail struct {

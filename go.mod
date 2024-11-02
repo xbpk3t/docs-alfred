@@ -5,6 +5,7 @@ go 1.23.1
 require (
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/deanishe/awgo v0.29.1
+	github.com/golang-module/carbon/v2 v2.4.1
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gorilla/feeds v1.2.0
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79
@@ -24,7 +25,6 @@ require (
 	github.com/PuerkitoBio/goquery v1.8.0 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/golang-module/carbon/v2 v2.4.1 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -44,7 +44,6 @@ require (
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.deanishe.net/env v0.5.1 // indirect
 	go.deanishe.net/fuzzy v1.0.0 // indirect
