@@ -40,7 +40,8 @@ tasks:
       - go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
       - task: pre-commit
 
-      - go vet -vettool=$(which shadow) -strict
+      #      - go vet -vettool=$(which shadow) -strict # 这个回去扫描官方pkg的版本，报错类似 shadow: package requires newer Go version go1.23，所以移除
+
       - nilaway ./...
-      - # go build -race cmd
-      - # hadolint --config </path/to/config.yaml> Dockerfile
+#      - # go build -race cmd
+#      - # hadolint --config </path/to/config.yaml> Dockerfile

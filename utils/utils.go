@@ -57,10 +57,10 @@ func GetFilesOfFolder(dir, fileType string) ([]string, error) {
 	return files, nil
 }
 
-func IsURL(str string) bool {
-	u, err := url.ParseRequestURI(str)
-	return err == nil && u.Scheme != "" && u.Host != ""
-}
+// func IsURL(str string) bool {
+// 	u, err := url.ParseRequestURI(str)
+// 	return err == nil && u.Scheme != "" && u.Host != ""
+// }
 
 // RenderMarkdownTable 封装了创建和渲染Markdown表格的逻辑
 func RenderMarkdownTable(res *strings.Builder, data [][]string) {
