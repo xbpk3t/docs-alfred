@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/golang-module/carbon/v2"
+
 	"gopkg.in/yaml.v3"
 
 	"github.com/avast/retry-go"
@@ -44,9 +46,9 @@ const (
 )
 
 // 时间范围映射
-var scheduleTimeRanges = map[string]time.Duration{
-	Daily:  24 * time.Hour,
-	Weekly: 7 * 24 * time.Hour,
+var scheduleTimeRanges = map[string]int{
+	Daily:  24,
+	Weekly: 7 * 24,
 }
 
 // func NewConfig() *Config {
@@ -215,7 +217,8 @@ func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) (*feeds
 	// sort.Sort(sort.Reverse(byPublished(allFeeds)))
 	limitPerFeed := e.Feed.FeedLimit
 	seen := make(map[string]bool)
-	created := GetToday()
+	created := carbon.Now().StartOfDay().StdTime()
+
 	for _, sourceFeed := range allFeeds {
 		for i, item := range sourceFeed.Items {
 			if i > limitPerFeed {
@@ -231,13 +234,7 @@ func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) (*feeds
 				created = *item.UpdatedParsed
 			}
 
-			timeRange, exists := scheduleTimeRanges[e.Newsletter.Schedule]
-			if !exists {
-				// 如果不存在对应的时间范围，可以选择跳过或者使用默认值
-				continue
-			}
-
-			if created.After(GetToday().Add(-timeRange)) {
+			if FilterFeedsWithTimeRange(created, e.Newsletter.Schedule) {
 				feed.Items = append(feed.Items, &feeds.Item{
 					Title: item.Title,
 					Link:  &feeds.Link{Href: item.Link},
@@ -253,9 +250,21 @@ func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) (*feeds
 	return feed, nil
 }
 
-func GetToday() time.Time {
-	timeStr := time.Now().Format("2006-01-02")
-	t, _ := time.ParseInLocation("2006-01-02 15:04:05", timeStr+" 00:00:00", time.Local)
-	return t
-	// return time.Now().Round(24 * time.Hour).Truncate(24 * time.Hour)
+func FilterFeedsWithTimeRange(created time.Time, schedule string) bool {
+	timeRange, exists := scheduleTimeRanges[schedule]
+	if !exists {
+		// 如果不存在对应的时间范围，可以选择跳过或者使用默认值
+		slog.Error("schedule错误，未匹配到，请检查拼写或者是否有该schedule")
+		return false
+	}
+
+	createdTime := carbon.CreateFromStdTime(created)
+
+	// if createdTime.Gte(carbon.Yesterday().StartOfDay()) && createdTime.Lt(carbon.Now().StartOfDay()) {
+	// 	return true
+	// }
+
+	// lt := createdTime.Lt(carbon.Now().StartOfDay())
+
+	return createdTime.Gte(carbon.Now().SubHours(timeRange).StartOfDay())
 }
