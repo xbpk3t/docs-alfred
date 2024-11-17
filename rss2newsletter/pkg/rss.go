@@ -234,7 +234,7 @@ func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) (*feeds
 				created = *item.UpdatedParsed
 			}
 
-			if FilterFeedsWithTimeRange(created, e.Newsletter.Schedule) {
+			if FilterFeedsWithTimeRange(created, time.Now(), e.Newsletter.Schedule) {
 				feed.Items = append(feed.Items, &feeds.Item{
 					Title: item.Title,
 					Link:  &feeds.Link{Href: item.Link},
@@ -250,7 +250,7 @@ func (e Config) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) (*feeds
 	return feed, nil
 }
 
-func FilterFeedsWithTimeRange(created time.Time, schedule string) bool {
+func FilterFeedsWithTimeRange(created, endDate time.Time, schedule string) bool {
 	timeRange, exists := scheduleTimeRanges[schedule]
 	if !exists {
 		// 如果不存在对应的时间范围，可以选择跳过或者使用默认值
@@ -266,5 +266,5 @@ func FilterFeedsWithTimeRange(created time.Time, schedule string) bool {
 
 	// lt := createdTime.Lt(carbon.Now().StartOfDay())
 
-	return createdTime.Gte(carbon.Now().SubHours(timeRange).StartOfDay())
+	return createdTime.Gte(carbon.CreateFromStdTime(endDate).SubHours(timeRange).StartOfDay())
 }
