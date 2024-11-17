@@ -88,8 +88,12 @@ func formatSummary(q gh.Qt) string {
 func formatDetails(q gh.Qt) string {
 	var parts []string
 
-	if q.P != "" {
-		parts = append(parts, fmt.Sprintf("![%s](%s)", "image", q.P))
+	if len(q.P) != 0 {
+		var b strings.Builder
+		for _, s := range q.P {
+			b.WriteString(fmt.Sprintf("![%s](%s)\n\n", "image", s))
+		}
+		parts = append(parts, b.String())
 	}
 
 	if len(q.S) != 0 {
