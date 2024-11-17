@@ -66,7 +66,7 @@ type Qs []Qt
 type Qt struct {
 	Q string   `yaml:"q,omitempty"` // 问题
 	X string   `yaml:"x,omitempty"` // 简要回答
-	P string   `yaml:"p,omitempty"`
+	P []string `yaml:"p,omitempty"`
 	U string   `yaml:"u,omitempty"` // url
 	S []string `yaml:"s,omitempty"` // 该问题的一些发散问题
 }
