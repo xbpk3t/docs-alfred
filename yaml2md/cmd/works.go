@@ -142,6 +142,14 @@ func formatSummaryWithWs(q work.QsN) string {
 func formatDetailsWithWs(q work.QsN) string {
 	var parts []string
 
+	if len(q.P) != 0 {
+		var b strings.Builder
+		for _, s := range q.P {
+			b.WriteString(fmt.Sprintf("![%s](%s)\n\n", "image", s))
+		}
+		parts = append(parts, b.String())
+	}
+
 	if len(q.S) != 0 {
 		var b strings.Builder
 		for _, t := range q.S {
