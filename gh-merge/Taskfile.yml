@@ -1,0 +1,7 @@
+version: "3"
+
+tasks:
+  default:
+    desc: feeds-merge
+    cmds:
+      - go run main.go
