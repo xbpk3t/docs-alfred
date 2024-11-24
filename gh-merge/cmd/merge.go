@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,20 +22,37 @@ var mergeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var cr gh.ConfigRepos
 
-		err := filepath.WalkDir(folderName, func(path string, d fs.DirEntry, err error) error {
-			if !d.IsDir() && slices.Contains(ghFiles, d.Name()) {
-				fmt.Println(d.Name())
-				fx, err := os.ReadFile(path)
-				if err != nil {
-					return err
-				}
-				cr = append(cr, gh.NewConfigRepos(fx).WithTag(strings.TrimSuffix(d.Name(), ".yml"))...)
-			}
+		// err := filepath.WalkDir(folderName, func(path string, d fs.DirEntry, err error) error {
+		// 	if !d.IsDir() && slices.Contains(ghFiles, d.Name()) {
+		// 		fmt.Println(d.Name())
+		// 		fx, err := os.ReadFile(path)
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		cr = append(cr, gh.NewConfigRepos(fx).WithTag(strings.TrimSuffix(d.Name(), ".yml"))...)
+		// 	}
+		//
+		// 	return nil
+		// })
+		// if err != nil {
+		// 	return
+		// }
 
-			return nil
-		})
+		// 读取文件夹中的文件
+		files, err := os.ReadDir(folderName)
 		if err != nil {
-			return
+			log.Fatalf("error reading directory: %v", err)
+		}
+
+		for _, file := range files {
+			if !file.IsDir() && slices.Contains(ghFiles, file.Name()) {
+				fmt.Println(file.Name())
+				fx, err := os.ReadFile(filepath.Join(folderName, file.Name()))
+				if err != nil {
+					log.Fatalf("error reading file: %v", err)
+				}
+				cr = append(cr, gh.NewConfigRepos(fx).WithTag(strings.TrimSuffix(file.Name(), ".yml"))...)
+			}
 		}
 
 		// 定义输出文件路径
