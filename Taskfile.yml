@@ -1,35 +1,23 @@
 version: "3"
 
 includes:
-  build: Taskfile.build.yml
-  y2m: Taskfile.y2m.yml
+  ak: Taskfile.ak.yml
+  y2m:
+    taskfile: ./yaml2md/Taskfile.yml
+    dir: yaml2md
+  merge:
+    taskfile: ./gh-merge/Taskfile.yml
+    dir: gh-merge
+  rss2newsletter:
+    taskfile: ./rss2newsletter/Taskfile.yml
+    dir: rss2newsletter
+
 
 tasks:
-  feeds-merge:
-    desc: feeds-merge
-    dir: feeds-merge
-    cmds:
-      - go run main.go
-
   pre-commit:
     desc: pre-commit
     cmds:
       - pre-commit run --all-files
-
-  # [REST API endpoints for repositories - GitHub Docs](https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-the-authenticated-user)
-  gh:
-    cmds:
-      - |
-        gh api \
-          -H "Accept: application/vnd.github+json" \
-          -H "X-GitHub-Api-Version: 2022-11-28" \
-          /user/repos
-
-  rss2newsletter:
-    dir: rss2newsletter
-    cmds:
-      - go run main.go --config rss2newsletter.yml
-
 
   lint:
     desc: golang linter
