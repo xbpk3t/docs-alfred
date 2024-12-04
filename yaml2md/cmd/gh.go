@@ -86,7 +86,7 @@ func RenderCmdAsMarkdownTable(repo gh.Repository) string {
 	}
 	var res strings.Builder
 	data := lo.Map(repo.Cmd, func(item string, index int) []string {
-		return []string{item}
+		return []string{fmt.Sprintf("`%s`", item)}
 	})
 	utils.RenderMarkdownTable([]string{"Commands"}, &res, data)
 	return res.String()
