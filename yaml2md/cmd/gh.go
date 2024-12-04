@@ -76,7 +76,19 @@ func RenderRepositoriesAsMarkdownTable(repos []gh.Repository) string {
 	})
 
 	// 渲染Markdown表格
-	utils.RenderMarkdownTable(&res, data)
+	utils.RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
+	return res.String()
+}
+
+func RenderCmdAsMarkdownTable(repo gh.Repository) string {
+	if len(repo.Cmd) == 0 {
+		return ""
+	}
+	var res strings.Builder
+	data := lo.Map(repo.Cmd, func(item string, index int) []string {
+		return []string{item}
+	})
+	utils.RenderMarkdownTable([]string{"Commands"}, &res, data)
 	return res.String()
 }
 
@@ -167,6 +179,8 @@ func RenderRepos(repos gh.Repos) (res strings.Builder) {
 			res.WriteString(RenderRepositoriesAsMarkdownTable(repo.Sub))
 			// 渲染该repo的rep repos
 			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>Replaced Repos</summary>\n\n%s\n\n</details>\n\n", RenderRepositoriesAsMarkdownTable(repo.Rep)))
+			// 渲染cmds
+			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>Commands</summary>\n\n%s\n\n</details>\n\n", RenderCmdAsMarkdownTable(repo)))
 
 			res.WriteString("\n\n---\n\n")
 
