@@ -116,43 +116,36 @@ func formatDetails(q gh.Qt) string {
 }
 
 // FilterRepos 过滤掉Repo中Qs为nil的ConfigRepos
-func FilterRepos(configRepos gh.ConfigRepos) (filteredRepos gh.ConfigRepos) {
-	for _, repoGroup := range configRepos {
-		// 过滤掉qs为nil的Repository
-		filteredGroup := gh.ConfigRepo{
-			Type:  repoGroup.Type,
-			Repos: make([]gh.Repository, 0),
-			Qs:    make(gh.Qs, 0),
-		}
-		filteredGroup.Type = repoGroup.Type
-		filteredGroup.Qs = repoGroup.Qs
-		for _, repo := range repoGroup.Repos {
-			if repo.Qs != nil {
-				filteredGroup.Repos = append(filteredGroup.Repos, repo)
-			}
-		}
-		// 只有当过滤后的Repositories不为空时，才添加到结果中
-		if len(filteredGroup.Repos) > 0 {
-			filteredRepos = append(filteredRepos, filteredGroup)
-		}
-	}
-	return filteredRepos
-}
+// func FilterRepos(configRepos gh.ConfigRepos) (filteredRepos gh.ConfigRepos) {
+// 	for _, repoGroup := range configRepos {
+// 		// 过滤掉qs为nil的Repository
+// 		filteredGroup := gh.ConfigRepo{
+// 			Type:  repoGroup.Type,
+// 			Repos: make([]gh.Repository, 0),
+// 		}
+// 		filteredGroup.Type = repoGroup.Type
+// 		for _, repo := range repoGroup.Repos {
+// 			if repo.Qs != nil {
+// 				filteredGroup.Repos = append(filteredGroup.Repos, repo)
+// 			}
+// 		}
+// 		// 只有当过滤后的Repositories不为空时，才添加到结果中
+// 		if len(filteredGroup.Repos) > 0 {
+// 			filteredRepos = append(filteredRepos, filteredGroup)
+// 		}
+// 	}
+// 	return filteredRepos
+// }
 
 // RenderTypeRepos 渲染整个type
 func RenderTypeRepos(d gh.ConfigRepo) (res strings.Builder) {
-	if d.Qs != nil || d.Repos != nil {
+	if d.Repos != nil {
 		res.WriteString(fmt.Sprintf("## %s \n", d.Type))
 	}
 
 	// repo下的所有repo列表
 	RenderRepositoriesAsMarkdownTable(d.Repos, &res)
 
-	// type对应的qs
-	// TODO 之后要把 type对应的qs 删掉
-	if d.Qs != nil {
-		res.WriteString(addMarkdownQsFormat(d.Qs))
-	}
 	repos := RenderRepos(d.Repos)
 	res.WriteString(repos.String())
 

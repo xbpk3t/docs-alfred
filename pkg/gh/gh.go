@@ -22,35 +22,22 @@ type ConfigRepos []ConfigRepo
 type ConfigRepo struct {
 	Type  string `yaml:"type"`
 	Repos `yaml:"repo"`
-	Qs    Qs `yaml:"qs,omitempty"`
 }
 
 type Repository struct {
 	LastUpdated time.Time
-	Doc         string `yaml:"doc,omitempty"` // 该repo的官方文档URL
-	URL         string `yaml:"url"`           // 该repo的gh URL
+	Type        string `yaml:"type"`
+	URL         string `yaml:"url"`
 	Name        string `yaml:"name,omitempty"`
 	User        string
-	Des         string `yaml:"des,omitempty"` // 描述
-	Type        string `yaml:"type"`          // used to mark Type
-
-	Tag string `yaml:"tag,omitempty"` // 原本的文件名，比如说 db.yml, db.yml, ...
-	Qs  Qs     `yaml:"qs,omitempty"`
-
-	Sub Repos `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
-	Rep Repos `yaml:"rep,omitempty"` // 用来标识可以被改repo替代的一些repo
-
-	IsStar bool // 用来标识该repo是否在gh.yml中
-
-	// Qq  `yaml:"qq,omitempty"`
-
-	// Alias       string `yaml:"alias,omitempty"` // 如果有alias，则直接渲染为[alias](URL)，而不是[User/Name](URL)
-
-	// Pix         []string `yaml:"pix"`
-	// Use         []struct {
-	// 	URL string `yaml:"url,omitempty"`
-	// 	Des string `yaml:"des,omitempty"`
-	// } `yaml:"use,omitempty"`
+	Des         string   `yaml:"des,omitempty"`
+	Doc         string   `yaml:"doc,omitempty"`
+	Tag         string   `yaml:"tag,omitempty"`
+	Qs          Qs       `yaml:"qs,omitempty"`
+	Sub         Repos    `yaml:"sub,omitempty"`
+	Rep         Repos    `yaml:"rep,omitempty"`
+	Cmd         []string `yaml:"cmd,omitempty"`
+	IsStar      bool
 }
 
 // type Qq []struct {
@@ -354,15 +341,15 @@ func (cr *ConfigRepos) FilterReposMD() ConfigRepos {
 	return filteredConfig
 }
 
-// IsTypeQsEmpty 判断该type是否为空
-func (cr *ConfigRepos) IsTypeQsEmpty() bool {
-	for _, crv := range *cr {
-		if crv.Qs == nil {
-			return true
-		}
-	}
-	return false
-}
+// // IsTypeQsEmpty 判断该type是否为空
+// func (cr *ConfigRepos) IsTypeQsEmpty() bool {
+// 	for _, crv := range *cr {
+// 		if crv.Qs == nil {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
 // func (cr *ConfigRepos) FilterWorksMD() ConfigRepos {
 // 	var filteredConfig ConfigRepos
