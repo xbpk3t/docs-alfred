@@ -64,10 +64,11 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 }
 
 // RenderRepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
-func RenderRepositoriesAsMarkdownTable(repos []gh.Repository, res *strings.Builder) {
+func RenderRepositoriesAsMarkdownTable(repos []gh.Repository) string {
 	if len(repos) == 0 {
-		return
+		return ""
 	}
+	var res strings.Builder
 	// 准备表格数据
 	data := lo.Map(repos, func(item gh.Repository, index int) []string {
 		repoName, _ := strings.CutPrefix(item.URL, gh.GhURL)
@@ -75,7 +76,8 @@ func RenderRepositoriesAsMarkdownTable(repos []gh.Repository, res *strings.Build
 	})
 
 	// 渲染Markdown表格
-	utils.RenderMarkdownTable(res, data)
+	utils.RenderMarkdownTable(&res, data)
+	return res.String()
 }
 
 func formatSummary(q gh.Qt) string {
@@ -144,7 +146,7 @@ func RenderTypeRepos(d gh.ConfigRepo) (res strings.Builder) {
 	}
 
 	// repo下的所有repo列表
-	RenderRepositoriesAsMarkdownTable(d.Repos, &res)
+	res.WriteString(RenderRepositoriesAsMarkdownTable(d.Repos))
 
 	repos := RenderRepos(d.Repos)
 	res.WriteString(repos.String())
@@ -161,8 +163,12 @@ func RenderRepos(repos gh.Repos) (res strings.Builder) {
 			}
 			res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
 
-			// 渲染该repo的sub repo
-			RenderRepositoriesAsMarkdownTable(repo.Sub, &res)
+			// 渲染该repo的sub repos
+			res.WriteString(RenderRepositoriesAsMarkdownTable(repo.Sub))
+			// 渲染该repo的rep repos
+			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>Replaced Repos</summary>\n\n%s\n\n</details>\n\n", RenderRepositoriesAsMarkdownTable(repo.Rep)))
+
+			res.WriteString("\n\n---\n\n")
 
 			if repo.Qs != nil {
 				res.WriteString(addMarkdownQsFormat(repo.Qs))
