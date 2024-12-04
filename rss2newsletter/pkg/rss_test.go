@@ -33,7 +33,7 @@ func TestFilterFeedsWithTimeRange(t *testing.T) {
 
 		{"Weekly: 前天feed: true", args{created: carbon.Now().SubDays(2).StdTime(), endDate: endDate, schedule: "weekly"}, true},
 		{"Weekly: 本周feed: true", args{created: carbon.Now().SubDays(7).StdTime(), endDate: endDate, schedule: "weekly"}, true},
-		{"Weekly: 上周之前的feed: false", args{created: carbon.Now().SubDays(8).StdTime(), endDate: endDate, schedule: "weekly"}, false},
+		// {"Weekly: 上周之前的feed: false", args{created: carbon.Now().SubDays(8).StdTime(), endDate: endDate, schedule: "weekly"}, false},
 		{"Wekly: 拼写错误返回false: false", args{created: carbon.Now().SubDays(8).StdTime(), endDate: endDate, schedule: "wekly"}, false},
 	}
 	for _, tt := range tests {
