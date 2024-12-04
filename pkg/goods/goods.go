@@ -31,8 +31,9 @@ type GoodsX struct {
 }
 
 type Qs struct {
-	Q string `yaml:"q"`
-	X string `yaml:"x"`
+	Q string   `yaml:"q"`
+	X string   `yaml:"x"`
+	S []string `yaml:"s"`
 }
 
 func NewConfigGoods(f []byte) (gk ConfigGoods) {
@@ -113,9 +114,17 @@ func AddTypeQs(gi ConfigGoodsX) string {
 	res.WriteString(":::tip \n")
 
 	// qs
+	// for _, q := range gi.Qs {
+	// 	if q.X != "" {
+	// 		res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+	// 	} else {
+	// 		res.WriteString(fmt.Sprintf("- %s \n", q.Q))
+	// 	}
+	// }
 	for _, q := range gi.Qs {
-		if q.X != "" {
-			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
+		details := formatDetailsWithWs(q)
+		if details != "" {
+			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, details))
 		} else {
 			res.WriteString(fmt.Sprintf("- %s \n", q.Q))
 		}
@@ -123,4 +132,26 @@ func AddTypeQs(gi ConfigGoodsX) string {
 	res.WriteString("\n\n:::\n\n")
 
 	return res.String()
+}
+
+func formatDetailsWithWs(q Qs) string {
+	var parts []string
+
+	if len(q.S) != 0 {
+		var b strings.Builder
+		for _, t := range q.S {
+			b.WriteString(fmt.Sprintf("- %s\n", t))
+		}
+		parts = append(parts, b.String())
+	}
+
+	if len(q.S) != 0 && q.X != "" {
+		parts = append(parts, "---")
+	}
+
+	if q.X != "" {
+		parts = append(parts, q.X)
+	}
+
+	return strings.Join(parts, "\n\n")
 }
