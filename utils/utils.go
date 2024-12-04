@@ -63,10 +63,10 @@ func GetFilesOfFolder(dir, fileType string) ([]string, error) {
 // }
 
 // RenderMarkdownTable 封装了创建和渲染Markdown表格的逻辑
-func RenderMarkdownTable(res *strings.Builder, data [][]string) {
+func RenderMarkdownTable(header []string, res *strings.Builder, data [][]string) {
 	table := tablewriter.NewWriter(res)
 	table.SetAutoWrapText(false)
-	table.SetHeader([]string{"Repo", "Des"})
+	table.SetHeader(header)
 	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 	table.SetCenterSeparator("|")
 	table.AppendBulk(data) // 添加大量数据
