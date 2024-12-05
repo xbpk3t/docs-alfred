@@ -92,6 +92,17 @@ func RenderCmdAsMarkdownTable(repo gh.Repository) string {
 	return res.String()
 }
 
+func RenderCmdAsCodeBlock(repo gh.Repository) string {
+	if len(repo.Cmd) == 0 {
+		return ""
+	}
+	var res strings.Builder
+	res.WriteString("\n```shell\n")
+	res.WriteString(strings.Join(repo.Cmd, "\n"))
+	res.WriteString("\n```")
+	return res.String()
+}
+
 func formatSummary(q gh.Qt) string {
 	if q.U != "" {
 		return fmt.Sprintf("[%s](%s)", q.Q, q.U)
@@ -174,15 +185,26 @@ func RenderRepos(repos gh.Repos) (res strings.Builder) {
 				repoName = ""
 			}
 			res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
+			flag := false
 
 			// 渲染该repo的sub repos
-			res.WriteString(RenderRepositoriesAsMarkdownTable(repo.Sub))
+			if len(repo.Sub) != 0 {
+				flag = true
+				res.WriteString(RenderRepositoriesAsMarkdownTable(repo.Sub))
+			}
 			// 渲染该repo的rep repos
-			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>Replaced Repos</summary>\n\n%s\n\n</details>\n\n", RenderRepositoriesAsMarkdownTable(repo.Rep)))
+			if len(repo.Rep) != 0 {
+				flag = true
+				res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>Replaced Repos</summary>\n\n%s\n\n</details>\n\n", RenderRepositoriesAsMarkdownTable(repo.Rep)))
+			}
 			// 渲染cmds
-			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>Commands</summary>\n\n%s\n\n</details>\n\n", RenderCmdAsMarkdownTable(repo)))
-
-			res.WriteString("\n\n---\n\n")
+			if len(repo.Cmd) != 0 {
+				flag = true
+				res.WriteString(RenderCmdAsCodeBlock(repo))
+			}
+			if flag == true {
+				res.WriteString("\n\n---\n\n")
+			}
 
 			if repo.Qs != nil {
 				res.WriteString(addMarkdownQsFormat(repo.Qs))
