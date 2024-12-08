@@ -203,7 +203,7 @@ func RenderRepos(repos gh.Repos) (res strings.Builder) {
 				flag = true
 				res.WriteString(RenderCmdAsCodeBlock(repo))
 			}
-			if flag == true {
+			if flag {
 				res.WriteString("\n\n---\n\n")
 			}
 
