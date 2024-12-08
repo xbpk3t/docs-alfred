@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -131,4 +132,16 @@ func EnsureBaseURL(baseUrl, relativeUrl string) (string, error) {
 
 	// 返回拼接后的URL
 	return base.String(), nil
+}
+
+// RenderMarkdownFold
+func RenderMarkdownFold(summary, details string) string {
+	return fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details)
+}
+
+func RenderMarkdownImageWithFigcaption(url string) string {
+	// split last part of title from url
+	title := strings.Split(url, "/")[len(strings.Split(url, "/"))-1]
+
+	return fmt.Sprintf("![image](%s)\n<center>*%s*</center>\n\n", url, title)
 }
