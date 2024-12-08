@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,6 +20,10 @@ func Fetch(url string) ([]byte, error) {
 	if err != nil {
 		slog.Error("request error", slog.Any("Error", err))
 		return nil, err
+	}
+	if resp == nil {
+		slog.Error("response is nil")
+		return nil, errors.New("response is nil")
 	}
 	defer resp.Body.Close()
 
@@ -141,9 +146,18 @@ func RenderMarkdownFold(summary, details string) string {
 
 func RenderMarkdownImageWithFigcaption(url string) string {
 	// split last part of title from url
-	title := strings.Split(url, "/")[len(strings.Split(url, "/"))-1]
+	title := ExtractTitleFromURL(url)
 
 	return fmt.Sprintf("![image](%s)\n<center>*%s*</center>\n\n", url, title)
+}
+
+func ExtractTitleFromURL(url string) string {
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	} else {
+		return url
+	}
 }
 
 // docusaurus admonitions const

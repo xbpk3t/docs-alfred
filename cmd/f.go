@@ -258,7 +258,13 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 			Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
 
 		docsURL := strings.Builder{}
-		docsURL.WriteString(fmt.Sprintf("%s/%s#", wf.Config.GetString("docs"), strings.ToLower(repo.Tag)))
+		if wf != nil {
+			docsURL.WriteString(fmt.Sprintf("%s/%s#", wf.Config.GetString("docs"), strings.ToLower(repo.Tag)))
+		} else {
+			slog.Error("wf is nil", slog.String("repo.Tag", repo.Tag))
+			docsURL.WriteString(fmt.Sprintf("%s#", strings.ToLower(repo.Tag)))
+		}
+
 		if repo.Qs == nil {
 			docsURL.WriteString(strings.ToLower(repo.Type))
 		} else {

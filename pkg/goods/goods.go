@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/utils"
 	"io"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/utils"
 
 	"gopkg.in/yaml.v3"
 )
