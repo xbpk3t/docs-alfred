@@ -61,21 +61,6 @@ var workCmd = &cobra.Command{
 	},
 }
 
-// func addMarkdownQsFormat(qs gh.Qs) string {
-// 	var builder strings.Builder
-// 	// builder.WriteString("<dl>")
-// 	for _, q := range qs {
-// 		if q.X == "" {
-// 			builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-// 		} else {
-// 			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-// 		}
-// 	}
-// 	// builder.WriteString("</dl>")
-//
-// 	return builder.String()
-// }
-
 func init() {
 	rootCmd.AddCommand(workCmd)
 
@@ -90,30 +75,6 @@ func init() {
 	// workCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-// 用来渲染qs
-// func addMarkdownQsFormatWorks(qs work.Qs) string {
-// 	var builder strings.Builder
-// 	// builder.WriteString("<dl>")
-// 	for _, q := range qs {
-// 		if q.X == "" {
-// 			if q.U != "" {
-// 				builder.WriteString(fmt.Sprintf("- [%s](%s)\n", q.Q, q.U))
-// 			} else {
-// 				builder.WriteString(fmt.Sprintf("- %s\n", q.Q))
-// 			}
-// 		} else {
-// 			if q.U != "" {
-// 				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>[%s](%s)</summary>\n\n%s\n\n</details>\n\n", q.Q, q.U, q.X))
-// 			} else {
-// 				builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-// 			}
-// 		}
-// 	}
-// 	// builder.WriteString("</dl>")
-//
-// 	return builder.String()
-// }
-
 func addMarkdownQsFormatWorks(qs work.Qs) string {
 	var builder strings.Builder
 
@@ -123,7 +84,7 @@ func addMarkdownQsFormatWorks(qs work.Qs) string {
 		if details == "" {
 			builder.WriteString(fmt.Sprintf("- %s\n", summary))
 		} else {
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details))
+			builder.WriteString(utils.RenderMarkdownFold(summary, details))
 		}
 	}
 
@@ -145,7 +106,7 @@ func formatDetailsWithWs(q work.QsN) string {
 	if len(q.P) != 0 {
 		var b strings.Builder
 		for _, s := range q.P {
-			b.WriteString(fmt.Sprintf("![%s](%s)\n\n", "image", s))
+			b.WriteString(utils.RenderMarkdownImageWithFigcaption(s))
 		}
 		parts = append(parts, b.String())
 	}

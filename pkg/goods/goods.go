@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"io"
 	"strings"
 
@@ -65,7 +66,7 @@ func AddMarkdownFormat(gi ConfigGoodsX) string {
 		if details == "" {
 			res.WriteString(fmt.Sprintf("- %s\n", summary))
 		} else {
-			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details))
+			res.WriteString(utils.RenderMarkdownFold(summary, details))
 		}
 	}
 	return res.String()
@@ -113,18 +114,10 @@ func AddTypeQs(gi ConfigGoodsX) string {
 	res.WriteString("--- \n")
 	res.WriteString(":::tip \n")
 
-	// qs
-	// for _, q := range gi.Qs {
-	// 	if q.X != "" {
-	// 		res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, q.X))
-	// 	} else {
-	// 		res.WriteString(fmt.Sprintf("- %s \n", q.Q))
-	// 	}
-	// }
 	for _, q := range gi.Qs {
 		details := formatDetailsWithWs(q)
 		if details != "" {
-			res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", q.Q, details))
+			res.WriteString(utils.RenderMarkdownFold(q.Q, details))
 		} else {
 			res.WriteString(fmt.Sprintf("- %s \n", q.Q))
 		}

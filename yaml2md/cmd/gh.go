@@ -56,7 +56,7 @@ func addMarkdownQsFormat(qs gh.Qs) string {
 		if details == "" {
 			builder.WriteString(fmt.Sprintf("- %s\n", summary))
 		} else {
-			builder.WriteString(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details))
+			builder.WriteString(utils.RenderMarkdownFold(summary, details))
 		}
 	}
 
@@ -116,7 +116,7 @@ func formatDetails(q gh.Qt) string {
 	if len(q.P) != 0 {
 		var b strings.Builder
 		for _, s := range q.P {
-			b.WriteString(fmt.Sprintf("![%s](%s)\n\n", "image", s))
+			b.WriteString(utils.RenderMarkdownImageWithFigcaption(s))
 		}
 		parts = append(parts, b.String())
 	}
@@ -195,7 +195,7 @@ func RenderRepos(repos gh.Repos) (res strings.Builder) {
 			// 渲染该repo的rep repos
 			if len(repo.Rep) != 0 {
 				flag = true
-				res.WriteString(fmt.Sprintf("\n\n<details>\n<summary>Replaced Repos</summary>\n\n%s\n\n</details>\n\n", RenderRepositoriesAsMarkdownTable(repo.Rep)))
+				res.WriteString(utils.RenderMarkdownFold("Replaced Repos", RenderRepositoriesAsMarkdownTable(repo.Rep)))
 			}
 			// 渲染cmds
 			if len(repo.Cmd) != 0 {
