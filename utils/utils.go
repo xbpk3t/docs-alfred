@@ -145,3 +145,27 @@ func RenderMarkdownImageWithFigcaption(url string) string {
 
 	return fmt.Sprintf("![image](%s)\n<center>*%s*</center>\n\n", url, title)
 }
+
+// docusaurus admonitions const
+const (
+	AdmonitionTip    = "tip"
+	AdmonitionInfo   = "info"
+	AdmonitionWarn   = "warning"
+	AdmonitionDanger = "danger"
+)
+
+func RenderMarkdownAdmonitions(admonitionType, title, rex string) string {
+	var res strings.Builder
+
+	if title == "" {
+		title = strings.ToUpper(admonitionType)
+	}
+
+	res.WriteString("\n---\n")
+	res.WriteString(fmt.Sprintf(":::%s[%s]\n\n", admonitionType, title))
+
+	res.WriteString(rex)
+
+	res.WriteString("\n\n:::\n\n")
+	return res.String()
+}

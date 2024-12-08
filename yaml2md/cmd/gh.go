@@ -195,7 +195,8 @@ func RenderRepos(repos gh.Repos) (res strings.Builder) {
 			// 渲染该repo的rep repos
 			if len(repo.Rep) != 0 {
 				flag = true
-				res.WriteString(utils.RenderMarkdownFold("Replaced Repos", RenderRepositoriesAsMarkdownTable(repo.Rep)))
+				res.WriteString(utils.RenderMarkdownAdmonitions(utils.AdmonitionWarn, "Replaced Repos",
+					RenderRepositoriesAsMarkdownTable(repo.Rep)))
 			}
 			// 渲染cmds
 			if len(repo.Cmd) != 0 {
