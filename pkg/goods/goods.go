@@ -111,9 +111,6 @@ func AddTypeQs(gi ConfigGoodsX) string {
 		return ""
 	}
 
-	res.WriteString("--- \n")
-	res.WriteString(":::tip \n")
-
 	for _, q := range gi.Qs {
 		details := formatDetailsWithWs(q)
 		if details != "" {
@@ -122,9 +119,8 @@ func AddTypeQs(gi ConfigGoodsX) string {
 			res.WriteString(fmt.Sprintf("- %s \n", q.Q))
 		}
 	}
-	res.WriteString("\n\n:::\n\n")
 
-	return res.String()
+	return utils.RenderMarkdownAdmonitions(utils.AdmonitionTip, "", res.String())
 }
 
 func formatDetailsWithWs(q Qs) string {
