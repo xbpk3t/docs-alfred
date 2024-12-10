@@ -190,7 +190,7 @@ func RenderRepos(repos gh.Repos) (res strings.Builder) {
 			// 渲染该repo的sub repos
 			if len(repo.Sub) != 0 {
 				flag = true
-				res.WriteString(RenderRepositoriesAsMarkdownTable(repo.Sub))
+				res.WriteString(utils.RenderMarkdownAdmonitions(utils.AdmonitionTip, "Sub Repos", RenderRepositoriesAsMarkdownTable(repo.Sub)))
 			}
 			// 渲染该repo的rep repos
 			if len(repo.Rep) != 0 {
