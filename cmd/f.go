@@ -89,14 +89,13 @@ var ghCmd = &cobra.Command{
 	Use:   "gh",
 	Short: "Searching from starred repositories and my repositories",
 	Run: func(cmd *cobra.Command, args []string) {
-		repos := gh.NewRepos()
-		err := repos.ListRepositories(wf.CacheDir() + RepoDB)
-		if err != nil {
-			wf.FatalError(err)
-		}
+		// repos := gh.NewRepos()
+		// err := repos.ListRepositories(wf.CacheDir() + RepoDB)
+		// if err != nil {
+		// 	wf.FatalError(err)
+		// }
 
-		ghs := gh.NewConfigRepos(data).ToRepos()
-		repos = append(ghs, repos...)
+		repos := gh.NewConfigRepos(data).ToRepos()
 
 		if len(args) > 0 && strings.HasPrefix(args[0], "#") {
 			tags := repos.ExtractTags()

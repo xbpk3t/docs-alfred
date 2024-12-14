@@ -8,7 +8,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/utils"
 
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
 )
 
 const SyncJob = "sync"
@@ -36,20 +35,21 @@ var syncCmd = &cobra.Command{
 		_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
 			data, _ = utils.Fetch(url)
 
-			switch cfgFile {
-			case ConfigGithub:
-				token, err := wf.Keychain.Get(KeyGithubAPIToken)
-				if token == "" || err != nil {
-					slog.Error("get github token error", slog.Any("Error", err))
-					ErrorHandle(err)
-				}
-				gh := gh.NewRepos()
-				if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
-					slog.Error("failed to update repo by token", slog.Any("Error", err))
-					ErrorHandle(err)
-				}
-			}
-			slog.Info("Sync Repos Successfully.")
+			// switch cfgFile {
+			// case ConfigGithub:
+			// 	token, err := wf.Keychain.Get(KeyGithubAPIToken)
+			// 	if token == "" || err != nil {
+			// 		slog.Error("get github token error", slog.Any("Error", err))
+			// 		ErrorHandle(err)
+			// 	}
+			// 	gh := gh.NewRepos()
+			// 	if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
+			// 		slog.Error("failed to update repo by token", slog.Any("Error", err))
+			// 		ErrorHandle(err)
+			// 	}
+			// }
+
+			slog.Info("Sync Config Files Successfully.")
 			return data, nil
 		})
 		if err != nil {

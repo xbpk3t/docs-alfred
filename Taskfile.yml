@@ -12,7 +12,6 @@ includes:
     taskfile: ./rss2newsletter/Taskfile.yml
     dir: rss2newsletter
 
-
 tasks:
   pre-commit:
     desc: pre-commit
