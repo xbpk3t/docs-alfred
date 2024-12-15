@@ -4,4 +4,9 @@ tasks:
   default:
     desc: feeds-merge
     cmds:
-      - go run main.go
+      - go run main.go merge --folder ./data/x --yf "algo.yml,db.yml,devops.yml,langs.yml,ms.yml,works.yml,kernel.yml"
+
+  build:
+    desc: build gh-merge
+    cmds:
+      - go build main.go -o gh-merge

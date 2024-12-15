@@ -50,3 +50,16 @@ func (r Repository) GetMainRepo() string {
 	}
 	return r.FullName()
 }
+
+// pkg/gh/repository.go
+
+// Repository 的方法
+func (r *Repository) SetGithubInfo(owner, name string) {
+	r.User = owner
+	r.Name = name
+	r.IsStar = true
+}
+
+func (r *Repository) IsValid() bool {
+	return r.User != "" && r.Name != ""
+}
