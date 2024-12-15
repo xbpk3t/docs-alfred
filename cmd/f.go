@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/config"
 	"log/slog"
 	"os/exec"
 
@@ -9,37 +10,41 @@ import (
 	"github.com/xbpk3t/docs-alfred/utils"
 )
 
-const (
-	ConfigGithub = "gh.yml"
-	RepoDB       = "/repo.db"
+var (
+	fCmd = &cobra.Command{
+		Use:              "f",
+		Short:            "Root search command",
+		PersistentPreRun: handlePreRun,
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("f called")
+		},
+	}
+	cfgManager *config.Manager
+	data       []byte
 )
 
-var fCmd = &cobra.Command{
-	Use:   "f",
-	Short: "A brief description of your command",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if !wf.Cache.Exists(cfgFile) {
-			ErrorHandle(&utils.DocsAlfredError{Err: utils.ErrConfigNotFound})
-		}
+const (
+	ConfigGithub = "gh.yml"
+)
 
-		data, _ = wf.Cache.Load(cfgFile)
+func handlePreRun(cmd *cobra.Command, args []string) {
+	if !wf.Cache.Exists(cfgFile) {
+		ErrorHandle(&utils.DocsAlfredError{Err: utils.ErrConfigNotFound})
+	}
 
-		if !wf.IsRunning(SyncJob) {
-			cmd := exec.Command("./exe", SyncJob, fmt.Sprintf("--config=%s", cfgFile))
-			slog.Info("sync cmd: ", slog.Any("cmd", cmd.String()))
-			if err := wf.RunInBackground(SyncJob, cmd); err != nil {
-				ErrorHandle(err)
-			}
+	data, _ = wf.Cache.Load(cfgFile)
+
+	if !wf.IsRunning(SyncJob) {
+		cmd := exec.Command("./exe", SyncJob, fmt.Sprintf("--config=%s", cfgFile))
+		slog.Info("sync cmd: ", slog.Any("cmd", cmd.String()))
+		if err := wf.RunInBackground(SyncJob, cmd); err != nil {
+			ErrorHandle(err)
 		}
-	},
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("f called")
-	},
+	}
 }
 
-var data []byte
-
 func init() {
+	cfgManager = config.NewManager(wf, ConfigGithub)
 	rootCmd.AddCommand(fCmd)
 	fCmd.AddCommand(ghCmd)
 	fCmd.AddCommand(wsCmd)
