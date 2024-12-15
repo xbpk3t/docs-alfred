@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/alfred"
+	"github.com/xbpk3t/docs-alfred/pkg/common"
 	"log/slog"
 	"net/url"
 	"path"
@@ -14,16 +16,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/utils"
 )
 
-const (
-	RepoSearch = "https://github.com/search?q=%s&type=repositories"
-	FaStar     = "icons/check.svg"
-	FaRepo     = "icons/repo.png"
-	FaSearch   = "icons/search.svg"
-	FaQs       = "icons/a.svg"
-	FaDoc      = "icons/b.svg"
-	FaQsAndDoc = "icons/ab.svg"
-)
-
 var ghCmd = &cobra.Command{
 	Use:   "gh",
 	Short: "Searching from starred repositories and my repositories",
@@ -32,27 +24,28 @@ var ghCmd = &cobra.Command{
 
 // 主命令处理函数
 func handleGhCommand(cmd *cobra.Command, args []string) {
+	builder := alfred.NewItemBuilder(wf)
 	repos := gh.NewConfigRepos(data).ToRepos()
 
 	if len(args) > 0 && strings.HasPrefix(args[0], "#") {
-		handleTagSearch(repos, args)
+		handleTagSearch(repos, args, builder)
 		return
 	}
 
-	RenderRepos(repos)
+	renderRepos(repos, builder)
 	handleSearchFilter(args)
 	renderSearchGithub(args)
 	wf.SendFeedback()
 }
 
 // 处理标签搜索
-func handleTagSearch(repos gh.Repos, args []string) {
+func handleTagSearch(repos gh.Repos, args []string, builder *alfred.ItemBuilder) {
 	tags := repos.ExtractTags()
 	ptag := strings.TrimPrefix(args[0], "#")
 
 	if slices.Contains(tags, ptag) {
 		repos = repos.QueryReposByTag(ptag)
-		RenderRepos(repos)
+		renderRepos(repos, builder)
 	} else {
 		renderTagItems(tags)
 		if len(args) > 0 {
@@ -86,9 +79,9 @@ func renderSearchGithub(args []string) {
 	searchTitle := fmt.Sprintf("Search Github For '%s'", strings.Join(args, " "))
 
 	wf.NewItem("Search Github").
-		Arg(fmt.Sprintf(RepoSearch, searchQuery)).
+		Arg(fmt.Sprintf(common.GithubSearchURL, searchQuery)).
 		Valid(true).
-		Icon(&aw.Icon{Value: FaSearch}).
+		Icon(&aw.Icon{Value: common.IconSearch}).
 		Title(searchTitle)
 }
 
@@ -159,15 +152,15 @@ func buildDocsURL(repo gh.Repository) string {
 func determineRepoIcon(repo gh.Repository) string {
 	switch {
 	case repo.Qs != nil && repo.Doc != "":
-		return FaQsAndDoc
+		return common.IconQsDoc
 	case repo.Qs != nil:
-		return FaQs
+		return common.IconQs
 	case repo.Doc != "":
-		return FaDoc
+		return common.IconDoc
 	case repo.IsStar:
-		return FaStar
+		return common.IconStar
 	default:
-		return FaRepo
+		return common.IconRepo
 	}
 }
 
@@ -187,11 +180,15 @@ func addModifierActions(item *aw.Item, repo gh.Repository, docsURL string) {
 }
 
 // 主渲染函数
-func RenderRepos(repos gh.Repos) (item *aw.Item) {
+func renderRepos(repos gh.Repos, builder *alfred.ItemBuilder) {
 	for _, repo := range repos {
-		item = createBaseItem(repo)
+		item := builder.BuildBasicItem(
+			repo.FullName(),
+			buildRepoDescription(repo),
+			repo.URL,
+			determineRepoIcon(repo),
+		)
 		docsURL := buildDocsURL(repo)
-		addModifierActions(item, repo, docsURL)
+		builder.AddRepoModifiers(item, repo, docsURL)
 	}
-	return item
 }
