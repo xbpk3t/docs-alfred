@@ -37,10 +37,6 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	return db, nil
 }
 
-func (r Repository) FullName() string {
-	return fmt.Sprintf("%s/%s", r.User, r.Name)
-}
-
 // Search from sqlite
 // func (rs Repos) ListRepositories(localDB string) (Repos, error) {
 // 	db, err := OpenDB(localDB)

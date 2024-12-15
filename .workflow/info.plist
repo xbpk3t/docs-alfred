@@ -452,7 +452,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://docs.hxha.xyz/f/</string>
+				<string>https://docs.hxha.xyz/data/</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>

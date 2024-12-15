@@ -16,6 +16,10 @@ var (
 	av   = aw.NewArgVars()
 )
 
+func ResetWorkflow() {
+	wf = nil
+}
+
 // ErrorHandle handle error
 func ErrorHandle(err error) {
 	av.Var("error", err.Error())
@@ -46,9 +50,15 @@ func Execute() {
 
 var cfgFile string
 
+func InitWorkflow() {
+	if wf == nil {
+		wf = aw.New(update.GitHub(repo), aw.HelpURL(repo+"/issues"))
+		wf.Args() // magic for "workflow:update"
+	}
+}
+
 func init() {
-	wf = aw.New(update.GitHub(repo), aw.HelpURL(repo+"/issues"))
-	wf.Args() // magic for "workflow:update"
+	InitWorkflow()
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "qs.yml", "Config File To Parse")
 	// rootCmd.MarkPersistentFlagRequired("config")

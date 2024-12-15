@@ -103,6 +103,10 @@ func RenderCmdAsCodeBlock(repo gh.Repository) string {
 	return res.String()
 }
 
+func RenderDocIcon() string {
+	return "[![GitHub](https://icongr.am/feather/github.svg)](https://www.github.com)\n"
+}
+
 func formatSummary(q gh.Qt) string {
 	if q.U != "" {
 		return fmt.Sprintf("[%s](%s)", q.Q, q.U)
