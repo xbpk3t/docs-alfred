@@ -13,49 +13,70 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Gh []string
-
 // mergeCmd represents the merge command
 var mergeCmd = &cobra.Command{
 	Use:   "merge",
-	Short: "A brief description of your command",
-	Run: func(cmd *cobra.Command, args []string) {
-		var cr gh.ConfigRepos
-
-		// 读取文件夹中的文件
-		files, err := os.ReadDir(folderName)
-		if err != nil {
-			log.Fatalf("error reading directory: %v", err)
-		}
-
-		for _, file := range files {
-			if !file.IsDir() && slices.Contains(ghFiles, file.Name()) {
-				fmt.Println(file.Name())
-				fx, err := os.ReadFile(filepath.Join(folderName, file.Name()))
-				if err != nil {
-					log.Fatalf("error reading file: %v", err)
-				}
-				cr = append(cr, gh.NewConfigRepos(fx).WithTag(strings.TrimSuffix(file.Name(), ".yml"))...)
-			}
-		}
-
-		// 定义输出文件路径
-		outputPath := "gh.yml"
-
-		// 将合并后的数据写入 YAML 文件
-		if err := WriteYAMLToFile(cr, outputPath); err != nil {
-			log.Fatalf("error writing to YAML file: %v", err)
-		}
-
-		fmt.Printf("Merged YAML file created: %s\n", outputPath)
-	},
+	Short: "合并多个 gh.yml 文件",
+	Run:   runMerge,
 }
 
-// WriteYAMLToFile 将 YAML 数据写入文件
-func WriteYAMLToFile(data gh.ConfigRepos, outputPath string) error {
+func runMerge(cmd *cobra.Command, args []string) {
+	cr, err := mergeConfigFiles()
+	if err != nil {
+		log.Fatalf("合并配置文件失败: %v", err)
+	}
+
+	if err := writeToYAML(cr, "gh.yml"); err != nil {
+		log.Fatalf("写入YAML文件失败: %v", err)
+	}
+
+	fmt.Printf("成功创建合并后的YAML文件: gh.yml\n")
+}
+
+// mergeConfigFiles 合并配置文件
+func mergeConfigFiles() (gh.ConfigRepos, error) {
+	var cr gh.ConfigRepos
+
+	files, err := os.ReadDir(folderName)
+	if err != nil {
+		return nil, fmt.Errorf("读取目录失败: %v", err)
+	}
+
+	for _, file := range files {
+		if shouldProcessFile(file) {
+			configs, err := processConfigFile(file)
+			if err != nil {
+				return nil, err
+			}
+			cr = append(cr, configs...)
+		}
+	}
+
+	return cr, nil
+}
+
+// shouldProcessFile 判断是否应该处理该文件
+func shouldProcessFile(file os.DirEntry) bool {
+	return !file.IsDir() && slices.Contains(ghFiles, file.Name())
+}
+
+// processConfigFile 处理单个配置文件
+func processConfigFile(file os.DirEntry) (gh.ConfigRepos, error) {
+	filePath := filepath.Join(folderName, file.Name())
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("读取文件 %s 失败: %v", file.Name(), err)
+	}
+
+	tag := strings.TrimSuffix(file.Name(), ".yml")
+	return gh.NewConfigRepos(content).WithTag(tag), nil
+}
+
+// writeToYAML 将数据写入YAML文件
+func writeToYAML(data gh.ConfigRepos, outputPath string) error {
 	file, err := os.Create(outputPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("创建文件失败: %v", err)
 	}
 	defer file.Close()
 
@@ -63,32 +84,18 @@ func WriteYAMLToFile(data gh.ConfigRepos, outputPath string) error {
 	defer encoder.Close()
 
 	if err := encoder.Encode(data); err != nil {
-		return err
+		return fmt.Errorf("编码YAML失败: %v", err)
 	}
 	return nil
 }
 
 var (
-	// URL     string
 	ghFiles    []string
 	folderName string
 )
 
 func init() {
 	rootCmd.AddCommand(mergeCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// mergeCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// mergeCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
-	mergeCmd.Flags().StringVar(&folderName, "folder", "data/x", "Folder Name")
-
-	// mergeCmd.Flags().StringVar(&URL, "url", "", "CDN Base URL")
-	mergeCmd.Flags().StringSliceVar(&ghFiles, "yf", []string{}, "gh.yml files")
+	mergeCmd.Flags().StringVar(&folderName, "folder", "data/x", "配置文件所在文件夹")
+	mergeCmd.Flags().StringSliceVar(&ghFiles, "yf", []string{}, "要合并的gh.yml文件列表")
 }
