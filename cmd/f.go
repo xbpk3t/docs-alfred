@@ -241,40 +241,94 @@ func GetFileNameFromURL(urlString string) (string, error) {
 // 	return builder.String()
 // }
 
+// 创建基本的 Item
+func createBaseItem(repo gh.Repository) *aw.Item {
+	name := repo.FullName()
+	des := renderReposDes(repo)
+	iconPath := renderIcon(repo)
+
+	return wf.NewItem(name).
+		Title(name).
+		Arg(repo.URL).
+		Subtitle(des.String()).
+		Copytext(repo.URL).
+		Valid(true).
+		Autocomplete(name).
+		Icon(&aw.Icon{Value: iconPath})
+}
+
+// 构建文档 URL
+// func buildDocsURL(repo gh.Repository) string {
+// 	var docsURL strings.Builder
+// 	docsPath := ""
+// 	if wf.Config.GetString("docs") == "" {
+// 		docsPath = "https://docs.hxha.xyz/x"
+// 	}
+//
+// 	// 构建基础URL部分
+// 	if wf != nil {
+// 		docsURL.WriteString(fmt.Sprintf("%s/%s#", docsPath, strings.ToLower(repo.Tag)))
+// 	} else {
+// 		slog.Error("wf is nil", slog.String("repo.Tag", repo.Tag))
+// 		docsURL.WriteString(fmt.Sprintf("%s#", strings.ToLower(repo.Tag)))
+// 	}
+//
+// 	// 根据是否有qs判断是否要跳转到其
+// 	if repo.Qs == nil {
+// 		docsURL.WriteString(strings.ToLower(repo.Type))
+// 	} else {
+// 		docsURL.WriteString(strings.ToLower(utils.JoinSlashParts(repo.FullName())))
+// 	}
+//
+// 	// 如果是某个repo的rep或者sub，就直接跳转到该sub/rep repo的主repo
+//
+//
+//
+// 	return docsURL.String()
+// }
+
+func buildDocsURL(repo gh.Repository) string {
+	var urlPath strings.Builder
+
+	// 获取基础tag部分
+	tag := strings.ToLower(repo.Tag)
+	urlPath.WriteString(fmt.Sprintf("%s/#", tag))
+
+	// 如果是子仓库，使用主仓库的路径
+	if repo.IsSubRepo() {
+		urlPath.WriteString(strings.ToLower(repo.GetMainRepo()))
+		return urlPath.String()
+	}
+
+	// 如果有问答内容，使用完整仓库名
+	if repo.Qs != nil {
+		urlPath.WriteString(strings.ToLower(repo.FullName()))
+		return urlPath.String()
+	}
+
+	// 默认使用类型
+	urlPath.WriteString(strings.ToLower(repo.Type))
+	return urlPath.String()
+}
+
+// 添加修饰键操作
+func addModifierActions(item *aw.Item, repo gh.Repository, docsURL string) {
+	item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs的URL: %s", docsURL)).Arg(docsURL)
+	item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repo.URL)).Arg(repo.URL)
+	item.Shift().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
+}
+
+// 主渲染函数
 func RenderRepos(repos gh.Repos) (item *aw.Item) {
 	for _, repo := range repos {
-		repoURL := repo.URL
-		name := repo.FullName()
-		des := renderReposDes(repo)
-		// remark := renderReposRemark(repo)
-		iconPath := renderIcon(repo)
+		// 创建基本项
+		item = createBaseItem(repo)
 
-		item = wf.NewItem(name).Title(name).
-			Arg(repoURL).
-			Subtitle(des.String()).
-			Copytext(repoURL).
-			Valid(true).
-			Autocomplete(name).Icon(&aw.Icon{Value: iconPath})
+		// 构建文档URL
+		docsURL := fmt.Sprintf("%s/%s", wf.Config.GetString("docs"), buildDocsURL(repo))
 
-		docsURL := strings.Builder{}
-		if wf != nil {
-			docsURL.WriteString(fmt.Sprintf("%s/%s#", wf.Config.GetString("docs"), strings.ToLower(repo.Tag)))
-		} else {
-			slog.Error("wf is nil", slog.String("repo.Tag", repo.Tag))
-			docsURL.WriteString(fmt.Sprintf("%s#", strings.ToLower(repo.Tag)))
-		}
-
-		if repo.Qs == nil {
-			docsURL.WriteString(strings.ToLower(repo.Type))
-		} else {
-			docsURL.WriteString(strings.ToLower(utils.JoinSlashParts(name)))
-		}
-		du := docsURL.String()
-
-		item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs中gh.md的URL: %s", du)).Arg(du)
-		// item.Cmd().Subtitle(fmt.Sprintf("Quicklook: %s", repoURL)).Arg(remark.String())
-		item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repoURL)).Arg(repoURL)
-		item.Shift().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
+		// 添加修饰键操作
+		addModifierActions(item, repo, docsURL)
 	}
 	return item
 }
@@ -283,16 +337,10 @@ func RenderRepos(repos gh.Repos) (item *aw.Item) {
 // 也就是item中的subtitle
 func renderReposDes(repo gh.Repository) (des strings.Builder) {
 	if repo.Type != "" {
-		// des.WriteString(fmt.Sprintf("[#%s]", repo.Type))
-
 		des.WriteString(fmt.Sprintf("【#%s】", repo.Type))
 	} else {
 		des.WriteString(repo.Des)
 	}
-
-	// if repo.Doc != "" {
-	// 	des.WriteString("⭐")
-	// }
 
 	if repo.Des != "" {
 		des.WriteString(fmt.Sprintf(" %s", repo.Des))
@@ -340,20 +388,6 @@ func renderReposDes(repo gh.Repository) (des strings.Builder) {
 // }
 
 func renderIcon(repo gh.Repository) (iconPath string) {
-	// switch {
-	// case repo.IsStar && repo.Qs != nil && repo.Doc != "":
-	// 	iconPath = FaQsAndDoc
-	// case repo.IsStar && repo.Qs != nil:
-	// 	iconPath = FaQs
-	// case repo.IsStar && repo.Doc != "":
-	// 	iconPath = FaDoc
-	// case repo.IsStar:
-	// 	iconPath = FaStar
-	// default:
-	// 	iconPath = FaRepo
-	// }
-	// return
-
 	// 因为需要处理有Doc的未加入gh.yml的repo，所以不再判断IsStar
 	switch {
 	case repo.Qs != nil && repo.Doc != "":

@@ -22,22 +22,6 @@ var mergeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var cr gh.ConfigRepos
 
-		// err := filepath.WalkDir(folderName, func(path string, d fs.DirEntry, err error) error {
-		// 	if !d.IsDir() && slices.Contains(ghFiles, d.Name()) {
-		// 		fmt.Println(d.Name())
-		// 		fx, err := os.ReadFile(path)
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 		cr = append(cr, gh.NewConfigRepos(fx).WithTag(strings.TrimSuffix(d.Name(), ".yml"))...)
-		// 	}
-		//
-		// 	return nil
-		// })
-		// if err != nil {
-		// 	return
-		// }
-
 		// 读取文件夹中的文件
 		files, err := os.ReadDir(folderName)
 		if err != nil {

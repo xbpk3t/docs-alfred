@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"io"
 	"log"
 	"slices"
 	"strings"
-	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -24,30 +22,6 @@ type ConfigRepo struct {
 	Repos `yaml:"repo"`
 }
 
-type Repository struct {
-	LastUpdated time.Time
-	Type        string `yaml:"type"`
-	URL         string `yaml:"url"`
-	Name        string `yaml:"name,omitempty"`
-	User        string
-	Des         string   `yaml:"des,omitempty"`
-	Doc         string   `yaml:"doc,omitempty"`
-	Tag         string   `yaml:"tag,omitempty"`
-	Qs          Qs       `yaml:"qs,omitempty"`
-	Sub         Repos    `yaml:"sub,omitempty"`
-	Rep         Repos    `yaml:"rep,omitempty"`
-	Cmd         []string `yaml:"cmd,omitempty"`
-	IsStar      bool
-}
-
-// type Qq []struct {
-// 	Topic string       `yaml:"topic"`
-// 	URL   string       `yaml:"url,omitempty"`
-// 	Des   string       `yaml:"des,omitempty"`
-// 	Qs    Qs           `yaml:"qs,omitempty"`
-// 	Sub   []Repository `yaml:"sub,omitempty"` // 用来标识属于该repo的一些repo
-// }
-
 type Qs []Qt
 
 type Qt struct {
@@ -57,15 +31,6 @@ type Qt struct {
 	U string   `yaml:"u,omitempty"` // url
 	S []string `yaml:"s,omitempty"` // 该问题的一些发散问题
 }
-
-// type Cmd []struct {
-// 	C string `yaml:"c"`
-// 	X string `yaml:"x,omitempty"` // 该命令的描述
-// 	K bool   `yaml:"k,omitempty"` // 该命令是否重要 default: false
-// }
-
-type Repos []Repository
-
 type Gh []string
 
 func NewConfigRepos(f []byte) ConfigRepos {
