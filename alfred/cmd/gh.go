@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/pkg/alfred"
-	"github.com/xbpk3t/docs-alfred/pkg/common"
+	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
+	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"
+	gh2 "github.com/xbpk3t/docs-alfred/pkg/gh"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"log/slog"
 	"net/url"
 	"path"
@@ -12,8 +14,6 @@ import (
 
 	aw "github.com/deanishe/awgo"
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
-	"github.com/xbpk3t/docs-alfred/utils"
 )
 
 var ghCmd = &cobra.Command{
@@ -25,7 +25,7 @@ var ghCmd = &cobra.Command{
 // 主命令处理函数
 func handleGhCommand(cmd *cobra.Command, args []string) {
 	builder := alfred.NewItemBuilder(wf)
-	repos := gh.NewConfigRepos(data).ToRepos()
+	repos := gh2.NewConfigRepos(data).ToRepos()
 
 	if len(args) > 0 && strings.HasPrefix(args[0], "#") {
 		handleTagSearch(repos, args, builder)
@@ -39,7 +39,7 @@ func handleGhCommand(cmd *cobra.Command, args []string) {
 }
 
 // 处理标签搜索
-func handleTagSearch(repos gh.Repos, args []string, builder *alfred.ItemBuilder) {
+func handleTagSearch(repos gh2.Repos, args []string, builder *alfred.ItemBuilder) {
 	tags := repos.ExtractTags()
 	ptag := strings.TrimPrefix(args[0], "#")
 
@@ -79,9 +79,9 @@ func renderSearchGithub(args []string) {
 	searchTitle := fmt.Sprintf("Search Github For '%s'", strings.Join(args, " "))
 
 	wf.NewItem("Search Github").
-		Arg(fmt.Sprintf(common.GithubSearchURL, searchQuery)).
+		Arg(fmt.Sprintf(cons.GithubSearchURL, searchQuery)).
 		Valid(true).
-		Icon(&aw.Icon{Value: common.IconSearch}).
+		Icon(&aw.Icon{Value: cons.IconSearch}).
 		Title(searchTitle)
 }
 
@@ -95,7 +95,7 @@ func GetFileNameFromURL(urlString string) (string, error) {
 }
 
 // Item 创建与渲染相关函数
-func createBaseItem(repo gh.Repository) *aw.Item {
+func createBaseItem(repo gh2.Repository) *aw.Item {
 	name := repo.FullName()
 	des := buildRepoDescription(repo)
 	iconPath := determineRepoIcon(repo)
@@ -111,7 +111,7 @@ func createBaseItem(repo gh.Repository) *aw.Item {
 }
 
 // 构建仓库描述
-func buildRepoDescription(repo gh.Repository) string {
+func buildRepoDescription(repo gh2.Repository) string {
 	var des strings.Builder
 
 	if repo.Type != "" {
@@ -128,7 +128,7 @@ func buildRepoDescription(repo gh.Repository) string {
 }
 
 // 构建文档 URL
-func buildDocsURL(repo gh.Repository) string {
+func buildDocsURL(repo gh2.Repository) string {
 	var docsURL strings.Builder
 	docsPath := ""
 
@@ -149,23 +149,23 @@ func buildDocsURL(repo gh.Repository) string {
 }
 
 // 确定仓库图标
-func determineRepoIcon(repo gh.Repository) string {
+func determineRepoIcon(repo gh2.Repository) string {
 	switch {
 	case repo.Qs != nil && repo.Doc != "":
-		return common.IconQsDoc
+		return cons.IconQsDoc
 	case repo.Qs != nil:
-		return common.IconQs
+		return cons.IconQs
 	case repo.Doc != "":
-		return common.IconDoc
+		return cons.IconDoc
 	case repo.IsStar:
-		return common.IconStar
+		return cons.IconStar
 	default:
-		return common.IconRepo
+		return cons.IconRepo
 	}
 }
 
 // 添加修饰键操作
-func addModifierActions(item *aw.Item, repo gh.Repository, docsURL string) {
+func addModifierActions(item *aw.Item, repo gh2.Repository, docsURL string) {
 	item.Cmd().
 		Subtitle(fmt.Sprintf("打开该Repo在Docs的URL: %s", docsURL)).
 		Arg(docsURL)
@@ -180,7 +180,7 @@ func addModifierActions(item *aw.Item, repo gh.Repository, docsURL string) {
 }
 
 // 主渲染函数
-func renderRepos(repos gh.Repos, builder *alfred.ItemBuilder) {
+func renderRepos(repos gh2.Repos, builder *alfred.ItemBuilder) {
 	for _, repo := range repos {
 		item := builder.BuildBasicItem(
 			repo.FullName(),

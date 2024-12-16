@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/ws"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"log/slog"
 	"os"
 	"strings"
-
-	"github.com/xbpk3t/docs-alfred/utils"
-
-	"github.com/xbpk3t/docs-alfred/pkg/ws"
 
 	"github.com/spf13/cobra"
 )

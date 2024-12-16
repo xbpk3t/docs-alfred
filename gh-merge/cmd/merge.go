@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/gh"
 	"log"
 	"os"
 	"path/filepath"
@@ -9,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
 	"gopkg.in/yaml.v3"
 )
 

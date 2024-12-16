@@ -2,14 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/goods"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"log/slog"
 	"os"
 	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/pkg/goods"
-	"github.com/xbpk3t/docs-alfred/utils"
 )
 
 // goodsCmd represents the goods command

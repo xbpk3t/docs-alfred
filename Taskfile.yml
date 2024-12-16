@@ -1,7 +1,9 @@
 version: "3"
 
 includes:
-  ak: Taskfile.ak.yml
+  alfred:
+    taskfile: ./alfred/Taskfile.yml
+    dir: alfred
   y2m:
     taskfile: ./yaml2md/Taskfile.yml
     dir: yaml2md
