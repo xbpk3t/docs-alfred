@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"errors"
-	"github.com/xbpk3t/docs-alfred/utils"
 	"log/slog"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	"github.com/spf13/cobra"
 )
@@ -31,25 +32,16 @@ var syncCmd = &cobra.Command{
 			ErrorHandle(errors.New("URL is Empty"))
 		}
 
-		_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
-			data, _ = utils.Fetch(url)
+		client := resty.New()
 
-			// switch cfgFile {
-			// case ConfigGithub:
-			// 	token, err := wf.Keychain.Get(KeyGithubAPIToken)
-			// 	if token == "" || err != nil {
-			// 		slog.Error("get github token error", slog.Any("Error", err))
-			// 		ErrorHandle(err)
-			// 	}
-			// 	gh := gh.NewRepos()
-			// 	if _, err := gh.UpdateRepositories(token, wf.CacheDir()+RepoDB); err != nil {
-			// 		slog.Error("failed to update repo by token", slog.Any("Error", err))
-			// 		ErrorHandle(err)
-			// 	}
-			// }
+		_, err := wf.Cache.LoadOrStore(cfgFile, time.Duration(expire)*time.Minute, func() ([]byte, error) {
+			data, err := client.R().Get(url)
+			if err != nil {
+				return nil, err
+			}
 
 			slog.Info("Sync Config Files Successfully.")
-			return data, nil
+			return data.Body(), nil
 		})
 		if err != nil {
 			ErrorHandle(err)

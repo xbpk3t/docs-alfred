@@ -2,10 +2,11 @@ package utils
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // MergeOptions 合并选项
@@ -115,7 +116,7 @@ func (m *Merger[T]) setTag(config []T, tag string) error {
 // writeResult 写入合并结果
 func (m *Merger[T]) writeResult(config []T) error {
 	// 创建输出目录（如果不存在）
-	if err := os.MkdirAll(filepath.Dir(m.options.OutputPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(m.options.OutputPath), 0o755); err != nil {
 		return fmt.Errorf("创建输出目录失败: %w", err)
 	}
 

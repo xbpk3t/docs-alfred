@@ -151,7 +151,7 @@ func TestConfigMerger(t *testing.T) {
 	}
 
 	for name, content := range testFiles {
-		err := os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0644)
+		err := os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0o644)
 		require.NoError(t, err)
 	}
 

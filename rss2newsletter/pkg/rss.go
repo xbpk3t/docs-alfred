@@ -4,11 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/avast/retry-go"
-	"github.com/golang-module/carbon/v2"
-	"github.com/gorilla/feeds"
-	"github.com/mmcdole/gofeed"
-	"gopkg.in/yaml.v3"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,6 +11,12 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/avast/retry-go"
+	"github.com/golang-module/carbon/v2"
+	"github.com/gorilla/feeds"
+	"github.com/mmcdole/gofeed"
+	"gopkg.in/yaml.v3"
 )
 
 // 错误定义
@@ -208,7 +209,6 @@ func (e *Config) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *g
 				slog.Any(LogKeyError, err))
 		}),
 	)
-
 	if err != nil {
 		slog.Error("Parse Feed Error",
 			slog.String(LogKeyURL, url),

@@ -3,8 +3,9 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"io"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Parser YAML配置解析器

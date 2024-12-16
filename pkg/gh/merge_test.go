@@ -26,7 +26,7 @@ repo:
 
 	// 写入测试文件
 	for name, content := range testFiles {
-		err := os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0644)
+		err := os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0o644)
 		if err != nil {
 			t.Fatalf("创建测试文件失败: %v", err)
 		}

@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/utils"
-	"gopkg.in/yaml.v3"
 	"io"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/utils"
+	"gopkg.in/yaml.v3"
 )
 
 // Goods 定义商品配置结构

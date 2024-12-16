@@ -16,7 +16,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/rss2newsletter/pkg"
-	"github.com/xbpk3t/docs-alfred/utils"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -110,7 +109,7 @@ func convertToRssFeed(typeName string, combinedFeed *feeds2.Feed, hideAuthor boo
 			Title:    title,
 			Link:     item.Link.Href,
 			Category: typeName,
-			PubDate:  utils.FormatDate(item.Created),
+			PubDate:  carbon.CreateFromStdTime(item.Created).ToDateTimeString(),
 		}
 	}
 	return feeds2.RssFeed{
@@ -150,7 +149,7 @@ func sendNewsletter(emailCfg EmailConfig, content string) error {
 	params := &resend.SendEmailRequest{
 		From:    emailCfg.From,
 		To:      emailCfg.To,
-		Subject: fmt.Sprintf("新内容更新 %s (第%d周)", carbon.Now().ToDateString(), utils.WeekNumOfYear()),
+		Subject: fmt.Sprintf("新内容更新 %s (第%d周)", carbon.Now().ToDateString(), carbon.Now().WeekOfYear()),
 		Html:    content,
 	}
 

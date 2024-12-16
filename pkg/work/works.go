@@ -1,13 +1,12 @@
 package work
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/samber/lo"
+	"github.com/xbpk3t/docs-a
 	"github.com/xbpk3t/docs-alfred/utils"
-	"gopkg.in/yaml.v3"
-	"io"
 	"strings"
 )
 
@@ -43,26 +42,9 @@ func NewWorkRenderer() *WorkRenderer {
 	}
 }
 
-// ParseConfig 解析配置文件
-func ParseConfig(data []byte) (Docs, error) {
-	var docs Docs
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	for {
-		var d Docs
-		if err := decoder.Decode(&d); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, fmt.Errorf("YAML解析失败: %w", err)
-		}
-		docs = append(docs, d...)
-	}
-	return docs, nil
-}
-
 // Render 渲染文档
 func (r *WorkRenderer) Render(data []byte) (string, error) {
-	docs, err := ParseConfig(data)
+	docs, err := utils.Parse[Doc](data)
 	if err != nil {
 		return "", err
 	}
@@ -117,12 +99,14 @@ func (qa *QA) formatSummary() string {
 // formatDetails 格式化问答详情
 func (qa *QA) formatDetails() string {
 	var parts []string
+	renderer := &utils.MarkdownRenderer{}
 
 	// 处理图片
 	if len(qa.Pictures) > 0 {
 		var pictures strings.Builder
 		for _, pic := range qa.Pictures {
-			pictures.WriteString(utils.RenderMarkdownImageWithFigcaption(pic))
+			renderer.RenderImageWithFigcaption(pic)
+			pictures.WriteString(renderer.String())
 		}
 		parts = append(parts, pictures.String())
 	}

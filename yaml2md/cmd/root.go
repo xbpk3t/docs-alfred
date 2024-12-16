@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/xbpk3t/docs-alfred/pkg/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/goods"
 	"github.com/xbpk3t/docs-alfred/pkg/work"
 	"github.com/xbpk3t/docs-alfred/pkg/ws"
 	"github.com/xbpk3t/docs-alfred/utils"
-	"os"
 
 	"github.com/spf13/viper"
 
@@ -86,7 +87,7 @@ var worksCmd = &cobra.Command{
 	Use:   "works",
 	Short: "Convert works yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		renderer := &work.WorksRenderer{}
+		renderer := &work.WorkRenderer{}
 		return utils.ProcessFile(cfgFile, renderer)
 	},
 }
@@ -95,7 +96,7 @@ var wsCmd = &cobra.Command{
 	Use:   "ws",
 	Short: "Convert website links yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		renderer := &ws.WsRenderer{}
+		renderer := &ws.WebStackRenderer{}
 		return utils.ProcessFile(cfgFile, renderer)
 	},
 }

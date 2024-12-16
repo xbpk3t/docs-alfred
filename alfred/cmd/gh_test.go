@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	gh2 "github.com/xbpk3t/docs-alfred/pkg/gh"
 	"os"
 	"testing"
+
+	gh2 "github.com/xbpk3t/docs-alfred/pkg/gh"
 
 	aw "github.com/deanishe/awgo"
 )
@@ -172,10 +173,10 @@ import (
 
 func setupTestEnv(t *testing.T) func() {
 	// 确保测试目录存在
-	if err := os.MkdirAll("./testenv/cache", 0755); err != nil {
+	if err := os.MkdirAll("./testenv/cache", 0o755); err != nil {
 		t.Fatalf("Failed to create cache directory: %v", err)
 	}
-	if err := os.MkdirAll("./testenv/data", 0755); err != nil {
+	if err := os.MkdirAll("./testenv/data", 0o755); err != nil {
 		t.Fatalf("Failed to create data directory: %v", err)
 	}
 
@@ -226,8 +227,8 @@ func Test_buildDocsURL(t *testing.T) {
 	defer cleanup()
 
 	// 2. 确保目录存在
-	os.MkdirAll("./testenv/cache", 0755)
-	os.MkdirAll("./testenv/data", 0755)
+	os.MkdirAll("./testenv/cache", 0o755)
+	os.MkdirAll("./testenv/data", 0o755)
 
 	// 3. 初始化 workflow (如果需要的话)
 	wf = aw.New()
@@ -259,7 +260,7 @@ func Test_buildDocsURL(t *testing.T) {
 				User: "owner",
 				Name: "repo",
 				Tag:  "tag",
-				Qs:   []gh2.Qt{{Q: "question", X: "answer"}},
+				Qs:   []gh2.Question{{Q: "question", X: "answer"}},
 			},
 			want: "tag/#owner/repo",
 		},

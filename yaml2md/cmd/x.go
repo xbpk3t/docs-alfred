@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
-	"github.com/xbpk3t/docs-alfred/utils"
 	"log/slog"
 	"os"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/pkg/gh"
+	"github.com/xbpk3t/docs-alfred/utils"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
