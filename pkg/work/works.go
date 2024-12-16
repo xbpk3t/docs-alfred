@@ -3,177 +3,186 @@ package work
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"github.com/samber/lo"
+	"github.com/xbpk3t/docs-alfred/utils"
+	"gopkg.in/yaml.v3"
 	"io"
 	"strings"
-
-	"github.com/samber/lo"
-	"gopkg.in/yaml.v3"
 )
 
+// Doc 定义文档结构
 type Doc struct {
 	Type string `yaml:"type"`
 	Tag  string `yaml:"tag"`
-	Qs   Qs     `yaml:"qs"`
+	Qs   []QA   `yaml:"qs"`
 }
 
-type Qs []QsN
-
-type QsN struct {
-	Q string   `yaml:"q"` // 问题
-	X string   `yaml:"x"` // 答案
-	U string   `yaml:"u"` // url
-	P []string `yaml:"p"` // 图片
-	S []string `yaml:"s"` // sub问题
+// QA 定义问答结构
+type QA struct {
+	Question string   `yaml:"q"` // 问题
+	Answer   string   `yaml:"x"` // 答案
+	URL      string   `yaml:"u"` // 链接
+	Pictures []string `yaml:"p"` // 图片
+	SubQs    []string `yaml:"s"` // 子问题
 }
 
+// Docs 文档集合
 type Docs []Doc
 
-func NewConfigQs(f []byte) (gk Docs) {
-	d := yaml.NewDecoder(bytes.NewReader(f))
+// WorkRenderer Markdown渲染器
+type WorkRenderer struct {
+	utils.MarkdownRenderer
+	seenTags map[string]bool
+}
+
+// NewWorkRenderer 创建新的渲染器
+func NewWorkRenderer() *WorkRenderer {
+	return &WorkRenderer{
+		seenTags: make(map[string]bool),
+	}
+}
+
+// ParseConfig 解析配置文件
+func ParseConfig(data []byte) (Docs, error) {
+	var docs Docs
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	for {
-		// create new spec here
-		spec := new(Docs)
-		// pass a reference to spec reference
-		if err := d.Decode(&spec); err != nil {
-			// break the loop in case of EOF
+		var d Docs
+		if err := decoder.Decode(&d); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			panic(err)
+			return nil, fmt.Errorf("YAML解析失败: %w", err)
 		}
-		gk = append(gk, *spec...)
+		docs = append(docs, d...)
 	}
-
-	return gk
+	return docs, nil
 }
 
-// GetNames Get All Names
-func (d Docs) GetNames() (names []string) {
-	for _, doc := range d {
-		// for _, xxx := range doc.Xxx {
-		// 	names = append(names, xxx.Name)
-		// }
-		names = append(names, doc.Type)
+// Render 渲染文档
+func (r *WorkRenderer) Render(data []byte) (string, error) {
+	docs, err := ParseConfig(data)
+	if err != nil {
+		return "", err
 	}
-	return
-}
 
-func (d Docs) GetNameByTag(tag string) (names []string) {
-	for _, doc := range d {
-		if doc.Tag == tag {
-			// for _, xxx := range doc.Xxx {
-			// 	names = append(names, xxx.Name)
-			// }
-			names = append(names, doc.Type)
+	for _, doc := range docs {
+		if !r.seenTags[doc.Tag] {
+			r.RenderHeader(2, doc.Tag)
+			r.seenTags[doc.Tag] = true
 		}
+
+		if doc.Tag != doc.Type {
+			r.RenderHeader(3, doc.Type)
+		}
+
+		r.Write(doc.RenderContent())
 	}
-	return
+
+	return r.String(), nil
 }
 
-func (d Docs) IsHitName(query string) bool {
-	return lo.ContainsBy(d.GetNames(), func(name string) bool {
-		return strings.EqualFold(name, query)
+// RenderContent 渲染文档内容
+func (d *Doc) RenderContent() string {
+	if len(d.Qs) == 0 {
+		return ""
+	}
+
+	var content strings.Builder
+	for _, qa := range d.Qs {
+		content.WriteString(qa.Render())
+	}
+	return content.String()
+}
+
+// Render 渲染问答内容
+func (qa *QA) Render() string {
+	summary := qa.formatSummary()
+	if details := qa.formatDetails(); details != "" {
+		return fmt.Sprintf("\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n",
+			summary, details)
+	}
+	return fmt.Sprintf("- %s\n", summary)
+}
+
+// formatSummary 格式化问答摘要
+func (qa *QA) formatSummary() string {
+	if qa.URL != "" {
+		return fmt.Sprintf("[%s](%s)", qa.Question, qa.URL)
+	}
+	return qa.Question
+}
+
+// formatDetails 格式化问答详情
+func (qa *QA) formatDetails() string {
+	var parts []string
+
+	// 处理图片
+	if len(qa.Pictures) > 0 {
+		var pictures strings.Builder
+		for _, pic := range qa.Pictures {
+			pictures.WriteString(utils.RenderMarkdownImageWithFigcaption(pic))
+		}
+		parts = append(parts, pictures.String())
+	}
+
+	// 处理子问题
+	if len(qa.SubQs) > 0 {
+		var steps strings.Builder
+		for _, subQ := range qa.SubQs {
+			steps.WriteString(fmt.Sprintf("- %s\n", subQ))
+		}
+		parts = append(parts, steps.String())
+	}
+
+	// 处理答案
+	if qa.Answer != "" {
+		if len(parts) > 0 {
+			parts = append(parts, "---")
+		}
+		parts = append(parts, qa.Answer)
+	}
+
+	return strings.Join(parts, "\n\n")
+}
+
+// GetTypes 获取所有类型
+func (docs Docs) GetTypes() []string {
+	return lo.Uniq(lo.Map(docs, func(d Doc, _ int) string {
+		return d.Type
+	}))
+}
+
+// GetTypesByTag 根据标签获取类型
+func (docs Docs) GetTypesByTag(tag string) []string {
+	filtered := lo.Filter(docs, func(d Doc, _ int) bool {
+		return d.Tag == tag
+	})
+	return lo.Map(filtered, func(d Doc, _ int) string {
+		return d.Type
 	})
 }
 
-type DocsTemp struct {
-	Tag string
-	Types
+// ContainsType 检查是否包含指定类型
+func (docs Docs) ContainsType(query string) bool {
+	return lo.ContainsBy(docs.GetTypes(), func(t string) bool {
+		return strings.EqualFold(t, query)
+	})
 }
 
-type Type struct {
-	Name string
-	Qs   []string
+// SearchQuestions 搜索问题
+func (docs Docs) SearchQuestions(query string) []string {
+	query = strings.ToLower(query)
+	var results []string
+
+	for _, doc := range docs {
+		for _, qa := range doc.Qs {
+			if strings.Contains(strings.ToLower(qa.Question), query) {
+				results = append(results, qa.Question)
+			}
+		}
+	}
+
+	return results
 }
-
-type Types []Type
-
-type DocsTemps []DocsTemp
-
-// func (d Docs) ConvertToDocsTemp()  {
-// 	var dc DocsTemps
-//
-// 	for _, doc := range d {
-//
-// 		types :=
-//
-// 		dc = append(dc, DocsTemp{
-// 			Type: doc.Type,
-// 			Types: make(Types, len(doc.Type)),
-// 		})
-//
-// 		for _, t := range doc.Type {
-//
-// 		}
-// 	}
-// }
-
-// func (d Docs) ExtractDocsTemps() DocsTemps {
-// 	docsTempsMap := make(map[string]Types)
-//
-// 	// Extract types for each tag
-// 	for _, doc := range d {
-// 		if types, ok := docsTempsMap[doc.Type]; ok {
-// 			// Append type to existing tag
-// 			types = append(types, Type{Name: doc.Type, Qs: doc.Qs})
-// 			docsTempsMap[doc.Type] = types
-// 		} else {
-// 			// Create new tag entry
-// 			docsTempsMap[doc.Type] = Types{Type{Name: doc.Type, Qs: doc.Qs}}
-// 		}
-// 	}
-//
-// 	// Convert map to slice
-// 	docsTemps := make(DocsTemps, 0, len(docsTempsMap))
-// 	for tag, types := range docsTempsMap {
-// 		docsTemp := DocsTemp{Type: tag, Types: types}
-// 		docsTemps = append(docsTemps, docsTemp)
-// 	}
-//
-// 	return docsTemps
-// }
-
-// func (d Docs) ExtractDocsTemps() DocsTemps {
-// 	docsTempsMap := make(map[string]Types)
-//
-// 	// Extract types for each tag
-// 	for i := 0; i < len(d); i++ {
-// 		doc := d[i]
-// 		if types, ok := docsTempsMap[doc.Type]; ok {
-// 			// Append type to existing tag
-// 			types = append(types, Type{Name: doc.Type, Qs: doc.Qs})
-// 			docsTempsMap[doc.Type] = types
-// 		} else {
-// 			// Create new tag entry
-// 			docsTempsMap[doc.Type] = Types{Type{Name: doc.Type, Qs: doc.Qs}}
-// 		}
-// 	}
-//
-// 	// Convert map to slice while preserving order
-// 	docsTemps := make(DocsTemps, len(docsTempsMap))
-// 	for i := 0; i < len(d); i++ {
-// 		doc := d[i]
-// 		if types, ok := docsTempsMap[doc.Type]; ok {
-// 			docsTemp := DocsTemp{Type: doc.Type, Types: types}
-// 			docsTemps[i] = docsTemp
-// 		}
-// 	}
-//
-// 	return docsTemps
-// }
-
-// func (d Docs) SearchQs(query string) []string {
-// 	var qs []string
-// 	for _, doc := range d {
-// 		for _, xxx := range doc.Xxx {
-// 			for _, q := range xxx.Qs {
-// 				qsLower := strings.ToLower(q)
-// 				query = strings.ToLower(query)
-// 				if strings.Contains(qsLower, query) {
-// 					qs = append(qs, q)
-// 				}
-// 			}
-// 		}
-// 	}
-// 	return qs
-// }

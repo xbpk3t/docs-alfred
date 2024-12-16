@@ -5,57 +5,108 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
-	"slices"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/samber/lo"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	GhURL = "https://github.com/"
-)
+const GhURL = "https://github.com/"
+
+// Repository 定义仓库结构
+type Repository struct {
+	LastUpdated time.Time
+	Type        string `yaml:"type"`
+	URL         string `yaml:"url"`
+	Name        string `yaml:"name,omitempty"`
+	User        string
+	Des         string    `yaml:"des,omitempty"`
+	Doc         string    `yaml:"doc,omitempty"`
+	Tag         string    `yaml:"tag,omitempty"`
+	Qs          Questions `yaml:"qs,omitempty"`
+	Sub         Repos     `yaml:"sub,omitempty"`
+	Rep         Repos     `yaml:"rep,omitempty"`
+	Cmd         []string  `yaml:"cmd,omitempty"`
+	IsStar      bool
+	utils.URLInfo
+}
+
+type Repos []Repository
+
+// ConfigRepo 定义配置仓库结构
+type ConfigRepo struct {
+	Type  string `yaml:"type"`
+	Repos Repos  `yaml:"repos"`
+}
 
 type ConfigRepos []ConfigRepo
 
-type ConfigRepo struct {
-	Type  string `yaml:"type"`
-	Repos `yaml:"repo"`
+// Question 定义问题结构
+type Question struct {
+	Q string   `yaml:"q"` // 问题
+	X string   `yaml:"x"` // 简要回答
+	P []string `yaml:"p"` // 图片
+	U string   `yaml:"u"` // url
+	S []string `yaml:"s"` // 子问题
 }
 
-type Qs []Qt
+type Questions []Question
 
-type Qt struct {
-	Q string   `yaml:"q,omitempty"` // 问题
-	X string   `yaml:"x,omitempty"` // 简要回答
-	P []string `yaml:"p,omitempty"`
-	U string   `yaml:"u,omitempty"` // url
-	S []string `yaml:"s,omitempty"` // 该问题的一些发散问题
+// GhRenderer Markdown渲染器
+type GhRenderer struct {
+	utils.MarkdownRenderer
+	Config ConfigRepos
 }
-type Gh []string
 
-func NewConfigRepos(f []byte) ConfigRepos {
-	var ghs ConfigRepos
+// Repository 相关方法
+func (r *Repository) SetGithubInfo(owner, name string) {
+	r.User = owner
+	r.Name = name
+	r.IsStar = true
+}
 
-	d := yaml.NewDecoder(bytes.NewReader(f))
+func (r *Repository) IsValid() bool {
+	return r.User != "" && r.Name != ""
+}
+
+func (r *Repository) FullName() string {
+	return fmt.Sprintf("%s/%s", r.User, r.Name)
+}
+
+func (r *Repository) IsSubRepo() bool {
+	return r.Type == "sub" || r.Type == "rep"
+}
+
+func (r *Repository) GetMainRepo() string {
+	if r.IsSubRepo() {
+		if mainRepo := extractMainRepoInfo(r.Type); mainRepo != "" {
+			return mainRepo
+		}
+	}
+	return r.FullName()
+}
+
+// ConfigRepos 相关方法
+func ParseConfig(data []byte) (ConfigRepos, error) {
+	var config ConfigRepos
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	for {
-		// create new spec here
-		spec := new(ConfigRepos)
-		// pass a reference to spec reference
-		if err := d.Decode(&spec); err != nil {
-			// break the loop in case of EOF
+		var cr ConfigRepos
+		if err := decoder.Decode(&cr); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			panic(err)
+			return nil, fmt.Errorf("解析配置失败: %w", err)
 		}
-
-		ghs = append(ghs, *spec...)
+		config = append(config, cr...)
 	}
-	return ghs
+	return config, nil
 }
 
-// 给Repo的Tag字段赋值，否则为空字符串
 func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
 	for _, repo := range cr {
 		for i := range repo.Repos {
@@ -65,25 +116,8 @@ func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
 	return cr
 }
 
-// MergeConfigs 将多个 ConfigRepos 合并为一个
-// func MergeConfigs(in <-chan ConfigRepos) ConfigRepos {
-// 	merged := make(ConfigRepos)
-//
-// 	for repo := range in {
-// 		for k, v := range repo {
-// 			merged[k] = v
-// 		}
-// 	}
-//
-// 	return merged
-// }
-
-// ToRepos Convert Type to Repo
 func (cr ConfigRepos) ToRepos() Repos {
-	repos := make(Repos, 0)
-	// for _, config := range cr {
-	// 	rec(config.Repos, config.Type, &repos)
-	// }
+	var repos Repos
 	for _, config := range cr {
 		for _, repo := range config.Repos {
 			repos = append(repos, processRepo(repo, config.Type)...)
@@ -92,127 +126,9 @@ func (cr ConfigRepos) ToRepos() Repos {
 	return repos
 }
 
-// func rec(rs Repos, t string, allRepos *Repos) {
-// 	repos := make(Repos, 0)
-//
-// 	for _, repo := range rs {
-// 		if strings.Contains(repo.URL, GhURL) {
-// 			sx, found := strings.CutPrefix(repo.URL, GhURL)
-// 			if found {
-// 				splits := strings.Split(sx, "/")
-// 				if len(splits) == 2 {
-// 					repo.User = splits[0]
-// 					repo.Name = splits[1]
-// 					repo.IsStar = true
-// 					// repo.Type = config.Type
-// 					repo.Type = t
-// 					repos = append(repos, repo)
-//
-//
-// 				} else {
-// 					log.Printf("URL Split Error: unexpected format: %s", repo.URL)
-// 				}
-// 			} else {
-// 				log.Printf("CutPrefix Error URL: %s", repo.URL)
-// 			}
-// 		} else {
-// 			log.Printf("URL Not Contains: %s", repo.URL)
-// 		}
-//
-// 		// 递归处理 Sub 字段
-// 		rec(repo.Sub, repo.Type, allRepos)
-//
-// 		// 递归处理 Rep 字段
-// 		rec(repo.Rep, repo.Type, allRepos)
-//
-// 		allRepos = append(allRepos, repos...)
-// 	}
-// 	// return repos
-// }
-
-// // processRepo 处理单个仓库，包括递归处理子仓库和依赖仓库
-// func processRepo(repo Repository, configType string) Repos {
-// 	repos := make(Repos, 0)
-// 	if strings.Contains(repo.URL, GhURL) {
-// 		sx, found := strings.CutPrefix(repo.URL, GhURL)
-// 		if found {
-// 			splits := strings.Split(sx, "/")
-// 			if len(splits) == 2 {
-// 				repo.User = splits[0]
-// 				repo.Name = splits[1]
-// 				repo.IsStar = true
-// 				repo.Type = configType
-// 				repos = append(repos, repo)
-// 				// 递归处理子仓库
-// 				repos = append(repos, processSubRepos(repo.Sub, configType)...)
-// 				// 递归处理依赖仓库
-// 				repos = append(repos, processDepRepos(repo.Rep, configType)...)
-// 			} else {
-// 				log.Printf("URL Split Error: unexpected format: %s", repo.URL)
-// 			}
-// 		} else {
-// 			log.Printf("CutPrefix Error URL: %s", repo.URL)
-// 		}
-// 	} else {
-// 		log.Printf("URL Not Contains: %s", repo.URL)
-// 	}
-// 	return repos
-// }
-//
-// // processSubRepos 递归处理子仓库
-// func processSubRepos(subRepos []Repository, configType string) Repos {
-// 	repos := make(Repos, 0)
-// 	for _, subRepo := range subRepos {
-// 		repos = append(repos, processRepo(subRepo, configType)...)
-// 	}
-// 	return repos
-// }
-//
-// // processDepRepos 递归处理依赖仓库
-// func processDepRepos(depRepos []Repository, configType string) Repos {
-// 	repos := make(Repos, 0)
-// 	for _, depRepo := range depRepos {
-// 		repos = append(repos, processRepo(depRepo, configType)...)
-// 	}
-// 	return repos
-// }
-
-// processRepo 递归处理单个仓库
-// func processRepo(repo Repository, configType string) Repos {
-// 	repos := make(Repos, 0)
-// 	if strings.Contains(repo.URL, GhURL) {
-// 		sx, found := strings.CutPrefix(repo.URL, GhURL)
-// 		if found {
-// 			splits := strings.Split(sx, "/")
-// 			if len(splits) == 2 {
-// 				repo.User = splits[0]
-// 				repo.Name = splits[1]
-// 				repo.IsStar = true
-// 				repo.Type = configType
-// 				repos = append(repos, repo)
-// 			} else {
-// 				log.Printf("URL Split Error: unexpected format: %s", repo.URL)
-// 			}
-// 		} else {
-// 			log.Printf("CutPrefix Error URL: %s", repo.URL)
-// 		}
-// 	} else {
-// 		log.Printf("URL Not Contains: %s", repo.URL)
-// 	}
-// 	for _, subRepo := range repo.Sub {
-// 		repos = append(repos, processRepo(subRepo, fmt.Sprintf("%s [SUB: %s]", configType, repo.FullName()))...)
-// 	}
-// 	for _, depRepo := range repo.Rep {
-// 		repos = append(repos, processRepo(depRepo, fmt.Sprintf("%s [DEP: %s]", configType, repo.FullName()))...)
-// 	}
-// 	return repos
-// }
-
-// pkg/gh/repository.go
-
 // processRepo 处理仓库及其子仓库
 func processRepo(repo Repository, configType string) Repos {
-	repos := make(Repos, 0)
+	var repos Repos
 
 	// 处理主仓库
 	if mainRepo := processMainRepo(repo, configType); mainRepo != nil {
@@ -229,7 +145,6 @@ func processRepo(repo Repository, configType string) Repos {
 // processMainRepo 处理主仓库信息
 func processMainRepo(repo Repository, configType string) *Repository {
 	if !isValidGithubURL(repo.URL) {
-		log.Printf("Invalid GitHub URL: %s", repo.URL)
 		return nil
 	}
 
@@ -238,9 +153,7 @@ func processMainRepo(repo Repository, configType string) *Repository {
 		return nil
 	}
 
-	repo.User = owner
-	repo.Name = name
-	repo.IsStar = true
+	repo.SetGithubInfo(owner, name)
 	repo.Type = configType
 
 	return &repo
@@ -248,11 +161,10 @@ func processMainRepo(repo Repository, configType string) *Repository {
 
 // processSubRepos 处理子仓库
 func processSubRepos(repo Repository, configType string) Repos {
-	repos := make(Repos, 0)
+	var repos Repos
 	parentFullName := repo.FullName()
 
 	for _, subRepo := range repo.Sub {
-		// subType := fmt.Sprintf("%s [SUB: %s]", configType, parentFullName)
 		subType := fmt.Sprintf("%s [SUB: %s]", configType, parentFullName)
 		repos = append(repos, processRepo(subRepo, subType)...)
 	}
@@ -262,7 +174,7 @@ func processSubRepos(repo Repository, configType string) Repos {
 
 // processDepRepos 处理依赖仓库
 func processDepRepos(repo Repository, configType string) Repos {
-	repos := make(Repos, 0)
+	var repos Repos
 	parentFullName := repo.FullName()
 
 	for _, depRepo := range repo.Rep {
@@ -273,172 +185,243 @@ func processDepRepos(repo Repository, configType string) Repos {
 	return repos
 }
 
-// isValidGithubURL 检查是否为有效的 GitHub URL
+// Renderer 相关方法
+func NewGhRenderer() *GhRenderer {
+	return &GhRenderer{}
+}
+
+func (g *GhRenderer) Render(data []byte) (string, error) {
+	config, err := ParseConfig(data)
+	if err != nil {
+		return "", err
+	}
+	g.Config = config
+	return g.renderContent()
+}
+
+func (g *GhRenderer) renderContent() (string, error) {
+	for _, repo := range g.Config {
+		g.RenderHeader(2, repo.Type)
+		g.renderRepos(repo.Repos)
+	}
+	return g.String(), nil
+}
+
+func (g *GhRenderer) renderRepos(repos Repos) {
+	for _, repo := range repos {
+		if repo.Qs != nil {
+			g.RenderHeader(3, g.RenderLink(repo.URL, repo.URL))
+			g.renderSubComponents(repo)
+			g.renderQuestions(repo.Qs)
+		}
+	}
+}
+
+func (g *GhRenderer) renderSubComponents(repo Repository) {
+	// 渲染子仓库
+	if len(repo.Sub) > 0 {
+		g.renderSubRepos(repo.Sub)
+	}
+
+	// 渲染命令
+	if len(repo.Cmd) > 0 {
+		g.RenderCodeBlock("shell", strings.Join(repo.Cmd, "\n"))
+	}
+}
+
+func (g *GhRenderer) renderSubRepos(repos Repos) {
+	if len(repos) > 0 {
+		content := RenderRepositoriesAsMarkdownTable(repos)
+		g.RenderAdmonitions(utils.AdmonitionTip, "Sub Repos", content)
+	}
+}
+
+func (g *GhRenderer) renderQuestions(qs Questions) {
+	for _, q := range qs {
+		summary := formatQuestionSummary(q)
+		details := formatQuestionDetails(q)
+		if details == "" {
+			g.RenderListItem(summary)
+		} else {
+			g.RenderFold(summary, details)
+		}
+	}
+}
+
+// 工具函数
 func isValidGithubURL(url string) bool {
 	return strings.Contains(url, GhURL)
 }
 
-// parseGithubURL 解析 GitHub URL，返回所有者和仓库名
 func parseGithubURL(url string) (owner, name string, ok bool) {
 	sx, found := strings.CutPrefix(url, GhURL)
 	if !found {
-		log.Printf("CutPrefix Error URL: %s", url)
 		return "", "", false
 	}
 
 	splits := strings.Split(sx, "/")
 	if len(splits) != 2 {
-		log.Printf("URL Split Error: unexpected format: %s", url)
 		return "", "", false
 	}
 
 	return splits[0], splits[1], true
 }
 
-//
-// // 为 Repository 类型添加 ToRepos 方法，以便递归调用
-// func (repo Repository) ToRepos() Repos {
-// 	repos := make(Repos, 0)
-// 	// 处理当前仓库
-// 	// ...（这里可以添加处理当前仓库的逻辑，如果需要的话）
-// 	// 递归处理子仓库
-// 	if len(repo.Sub) > 0 {
-// 		for _, subRepo := range repo.Sub {
-// 			repos = append(repos, subRepo.ToRepos()...)
-// 		}
-// 	}
-// 	// 递归处理依赖仓库
-// 	if len(repo.Rep) > 0 {
-// 		for _, depRepo := range repo.Rep {
-// 			repos = append(repos, depRepo.ToRepos()...)
-// 		}
-// 	}
-// 	return repos
-// }
-//
-// func (rs Repos) ToRepos() Repos {
-// 	result := make(Repos, 0)
-// 	for _, repo := range rs {
-// 		// 添加当前仓库
-// 		result = append(result, repo)
-//
-// 		// 递归处理子仓库
-// 		for _, subRepo := range repo.Sub {
-// 			result = append(result, subRepo.ToRepos()...)
-// 		}
-//
-// 		// 递归处理依赖仓库
-// 		for _, depRepo := range repo.Rep {
-// 			result = append(result, depRepo.ToRepos()...)
-// 		}
-// 	}
-// 	return result
-// }
-
-// ExtractTags Extract tags from Repos
-func (rs Repos) ExtractTags() []string {
-	var tags []string
-	for _, repo := range rs {
-		if repo.Type != "" && !slices.Contains(tags, repo.Type) {
-			tags = append(tags, repo.Type)
-		}
+func extractMainRepoInfo(typeStr string) string {
+	parts := strings.Split(typeStr, "[")
+	if len(parts) == 2 {
+		repoInfo := strings.TrimSuffix(parts[1], "]")
+		repoInfo = strings.TrimPrefix(repoInfo, "SUB: ")
+		repoInfo = strings.TrimPrefix(repoInfo, "DEP: ")
+		return repoInfo
 	}
-	return tags
+	return ""
 }
 
-// QueryReposByTag Query Repos by Type
-func (rs Repos) QueryReposByTag(tag string) Repos {
-	var res Repos
-	for _, repo := range rs {
-		if repo.Type == tag {
-			res = append(res, repo)
-		}
+func formatQuestionSummary(q Question) string {
+	if q.U != "" {
+		return fmt.Sprintf("[%s](%s)", q.Q, q.U)
 	}
-	return res
+	return q.Q
 }
 
-// FilterReposMD x
-// func (cr *ConfigRepos) FilterReposMD() ConfigRepos {
-// 	var filteredConfig ConfigRepos
-// 	for _, crv := range *cr {
-// 		// if crv.Md {
-// 		var filteredRepos []Repository
-// 		for _, repo := range crv.Repos {
-// 			if repo.Qs != nil {
-// 				// repo.Pix = addMarkdownPicFormat(repo.Pix)
-// 				filteredRepos = append(filteredRepos, repo)
-// 			}
-// 		}
-// 		crv.Repos = filteredRepos
-// 		filteredConfig = append(filteredConfig, crv)
-// 		// }
-// 	}
-// 	return filteredConfig
-// }
+func formatQuestionDetails(q Question) string {
+	var parts []string
 
-func (cr *ConfigRepos) FilterReposMD() ConfigRepos {
-	var filteredConfig ConfigRepos
-	for _, crv := range *cr {
-		// if crv.Md {
-		var filteredRepos []Repository
-		for _, repo := range crv.Repos {
-			if repo.Qs != nil {
-				// repo.Pix = addMarkdownPicFormat(repo.Pix)
-				filteredRepos = append(filteredRepos, repo)
-			}
+	// 处理图片
+	if len(q.P) > 0 {
+		var images strings.Builder
+		for _, img := range q.P {
+			images.WriteString(utils.RenderMarkdownImageWithFigcaption(img))
 		}
-		crv.Repos = filteredRepos
-		filteredConfig = append(filteredConfig, crv)
-		// }
+		parts = append(parts, images.String())
 	}
-	return filteredConfig
+
+	// 处理子问题
+	if len(q.S) > 0 {
+		var subQuestions strings.Builder
+		for _, sq := range q.S {
+			subQuestions.WriteString(fmt.Sprintf("- %s\n", sq))
+		}
+		parts = append(parts, subQuestions.String())
+	}
+
+	// 处理答案
+	if q.X != "" {
+		if len(parts) > 0 {
+			parts = append(parts, "---")
+		}
+		parts = append(parts, q.X)
+	}
+
+	return strings.Join(parts, "\n\n")
 }
 
-// // IsTypeQsEmpty 判断该type是否为空
-// func (cr *ConfigRepos) IsTypeQsEmpty() bool {
-// 	for _, crv := range *cr {
-// 		if crv.Qs == nil {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
+// RenderRepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
+func RenderRepositoriesAsMarkdownTable(repos Repos) string {
+	if len(repos) == 0 {
+		return ""
+	}
 
-// func (cr *ConfigRepos) FilterWorksMD() ConfigRepos {
-// 	var filteredConfig ConfigRepos
-// 	for _, crv := range *cr {
-// 		// if crv.Md {
-// 		var filteredRepos []Repository
-// 		crv.Repos = filteredRepos
-// 		filteredConfig = append(filteredConfig, crv)
-// 		// }
-// 	}
-// 	return filteredConfig
-// }
+	var res strings.Builder
+	data := lo.Map(repos, func(item Repository, _ int) []string {
+		repoName, _ := strings.CutPrefix(item.URL, GhURL)
+		return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
+	})
 
-// GetFileNameFromURL 从给定的 URL 中提取并返回文件名。
-// func GetFileNameFromURL(urlString string) (string, error) {
-// 	// 解析 URL
-// 	parsedURL, err := url.Parse(urlString)
-// 	if err != nil {
-// 		return "", fmt.Errorf("error parsing URL: %v", err)
-// 	}
-//
-// 	// 获取路径
-// 	urlPath := parsedURL.Path
-//
-// 	// 获取文件名
-// 	fileName := path.Base(urlPath)
-//
-// 	return fileName, nil
-// }
+	utils.RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
+	return res.String()
+}
 
-// 用来渲染pic
-// func addMarkdownPicFormat(URLs []string) []string {
-// 	res := make([]string, len(URLs))
-// 	for _, u := range URLs {
-// 		name, _ := GetFileNameFromURL(u)
-// 		res = append(res, fmt.Sprintf("![%s](%s)\n", name, u))
-// 	}
-// 	return res
-// }
+// MergeConfig 相关结构和方法
+type MergeOptions struct {
+	FolderPath string   // 配置文件所在文件夹
+	FileNames  []string // 要合并的文件名列表
+	OutputPath string   // 输出文件路径
+}
+
+type ConfigMerger struct {
+	options MergeOptions
+}
+
+func NewConfigMerger(opts MergeOptions) *ConfigMerger {
+	return &ConfigMerger{options: opts}
+}
+
+func (m *ConfigMerger) Merge() error {
+	if err := m.validateInput(); err != nil {
+		return fmt.Errorf("验证输入失败: %w", err)
+	}
+
+	config, err := m.mergeConfigs()
+	if err != nil {
+		return fmt.Errorf("合并配置失败: %w", err)
+	}
+
+	return m.writeResult(config)
+}
+
+func (m *ConfigMerger) validateInput() error {
+	if m.options.FolderPath == "" {
+		return fmt.Errorf("文件夹路径不能为空")
+	}
+	if len(m.options.FileNames) == 0 {
+		return fmt.Errorf("文件列表不能为空")
+	}
+	if m.options.OutputPath == "" {
+		return fmt.Errorf("输出路径不能为空")
+	}
+	return nil
+}
+
+func (m *ConfigMerger) mergeConfigs() (ConfigRepos, error) {
+	var mergedConfig ConfigRepos
+
+	for _, fileName := range m.options.FileNames {
+		config, err := m.processFile(fileName)
+		if err != nil {
+			return nil, fmt.Errorf("处理文件 %s 失败: %w", fileName, err)
+		}
+		mergedConfig = append(mergedConfig, config...)
+	}
+
+	return mergedConfig, nil
+}
+
+func (m *ConfigMerger) processFile(fileName string) (ConfigRepos, error) {
+	content, err := m.readFile(fileName)
+	if err != nil {
+		return nil, err
+	}
+
+	tag := strings.TrimSuffix(fileName, ".yml")
+	rc, _ := ParseConfig(content)
+
+	return rc.WithTag(tag), nil
+}
+
+func (m *ConfigMerger) readFile(fileName string) ([]byte, error) {
+	filePath := filepath.Join(m.options.FolderPath, fileName)
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("读取文件失败: %w", err)
+	}
+	return content, nil
+}
+
+func (m *ConfigMerger) writeResult(config ConfigRepos) error {
+	file, err := os.Create(m.options.OutputPath)
+	if err != nil {
+		return fmt.Errorf("创建输出文件失败: %w", err)
+	}
+	defer file.Close()
+
+	encoder := yaml.NewEncoder(file)
+	defer encoder.Close()
+
+	if err := encoder.Encode(config); err != nil {
+		return fmt.Errorf("编码YAML失败: %w", err)
+	}
+
+	return nil
+}
