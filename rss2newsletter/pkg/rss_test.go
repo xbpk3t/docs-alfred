@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"github.com/mmcdole/gofeed"
 	"testing"
 	"time"
 
@@ -40,6 +41,151 @@ func TestFilterFeedsWithTimeRange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := FilterFeedsWithTimeRange(tt.args.created, tt.args.endDate, tt.args.schedule); got != tt.want {
 				t.Errorf("FilterFeedsWithTimeRange() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateFeeds(t *testing.T) {
+	tests := []struct {
+		name    string
+		feeds   []*gofeed.Feed
+		wantErr bool
+	}{
+		{
+			name:    "空feeds列表",
+			feeds:   []*gofeed.Feed{},
+			wantErr: true,
+		},
+		{
+			name:    "有效feeds列表",
+			feeds:   []*gofeed.Feed{{Title: "Test Feed"}},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFeeds(tt.feeds)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateFeeds() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCreateBaseFeed(t *testing.T) {
+	tests := []struct {
+		name  string
+		title string
+		want  string
+	}{
+		{
+			name:  "基本标题",
+			title: "Test Feed",
+			want:  "Test Feed",
+		},
+		{
+			name:  "空标题",
+			title: "",
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := createBaseFeed(tt.title)
+			if got.Title != tt.want {
+				t.Errorf("createBaseFeed() title = %v, want %v", got.Title, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfig_GetItemCreationTime(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name string
+		item *gofeed.Item
+		want time.Time
+	}{
+		{
+			name: "有发布时间",
+			item: &gofeed.Item{
+				PublishedParsed: &now,
+			},
+			want: now,
+		},
+		{
+			name: "只有更新时间",
+			item: &gofeed.Item{
+				UpdatedParsed: &now,
+			},
+			want: now,
+		},
+		{
+			name: "都没有时间",
+			item: &gofeed.Item{},
+			want: time.Now(),
+		},
+	}
+
+	cfg := Config{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cfg.getItemCreationTime(tt.item)
+			if !got.Equal(tt.want) && tt.item.PublishedParsed != nil {
+				t.Errorf("getItemCreationTime() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfig_ProcessSingleFeed(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name      string
+		feed      *gofeed.Feed
+		seen      map[string]bool
+		wantCount int
+		config    Config
+	}{
+		{
+			name: "正常处理",
+			feed: &gofeed.Feed{
+				Title: "Test Feed",
+				Items: []*gofeed.Item{
+					{
+						Title:           "Item 1",
+						Link:            "http://example.com/1",
+						PublishedParsed: &now,
+					},
+				},
+			},
+			seen:      make(map[string]bool),
+			wantCount: 1,
+			config: Config{
+				Feed: struct {
+					MaxTries  int `yaml:"maxTries"`
+					FeedLimit int `yaml:"feedLimit"`
+				}{
+					FeedLimit: 10,
+				},
+				Newsletter: struct {
+					Schedule            string `yaml:"schedule"`
+					IsHideAuthorInTitle bool   `yaml:"isHideAuthorInTitle"`
+				}{
+					Schedule: "daily",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.processSingleFeed(tt.feed, tt.seen)
+			if len(got) != tt.wantCount {
+				t.Errorf("processSingleFeed() got %v items, want %v", len(got), tt.wantCount)
 			}
 		})
 	}

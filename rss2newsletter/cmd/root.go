@@ -38,7 +38,7 @@ var rootCmd = &cobra.Command{
 	Use:   "rss2newsletter",
 	Short: "RSS订阅转换为邮件推送工具",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		config := pkg.NewConfig(cfgFile)
+		config, _ := pkg.NewConfig(cfgFile)
 
 		// 使用 errgroup 进行并发处理
 		g, _ := errgroup.WithContext(context.Background())
@@ -88,7 +88,7 @@ func processFeed(feed pkg.FeedsDetail, config *pkg.Config) (feeds2.RssFeed, erro
 		return item.Feed
 	}))
 
-	allFeeds := config.FetchURLs(urls)
+	allFeeds := config.FetchURLs(context.TODO(), urls)
 	if len(allFeeds) == 0 {
 		return feeds2.RssFeed{}, fmt.Errorf("no feed found for type: %s", TypeName)
 	}

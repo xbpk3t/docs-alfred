@@ -51,7 +51,8 @@ func (g *GhRenderer) renderRepos(repos Repos) {
 // renderSubRepos 渲染子仓库
 func (g *GhRenderer) renderSubRepos(repos Repos) {
 	if len(repos) > 0 {
-		g.Write(utils.RenderMarkdownAdmonitions(utils.AdmonitionTip, "Sub Repos", RenderRepositoriesAsMarkdownTable(repos)))
+		renderer := &utils.MarkdownRenderer{}
+		renderer.RenderAdmonitions(utils.AdmonitionTip, "Sub Repos", RenderRepositoriesAsMarkdownTable(repos))
 	}
 }
 

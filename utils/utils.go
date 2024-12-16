@@ -133,7 +133,6 @@ func RenderMarkdownFold(summary, details string) string {
 func RenderMarkdownImageWithFigcaption(url string) string {
 	// split last part of title from url
 	title := ExtractTitleFromURL(url)
-
 	return fmt.Sprintf("![image](%s)\n<center>*%s*</center>\n\n", url, title)
 }
 
