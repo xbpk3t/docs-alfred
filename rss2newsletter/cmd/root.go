@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"html/template"
 	"log"
 	"log/slog"
@@ -15,10 +16,8 @@ import (
 	feeds2 "github.com/gorilla/feeds"
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
-	"github.com/xbpk3t/docs-alfred/rss2newsletter/pkg"
-	"github.com/xbpk3t/docs-alfred/utils"
-
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/rss2newsletter/pkg"
 )
 
 var wg sync.WaitGroup

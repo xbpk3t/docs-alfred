@@ -1,11 +1,11 @@
 package cmd
 
 import (
+	gh2 "github.com/xbpk3t/docs-alfred/pkg/gh"
 	"os"
 	"testing"
 
 	aw "github.com/deanishe/awgo"
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
 )
 
 // RenderRepos function should correctly render repository items with valid data using a table-driven approach.
@@ -240,12 +240,12 @@ func Test_buildDocsURL(t *testing.T) {
 
 	tests := []struct {
 		name string
-		repo gh.Repository
+		repo gh2.Repository
 		want string
 	}{
 		{
 			name: "基础仓库测试",
-			repo: gh.Repository{
+			repo: gh2.Repository{
 				User: "owner",
 				Name: "repo",
 				Tag:  "tag",
@@ -255,17 +255,17 @@ func Test_buildDocsURL(t *testing.T) {
 		},
 		{
 			name: "带有Qs的仓库测试",
-			repo: gh.Repository{
+			repo: gh2.Repository{
 				User: "owner",
 				Name: "repo",
 				Tag:  "tag",
-				Qs:   []gh.Qt{{Q: "question", X: "answer"}},
+				Qs:   []gh2.Qt{{Q: "question", X: "answer"}},
 			},
 			want: "tag/#owner/repo",
 		},
 		{
 			name: "大写标签测试",
-			repo: gh.Repository{
+			repo: gh2.Repository{
 				User: "owner",
 				Name: "repo",
 				Tag:  "TAG",
@@ -275,7 +275,7 @@ func Test_buildDocsURL(t *testing.T) {
 		},
 		{
 			name: "空标签测试",
-			repo: gh.Repository{
+			repo: gh2.Repository{
 				User: "owner",
 				Name: "repo",
 				Tag:  "",
@@ -285,13 +285,13 @@ func Test_buildDocsURL(t *testing.T) {
 		},
 		{
 			name: "kong",
-			repo: gh.Repository{
+			repo: gh2.Repository{
 				User: "spf13",
 				Name: "cobra",
 				Tag:  "works",
 				Type: "cli",
-				Sub: gh.Repos{
-					gh.Repository{
+				Sub: gh2.Repos{
+					gh2.Repository{
 						User: "alecthomas",
 						Name: "kong",
 						Tag:  "works",

@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/pkg/alfred"
-	"github.com/xbpk3t/docs-alfred/pkg/common"
+	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
+	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"
 	"github.com/xbpk3t/docs-alfred/pkg/ws"
 )
 
@@ -28,7 +28,7 @@ func handleWsCommand(cmd *cobra.Command, args []string) {
 			tk.Name,
 			tk.Des,
 			tk.URL,
-			common.IconStar,
+			cons.IconStar,
 		)
 		builder.AddCommonModifiers(item, tk.URL, tk.Des)
 	}
