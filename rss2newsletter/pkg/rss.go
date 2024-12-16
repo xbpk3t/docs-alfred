@@ -51,25 +51,6 @@ var scheduleTimeRanges = map[string]int{
 	Weekly: 7 * 24,
 }
 
-// func NewConfig() *Config {
-// 	fx, err := os.ReadFile(feedFile)
-// 	if err != nil {
-// 		slog.Error("Read FeedCfg File Error, Check your path:", slog.String("FeedCfg File", feedFile))
-// 		return nil
-// 	}
-// 	var cates []Category
-// 	err = yaml.Unmarshal(fx, &cates)
-// 	if err != nil {
-// 		slog.Error("Unmarshal:", slog.Any("Error", err))
-// 		return nil
-// 	}
-// 	return &Config{
-// 		// Timeout:    30,
-// 		// FeedLimit:  20,
-// 		Categories: cates,
-// 	}
-// }
-
 func NewConfig(cfgFile string) *Config {
 	fx, err := os.ReadFile(cfgFile)
 	if err != nil {
@@ -83,22 +64,6 @@ func NewConfig(cfgFile string) *Config {
 
 	return &cfg
 }
-
-// // fetchURL 直接获取
-// func (e Config) fetchURL(url string, ch chan<- *gofeed.FeedCfg) {
-// 	// core.Infof("Fetching URL: %v\n", url)
-// 	fp := gofeed.NewParser()
-// 	fp.Client = &http.Client{
-// 		Timeout: time.Duration(e.Timeout) * time.Second,
-// 	}
-// 	feed, err := fp.ParseURL(url)
-// 	if err == nil {
-// 		ch <- feed
-// 	} else {
-// 		slog.Info("fetchURL Error:", slog.String("URL", url), slog.Any("Error", err))
-// 		ch <- nil
-// 	}
-// }
 
 // 尝试retry获取
 func (e Config) FetchURLWithRetry(url string, ch chan<- *gofeed.Feed) {

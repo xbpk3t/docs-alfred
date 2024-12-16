@@ -1,75 +1,82 @@
-package cmd
+package gh
 
 import (
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
-	"github.com/xbpk3t/docs-alfred/utils"
-	"log/slog"
-	"os"
-	"strings"
-
 	"github.com/samber/lo"
-
-	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/utils"
+	"strings"
 )
 
-// ghCmd represents the gh command
-var ghCmd = &cobra.Command{
-	Use:   "gh",
-	Short: "A brief description of your command",
-	Run: func(cmd *cobra.Command, args []string) {
-		f, err := os.ReadFile(cfgFile)
-		if err != nil {
-			slog.Error(err.Error())
-			return
-		}
-
-		df := gh.NewConfigRepos(f)
-
-		var res strings.Builder
-
-		for _, d := range df {
-			repos := RenderTypeRepos(d)
-			res.WriteString(repos.String())
-		}
-
-		targetFile := utils.ChangeFileExtFromYamlToMd(cfgFile)
-		err = os.WriteFile(targetFile, []byte(res.String()), os.ModePerm)
-		if err != nil {
-			return
-		}
-
-		slog.Info("Markdown output has been written to", slog.String("File", targetFile))
-	},
+type GhRenderer struct {
+	utils.MarkdownRenderer
+	Config ConfigRepos
 }
 
-// addMarkdownQsFormat 渲染qs
-// 分别渲染 summary 和 details，来替换之前 switch...case 写法
-func addMarkdownQsFormat(qs gh.Qs) string {
-	var builder strings.Builder
+// RenderContent 保留原有的渲染逻辑
+func (g *GhRenderer) RenderContent() (string, error) {
+	for _, repo := range g.Config {
+		g.RenderHeader(2, repo.Type)
+		g.renderRepos(repo.Repos)
+	}
+	return g.String(), nil
+}
 
+// Render 实现 ContentRenderer 接口
+func (g *GhRenderer) Render(data []byte) (string, error) {
+	g.Config = NewConfigRepos(data)
+	return g.RenderContent()
+}
+
+func (g *GhRenderer) renderRepos(repos Repos) {
+	for _, repo := range repos {
+		if repo.Qs != nil {
+			g.RenderHeader(3, g.RenderLink(repo.URL, repo.URL))
+
+			// 渲染子仓库
+			if len(repo.Sub) > 0 {
+				g.renderSubRepos(repo.Sub)
+			}
+
+			// 渲染命令
+			if len(repo.Cmd) > 0 {
+				g.RenderCodeBlock("shell", strings.Join(repo.Cmd, "\n"))
+			}
+
+			// 渲染问题
+			g.renderQuestions(repo.Qs)
+		}
+	}
+}
+
+// renderSubRepos 渲染子仓库
+func (g *GhRenderer) renderSubRepos(repos Repos) {
+	if len(repos) > 0 {
+		g.Write(utils.RenderMarkdownAdmonitions(utils.AdmonitionTip, "Sub Repos", RenderRepositoriesAsMarkdownTable(repos)))
+	}
+}
+
+// renderQuestions 渲染问题
+func (g *GhRenderer) renderQuestions(qs Qs) {
 	for _, q := range qs {
 		summary := formatSummary(q)
 		details := formatDetails(q)
 		if details == "" {
-			builder.WriteString(fmt.Sprintf("- %s\n", summary))
+			g.RenderListItem(summary)
 		} else {
-			builder.WriteString(utils.RenderMarkdownFold(summary, details))
+			g.RenderFold(summary, details)
 		}
 	}
-
-	return builder.String()
 }
 
 // RenderRepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
-func RenderRepositoriesAsMarkdownTable(repos []gh.Repository) string {
+func RenderRepositoriesAsMarkdownTable(repos []Repository) string {
 	if len(repos) == 0 {
 		return ""
 	}
 	var res strings.Builder
 	// 准备表格数据
-	data := lo.Map(repos, func(item gh.Repository, index int) []string {
-		repoName, _ := strings.CutPrefix(item.URL, gh.GhURL)
+	data := lo.Map(repos, func(item Repository, index int) []string {
+		repoName, _ := strings.CutPrefix(item.URL, GhURL)
 		return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
 	})
 
@@ -78,7 +85,7 @@ func RenderRepositoriesAsMarkdownTable(repos []gh.Repository) string {
 	return res.String()
 }
 
-func RenderCmdAsMarkdownTable(repo gh.Repository) string {
+func RenderCmdAsMarkdownTable(repo Repository) string {
 	if len(repo.Cmd) == 0 {
 		return ""
 	}
@@ -90,7 +97,7 @@ func RenderCmdAsMarkdownTable(repo gh.Repository) string {
 	return res.String()
 }
 
-func RenderCmdAsCodeBlock(repo gh.Repository) string {
+func RenderCmdAsCodeBlock(repo Repository) string {
 	if len(repo.Cmd) == 0 {
 		return ""
 	}
@@ -105,14 +112,14 @@ func RenderDocIcon() string {
 	return "[![GitHub](https://icongr.am/feather/github.svg)](https://www.github.com)\n"
 }
 
-func formatSummary(q gh.Qt) string {
+func formatSummary(q Qt) string {
 	if q.U != "" {
 		return fmt.Sprintf("[%s](%s)", q.Q, q.U)
 	}
 	return q.Q
 }
 
-func formatDetails(q gh.Qt) string {
+func formatDetails(q Qt) string {
 	var parts []string
 
 	if len(q.P) != 0 {
@@ -130,7 +137,7 @@ func formatDetails(q gh.Qt) string {
 		}
 		parts = append(parts, b.String())
 	}
-	// 在s和x之间插入分隔符
+
 	if len(q.S) != 0 && q.X != "" {
 		parts = append(parts, "---")
 	}
@@ -142,30 +149,8 @@ func formatDetails(q gh.Qt) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// FilterRepos 过滤掉Repo中Qs为nil的ConfigRepos
-// func FilterRepos(configRepos gh.ConfigRepos) (filteredRepos gh.ConfigRepos) {
-// 	for _, repoGroup := range configRepos {
-// 		// 过滤掉qs为nil的Repository
-// 		filteredGroup := gh.ConfigRepo{
-// 			Type:  repoGroup.Type,
-// 			Repos: make([]gh.Repository, 0),
-// 		}
-// 		filteredGroup.Type = repoGroup.Type
-// 		for _, repo := range repoGroup.Repos {
-// 			if repo.Qs != nil {
-// 				filteredGroup.Repos = append(filteredGroup.Repos, repo)
-// 			}
-// 		}
-// 		// 只有当过滤后的Repositories不为空时，才添加到结果中
-// 		if len(filteredGroup.Repos) > 0 {
-// 			filteredRepos = append(filteredRepos, filteredGroup)
-// 		}
-// 	}
-// 	return filteredRepos
-// }
-
 // RenderTypeRepos 渲染整个type
-func RenderTypeRepos(d gh.ConfigRepo) (res strings.Builder) {
+func RenderTypeRepos(d ConfigRepo) (res strings.Builder) {
 	if d.Repos != nil {
 		res.WriteString(fmt.Sprintf("## %s \n", d.Type))
 	}
@@ -179,10 +164,10 @@ func RenderTypeRepos(d gh.ConfigRepo) (res strings.Builder) {
 	return
 }
 
-func RenderRepos(repos gh.Repos) (res strings.Builder) {
+func RenderRepos(repos Repos) (res strings.Builder) {
 	for _, repo := range repos {
 		if repo.Qs != nil {
-			repoName, f := strings.CutPrefix(repo.URL, gh.GhURL)
+			repoName, f := strings.CutPrefix(repo.URL, GhURL)
 			if !f {
 				repoName = ""
 			}
@@ -218,16 +203,19 @@ func RenderRepos(repos gh.Repos) (res strings.Builder) {
 	return
 }
 
-func init() {
-	rootCmd.AddCommand(ghCmd)
+// addMarkdownQsFormat 渲染qs
+func addMarkdownQsFormat(qs Qs) string {
+	var builder strings.Builder
 
-	// Here you will define your flags and configuration settings.
+	for _, q := range qs {
+		summary := formatSummary(q)
+		details := formatDetails(q)
+		if details == "" {
+			builder.WriteString(fmt.Sprintf("- %s\n", summary))
+		} else {
+			builder.WriteString(utils.RenderMarkdownFold(summary, details))
+		}
+	}
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// ghCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// ghCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	return builder.String()
 }
