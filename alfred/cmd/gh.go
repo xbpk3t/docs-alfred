@@ -2,15 +2,16 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
-	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"
-	gh2 "github.com/xbpk3t/docs-alfred/pkg/gh"
-	"github.com/xbpk3t/docs-alfred/utils"
 	"log/slog"
 	"net/url"
 	"path"
 	"slices"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
+	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"
+	gh2 "github.com/xbpk3t/docs-alfred/pkg/gh"
+	"github.com/xbpk3t/docs-alfred/utils"
 
 	aw "github.com/deanishe/awgo"
 	"github.com/spf13/cobra"
@@ -25,7 +26,8 @@ var ghCmd = &cobra.Command{
 // 主命令处理函数
 func handleGhCommand(cmd *cobra.Command, args []string) {
 	builder := alfred.NewItemBuilder(wf)
-	repos := gh2.NewConfigRepos(data).ToRepos()
+	r, _ := gh2.ParseConfig(data)
+	repos := r.ToRepos()
 
 	if len(args) > 0 && strings.HasPrefix(args[0], "#") {
 		handleTagSearch(repos, args, builder)

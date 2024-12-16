@@ -1,9 +1,10 @@
 package pkg
 
 import (
-	"github.com/mmcdole/gofeed"
 	"testing"
 	"time"
+
+	"github.com/mmcdole/gofeed"
 
 	"github.com/golang-module/carbon/v2"
 )

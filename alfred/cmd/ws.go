@@ -16,12 +16,12 @@ var wsCmd = &cobra.Command{
 func handleWsCommand(cmd *cobra.Command, args []string) {
 	builder := alfred.NewItemBuilder(wf)
 
-	ws, err := ws.NewConfigWs(data)
+	f, err := ws.ParseConfig(data)
 	if err != nil {
 		wf.FatalError(err)
 	}
 
-	tks := ws.SearchWs(args)
+	tks := f.Search(args)
 
 	for _, tk := range tks {
 		item := builder.BuildBasicItem(

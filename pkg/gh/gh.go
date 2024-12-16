@@ -126,6 +126,10 @@ func (cr ConfigRepos) ToRepos() Repos {
 	return repos
 }
 
+// ExtractTags
+func (cr ConfigRepos) ExtractTags() {
+}
+
 // processRepo 处理仓库及其子仓库
 func processRepo(repo Repository, configType string) Repos {
 	var repos Repos
@@ -287,12 +291,14 @@ func formatQuestionSummary(q Question) string {
 
 func formatQuestionDetails(q Question) string {
 	var parts []string
+	renderer := &utils.MarkdownRenderer{}
 
 	// 处理图片
 	if len(q.P) > 0 {
 		var images strings.Builder
 		for _, img := range q.P {
-			images.WriteString(utils.RenderMarkdownImageWithFigcaption(img))
+			renderer.RenderImageWithFigcaption(img)
+			images.WriteString(renderer.String())
 		}
 		parts = append(parts, images.String())
 	}

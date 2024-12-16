@@ -1,7 +1,11 @@
 package work
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/xbpk3t/docs-a
+	"github.com/xbpk3t/docs-alfred/utils"
 	"testing"
 )
 
@@ -71,7 +75,8 @@ func TestParseConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseConfig([]byte(tt.input))
+			// got, err := ParseConfig([]byte(tt.input))
+			got, err := utils.Parse[Doc]([]byte(tt.input))
 			if tt.wantErr {
 				assert.Error(t, err)
 				return

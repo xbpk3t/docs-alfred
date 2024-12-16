@@ -1,11 +1,12 @@
 package utils
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // 测试用的配置结构
@@ -38,7 +39,7 @@ func TestMerger_Merge(t *testing.T) {
 	}
 
 	for name, content := range testFiles {
-		err := os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0644)
+		err := os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0o644)
 		require.NoError(t, err)
 	}
 
@@ -174,7 +175,7 @@ func TestMerger_processFile(t *testing.T) {
   name: "test1"
 `
 	testFile := "test.yml"
-	err = os.WriteFile(filepath.Join(tempDir, testFile), []byte(testContent), 0644)
+	err = os.WriteFile(filepath.Join(tempDir, testFile), []byte(testContent), 0o644)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -242,7 +243,7 @@ func TestMergeFiles(t *testing.T) {
 	}
 
 	for name, content := range testFiles {
-		err := os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0644)
+		err := os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0o644)
 		require.NoError(t, err)
 	}
 

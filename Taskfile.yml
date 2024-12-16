@@ -23,7 +23,8 @@ tasks:
   lint:
     desc: golang linter
     cmds:
-      - golangci-lint run --fix && gofumpt -l -w .
+      - golangci-lint run --fix
+      - gofumpt -l -w .
       - go mod tidy -v
       - fieldalignment -fix ./...
       - go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic

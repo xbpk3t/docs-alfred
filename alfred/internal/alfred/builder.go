@@ -2,6 +2,7 @@ package alfred
 
 import (
 	"fmt"
+
 	aw "github.com/deanishe/awgo"
 	"github.com/xbpk3t/docs-alfred/pkg/gh"
 )

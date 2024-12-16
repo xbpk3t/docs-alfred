@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
 	"log"
 	"os"
+
+	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/gh"
 )
 
 var (

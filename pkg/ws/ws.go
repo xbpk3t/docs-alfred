@@ -2,10 +2,9 @@ package ws
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/xbpk3t/docs-alfred/utils"
-	"gopkg.in/yaml.v3"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/utils"
 )
 
 // URL 定义单个URL结构
@@ -37,11 +36,7 @@ func NewWebStackRenderer() *WebStackRenderer {
 
 // ParseConfig 解析配置文件
 func ParseConfig(data []byte) (WebStacks, error) {
-	var ws WebStacks
-	if err := yaml.Unmarshal(data, &ws); err != nil {
-		return nil, errors.Wrap(err, "解析YAML失败")
-	}
-	return ws, nil
+	return utils.Parse[WebStack](data)
 }
 
 // Render 渲染为Markdown格式
