@@ -7,6 +7,30 @@ import (
 	"strings"
 )
 
+// URLInfo URL信息结构
+type URLInfo struct {
+	Name string
+	URL  string
+	Feed string
+	Des  string
+}
+
+// GetDisplayName 获取显示名称
+func (u *URLInfo) GetDisplayName() string {
+	if u.Name != "" {
+		return u.Name
+	}
+	return u.URL
+}
+
+// GetLink 获取链接地址
+func (u *URLInfo) GetLink() string {
+	if u.URL != "" {
+		return u.URL
+	}
+	return u.Feed
+}
+
 func GetFileName(urlString string) (string, error) {
 	parsedURL, err := url.Parse(urlString)
 	if err != nil {

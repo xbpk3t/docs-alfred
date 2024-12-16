@@ -92,3 +92,22 @@ func (m *MarkdownRenderer) RenderAdmonitions(admonitionType, title, rex string) 
 	m.Write(rex)
 	m.Write("\n\n:::\n\n")
 }
+
+// RenderURLTable 渲染URL表格
+func (r *MarkdownRenderer) RenderURLTable(items []URLInfo, headers []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+
+	var res strings.Builder
+	data := make([][]string, len(items))
+	for i, item := range items {
+		data[i] = []string{
+			fmt.Sprintf("[%s](%s)", item.GetDisplayName(), item.GetLink()),
+			item.Des,
+		}
+	}
+
+	RenderMarkdownTable(headers, &res, data)
+	return res.String()
+}

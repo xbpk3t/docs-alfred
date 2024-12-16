@@ -5,23 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"github.com/xbpk3t/docs-alfred/utils"
+	"gopkg.in/yaml.v3"
 	"io"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
-type ConfigGoods []ConfigGoodsX
-
-type ConfigGoodsX struct {
-	Type  string   `yaml:"type"`
-	Tag   string   `yaml:"tag"`
-	Goods []GoodsX `yaml:"goods"`
-	Des   string   `yaml:"des,omitempty"`
-	Qs    []Qs     `yaml:"qs,omitempty"`
+// Goods 定义商品配置结构
+type Goods struct {
+	Type  string `yaml:"type"`
+	Tag   string `yaml:"tag"`
+	Items []Item `yaml:"goods"`
+	Des   string `yaml:"des,omitempty"`
+	QA    []QA   `yaml:"qs,omitempty"`
 }
 
-type GoodsX struct {
+// Item 定义单个商品项
+type Item struct {
 	Name  string   `yaml:"name"`
 	Param string   `yaml:"param,omitempty"`
 	Price string   `yaml:"price,omitempty"`
@@ -31,115 +30,182 @@ type GoodsX struct {
 	Use   bool     `yaml:"use,omitempty"`
 }
 
-type Qs struct {
-	Q string   `yaml:"q"`
-	X string   `yaml:"x"`
-	S []string `yaml:"s"`
+// QA 定义问答结构
+type QA struct {
+	Question string   `yaml:"q"`
+	Answer   string   `yaml:"x"`
+	Steps    []string `yaml:"s"`
 }
 
-func NewConfigGoods(f []byte) (gk ConfigGoods) {
-	d := yaml.NewDecoder(bytes.NewReader(f))
+// GoodsRenderer Markdown渲染器
+type GoodsRenderer struct {
+	utils.MarkdownRenderer
+	seenTags map[string]bool
+}
+
+// NewGoodsRenderer 创建新的渲染器
+func NewGoodsRenderer() *GoodsRenderer {
+	return &GoodsRenderer{
+		seenTags: make(map[string]bool),
+	}
+}
+
+// Render 渲染商品数据
+func (r *GoodsRenderer) Render(data []byte) (string, error) {
+	goods, err := ParseConfig(data)
+	if err != nil {
+		return "", fmt.Errorf("解析配置失败: %w", err)
+	}
+
+	for _, item := range goods {
+		// 渲染标签标题
+		if !r.seenTags[item.Tag] {
+			r.RenderHeader(2, item.Tag)
+			r.seenTags[item.Tag] = true
+		}
+
+		// 渲染类型标题
+		r.RenderHeader(3, item.Type)
+
+		// 渲染商品内容
+		r.Write(item.RenderMarkdown())
+	}
+
+	return r.String(), nil
+}
+
+// ParseConfig 解析配置文件
+func ParseConfig(data []byte) ([]Goods, error) {
+	var goods []Goods
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	for {
-		// create new spec here
-		spec := new(ConfigGoods)
-		// pass a reference to spec reference
-		if err := d.Decode(&spec); err != nil {
-			// break the loop in case of EOF
+		var g []Goods
+		if err := decoder.Decode(&g); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			panic(err)
+			return nil, fmt.Errorf("YAML解析失败: %w", err)
 		}
-		gk = append(gk, *spec...)
+		goods = append(goods, g...)
 	}
-
-	return gk
+	return goods, nil
 }
 
-// AddMarkdownFormat converts a ConfigGoodsX item to a Markdown formatted string
-func AddMarkdownFormat(gi ConfigGoodsX) string {
-	var res strings.Builder
-	for _, gd := range gi.Goods {
-		summary := createMarkdownSummary(gd)
-		details := createMarkdownDetails(gd)
+// RenderMarkdown 渲染为 Markdown 格式
+func (g *Goods) RenderMarkdown() string {
+	var content strings.Builder
 
-		if details == "" {
-			res.WriteString(fmt.Sprintf("- %s\n", summary))
+	// 渲染商品描述
+	if g.Des != "" {
+		content.WriteString(fmt.Sprintf("%s\n\n", g.Des))
+	}
+
+	// 渲染商品列表
+	content.WriteString(g.renderItems())
+
+	// 渲染问答部分
+	if qaContent := g.renderQA(); qaContent != "" {
+		content.WriteString(qaContent)
+	}
+
+	return content.String()
+}
+
+// renderItems 渲染商品项
+func (g *Goods) renderItems() string {
+	var content strings.Builder
+	for _, item := range g.Items {
+		summary := item.formatSummary()
+		if details := item.formatDetails(); details != "" {
+			content.WriteString(fmt.Sprintf("\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n",
+				summary, details))
 		} else {
-			res.WriteString(utils.RenderMarkdownFold(summary, details))
+			content.WriteString(fmt.Sprintf("- %s\n", summary))
 		}
 	}
-	return res.String()
+	return content.String()
 }
 
-// createMarkdownSummary formats the summary for a goods item
-func createMarkdownSummary(gd GoodsX) string {
+// formatSummary 格式化商品摘要
+func (i *Item) formatSummary() string {
 	mark := "~~"
-	if gd.Use {
+	if i.Use {
 		mark = "***"
 	}
 
-	if gd.URL != "" {
-		return fmt.Sprintf("%s[%s](%s)%s", mark, gd.Name, gd.URL, mark)
+	if i.URL != "" {
+		return fmt.Sprintf("%s[%s](%s)%s", mark, i.Name, i.URL, mark)
 	}
-	return fmt.Sprintf("%s%s%s", mark, gd.Name, mark)
+	return fmt.Sprintf("%s%s%s", mark, i.Name, mark)
 }
 
-// createMarkdownDetails formats the details for a goods item
-func createMarkdownDetails(gd GoodsX) string {
-	var details strings.Builder
-	if gd.Param != "" {
-		details.WriteString(fmt.Sprintf("- 参数: %s\n", gd.Param))
+// formatDetails 格式化商品详情
+func (i *Item) formatDetails() string {
+	var details []string
+
+	// 添加商品参数
+	if i.Param != "" {
+		details = append(details, fmt.Sprintf("- 参数: %s", i.Param))
 	}
-	if gd.Price != "" {
-		details.WriteString(fmt.Sprintf("- 价格: %s\n", gd.Price))
+	if i.Price != "" {
+		details = append(details, fmt.Sprintf("- 价格: %s", i.Price))
 	}
-	if gd.Date != nil {
-		details.WriteString(fmt.Sprintf("- 购买时间: %s\n", strings.Join(gd.Date, ", ")))
-	}
-	if gd.Des != "" {
-		details.WriteString("\n---\n")
-		details.WriteString(gd.Des)
+	if len(i.Date) > 0 {
+		details = append(details, fmt.Sprintf("- 购买时间: %s", strings.Join(i.Date, ", ")))
 	}
 
-	return details.String()
+	// 添加商品描述
+	if i.Des != "" {
+		if len(details) > 0 {
+			details = append(details, "---")
+		}
+		details = append(details, i.Des)
+	}
+
+	return strings.Join(details, "\n")
 }
 
-func AddTypeQs(gi ConfigGoodsX) string {
-	var res strings.Builder
-	if len(gi.Qs) == 0 {
+// renderQA 渲染问答部分
+func (g *Goods) renderQA() string {
+	if len(g.QA) == 0 {
 		return ""
 	}
 
-	for _, q := range gi.Qs {
-		details := formatDetailsWithWs(q)
-		if details != "" {
-			res.WriteString(utils.RenderMarkdownFold(q.Q, details))
+	var content strings.Builder
+	for _, qa := range g.QA {
+		if details := qa.formatContent(); details != "" {
+			content.WriteString(fmt.Sprintf("\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n",
+				qa.Question, details))
 		} else {
-			res.WriteString(fmt.Sprintf("- %s \n", q.Q))
+			content.WriteString(fmt.Sprintf("- %s\n", qa.Question))
 		}
 	}
 
-	return utils.RenderMarkdownAdmonitions(utils.AdmonitionTip, "", res.String())
+	return fmt.Sprintf("\n---\n:::%s[%s]\n\n%s\n\n:::\n\n",
+		utils.AdmonitionTip, "常见问题", content.String())
 }
 
-func formatDetailsWithWs(q Qs) string {
+// formatContent 格式化问答内容
+func (qa *QA) formatContent() string {
 	var parts []string
 
-	if len(q.S) != 0 {
-		var b strings.Builder
-		for _, t := range q.S {
-			b.WriteString(fmt.Sprintf("- %s\n", t))
+	// 添加步骤
+	if len(qa.Steps) > 0 {
+		var steps strings.Builder
+		for _, step := range qa.Steps {
+			steps.WriteString(fmt.Sprintf("- %s\n", step))
 		}
-		parts = append(parts, b.String())
+		parts = append(parts, steps.String())
 	}
 
-	if len(q.S) != 0 && q.X != "" {
+	// 添加分隔符
+	if len(qa.Steps) > 0 && qa.Answer != "" {
 		parts = append(parts, "---")
 	}
 
-	if q.X != "" {
-		parts = append(parts, q.X)
+	// 添加答案
+	if qa.Answer != "" {
+		parts = append(parts, qa.Answer)
 	}
 
 	return strings.Join(parts, "\n\n")

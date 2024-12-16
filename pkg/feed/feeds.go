@@ -1,14 +1,8 @@
 package feed
 
 import (
-	"github.com/pkg/errors"
-	"gopkg.in/yaml.v3"
+	"github.com/xbpk3t/docs-alfred/utils"
 )
-
-type Categories struct {
-	Type  string `yaml:"type"`
-	Feeds []Feed `yaml:"feeds"`
-}
 
 type Feed struct {
 	Feed string `yaml:"feed"`
@@ -17,12 +11,12 @@ type Feed struct {
 	Name string `yaml:"name"`
 }
 
-func NewConfigFeeds(data []byte) ([]Categories, error) {
-	var cates []Categories
-	err := yaml.Unmarshal(data, &cates)
-	if err != nil {
-		return nil, errors.Wrap(err, "")
-	}
+type Categories struct {
+	Type  string          `yaml:"type"`
+	Feeds []utils.URLInfo `yaml:"feeds"`
+}
 
-	return cates, nil
+// ParseConfig 解析Feed配置
+func ParseConfig(data []byte) ([]Categories, error) {
+	return utils.Parse[Categories](data)
 }
