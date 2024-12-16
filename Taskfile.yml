@@ -10,7 +10,7 @@ includes:
   merge:
     taskfile: ./gh-merge/Taskfile.yml
     dir: gh-merge
-  rss2newsletter:
+  r2n:
     taskfile: ./rss2newsletter/Taskfile.yml
     dir: rss2newsletter
 
