@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+// Docusaurus admonitions 常量
+const (
+	AdmonitionTip    = "tip"
+	AdmonitionInfo   = "info"
+	AdmonitionWarn   = "warning"
+	AdmonitionDanger = "danger"
+)
+
 // MarkdownRenderer Markdown渲染器
 type MarkdownRenderer struct {
 	builder strings.Builder
@@ -37,7 +45,7 @@ func (m *MarkdownRenderer) RenderListItem(text string) {
 
 // RenderFold 渲染折叠块
 func (m *MarkdownRenderer) RenderFold(summary, details string) {
-	m.Write(fmt.Sprintf("<details><summary>%s</summary>\n\n%s\n</details>\n",
+	m.Write(fmt.Sprintf("\n\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n",
 		summary, details))
 }
 
@@ -56,4 +64,31 @@ func (m *MarkdownRenderer) RenderTable(headers []string, rows [][]string) {
 // RenderCodeBlock 渲染代码块
 func (m *MarkdownRenderer) RenderCodeBlock(language, code string) {
 	m.Write(fmt.Sprintf("```%s\n%s\n```\n", language, code))
+}
+
+// RenderImageWithFigcaption 渲染带有图片说明的图片
+func (m *MarkdownRenderer) RenderImageWithFigcaption(url string) {
+	title := extractTitleFromURL(url)
+	m.Write(fmt.Sprintf("![image](%s)\n<center>*%s*</center>\n\n", url, title))
+}
+
+// extractTitleFromURL 从 URL 中提取标题 (私有方法)
+func extractTitleFromURL(url string) string {
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return url
+}
+
+// RenderAdmonitions 渲染提示块
+func (m *MarkdownRenderer) RenderAdmonitions(admonitionType, title, rex string) {
+	if title == "" {
+		title = strings.ToUpper(admonitionType)
+	}
+
+	m.Write("\n---\n")
+	m.Write(fmt.Sprintf(":::%s[%s]\n\n", admonitionType, title))
+	m.Write(rex)
+	m.Write("\n\n:::\n\n")
 }
