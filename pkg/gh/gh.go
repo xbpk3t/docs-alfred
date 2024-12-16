@@ -1,12 +1,10 @@
 package gh
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -90,21 +88,9 @@ func (r *Repository) GetMainRepo() string {
 	return r.FullName()
 }
 
-// ConfigRepos 相关方法
+// ParseConfig 相关方法
 func ParseConfig(data []byte) (ConfigRepos, error) {
-	var config ConfigRepos
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	for {
-		var cr ConfigRepos
-		if err := decoder.Decode(&cr); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, fmt.Errorf("解析配置失败: %w", err)
-		}
-		config = append(config, cr...)
-	}
-	return config, nil
+	return utils.Parse[ConfigRepo](data)
 }
 
 func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
@@ -126,8 +112,41 @@ func (cr ConfigRepos) ToRepos() Repos {
 	return repos
 }
 
-// ExtractTags
-func (cr ConfigRepos) ExtractTags() {
+// ExtractTags 从所有仓库中提取唯一的标签列表
+func (r Repos) ExtractTags() []string {
+	// 使用 map 来去重
+	tagMap := make(map[string]struct{})
+
+	// 遍历所有仓库收集标签
+	for _, repo := range r {
+		if repo.Type != "" {
+			tagMap[repo.Type] = struct{}{}
+		}
+	}
+
+	// 将 map 转换为切片
+	tags := make([]string, 0, len(tagMap))
+	for tag := range tagMap {
+		tags = append(tags, tag)
+	}
+
+	// 对标签进行排序，使结果稳定
+	slices.Sort(tags)
+	return tags
+}
+
+// QueryReposByTag 根据标签筛选仓库
+func (r Repos) QueryReposByTag(tag string) Repos {
+	var filtered Repos
+
+	// 遍历所有仓库，找出匹配标签的仓库
+	for _, repo := range r {
+		if repo.Type == tag {
+			filtered = append(filtered, repo)
+		}
+	}
+
+	return filtered
 }
 
 // processRepo 处理仓库及其子仓库
