@@ -88,20 +88,6 @@ func JoinSlashParts(s string) string {
 	return s
 }
 
-func ChangeFileExtFromYamlToMd(fp string) string {
-	filename := filepath.Base(fp)
-	ext := strings.ToLower(filepath.Ext(filename))
-	// 检查文件扩展名是否为 .yml 或 .yaml
-	if ext == ".yml" || ext == ".yaml" {
-		// 截取文件名（不包含扩展名）
-		base := filename[:len(filename)-len(ext)]
-		// 拼接新的扩展名 .md
-		return base + ".md"
-	}
-	// 如果不是 .yml 或 .yaml 文件，返回原文件名
-	return filename
-}
-
 // FormatDate 函数用于将 time.Time 格式化为 "2006-01-02 15:04:05" 形式的字符串
 func FormatDate(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")

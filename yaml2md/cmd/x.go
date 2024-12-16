@@ -41,26 +41,7 @@ var xCmd = &cobra.Command{
 
 			res.WriteString(fmt.Sprintf("## %s\n", x.File))
 
-			// for _, d := range df {
-			// 	for _, repo := range d.Repos {
-			// 		// repoName, f := strings.CutPrefix(repo.URL, gh.GhURL)
-			// 		// if !f {
-			// 		// 	repoName = ""
-			// 		// }
-			// 		// res.WriteString(fmt.Sprintf("\n\n### [%s](%s)\n\n", repoName, repo.URL))
-			//
-			// 		for _, s := range x.Repo {
-			// 			if strings.EqualFold(s, repo.URL) {
-			// 				if repo.Qs != nil {
-			//
-			// 					res.WriteString(addMarkdownQsFormat(repo.Qs))
-			// 				}
-			// 			}
-			// 		}
-			// 	}
-			// }
-
-			repos := RenderRepos(MatchRepos(df.ToRepos(), iv))
+			repos := gh.RenderRepos(MatchRepos(df.ToRepos(), iv))
 			res.WriteString(repos.String())
 		}
 

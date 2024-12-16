@@ -2,6 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/gh"
+	"github.com/xbpk3t/docs-alfred/pkg/goods"
+	"github.com/xbpk3t/docs-alfred/pkg/work"
+	"github.com/xbpk3t/docs-alfred/pkg/ws"
+	"github.com/xbpk3t/docs-alfred/utils"
 	"os"
 
 	"github.com/spf13/viper"
@@ -32,6 +37,11 @@ var cfgFile string
 func init() {
 	cobra.OnInitialize(initConfig)
 
+	rootCmd.AddCommand(ghCmd)
+	rootCmd.AddCommand(worksCmd)
+	rootCmd.AddCommand(wsCmd)
+	rootCmd.AddCommand(goodsCmd)
+
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
@@ -60,4 +70,42 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+var ghCmd = &cobra.Command{
+	Use:   "gh",
+	Short: "Convert GitHub repos yaml to markdown",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		renderer := &gh.GhRenderer{}
+		return utils.ProcessFile(cfgFile, renderer)
+	},
+}
+
+// cmd/works.go
+var worksCmd = &cobra.Command{
+	Use:   "works",
+	Short: "Convert works yaml to markdown",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		renderer := &work.WorksRenderer{}
+		return utils.ProcessFile(cfgFile, renderer)
+	},
+}
+
+var wsCmd = &cobra.Command{
+	Use:   "ws",
+	Short: "Convert website links yaml to markdown",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		renderer := &ws.WsRenderer{}
+		return utils.ProcessFile(cfgFile, renderer)
+	},
+}
+
+// cmd/goods.go
+var goodsCmd = &cobra.Command{
+	Use:   "goods",
+	Short: "Convert goods yaml to markdown",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		renderer := &goods.GoodsRenderer{}
+		return utils.ProcessFile(cfgFile, renderer)
+	},
 }
