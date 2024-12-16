@@ -226,10 +226,6 @@ func Test_buildDocsURL(t *testing.T) {
 	cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	// 2. 确保目录存在
-	os.MkdirAll("./testenv/cache", 0o755)
-	os.MkdirAll("./testenv/data", 0o755)
-
 	// 3. 初始化 workflow (如果需要的话)
 	wf = aw.New()
 

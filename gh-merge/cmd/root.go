@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/xbpk3t/docs-alfred/utils"
+
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/gh"
 )
@@ -43,13 +45,13 @@ func init() {
 }
 
 func runMerge(cmd *cobra.Command, args []string) {
-	cr, err := gh.MergeConfigFiles()
+	err := utils.MergeFiles[gh.ConfigRepos](
+		folderName, // 配置文件所在文件夹
+		ghFiles,    // 要合并的文件列表
+		"gh.yml",   // 输出文件路径
+	)
 	if err != nil {
 		log.Fatalf("合并配置文件失败: %v", err)
-	}
-
-	if err := gh.WriteToYAML(cr, "gh.yml"); err != nil {
-		log.Fatalf("写入YAML文件失败: %v", err)
 	}
 
 	fmt.Printf("成功创建合并后的YAML文件: gh.yml\n")

@@ -37,7 +37,11 @@ var rootCmd = &cobra.Command{
 	Use:   "rss2newsletter",
 	Short: "RSS订阅转换为邮件推送工具",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		config, _ := pkg.NewConfig(cfgFile)
+		config, err := pkg.NewConfig(cfgFile)
+		if err != nil {
+			slog.Error("rss2newsletter config file load error:", err)
+			return err
+		}
 
 		// 使用 errgroup 进行并发处理
 		g, _ := errgroup.WithContext(context.Background())

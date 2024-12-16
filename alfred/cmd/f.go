@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os/exec"
 
-	"github.com/xbpk3t/docs-alfred/alfred/internal/config"
 	"github.com/xbpk3t/docs-alfred/utils"
 
 	"github.com/spf13/cobra"
@@ -20,8 +19,7 @@ var (
 			fmt.Println("f called")
 		},
 	}
-	cfgManager *config.Manager
-	data       []byte
+	data []byte
 )
 
 const (
@@ -45,7 +43,7 @@ func handlePreRun(cmd *cobra.Command, args []string) {
 }
 
 func init() {
-	cfgManager = config.NewManager(wf, ConfigGithub)
+	// cfgManager = config.NewManager(wf, ConfigGithub)
 	rootCmd.AddCommand(fCmd)
 	fCmd.AddCommand(ghCmd)
 	fCmd.AddCommand(wsCmd)

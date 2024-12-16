@@ -4,9 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xbpk3t/docs-a
 	"github.com/xbpk3t/docs-alfred/utils"
-	"testing"
 )
 
 func TestParseConfig(t *testing.T) {

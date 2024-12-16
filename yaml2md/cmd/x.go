@@ -4,106 +4,134 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
+	"path/filepath"
 
 	"github.com/xbpk3t/docs-alfred/pkg/gh"
 	"github.com/xbpk3t/docs-alfred/utils"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
-// xCmd represents the x command
 var xCmd = &cobra.Command{
 	Use:   "x",
-	Short: "A brief description of your command",
-	Run: func(cmd *cobra.Command, args []string) {
-		f, err := os.ReadFile(cfgFile)
-		if err != nil {
-			return
-		}
-		iv := NewConfigX(f)
-
-		var res strings.Builder
-
-		for _, x := range iv.X {
-			var fp string
-			if folder == "" {
-				fp = x.File + ".yml"
-			} else {
-				fp = fmt.Sprintf("%s/%s.yml", folder, x.File)
-			}
-			f, err := os.ReadFile(fp)
-			if err != nil {
-				slog.Error(err.Error())
-				return
-			}
-			df := gh.NewConfigRepos(f)
-
-			res.WriteString(fmt.Sprintf("## %s\n", x.File))
-
-			repos := gh.RenderRepos(MatchRepos(df.ToRepos(), iv))
-			res.WriteString(repos.String())
-		}
-
-		targetFile := utils.ChangeFileExtFromYamlToMd(cfgFile)
-		err = os.WriteFile(targetFile, []byte(res.String()), os.ModePerm)
-		if err != nil {
-			return
-		}
-
-		slog.Info("Markdown output has been written to", slog.String("File", targetFile))
-	},
+	Short: "处理 interview 配置文件",
+	Run:   runX,
 }
 
 func init() {
 	rootCmd.AddCommand(xCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// xCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// xCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
-	xCmd.Flags().StringVarP(&folder, "folder", "f", "", "")
+	xCmd.Flags().StringVarP(&folder, "folder", "f", "", "配置文件所在文件夹")
 }
 
 var folder string
 
-type Y2M struct {
-	X []struct {
-		File string   `yaml:"file"`
-		Repo []string `yaml:"repo"`
-	} `yaml:"interview"`
+type Y struct {
+	File string   `yaml:"file"`
+	Repo []string `yaml:"repo"`
 }
 
-func NewConfigX(f []byte) (y2m Y2M) {
-	err := yaml.Unmarshal(f, &y2m)
+type Y2M []Y
+
+// runX 主执行函数
+func runX(cmd *cobra.Command, args []string) {
+	f, _ := os.ReadFile(cfgFile)
+
+	iv, err := NewConfigX(f)
 	if err != nil {
-		panic(err)
+		slog.Error("加载配置失败", slog.String("error", err.Error()))
+		return
 	}
 
-	return y2m
+	content, err := processFiles(iv)
+	if err != nil {
+		slog.Error("处理文件失败", slog.String("error", err.Error()))
+		return
+	}
+
+	if err := writeOutput(content); err != nil {
+		slog.Error("写入输出失败", slog.String("error", err.Error()))
+		return
+	}
+
+	slog.Info("Markdown输出已写入", slog.String("File", utils.ChangeFileExtFromYamlToMd(cfgFile)))
 }
 
-// MatchRepos 函数接受 Repos 和 Y2M 类型的参数，返回匹配的 Repos 切片
+// NewConfigX 创建新的配置
+func NewConfigX(f []byte) (y2m Y2M, err error) {
+	return utils.Parse[Y](f)
+}
+
+// processFiles 处理所有文件并生成内容
+func processFiles(iv Y2M) (string, error) {
+	renderer := &utils.MarkdownRenderer{}
+
+	for _, x := range iv {
+		repos, err := processFile(x, iv) // 传入完整的 iv
+		if err != nil {
+			return "", fmt.Errorf("处理文件 %s 失败: %w", x.File, err)
+		}
+
+		renderer.RenderHeader(2, x.File)
+		// 直接使用 gh.RenderRepositoriesAsMarkdownTable
+		renderer.Write(gh.RenderRepositoriesAsMarkdownTable(repos))
+	}
+
+	return renderer.String(), nil
+}
+
+// processFile 处理单个文件
+func processFile(x Y, iv Y2M) (gh.Repos, error) { // 修改参数类型为 Y
+	fp := getFilePath(x.File)
+
+	// 使用 MergeFiles 处理文件
+	err := utils.MergeFiles[gh.ConfigRepos](
+		filepath.Dir(fp),
+		[]string{filepath.Base(fp)},
+		"temp.yml",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("合并文件失败: %w", err)
+	}
+
+	// 读取处理后的文件
+	f, err := os.ReadFile("temp.yml")
+	if err != nil {
+		return nil, fmt.Errorf("读取临时文件失败: %w", err)
+	}
+
+	df, err := gh.ParseConfig(f)
+	if err != nil {
+		return nil, fmt.Errorf("解析配置失败: %w", err)
+	}
+
+	return MatchRepos(df.ToRepos(), iv), nil
+}
+
+// getFilePath 获取文件路径
+func getFilePath(fileName string) string {
+	if folder == "" {
+		return fileName + ".yml"
+	}
+	return filepath.Join(folder, fileName+".yml")
+}
+
+// writeOutput 写入输出文件
+func writeOutput(content string) error {
+	targetFile := utils.ChangeFileExtFromYamlToMd(cfgFile)
+	return os.WriteFile(targetFile, []byte(content), os.ModePerm)
+}
+
+// MatchRepos 匹配仓库
 func MatchRepos(repos gh.Repos, y2m Y2M) gh.Repos {
 	matchedRepos := make(gh.Repos, 0)
 	repoURLMap := make(map[string]gh.Repository)
 
-	// 将所有 Repository 的 URL 作为 key 存储在 map 中
 	for _, repo := range repos {
 		repoURLMap[repo.URL] = repo
 	}
 
-	// 遍历 Y2M 结构体中的 Repo 列表
-	for _, item := range y2m.X {
+	for _, item := range y2m {
 		for _, repoURL := range item.Repo {
-			// 如果 URL 在 map 中，添加到结果切片中
 			if matchedRepo, exists := repoURLMap[repoURL]; exists {
 				matchedRepos = append(matchedRepos, matchedRepo)
 			}

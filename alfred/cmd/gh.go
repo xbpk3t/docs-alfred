@@ -42,18 +42,36 @@ func handleGhCommand(cmd *cobra.Command, args []string) {
 
 // 处理标签搜索
 func handleTagSearch(repos gh2.Repos, args []string, builder *alfred.ItemBuilder) {
+	// 参数验证
+	if len(args) == 0 || !strings.HasPrefix(args[0], "#") {
+		renderTagItems(repos.ExtractTags())
+		wf.SendFeedback()
+		return
+	}
+
+	// 提取标签
 	tags := repos.ExtractTags()
 	ptag := strings.TrimPrefix(args[0], "#")
 
+	// 如果输入的标签存在
 	if slices.Contains(tags, ptag) {
-		repos = repos.QueryReposByTag(ptag)
-		renderRepos(repos, builder)
+		filteredRepos := repos.QueryReposByTag(ptag)
+		if len(filteredRepos) > 0 {
+			renderRepos(filteredRepos, builder)
+		} else {
+			// 没有找到相关仓库时显示提示
+			wf.NewItem("No repositories found").
+				Subtitle(fmt.Sprintf("No repositories found with tag: %s", ptag)).
+				Icon(aw.IconWarning)
+		}
 	} else {
+		// 显示所有标签并根据输入进行过滤
 		renderTagItems(tags)
-		if len(args) > 0 {
-			wf.Filter(args[0])
+		if len(ptag) > 0 {
+			wf.Filter(ptag) // 使用去掉#的标签进行过滤
 		}
 	}
+
 	wf.SendFeedback()
 }
 
@@ -94,22 +112,6 @@ func GetFileNameFromURL(urlString string) (string, error) {
 		return "", fmt.Errorf("error parsing URL: %v", err)
 	}
 	return path.Base(parsedURL.Path), nil
-}
-
-// Item 创建与渲染相关函数
-func createBaseItem(repo gh2.Repository) *aw.Item {
-	name := repo.FullName()
-	des := buildRepoDescription(repo)
-	iconPath := determineRepoIcon(repo)
-
-	return wf.NewItem(name).
-		Title(name).
-		Arg(repo.URL).
-		Subtitle(des).
-		Copytext(repo.URL).
-		Valid(true).
-		Autocomplete(name).
-		Icon(&aw.Icon{Value: iconPath})
 }
 
 // 构建仓库描述
@@ -164,21 +166,6 @@ func determineRepoIcon(repo gh2.Repository) string {
 	default:
 		return cons.IconRepo
 	}
-}
-
-// 添加修饰键操作
-func addModifierActions(item *aw.Item, repo gh2.Repository, docsURL string) {
-	item.Cmd().
-		Subtitle(fmt.Sprintf("打开该Repo在Docs的URL: %s", docsURL)).
-		Arg(docsURL)
-
-	item.Opt().
-		Subtitle(fmt.Sprintf("复制URL: %s", repo.URL)).
-		Arg(repo.URL)
-
-	item.Shift().
-		Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).
-		Arg(repo.Doc)
 }
 
 // 主渲染函数
