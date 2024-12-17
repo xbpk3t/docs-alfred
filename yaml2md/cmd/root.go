@@ -2,14 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/service/ws"
 	"os"
 
 	"github.com/xbpk3t/docs-alfred/pkg"
-	"gith
 	"github.com/xbpk3t/docs-alfred/service/gh"
 	"github.com/xbpk3t/docs-alfred/service/goods"
 	"github.com/xbpk3t/docs-alfred/service/work"
-	"github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/spf13/viper"
 

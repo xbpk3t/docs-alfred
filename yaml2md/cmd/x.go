@@ -63,7 +63,7 @@ func NewConfigX(f []byte) (y2m Y2M, err error) {
 
 // processFiles 处理所有文件并生成内容
 func processFiles(iv Y2M) (string, error) {
-	renderer := &pkg.MarkdownRenderer{}
+	renderer := pkg.NewMarkdownRenderer()
 
 	for _, x := range iv {
 		repos, err := processFile(x, iv) // 传入完整的 iv

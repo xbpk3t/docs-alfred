@@ -97,7 +97,7 @@ func (qa *QA) formatSummary() string {
 // formatDetails 格式化问答详情
 func (qa *QA) formatDetails() string {
 	var parts []string
-	renderer := &pkg.MarkdownRenderer{}
+	renderer := pkg.NewMarkdownRenderer()
 
 	// 处理图片
 	if len(qa.Pictures) > 0 {

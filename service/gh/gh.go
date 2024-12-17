@@ -1,7 +1,10 @@
 package gh
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -93,12 +96,30 @@ func (r *Repository) GetMainRepo() string {
 // 	return utils.Parse[ConfigRepo](data)
 // }
 
-func ParseConfig(data []byte) (ConfigRepos, error) {
-	var configs ConfigRepos
-	if err := yaml.Unmarshal(data, &configs); err != nil {
-		return nil, fmt.Errorf("解析配置失败: %w", err)
+func ParseConfig(f []byte) (ConfigRepos, error) {
+	// var configs ConfigRepos
+	// if err := yaml.Unmarshal(data, &configs); err != nil {
+	// 	return nil, fmt.Errorf("解析配置失败: %w", err)
+	// }
+	// return configs, nil
+	var ghs ConfigRepos
+
+	d := yaml.NewDecoder(bytes.NewReader(f))
+	for {
+		// create new spec here
+		spec := new(ConfigRepos)
+		// pass a reference to spec reference
+		if err := d.Decode(&spec); err != nil {
+			// break the loop in case of EOF
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			panic(err)
+		}
+
+		ghs = append(ghs, *spec...)
 	}
-	return configs, nil
+	return ghs, nil
 }
 
 func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
@@ -318,7 +339,7 @@ func formatQuestionSummary(q Question) string {
 
 func formatQuestionDetails(q Question) string {
 	var parts []string
-	renderer := &pkg.MarkdownRenderer{}
+	renderer := pkg.NewMarkdownRenderer()
 
 	// 处理图片
 	if len(q.P) > 0 {
