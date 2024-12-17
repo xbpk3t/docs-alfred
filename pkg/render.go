@@ -18,6 +18,12 @@ type MarkdownRenderer struct {
 	builder strings.Builder
 }
 
+func NewMarkdownRenderer() *MarkdownRenderer {
+	return &MarkdownRenderer{
+		builder: strings.Builder{},
+	}
+}
+
 // Write 写入内容
 func (m *MarkdownRenderer) Write(s string) {
 	m.builder.WriteString(s)
