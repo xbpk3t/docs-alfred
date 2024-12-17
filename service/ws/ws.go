@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/utils"
+	"github.com/xbpk3t/docs-alfred/pkg"
 )
 
 // URL 定义单个URL结构
@@ -26,7 +26,7 @@ type WebStacks []WebStack
 
 // WebStackRenderer Markdown渲染器
 type WebStackRenderer struct {
-	utils.MarkdownRenderer
+	pkg.MarkdownRenderer
 }
 
 // NewWebStackRenderer 创建新的渲染器
@@ -36,7 +36,7 @@ func NewWebStackRenderer() *WebStackRenderer {
 
 // ParseConfig 解析配置文件
 func ParseConfig(data []byte) (WebStacks, error) {
-	return utils.Parse[WebStack](data)
+	return pkg.Parse[WebStack](data)
 }
 
 // Render 渲染为Markdown格式

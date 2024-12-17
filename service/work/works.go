@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/samber/lo"
-	"github.com/xbpk3t/docs-alfred/utils"
+	"github.com/xbpk3t/docs-alfred/pkg"
 )
 
 // Doc 定义文档结构
@@ -29,7 +29,7 @@ type Docs []Doc
 
 // WorkRenderer Markdown渲染器
 type WorkRenderer struct {
-	utils.MarkdownRenderer
+	pkg.MarkdownRenderer
 	seenTags map[string]bool
 }
 
@@ -42,7 +42,7 @@ func NewWorkRenderer() *WorkRenderer {
 
 // Render 渲染文档
 func (r *WorkRenderer) Render(data []byte) (string, error) {
-	docs, err := utils.Parse[Doc](data)
+	docs, err := pkg.Parse[Doc](data)
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +97,7 @@ func (qa *QA) formatSummary() string {
 // formatDetails 格式化问答详情
 func (qa *QA) formatDetails() string {
 	var parts []string
-	renderer := &utils.MarkdownRenderer{}
+	renderer := &pkg.MarkdownRenderer{}
 
 	// 处理图片
 	if len(qa.Pictures) > 0 {
