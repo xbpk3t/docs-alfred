@@ -10,8 +10,8 @@ import (
 
 	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
 	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"
-	gh2 "github.com/xbpk3t/docs-alfred/pkg/gh"
-	"github.com/xbpk3t/docs-alfred/utils"
+	"github.com/xbpk3t/docs-alfred/pkg"
+	gh2 "github.com/xbpk3t/docs-alfred/service/gh"
 
 	aw "github.com/deanishe/awgo"
 	"github.com/spf13/cobra"
@@ -146,7 +146,7 @@ func buildDocsURL(repo gh2.Repository) string {
 	if repo.Qs == nil {
 		docsURL.WriteString(strings.ToLower(repo.Type))
 	} else {
-		docsURL.WriteString(strings.ToLower(utils.JoinSlashParts(repo.FullName())))
+		docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.FullName())))
 	}
 
 	return docsURL.String()

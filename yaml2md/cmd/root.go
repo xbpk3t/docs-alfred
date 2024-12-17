@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
-	"github.com/xbpk3t/docs-alfred/pkg/goods"
-	"github.com/xbpk3t/docs-alfred/pkg/work"
-	"github.com/xbpk3t/docs-alfred/pkg/ws"
-	"github.com/xbpk3t/docs-alfred/utils"
+	"github.com/xbpk3t/docs-alfred/pkg"
+	"gith
+	"github.com/xbpk3t/docs-alfred/service/gh"
+	"github.com/xbpk3t/docs-alfred/service/goods"
+	"github.com/xbpk3t/docs-alfred/service/work"
+	"github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/spf13/viper"
 
@@ -78,7 +79,7 @@ var ghCmd = &cobra.Command{
 	Short: "Convert GitHub repos yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		renderer := &gh.GhRenderer{}
-		return utils.ProcessFile(cfgFile, renderer)
+		return pkg.ProcessFile(cfgFile, renderer)
 	},
 }
 
@@ -88,7 +89,7 @@ var worksCmd = &cobra.Command{
 	Short: "Convert works yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		renderer := &work.WorkRenderer{}
-		return utils.ProcessFile(cfgFile, renderer)
+		return pkg.ProcessFile(cfgFile, renderer)
 	},
 }
 
@@ -97,7 +98,7 @@ var wsCmd = &cobra.Command{
 	Short: "Convert website links yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		renderer := &ws.WebStackRenderer{}
-		return utils.ProcessFile(cfgFile, renderer)
+		return pkg.ProcessFile(cfgFile, renderer)
 	},
 }
 
@@ -107,6 +108,6 @@ var goodsCmd = &cobra.Command{
 	Short: "Convert goods yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		renderer := &goods.GoodsRenderer{}
-		return utils.ProcessFile(cfgFile, renderer)
+		return pkg.ProcessFile(cfgFile, renderer)
 	},
 }

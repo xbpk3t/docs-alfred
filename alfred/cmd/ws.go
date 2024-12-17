@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
 	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"
-	"github.com/xbpk3t/docs-alfred/pkg/ws"
+	"github.com/xbpk3t/docs-alfred/service/ws"
 )
 
 var wsCmd = &cobra.Command{

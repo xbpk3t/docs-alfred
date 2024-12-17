@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os/exec"
 
-	"github.com/xbpk3t/docs-alfred/utils"
+	"github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/spf13/cobra"
 )
@@ -28,7 +28,7 @@ const (
 
 func handlePreRun(cmd *cobra.Command, args []string) {
 	if !wf.Cache.Exists(cfgFile) {
-		ErrorHandle(&utils.DocsAlfredError{Err: utils.ErrConfigNotFound})
+		ErrorHandle(&pkg.DocsAlfredError{Err: pkg.ErrConfigNotFound})
 	}
 
 	data, _ = wf.Cache.Load(cfgFile)

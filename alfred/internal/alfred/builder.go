@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	aw "github.com/deanishe/awgo"
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
+	"github.com/xbpk3t/docs-alfred/service/gh"
 )
 
 type ItemBuilder struct {

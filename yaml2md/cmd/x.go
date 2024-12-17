@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/xbpk3t/docs-alfred/pkg/gh"
-	"github.com/xbpk3t/docs-alfred/utils"
+	"github.com/xbpk3t/docs-alfred/pkg"
+	"github.com/xbpk3t/docs-alfred/service/gh"
 
 	"github.com/spf13/cobra"
 )
@@ -53,17 +53,17 @@ func runX(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	slog.Info("Markdown输出已写入", slog.String("File", utils.ChangeFileExtFromYamlToMd(cfgFile)))
+	slog.Info("Markdown输出已写入", slog.String("File", pkg.ChangeFileExtFromYamlToMd(cfgFile)))
 }
 
 // NewConfigX 创建新的配置
 func NewConfigX(f []byte) (y2m Y2M, err error) {
-	return utils.Parse[Y](f)
+	return pkg.Parse[Y](f)
 }
 
 // processFiles 处理所有文件并生成内容
 func processFiles(iv Y2M) (string, error) {
-	renderer := &utils.MarkdownRenderer{}
+	renderer := &pkg.MarkdownRenderer{}
 
 	for _, x := range iv {
 		repos, err := processFile(x, iv) // 传入完整的 iv
@@ -84,7 +84,7 @@ func processFile(x Y, iv Y2M) (gh.Repos, error) { // 修改参数类型为 Y
 	fp := getFilePath(x.File)
 
 	// 使用 MergeFiles 处理文件
-	err := utils.MergeFiles[gh.ConfigRepos](
+	err := pkg.MergeFiles[gh.ConfigRepos](
 		filepath.Dir(fp),
 		[]string{filepath.Base(fp)},
 		"temp.yml",
@@ -117,7 +117,7 @@ func getFilePath(fileName string) string {
 
 // writeOutput 写入输出文件
 func writeOutput(content string) error {
-	targetFile := utils.ChangeFileExtFromYamlToMd(cfgFile)
+	targetFile := pkg.ChangeFileExtFromYamlToMd(cfgFile)
 	return os.WriteFile(targetFile, []byte(content), os.ModePerm)
 }
 

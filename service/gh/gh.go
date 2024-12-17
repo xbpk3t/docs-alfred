@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/samber/lo"
-	"github.com/xbpk3t/docs-alfred/utils"
+	"github.com/xbpk3t/docs-alfred/pkg"
 	"gopkg.in/yaml.v3"
 )
 
@@ -30,7 +30,7 @@ type Repository struct {
 	Rep         Repos     `yaml:"rep,omitempty"`
 	Cmd         []string  `yaml:"cmd,omitempty"`
 	IsStar      bool
-	utils.URLInfo
+	pkg.URLInfo
 }
 
 type Repos []Repository
@@ -56,7 +56,7 @@ type Questions []Question
 
 // GhRenderer Markdown渲染器
 type GhRenderer struct {
-	utils.MarkdownRenderer
+	pkg.MarkdownRenderer
 	Config ConfigRepos
 }
 
@@ -89,8 +89,16 @@ func (r *Repository) GetMainRepo() string {
 }
 
 // ParseConfig 相关方法
+// func ParseConfig(data []byte) (ConfigRepos, error) {
+// 	return utils.Parse[ConfigRepo](data)
+// }
+
 func ParseConfig(data []byte) (ConfigRepos, error) {
-	return utils.Parse[ConfigRepo](data)
+	var configs ConfigRepos
+	if err := yaml.Unmarshal(data, &configs); err != nil {
+		return nil, fmt.Errorf("解析配置失败: %w", err)
+	}
+	return configs, nil
 }
 
 func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
@@ -255,7 +263,7 @@ func (g *GhRenderer) renderSubComponents(repo Repository) {
 func (g *GhRenderer) renderSubRepos(repos Repos) {
 	if len(repos) > 0 {
 		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonitions(utils.AdmonitionTip, "Sub Repos", content)
+		g.RenderAdmonitions(pkg.AdmonitionTip, "Sub Repos", content)
 	}
 }
 
@@ -310,7 +318,7 @@ func formatQuestionSummary(q Question) string {
 
 func formatQuestionDetails(q Question) string {
 	var parts []string
-	renderer := &utils.MarkdownRenderer{}
+	renderer := &pkg.MarkdownRenderer{}
 
 	// 处理图片
 	if len(q.P) > 0 {
@@ -354,7 +362,7 @@ func RenderRepositoriesAsMarkdownTable(repos Repos) string {
 		return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
 	})
 
-	utils.RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
+	pkg.RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
 	return res.String()
 }
 

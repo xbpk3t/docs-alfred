@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	gh2 "github.com/xbpk3t/docs-alfred/pkg/gh"
+	gh2 "github.com/xbpk3t/docs-alfred/service/gh"
 
 	aw "github.com/deanishe/awgo"
 )
