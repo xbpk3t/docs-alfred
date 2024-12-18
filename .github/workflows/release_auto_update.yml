@@ -35,8 +35,8 @@ jobs:
       - name: Build and pack
         run: |
           # build package
-          task build:release ARCH=amd64
-          task build:release ARCH=arm64
+          task ak:release ARCH=amd64
+          task ak:release ARCH=arm64
           lipo -create -output .workflow/exe exe_amd64 exe_arm64
           rm  exe_amd64
           rm  exe_arm64
