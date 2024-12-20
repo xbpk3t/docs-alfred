@@ -2,6 +2,7 @@ package ws
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg"
@@ -26,7 +27,7 @@ type WebStacks []WebStack
 
 // WebStackRenderer Markdown渲染器
 type WebStackRenderer struct {
-	pkg.MarkdownRenderer
+	render.MarkdownRenderer
 }
 
 // NewWebStackRenderer 创建新的渲染器

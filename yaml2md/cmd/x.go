@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/merger"
+	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -58,12 +60,13 @@ func runX(cmd *cobra.Command, args []string) {
 
 // NewConfigX 创建新的配置
 func NewConfigX(f []byte) (y2m Y2M, err error) {
-	return pkg.Parse[Y](f)
+	// ps := parser.NewParser[y2m](f)
+	// return
 }
 
 // processFiles 处理所有文件并生成内容
 func processFiles(iv Y2M) (string, error) {
-	renderer := pkg.NewMarkdownRenderer()
+	renderer := render.NewMarkdownRenderer()
 
 	for _, x := range iv {
 		repos, err := processFile(x, iv) // 传入完整的 iv
@@ -84,7 +87,7 @@ func processFile(x Y, iv Y2M) (gh.Repos, error) { // 修改参数类型为 Y
 	fp := getFilePath(x.File)
 
 	// 使用 MergeFiles 处理文件
-	err := pkg.MergeFiles[gh.ConfigRepos](
+	err := merger.MergeFiles[gh.ConfigRepos](
 		filepath.Dir(fp),
 		[]string{filepath.Base(fp)},
 		"temp.yml",

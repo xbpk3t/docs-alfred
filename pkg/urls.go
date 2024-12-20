@@ -1,11 +1,6 @@
 package pkg
 
-import (
-	"fmt"
-	"net/url"
-	"path"
-	"strings"
-)
+import "strings"
 
 // URLInfo URL信息结构
 type URLInfo struct {
@@ -31,14 +26,11 @@ func (u *URLInfo) GetLink() string {
 	return u.Feed
 }
 
-func GetFileName(urlString string) (string, error) {
-	parsedURL, err := url.Parse(urlString)
-	if err != nil {
-		return "", fmt.Errorf("error parsing URL: %v", err)
+func JoinSlashParts(s string) string {
+	index := strings.Index(s, "/")
+	if index != -1 {
+		// 拼接 `/` 前后的字符串，并保留 `/` 字符
+		return s[:index] + s[index+1:]
 	}
-	return path.Base(parsedURL.Path), nil
-}
-
-func BuildDocsURL(parts ...string) string {
-	return strings.Join(parts, "/")
+	return s
 }

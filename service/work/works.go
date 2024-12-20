@@ -2,6 +2,7 @@ package work
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"strings"
 
 	"github.com/samber/lo"
@@ -29,7 +30,7 @@ type Docs []Doc
 
 // WorkRenderer Markdown渲染器
 type WorkRenderer struct {
-	pkg.MarkdownRenderer
+	render.MarkdownRenderer
 	seenTags map[string]bool
 }
 
@@ -97,7 +98,7 @@ func (qa *QA) formatSummary() string {
 // formatDetails 格式化问答详情
 func (qa *QA) formatDetails() string {
 	var parts []string
-	renderer := pkg.NewMarkdownRenderer()
+	renderer := render.NewMarkdownRenderer()
 
 	// 处理图片
 	if len(qa.Pictures) > 0 {

@@ -3,8 +3,6 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
-	"net/url"
-	"path"
 	"slices"
 	"strings"
 
@@ -103,15 +101,6 @@ func renderSearchGithub(args []string) {
 		Valid(true).
 		Icon(&aw.Icon{Value: cons.IconSearch}).
 		Title(searchTitle)
-}
-
-// URL 处理相关函数
-func GetFileNameFromURL(urlString string) (string, error) {
-	parsedURL, err := url.Parse(urlString)
-	if err != nil {
-		return "", fmt.Errorf("error parsing URL: %v", err)
-	}
-	return path.Base(parsedURL.Path), nil
 }
 
 // 构建仓库描述
