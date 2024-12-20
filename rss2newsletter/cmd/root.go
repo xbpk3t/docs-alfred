@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/rss"
 	"html/template"
 	"log/slog"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/rss2newsletter/pkg"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -37,7 +37,7 @@ var rootCmd = &cobra.Command{
 	Use:   "rss2newsletter",
 	Short: "RSS订阅转换为邮件推送工具",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		config, err := pkg.NewConfig(cfgFile)
+		config, err := rss.NewConfig(cfgFile)
 		if err != nil {
 			slog.Error("rss2newsletter config file load error:", err)
 			return err
@@ -85,9 +85,9 @@ var rootCmd = &cobra.Command{
 }
 
 // processFeed 处理单个Feed源
-func processFeed(feed pkg.FeedsDetail, config *pkg.Config) (feeds2.RssFeed, error) {
+func processFeed(feed rss.FeedsDetail, config *rss.Config) (feeds2.RssFeed, error) {
 	TypeName := feed.Type
-	urls := lo.Compact(lo.Map(feed.Urls, func(item pkg.Feeds, _ int) string {
+	urls := lo.Compact(lo.Map(feed.Urls, func(item rss.Feeds, _ int) string {
 		return item.Feed
 	}))
 

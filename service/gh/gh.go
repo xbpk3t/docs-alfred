@@ -1,10 +1,9 @@
 package gh
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"io"
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
+	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"os"
 	"path/filepath"
 	"slices"
@@ -59,7 +58,7 @@ type Questions []Question
 
 // GhRenderer Markdown渲染器
 type GhRenderer struct {
-	pkg.MarkdownRenderer
+	render.MarkdownRenderer
 	Config ConfigRepos
 }
 
@@ -89,37 +88,6 @@ func (r *Repository) GetMainRepo() string {
 		}
 	}
 	return r.FullName()
-}
-
-// ParseConfig 相关方法
-// func ParseConfig(data []byte) (ConfigRepos, error) {
-// 	return utils.Parse[ConfigRepo](data)
-// }
-
-func ParseConfig(f []byte) (ConfigRepos, error) {
-	// var configs ConfigRepos
-	// if err := yaml.Unmarshal(data, &configs); err != nil {
-	// 	return nil, fmt.Errorf("解析配置失败: %w", err)
-	// }
-	// return configs, nil
-	var ghs ConfigRepos
-
-	d := yaml.NewDecoder(bytes.NewReader(f))
-	for {
-		// create new spec here
-		spec := new(ConfigRepos)
-		// pass a reference to spec reference
-		if err := d.Decode(&spec); err != nil {
-			// break the loop in case of EOF
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			panic(err)
-		}
-
-		ghs = append(ghs, *spec...)
-	}
-	return ghs, nil
 }
 
 func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
@@ -243,7 +211,7 @@ func NewGhRenderer() *GhRenderer {
 }
 
 func (g *GhRenderer) Render(data []byte) (string, error) {
-	config, err := ParseConfig(data)
+	config, err := parser.NewParser[ConfigRepos](data).ParseSingle()
 	if err != nil {
 		return "", err
 	}
@@ -284,7 +252,7 @@ func (g *GhRenderer) renderSubComponents(repo Repository) {
 func (g *GhRenderer) renderSubRepos(repos Repos) {
 	if len(repos) > 0 {
 		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonitions(pkg.AdmonitionTip, "Sub Repos", content)
+		g.RenderAdmonitions(render.AdmonitionTip, "Sub Repos", content)
 	}
 }
 
@@ -339,7 +307,7 @@ func formatQuestionSummary(q Question) string {
 
 func formatQuestionDetails(q Question) string {
 	var parts []string
-	renderer := pkg.NewMarkdownRenderer()
+	renderer := render.NewMarkdownRenderer()
 
 	// 处理图片
 	if len(q.P) > 0 {
@@ -383,7 +351,7 @@ func RenderRepositoriesAsMarkdownTable(repos Repos) string {
 		return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
 	})
 
-	pkg.RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
+	render.RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
 	return res.String()
 }
 
@@ -402,6 +370,7 @@ func NewConfigMerger(opts MergeOptions) *ConfigMerger {
 	return &ConfigMerger{options: opts}
 }
 
+// Merge
 func (m *ConfigMerger) Merge() error {
 	if err := m.validateInput(); err != nil {
 		return fmt.Errorf("验证输入失败: %w", err)
@@ -428,6 +397,7 @@ func (m *ConfigMerger) validateInput() error {
 	return nil
 }
 
+// mergeConfigs
 func (m *ConfigMerger) mergeConfigs() (ConfigRepos, error) {
 	var mergedConfig ConfigRepos
 

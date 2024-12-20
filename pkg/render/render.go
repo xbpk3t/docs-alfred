@@ -1,7 +1,9 @@
-package pkg
+package render
 
 import (
 	"fmt"
+	"github.com/olekukonko/tablewriter"
+	"github.com/xbpk3t/docs-alfred/pkg"
 	"strings"
 )
 
@@ -100,7 +102,7 @@ func (m *MarkdownRenderer) RenderAdmonitions(admonitionType, title, rex string) 
 }
 
 // RenderURLTable 渲染URL表格
-func (r *MarkdownRenderer) RenderURLTable(items []URLInfo, headers []string) string {
+func (r *MarkdownRenderer) RenderURLTable(items []pkg.URLInfo, headers []string) string {
 	if len(items) == 0 {
 		return ""
 	}
@@ -114,6 +116,17 @@ func (r *MarkdownRenderer) RenderURLTable(items []URLInfo, headers []string) str
 		}
 	}
 
-	RenderMarkdownTable(headers, &res, data)
+	renderMarkdownTable(headers, &res, data)
 	return res.String()
+}
+
+// RenderMarkdownTable 封装了创建和渲染Markdown表格的逻辑
+func renderMarkdownTable(header []string, res *strings.Builder, data [][]string) {
+	table := tablewriter.NewWriter(res)
+	table.SetAutoWrapText(false)
+	table.SetHeader(header)
+	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+	table.SetCenterSeparator("|")
+	table.AppendBulk(data) // 添加大量数据
+	table.Render()
 }

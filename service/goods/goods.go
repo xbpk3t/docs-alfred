@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"io"
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/pkg"
 	"gopkg.in/yaml.v3"
 )
 
@@ -40,7 +40,7 @@ type QA struct {
 
 // GoodsRenderer Markdown渲染器
 type GoodsRenderer struct {
-	pkg.MarkdownRenderer
+	render.MarkdownRenderer
 	seenTags map[string]bool
 }
 
@@ -183,7 +183,7 @@ func (g *Goods) renderQA() string {
 	}
 
 	return fmt.Sprintf("\n---\n:::%s[%s]\n\n%s\n\n:::\n\n",
-		pkg.AdmonitionTip, "常见问题", content.String())
+		render.AdmonitionTip, "常见问题", content.String())
 }
 
 // formatContent 格式化问答内容

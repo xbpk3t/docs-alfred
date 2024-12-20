@@ -2,10 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/merger"
 	"log"
 	"os"
-
-	"github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/service/gh"
@@ -45,7 +44,7 @@ func init() {
 }
 
 func runMerge(cmd *cobra.Command, args []string) {
-	err := pkg.MergeFiles[gh.ConfigRepos](
+	err := merger.MergeFiles[gh.ConfigRepos](
 		folderName, // 配置文件所在文件夹
 		ghFiles,    // 要合并的文件列表
 		"gh.yml",   // 输出文件路径
