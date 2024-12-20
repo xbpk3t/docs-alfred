@@ -2,11 +2,11 @@ package work
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"strings"
 
 	"github.com/samber/lo"
-	"github.com/xbpk3t/docs-alfred/pkg"
 )
 
 // Doc 定义文档结构
@@ -43,7 +43,7 @@ func NewWorkRenderer() *WorkRenderer {
 
 // Render 渲染文档
 func (r *WorkRenderer) Render(data []byte) (string, error) {
-	docs, err := pkg.Parse[Doc](data)
+	docs, err := parser.NewParser[Doc](data).ParseMulti()
 	if err != nil {
 		return "", err
 	}

@@ -419,7 +419,7 @@ func (m *ConfigMerger) processFile(fileName string) (ConfigRepos, error) {
 	}
 
 	tag := strings.TrimSuffix(fileName, ".yml")
-	rc, _ := ParseConfig(content)
+	rc, _ := parser.NewParser[ConfigRepos](content).ParseMulti()
 
 	return rc.WithTag(tag), nil
 }

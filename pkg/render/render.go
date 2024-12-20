@@ -15,6 +15,11 @@ const (
 	AdmonitionDanger = "danger"
 )
 
+// ContentRenderer 定义渲染器接口
+type MarkdownRender interface {
+	Render(data []byte) (string, error)
+}
+
 // MarkdownRenderer Markdown渲染器
 type MarkdownRenderer struct {
 	builder strings.Builder

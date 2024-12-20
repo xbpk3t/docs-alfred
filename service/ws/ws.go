@@ -2,10 +2,9 @@ package ws
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"strings"
-
-	"github.com/xbpk3t/docs-alfred/pkg"
 )
 
 // URL 定义单个URL结构
@@ -37,7 +36,7 @@ func NewWebStackRenderer() *WebStackRenderer {
 
 // ParseConfig 解析配置文件
 func ParseConfig(data []byte) (WebStacks, error) {
-	return pkg.Parse[WebStack](data)
+	return parser.NewParser[WebStack](data).ParseMulti()
 }
 
 // Render 渲染为Markdown格式

@@ -1,14 +1,10 @@
 package goods
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
-	"io"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Goods 定义商品配置结构
@@ -77,19 +73,7 @@ func (r *GoodsRenderer) Render(data []byte) (string, error) {
 
 // ParseConfig 解析配置文件
 func ParseConfig(data []byte) ([]Goods, error) {
-	var goods []Goods
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	for {
-		var g []Goods
-		if err := decoder.Decode(&g); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, fmt.Errorf("YAML解析失败: %w", err)
-		}
-		goods = append(goods, g...)
-	}
-	return goods, nil
+	return parser.NewParser[Goods](data).ParseMulti()
 }
 
 // RenderMarkdown 渲染为 Markdown 格式
