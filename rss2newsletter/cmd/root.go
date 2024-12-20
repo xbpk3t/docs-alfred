@@ -5,17 +5,16 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/pkg/rss"
 	"html/template"
 	"log/slog"
 	"os"
-	"sync"
 
 	"github.com/golang-module/carbon/v2"
-	feeds2 "github.com/gorilla/feeds"
+	"github.com/gorilla/feeds"
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/rss"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -32,106 +31,140 @@ type EmailConfig struct {
 	Token string
 }
 
+// NewsletterService 处理新闻通讯的服务
+type NewsletterService struct {
+	config *rss.Config
+	feed   *rss.Feed
+}
+
+// NewNewsletterService 创建新闻通讯服务
+func NewNewsletterService(cfg *rss.Config) *NewsletterService {
+	return &NewsletterService{
+		config: cfg,
+		feed:   rss.NewFeed(cfg),
+	}
+}
+
 // rootCmd 根命令
 var rootCmd = &cobra.Command{
 	Use:   "rss2newsletter",
 	Short: "RSS订阅转换为邮件推送工具",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		config, err := rss.NewConfig(cfgFile)
-		if err != nil {
-			slog.Error("rss2newsletter config file load error:", err)
-			return err
-		}
-
-		// 使用 errgroup 进行并发处理
-		g, _ := errgroup.WithContext(context.Background())
-		var results []feeds2.RssFeed
-		var mu sync.Mutex // 保护 results
-
-		for _, feed := range config.Feeds {
-			feed := feed // 避免闭包问题
-			g.Go(func() error {
-				rssFeed, err := processFeed(feed, config)
-				if err != nil {
-					return err
-				}
-
-				mu.Lock()
-				results = append(results, rssFeed)
-				mu.Unlock()
-				return nil
-			})
-		}
-
-		if err := g.Wait(); err != nil {
-			return err
-		}
-
-		// 渲染模板
-		content, err := renderNewsletter(results)
-		if err != nil {
-			return err
-		}
-
-		// 发送邮件
-		emailCfg := EmailConfig{
-			From:  "Acme <onboarding@resend.dev>",
-			To:    []string{"jeffcottlu@gmail.com"},
-			Token: config.Resend.Token,
-		}
-
-		return sendNewsletter(emailCfg, content)
-	},
+	RunE:  runNewsletter,
 }
 
-// processFeed 处理单个Feed源
-func processFeed(feed rss.FeedsDetail, config *rss.Config) (feeds2.RssFeed, error) {
-	TypeName := feed.Type
+func runNewsletter(cmd *cobra.Command, args []string) error {
+	config, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	service := NewNewsletterService(config)
+	feeds, err := service.ProcessAllFeeds()
+	if err != nil {
+		return err
+	}
+
+	content, err := service.RenderNewsletter(feeds)
+	if err != nil {
+		return err
+	}
+
+	return service.SendNewsletter(content)
+}
+
+func loadConfig() (*rss.Config, error) {
+	config, err := rss.NewConfig(cfgFile)
+	if err != nil {
+		slog.Error("rss2newsletter config file load error:", slog.Any("err", err))
+		return nil, err
+	}
+	return config, nil
+}
+
+// ProcessAllFeeds 并发处理所有Feed源
+func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
+	g, _ := errgroup.WithContext(context.Background())
+	results := make([]feeds.RssFeed, 0, len(s.config.Feeds))
+	resultChan := make(chan feeds.RssFeed, len(s.config.Feeds))
+
+	// 启动goroutine处理每个feed
+	for _, feed := range s.config.Feeds {
+		feed := feed // 避免闭包问题
+		g.Go(func() error {
+			rssFeed, err := s.processSingleFeed(feed)
+			if err != nil {
+				return err
+			}
+			resultChan <- rssFeed
+			return nil
+		})
+	}
+
+	// 等待所有goroutine完成
+	go func() {
+		g.Wait()
+		close(resultChan)
+	}()
+
+	// 收集结果
+	for result := range resultChan {
+		results = append(results, result)
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+// processSingleFeed 处理单个Feed源
+func (s *NewsletterService) processSingleFeed(feed rss.FeedsDetail) (feeds.RssFeed, error) {
 	urls := lo.Compact(lo.Map(feed.Urls, func(item rss.Feeds, _ int) string {
 		return item.Feed
 	}))
 
-	allFeeds := config.FetchURLs(context.TODO(), urls)
+	allFeeds := s.feed.FetchURLs(context.TODO(), urls)
 	if len(allFeeds) == 0 {
-		return feeds2.RssFeed{}, fmt.Errorf("no feed found for type: %s", TypeName)
+		return feeds.RssFeed{}, fmt.Errorf("no feed found for type: %s", feed.Type)
 	}
 
-	combinedFeed, err := config.MergeAllFeeds(TypeName, allFeeds)
+	combinedFeed, err := s.feed.MergeAllFeeds(feed.Type, allFeeds)
 	if err != nil {
-		return feeds2.RssFeed{}, fmt.Errorf("merge feeds error: %w", err)
+		return feeds.RssFeed{}, fmt.Errorf("merge feeds error: %w", err)
 	}
 
-	return convertToRssFeed(TypeName, combinedFeed, config.Newsletter.IsHideAuthorInTitle), nil
+	return s.convertToRssFeed(feed.Type, combinedFeed), nil
 }
 
 // convertToRssFeed 将Feed转换为RssFeed格式
-func convertToRssFeed(typeName string, combinedFeed *feeds2.Feed, hideAuthor bool) feeds2.RssFeed {
-	newFeeds := make([]*feeds2.RssItem, len(combinedFeed.Items))
+func (s *NewsletterService) convertToRssFeed(typeName string, combinedFeed *feeds.Feed) feeds.RssFeed {
+	newFeeds := make([]*feeds.RssItem, len(combinedFeed.Items))
 	for i, item := range combinedFeed.Items {
-		title := getItemTitle(item, hideAuthor)
-		newFeeds[i] = &feeds2.RssItem{
+		title := s.getItemTitle(item)
+		newFeeds[i] = &feeds.RssItem{
 			Title:    title,
 			Link:     item.Link.Href,
 			Category: typeName,
 			PubDate:  carbon.CreateFromStdTime(item.Created).ToDateTimeString(),
 		}
 	}
-	return feeds2.RssFeed{
+	return feeds.RssFeed{
 		Category: typeName,
 		Items:    newFeeds,
 	}
 }
 
 // getItemTitle 生成文章标题
-func getItemTitle(item *feeds2.Item, hideAuthor bool) string {
-	if !hideAuthor && item.Author.Name != "" {
+func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
+	if !s.config.Newsletter.IsHideAuthorInTitle && item.Author.Name != "" {
 		return fmt.Sprintf("[%s] %s", item.Author.Name, item.Title)
 	}
 	return item.Title
 }
 
-// renderNewsletter 渲染邮件模板
-func renderNewsletter(feeds []feeds2.RssFeed) (string, error) {
+// RenderNewsletter 渲染邮件模板
+func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed) (string, error) {
 	tmpl, err := template.ParseFS(newsletterTpl, "templates/newsletter.tpl")
 	if err != nil {
 		return "", fmt.Errorf("解析模板失败: %w", err)
@@ -145,15 +178,21 @@ func renderNewsletter(feeds []feeds2.RssFeed) (string, error) {
 	return tplBytes.String(), nil
 }
 
-// sendNewsletter 发送邮件
-func sendNewsletter(emailCfg EmailConfig, content string) error {
+// SendNewsletter 发送邮件
+func (s *NewsletterService) SendNewsletter(content string) error {
+	emailCfg := EmailConfig{
+		From:  "Acme <onboarding@resend.dev>",
+		To:    []string{"jeffcottlu@gmail.com"},
+		Token: s.config.Resend.Token,
+	}
+
 	ctx := context.Background()
 	client := resend.NewClient(emailCfg.Token)
 
 	params := &resend.SendEmailRequest{
 		From:    emailCfg.From,
 		To:      emailCfg.To,
-		Subject: fmt.Sprintf("新内容更新 %s (第%d周)", carbon.Now().ToDateString(), carbon.Now().WeekOfYear()),
+		Subject: s.generateEmailSubject(),
 		Html:    content,
 	}
 
@@ -161,8 +200,15 @@ func sendNewsletter(emailCfg EmailConfig, content string) error {
 	if err != nil {
 		return fmt.Errorf("发送邮件失败: %w", err)
 	}
+
 	slog.Info("邮件发送成功", "id", sent.Id)
 	return nil
+}
+
+// generateEmailSubject 生成邮件主题
+func (s *NewsletterService) generateEmailSubject() string {
+	now := carbon.Now()
+	return fmt.Sprintf("新内容更新 %s (第%d周)", now.ToDateString(), now.WeekOfYear())
 }
 
 // Execute 执行根命令
