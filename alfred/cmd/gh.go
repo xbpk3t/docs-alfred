@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"log/slog"
 	"slices"
 	"strings"
@@ -24,7 +25,7 @@ var ghCmd = &cobra.Command{
 // 主命令处理函数
 func handleGhCommand(cmd *cobra.Command, args []string) {
 	builder := alfred.NewItemBuilder(wf)
-	r, _ := gh2.ParseConfig(data)
+	r, _ := parser.NewParser[gh2.ConfigRepos](data).ParseSingle()
 	repos := r.ToRepos()
 
 	if len(args) > 0 && strings.HasPrefix(args[0], "#") {
