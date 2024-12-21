@@ -2,6 +2,7 @@ package feed
 
 import (
 	"github.com/xbpk3t/docs-alfred/pkg"
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
 
 type Feed struct {
@@ -18,5 +19,5 @@ type Categories struct {
 
 // ParseConfig 解析Feed配置
 func ParseConfig(data []byte) ([]Categories, error) {
-	return pkg.Parse[Categories](data)
+	return parser.NewParser[Categories](data).ParseMulti()
 }

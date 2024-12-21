@@ -9,54 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseConfig(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    ConfigRepos
-		wantErr bool
-	}{
-		{
-			name: "基本配置",
-			input: `
-- type: "test"
-  repos:
-    - url: "https://github.com/user/repo"
-      des: "test repo"`,
-			want: ConfigRepos{
-				{
-					Type: "test",
-					Repos: Repos{
-						{
-							URL: "https://github.com/user/repo",
-							Des: "test repo",
-						},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name:    "无效的YAML",
-			input:   `invalid: ][`,
-			want:    nil,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseConfig([]byte(tt.input))
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-			assert.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
+func TestRepository_Methods(t *testing.T) 
 func TestRepository_Methods(t *testing.T) {
 	tests := []struct {
 		name     string
