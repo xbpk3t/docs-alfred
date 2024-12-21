@@ -39,7 +39,7 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	rootCmd.Flags().StringVar(&folderName, "folder", "data/x", "配置文件所在文件夹")
+	rootCmd.Flags().StringVar(&folderName, "folder", "", "配置文件所在文件夹")
 	rootCmd.Flags().StringSliceVar(&ghFiles, "yf", []string{}, "要合并的gh.yml文件列表")
 }
 

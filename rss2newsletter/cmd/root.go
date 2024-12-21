@@ -59,12 +59,12 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 	}
 
 	service := NewNewsletterService(config)
-	feeds, err := service.ProcessAllFeeds()
+	f, err := service.ProcessAllFeeds()
 	if err != nil {
 		return err
 	}
 
-	content, err := service.RenderNewsletter(feeds)
+	content, err := service.RenderNewsletter(f)
 	if err != nil {
 		return err
 	}
@@ -221,5 +221,4 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "rss2newsletter.yml", "配置文件路径")
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

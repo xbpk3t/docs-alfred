@@ -42,9 +42,10 @@ func (m *Merger[T]) Merge() error {
 
 // validateInput 验证输入参数
 func (m *Merger[T]) validateInput() error {
-	if m.options.FolderPath == "" {
-		return fmt.Errorf("文件夹路径不能为空")
-	}
+	// TODO fp应该默认当前文件夹，如果设置就为自定义文件夹。那这里是否应该做个路径是否存在的check？
+	// if m.options.FolderPath == "" {
+	// 	return fmt.Errorf("文件夹路径不能为空")
+	// }
 	if len(m.options.FileNames) == 0 {
 		return fmt.Errorf("文件列表不能为空")
 	}

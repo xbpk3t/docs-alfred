@@ -3,9 +3,8 @@ package parser
 import (
 	"bytes"
 	"fmt"
-	"io"
-
 	"gopkg.in/yaml.v3"
+	"io"
 )
 
 // Parser YAML配置解析器
@@ -31,6 +30,26 @@ func (p *Parser[T]) ParseSingle() (T, error) {
 }
 
 // ParseMulti 解析多文档YAML
+// func (p *Parser[T]) ParseMulti() ([]T, error) {
+// 	var results []T
+// 	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
+//
+// 	for {
+// 		var item T
+// 		err := decoder.Decode(&item)
+// 		if err == io.EOF {
+// 			break
+// 		}
+// 		if err != nil {
+// 			return nil, fmt.Errorf("解析配置失败: %w", err)
+// 		}
+// 		results = append(results, item)
+// 	}
+// 	return results, nil
+// }
+
+// ParseMulti 解析多文档 YAML
+// T 可以是单个对象类型，也可以是切片类型
 func (p *Parser[T]) ParseMulti() ([]T, error) {
 	var results []T
 	decoder := yaml.NewDecoder(bytes.NewReader(p.data))

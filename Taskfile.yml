@@ -33,3 +33,7 @@ tasks:
 #      - # go build -race cmd
 #      - # hadolint --config </path/to/config.yaml> Dockerfile
 #      - go vet -vettool=$(which shadow) -strict # 这个回去扫描官方pkg的版本，报错类似 shadow: package requires newer Go version go1.23，所以移除
+
+
+  test:
+    cmd: set -o pipefail && go test ./... -json | tparse -all

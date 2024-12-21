@@ -1,10 +1,13 @@
-package work
+package works
 
 import (
+	"os"
 	"testing"
 
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/xbpk3t/docs-alfred/pkg"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseConfig(t *testing.T) {
@@ -53,10 +56,10 @@ func TestParseConfig(t *testing.T) {
 					Tag:  "标签2",
 					Qs: []QA{
 						{
-							Question: "主问题",
-							Answer:   "主答案",
-							SubQs:    []string{"子问题1", "子问题2"},
-							Pictures: []string{"image1.jpg", "image2.jpg"},
+							Question:     "主问题",
+							Answer:       "主答案",
+							SubQuestions: []string{"子问题1", "子问题2"},
+							Pictures:     []string{"image1.jpg", "image2.jpg"},
 						},
 					},
 				},
@@ -73,14 +76,15 @@ func TestParseConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// got, err := ParseConfig([]byte(tt.input))
-			got, err := pkg.Parse[Doc]([]byte(tt.input))
+			got, err := parser.NewParser[Docs]([]byte(tt.input)).ParseMulti()
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
 			}
 			assert.NoError(t, err)
-			assert.Equal(t, tt.want, got)
+			for _, docs := range got {
+				assert.Equal(t, tt.want, docs)
+			}
 		})
 	}
 }
@@ -111,11 +115,11 @@ func TestQA_Render(t *testing.T) {
 		{
 			name: "带子问题的问答",
 			qa: QA{
-				Question: "主问题",
-				Answer:   "主答案",
-				SubQs:    []string{"子问题1", "子问题2"},
+				Question:     "主问题",
+				Answer:       "主答案",
+				SubQuestions: []string{"子问题1", "子问题2"},
 			},
-			want: "\n<details>\n<summary>主问题</summary>\n\n- 子问题1\n- 子问题2\n\n---\n\n主答案\n\n</details>\n\n",
+			want: "\n<details>\n<summary>主问题</summary>\n\n- 子问题1\n- 子问题2\n\n\n---\n\n主答案\n\n</details>\n\n",
 		},
 	}
 
@@ -285,6 +289,117 @@ func TestWorkRenderer_Render(t *testing.T) {
 			}
 			assert.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// func TestParsePoetryConfig(t *testing.T) {
+// 	// 读取测试文件
+// 	content, err := os.ReadFile("testdata/test.yml")
+// 	require.NoError(t, err)
+//
+// 	tests := []struct {
+// 		name     string
+// 		validate func(*testing.T, Docs)
+// 	}{
+// 		{
+// 			name: "parse poetry structure",
+// 			validate: func(t *testing.T, docs Docs) {
+// 				// 验证文档数量
+// 				assert.Len(t, docs, 4)
+//
+// 				// 验证第一个poetry部分
+// 				assert.Equal(t, "poetry", docs[0].Type)
+// 				assert.Equal(t, "verse", docs[0].Tag)
+// 				assert.Len(t, docs[0].Qs, 1)
+// 				assert.Equal(t, "What are common poetic devices in English poetry?", docs[0].Qs[0].Question)
+//
+// 				// 验证classic部分
+// 				classicDoc := docs[2]
+// 				assert.Equal(t, "classic", classicDoc.Type)
+// 				assert.Equal(t, "literature", classicDoc.Tag)
+// 				assert.Contains(t, classicDoc.Qs[0].Answer, "iambic pentameter")
+// 			},
+// 		},
+// 		{
+// 			name: "verify tag references",
+// 			validate: func(t *testing.T, docs Docs) {
+// 				// 验证相同tag的文档
+// 				verseDocs := lo.Filter(docs, func(d Doc, _ int) bool {
+// 					return d.Tag == "verse"
+// 				})
+// 				assert.Len(t, verseDocs, 2)
+//
+// 				literatureDocs := lo.Filter(docs, func(d Doc, _ int) bool {
+// 					return d.Tag == "literature"
+// 				})
+// 				assert.Len(t, literatureDocs, 2)
+// 			},
+// 		},
+// 		{
+// 			name: "test type retrieval",
+// 			validate: func(t *testing.T, docs Docs) {
+// 				types := docs.GetTypes()
+// 				assert.ElementsMatch(t, []string{"poetry", "classic", "modern"}, types)
+//
+// 				// 测试按标签获取类型
+// 				literatureTypes := docs.GetTypesByTag("literature")
+// 				assert.ElementsMatch(t, []string{"classic", "modern"}, literatureTypes)
+// 			},
+// 		},
+// 		{
+// 			name: "test question search",
+// 			validate: func(t *testing.T, docs Docs) {
+// 				results := docs.SearchQuestions("verse")
+// 				assert.Len(t, results, 2)
+//
+// 				results = docs.SearchQuestions("poetry")
+// 				assert.Contains(t, results, "What are common poetic devices in English poetry?")
+// 			},
+// 		},
+// 	}
+//
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			docs, err := parser.NewParser[Docs](content).ParseMulti()
+// 			require.NoError(t, err)
+// 			for _, doc := range docs {
+// 				tt.validate(t, doc)
+// 			}
+// 		})
+// 	}
+// }
+
+func TestRenderPoetryContent(t *testing.T) {
+	content, err := os.ReadFile("testdata/test.yml")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		validate func(*testing.T, string)
+	}{
+		{
+			name: "render markdown structure",
+			validate: func(t *testing.T, output string) {
+				// 验证标题结构
+				assert.Contains(t, output, "## verse")
+				assert.Contains(t, output, "### poetry")
+				assert.Contains(t, output, "## literature")
+
+				// 验证问答格式
+				assert.Contains(t, output, "<details>")
+				assert.Contains(t, output, "<summary>")
+				assert.Contains(t, output, "iambic pentameter")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			renderer := NewWorkRenderer()
+			output, err := renderer.Render(content)
+			require.NoError(t, err)
+			tt.validate(t, output)
 		})
 	}
 }

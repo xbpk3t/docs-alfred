@@ -10,7 +10,7 @@ import (
 
 	"github.com/xbpk3t/docs-alfred/service/gh"
 	"github.com/xbpk3t/docs-alfred/service/goods"
-	"github.com/xbpk3t/docs-alfred/service/work"
+	"github.com/xbpk3t/docs-alfred/service/works"
 
 	"github.com/spf13/viper"
 
@@ -21,9 +21,6 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "yaml2md",
 	Short: "A brief description of your application",
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -44,16 +41,7 @@ func init() {
 	rootCmd.AddCommand(worksCmd)
 	rootCmd.AddCommand(wsCmd)
 	rootCmd.AddCommand(goodsCmd)
-
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.yaml2md.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.AddCommand(xCmd)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "src/data/qs.yml", "config file (default is src/data/qs.yml)")
 }
@@ -84,12 +72,12 @@ var ghCmd = &cobra.Command{
 	},
 }
 
-// cmd/works.go
+// Deprecated: func is deprecated.
 var worksCmd = &cobra.Command{
 	Use:   "works",
 	Short: "Convert works yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		renderer := &work.WorkRenderer{}
+		renderer := &works.WorkRenderer{}
 		return ProcessFile(cfgFile, renderer)
 	},
 }
@@ -109,6 +97,15 @@ var goodsCmd = &cobra.Command{
 	Short: "Convert goods yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		renderer := &goods.GoodsRenderer{}
+		return ProcessFile(cfgFile, renderer)
+	},
+}
+
+var xCmd = &cobra.Command{
+	Use:   "x",
+	Short: "处理 interview 配置文件",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		renderer := &gh.XRenderer{}
 		return ProcessFile(cfgFile, renderer)
 	},
 }
