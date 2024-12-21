@@ -29,9 +29,9 @@ type Item struct {
 
 // QA 定义问答结构
 type QA struct {
-	Question string   `yaml:"q"`
-	Answer   string   `yaml:"x"`
-	Steps    []string `yaml:"s"`
+	Question     string   `yaml:"q"`
+	Answer       string   `yaml:"x"`
+	SubQuestions []string `yaml:"s"`
 }
 
 // GoodsRenderer Markdown渲染器
@@ -175,16 +175,16 @@ func (qa *QA) formatContent() string {
 	var parts []string
 
 	// 添加步骤
-	if len(qa.Steps) > 0 {
+	if len(qa.SubQuestions) > 0 {
 		var steps strings.Builder
-		for _, step := range qa.Steps {
+		for _, step := range qa.SubQuestions {
 			steps.WriteString(fmt.Sprintf("- %s\n", step))
 		}
 		parts = append(parts, steps.String())
 	}
 
 	// 添加分隔符
-	if len(qa.Steps) > 0 && qa.Answer != "" {
+	if len(qa.SubQuestions) > 0 && qa.Answer != "" {
 		parts = append(parts, "---")
 	}
 

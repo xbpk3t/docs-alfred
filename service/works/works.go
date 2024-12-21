@@ -1,4 +1,4 @@
-package work
+package works
 
 import (
 	"fmt"
@@ -18,11 +18,11 @@ type Doc struct {
 
 // QA 定义问答结构
 type QA struct {
-	Question string   `yaml:"q"` // 问题
-	Answer   string   `yaml:"x"` // 答案
-	URL      string   `yaml:"u"` // 链接
-	Pictures []string `yaml:"p"` // 图片
-	SubQs    []string `yaml:"s"` // 子问题
+	Question     string   `yaml:"q"` // 问题
+	Answer       string   `yaml:"x"` // 答案
+	URL          string   `yaml:"u"` // 链接
+	Pictures     []string `yaml:"p"` // 图片
+	SubQuestions []string `yaml:"s"` // 子问题
 }
 
 // Docs 文档集合
@@ -43,22 +43,24 @@ func NewWorkRenderer() *WorkRenderer {
 
 // Render 渲染文档
 func (r *WorkRenderer) Render(data []byte) (string, error) {
-	docs, err := parser.NewParser[Doc](data).ParseMulti()
+	docs, err := parser.NewParser[Docs](data).ParseMulti()
 	if err != nil {
 		return "", err
 	}
 
 	for _, doc := range docs {
-		if !r.seenTags[doc.Tag] {
-			r.RenderHeader(2, doc.Tag)
-			r.seenTags[doc.Tag] = true
-		}
+		for _, d := range doc {
+			if !r.seenTags[d.Tag] {
+				r.RenderHeader(2, d.Tag)
+				r.seenTags[d.Tag] = true
+			}
 
-		if doc.Tag != doc.Type {
-			r.RenderHeader(3, doc.Type)
-		}
+			if d.Tag != d.Type {
+				r.RenderHeader(3, d.Type)
+			}
 
-		r.Write(doc.RenderContent())
+			r.Write(d.RenderContent())
+		}
 	}
 
 	return r.String(), nil
@@ -111,9 +113,9 @@ func (qa *QA) formatDetails() string {
 	}
 
 	// 处理子问题
-	if len(qa.SubQs) > 0 {
+	if len(qa.SubQuestions) > 0 {
 		var steps strings.Builder
-		for _, subQ := range qa.SubQs {
+		for _, subQ := range qa.SubQuestions {
 			steps.WriteString(fmt.Sprintf("- %s\n", subQ))
 		}
 		parts = append(parts, steps.String())

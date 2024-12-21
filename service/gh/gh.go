@@ -351,7 +351,7 @@ func RenderRepositoriesAsMarkdownTable(repos Repos) string {
 		return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
 	})
 
-	render.RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
+	render.NewMarkdownRenderer().RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
 	return res.String()
 }
 
@@ -419,7 +419,7 @@ func (m *ConfigMerger) processFile(fileName string) (ConfigRepos, error) {
 	}
 
 	tag := strings.TrimSuffix(fileName, ".yml")
-	rc, _ := parser.NewParser[ConfigRepos](content).ParseMulti()
+	rc, _ := parser.NewParser[ConfigRepos](content).ParseSingle()
 
 	return rc.WithTag(tag), nil
 }

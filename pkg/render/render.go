@@ -62,18 +62,6 @@ func (m *MarkdownRenderer) RenderFold(summary, details string) {
 		summary, details))
 }
 
-// RenderTable 渲染表格
-func (m *MarkdownRenderer) RenderTable(headers []string, rows [][]string) {
-	// 渲染表头
-	m.Write("|" + strings.Join(headers, "|") + "|\n")
-	m.Write("|" + strings.Repeat("---|", len(headers)) + "\n")
-
-	// 渲染数据行
-	for _, row := range rows {
-		m.Write("|" + strings.Join(row, "|") + "|\n")
-	}
-}
-
 // RenderCodeBlock 渲染代码块
 func (m *MarkdownRenderer) RenderCodeBlock(language, code string) {
 	m.Write(fmt.Sprintf("```%s\n%s\n```\n", language, code))
@@ -121,17 +109,17 @@ func (r *MarkdownRenderer) RenderURLTable(items []pkg.URLInfo, headers []string)
 		}
 	}
 
-	renderMarkdownTable(headers, &res, data)
+	r.RenderMarkdownTable(headers, &res, data)
 	return res.String()
 }
 
 // RenderMarkdownTable 封装了创建和渲染Markdown表格的逻辑
-func renderMarkdownTable(header []string, res *strings.Builder, data [][]string) {
+func (m *MarkdownRenderer) RenderMarkdownTable(header []string, res *strings.Builder, data [][]string) {
 	table := tablewriter.NewWriter(res)
 	table.SetAutoWrapText(false)
 	table.SetHeader(header)
 	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 	table.SetCenterSeparator("|")
-	table.AppendBulk(data) // 添加大量数据
+	table.AppendBulk(data)
 	table.Render()
 }
