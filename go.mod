@@ -5,7 +5,7 @@ go 1.23.1
 require (
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/deanishe/awgo v0.29.1
-	github.com/golang-module/carbon/v2 v2.4.1
+	github.com/golang-module/carbon/v2 v2.5.2
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/go-github/v67 v67.0.0
 	github.com/gorilla/feeds v1.2.0
