@@ -1,30 +1,19 @@
 package gh
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
-	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 
 	"github.com/samber/lo"
-	"github.com/xbpk3t/docs-alfred/pkg"
-	"gopkg.in/yaml.v3"
 )
 
 const GhURL = "https://github.com/"
 
 // Repository 定义仓库结构
 type Repository struct {
-	LastUpdated time.Time
-	pkg.URLInfo
 	Doc           string `yaml:"doc,omitempty"`
 	Name          string `yaml:"name,omitempty"`
 	User          string
@@ -61,12 +50,6 @@ type Question struct {
 
 type Questions []Question
 
-// GhRenderer Markdown渲染器
-type GhRenderer struct {
-	render.MarkdownRenderer
-	Config ConfigRepos
-}
-
 // Repository 相关方法
 func (r *Repository) SetGithubInfo(owner, name string) {
 	r.User = owner
@@ -99,6 +82,15 @@ func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
 	for _, repo := range cr {
 		for i := range repo.Repos {
 			repo.Repos[i].Tag = tag
+		}
+	}
+	return cr
+}
+
+func (cr ConfigRepos) WithType() ConfigRepos {
+	for _, repo := range cr {
+		for i := range repo.Repos {
+			repo.Repos[i].Type = repo.Type
 		}
 	}
 	return cr
@@ -210,91 +202,6 @@ func processDepRepos(repo Repository, configType string) Repos {
 	return repos
 }
 
-// Renderer 相关方法
-func NewGhRenderer() *GhRenderer {
-	return &GhRenderer{}
-}
-
-func (g *GhRenderer) Render(data []byte) (string, error) {
-	config, err := parser.NewParser[ConfigRepos](data).ParseSingle()
-	if err != nil {
-		return "", err
-	}
-	g.Config = config
-	return g.renderContent()
-}
-
-func (g *GhRenderer) renderContent() (string, error) {
-	for _, repo := range g.Config {
-		g.RenderHeader(2, repo.Type)
-		g.renderRepos(repo.Repos)
-	}
-	return g.String(), nil
-}
-
-func (g *GhRenderer) renderRepos(repos Repos) {
-	for _, repo := range repos {
-		if repo.Qs != nil {
-			g.RenderHeader(3, g.RenderLink(repo.URL, repo.URL))
-			g.renderSubComponents(repo)
-			g.renderQuestions(repo.Qs)
-		}
-	}
-}
-
-func (g *GhRenderer) renderSubComponents(repo Repository) {
-	// 渲染子仓库
-	if len(repo.SubRepos) > 0 {
-		g.renderSubRepos(repo.SubRepos)
-	}
-
-	if len(repo.ReplacedRepos) > 0 {
-		g.renderReplacedRepos(repo.ReplacedRepos)
-	}
-
-	if len(repo.RelatedRepos) > 0 {
-		g.renderRelatedRepos(repo.RelatedRepos)
-	}
-
-	// 渲染命令
-	if len(repo.Cmd) > 0 {
-		g.RenderCodeBlock("shell", strings.Join(repo.Cmd, "\n"))
-	}
-}
-
-func (g *GhRenderer) renderSubRepos(repos Repos) {
-	if len(repos) > 0 {
-		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonition(render.AdmonitionTip, "SubRepos Repos", content)
-	}
-}
-
-func (g *GhRenderer) renderReplacedRepos(repos Repos) {
-	if len(repos) > 0 {
-		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonition(render.AdmonitionWarning, "Replaced Repos", content)
-	}
-}
-
-func (g *GhRenderer) renderRelatedRepos(repos Repos) {
-	if len(repos) > 0 {
-		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonition(render.AdmonitionInfo, "Related Repos", content)
-	}
-}
-
-func (g *GhRenderer) renderQuestions(qs Questions) {
-	for _, q := range qs {
-		summary := formatQuestionSummary(q)
-		details := formatQuestionDetails(q)
-		if details == "" {
-			g.RenderListItem(summary)
-		} else {
-			g.RenderFold(summary, details)
-		}
-	}
-}
-
 // 工具函数
 func isValidGithubURL(url string) bool {
 	return strings.Contains(url, GhURL)
@@ -387,117 +294,4 @@ type MergeOptions struct {
 	FolderPath string
 	OutputPath string
 	FileNames  []string
-}
-
-type ConfigMerger struct {
-	options MergeOptions
-}
-
-func NewConfigMerger(opts MergeOptions) *ConfigMerger {
-	return &ConfigMerger{options: opts}
-}
-
-// Merge
-func (m *ConfigMerger) Merge() error {
-	if err := m.validateInput(); err != nil {
-		return fmt.Errorf("验证输入失败: %w", err)
-	}
-
-	config, err := m.mergeConfigs()
-	if err != nil {
-		return fmt.Errorf("合并配置失败: %w", err)
-	}
-
-	return m.writeResult(config)
-}
-
-func (m *ConfigMerger) validateInput() error {
-	if m.options.FolderPath == "" {
-		return fmt.Errorf("文件夹路径不能为空")
-	}
-	if len(m.options.FileNames) == 0 {
-		return fmt.Errorf("文件列表不能为空")
-	}
-	if m.options.OutputPath == "" {
-		return fmt.Errorf("输出路径不能为空")
-	}
-	return nil
-}
-
-// mergeConfigs
-func (m *ConfigMerger) mergeConfigs() (ConfigRepos, error) {
-	var mergedConfig ConfigRepos
-
-	for _, fileName := range m.options.FileNames {
-		config, err := m.processFile(fileName)
-		if err != nil {
-			return nil, fmt.Errorf("处理文件 %s 失败: %w", fileName, err)
-		}
-		mergedConfig = append(mergedConfig, config...)
-	}
-
-	return mergedConfig, nil
-}
-
-func (m *ConfigMerger) processFile(fileName string) (ConfigRepos, error) {
-	content, err := m.readFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	tag := strings.TrimSuffix(fileName, ".yml")
-	rc := NewConfigRepos(content)
-	// rc, err := parser.NewParser[ConfigRepos](content).ParseFlatten()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("解析YAML失败: %w", err)
-	// }
-
-	return rc.WithTag(tag), nil
-}
-
-func (m *ConfigMerger) readFile(fileName string) ([]byte, error) {
-	filePath := filepath.Join(m.options.FolderPath, fileName)
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("读取文件失败: %w", err)
-	}
-	return content, nil
-}
-
-func (m *ConfigMerger) writeResult(config ConfigRepos) error {
-	file, err := os.Create(m.options.OutputPath)
-	if err != nil {
-		return fmt.Errorf("创建输出文件失败: %w", err)
-	}
-	defer file.Close()
-
-	encoder := yaml.NewEncoder(file)
-	defer encoder.Close()
-
-	if err := encoder.Encode(config); err != nil {
-		return fmt.Errorf("编码YAML失败: %w", err)
-	}
-
-	return nil
-}
-
-func NewConfigRepos(f []byte) ConfigRepos {
-	var ghs ConfigRepos
-
-	d := yaml.NewDecoder(bytes.NewReader(f))
-	for {
-		// create new spec here
-		spec := new(ConfigRepos)
-		// pass a reference to spec reference
-		if err := d.Decode(&spec); err != nil {
-			// break the loop in case of EOF
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			panic(err)
-		}
-
-		ghs = append(ghs, *spec...)
-	}
-	return ghs
 }
