@@ -83,8 +83,7 @@ func loadConfig() (*rss.Config, error) {
 
 // ProcessAllFeeds 并发处理所有Feed源
 func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
-	g, _ := errgroup.WithContext(context.Background())
-	results := make([]feeds.RssFeed, 0, len(s.config.Feeds))
+	g, ctx := errgroup.WithContext(context.Background())
 	resultChan := make(chan feeds.RssFeed, len(s.config.Feeds))
 
 	// 启动goroutine处理每个feed
@@ -95,25 +94,31 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 			if err != nil {
 				return err
 			}
-			resultChan <- rssFeed
-			return nil
+			select {
+			case resultChan <- rssFeed:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		})
 	}
 
-	// 等待所有goroutine完成
+	// 等待所有goroutine完成或出错
 	go func() {
-		err := g.Wait()
-		if err != nil {
+		if err := g.Wait(); err != nil {
+			close(resultChan)
 			return
 		}
 		close(resultChan)
 	}()
 
 	// 收集结果
+	var results []feeds.RssFeed
 	for result := range resultChan {
 		results = append(results, result)
 	}
 
+	// 检查是否有错误发生
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
