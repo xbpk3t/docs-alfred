@@ -25,18 +25,19 @@ const GhURL = "https://github.com/"
 type Repository struct {
 	LastUpdated time.Time
 	pkg.URLInfo
-	Doc    string `yaml:"doc,omitempty"`
-	Name   string `yaml:"name,omitempty"`
-	User   string
-	Des    string    `yaml:"des,omitempty"`
-	URL    string    `yaml:"url"`
-	Tag    string    `yaml:"tag,omitempty"`
-	Type   string    `yaml:"type"`
-	Qs     Questions `yaml:"qs,omitempty"`
-	Sub    Repos     `yaml:"sub,omitempty"`
-	Rep    Repos     `yaml:"rep,omitempty"`
-	Cmd    []string  `yaml:"cmd,omitempty"`
-	IsStar bool
+	Doc           string `yaml:"doc,omitempty"`
+	Name          string `yaml:"name,omitempty"`
+	User          string
+	Des           string    `yaml:"des,omitempty"`
+	URL           string    `yaml:"url"`
+	Tag           string    `yaml:"tag,omitempty"`
+	Type          string    `yaml:"type"`
+	Qs            Questions `yaml:"qs,omitempty"`
+	SubRepos      Repos     `yaml:"sub,omitempty"`
+	ReplacedRepos Repos     `yaml:"rep,omitempty"`
+	RelatedRepos  Repos     `yaml:"rel,omitempty"`
+	Cmd           []string  `yaml:"cmd,omitempty"`
+	IsStar        bool
 }
 
 type Repos []Repository
@@ -188,7 +189,7 @@ func processSubRepos(repo Repository, configType string) Repos {
 	var repos Repos
 	parentFullName := repo.FullName()
 
-	for _, subRepo := range repo.Sub {
+	for _, subRepo := range repo.SubRepos {
 		subType := fmt.Sprintf("%s [SUB: %s]", configType, parentFullName)
 		repos = append(repos, processRepo(subRepo, subType)...)
 	}
@@ -201,7 +202,7 @@ func processDepRepos(repo Repository, configType string) Repos {
 	var repos Repos
 	parentFullName := repo.FullName()
 
-	for _, depRepo := range repo.Rep {
+	for _, depRepo := range repo.ReplacedRepos {
 		depType := fmt.Sprintf("%s [DEP: %s]", configType, parentFullName)
 		repos = append(repos, processRepo(depRepo, depType)...)
 	}
@@ -243,8 +244,16 @@ func (g *GhRenderer) renderRepos(repos Repos) {
 
 func (g *GhRenderer) renderSubComponents(repo Repository) {
 	// 渲染子仓库
-	if len(repo.Sub) > 0 {
-		g.renderSubRepos(repo.Sub)
+	if len(repo.SubRepos) > 0 {
+		g.renderSubRepos(repo.SubRepos)
+	}
+
+	if len(repo.ReplacedRepos) > 0 {
+		g.renderReplacedRepos(repo.ReplacedRepos)
+	}
+
+	if len(repo.RelatedRepos) > 0 {
+		g.renderRelatedRepos(repo.RelatedRepos)
 	}
 
 	// 渲染命令
@@ -256,7 +265,21 @@ func (g *GhRenderer) renderSubComponents(repo Repository) {
 func (g *GhRenderer) renderSubRepos(repos Repos) {
 	if len(repos) > 0 {
 		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonition(render.AdmonitionTip, "Sub Repos", content)
+		g.RenderAdmonition(render.AdmonitionTip, "SubRepos Repos", content)
+	}
+}
+
+func (g *GhRenderer) renderReplacedRepos(repos Repos) {
+	if len(repos) > 0 {
+		content := RenderRepositoriesAsMarkdownTable(repos)
+		g.RenderAdmonition(render.AdmonitionWarning, "Replaced Repos", content)
+	}
+}
+
+func (g *GhRenderer) renderRelatedRepos(repos Repos) {
+	if len(repos) > 0 {
+		content := RenderRepositoriesAsMarkdownTable(repos)
+		g.RenderAdmonition(render.AdmonitionInfo, "Related Repos", content)
 	}
 }
 
