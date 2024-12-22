@@ -74,7 +74,7 @@ func (r *GoodsRenderer) Render(data []byte) (string, error) {
 
 // ParseConfig 解析配置文件
 func ParseConfig(data []byte) ([]Goods, error) {
-	return parser.NewParser[Goods](data).ParseMulti()
+	return parser.NewParser[Goods](data).ParseFlatten()
 }
 
 // RenderMarkdown 渲染为 Markdown 格式
