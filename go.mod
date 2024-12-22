@@ -6,7 +6,7 @@ require (
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/deanishe/awgo v0.29.1
 	github.com/go-resty/resty/v2 v2.16.2
-	github.com/golang-module/carbon/v2 v2.4.1
+	github.com/golang-module/carbon/v2 v2.5.2
 	github.com/google/go-github/v67 v67.0.0
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/olekukonko/tablewriter v0.0.5
