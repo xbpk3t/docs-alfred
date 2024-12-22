@@ -110,8 +110,14 @@ func renderSearchGithub(args []string) {
 func buildRepoDescription(repo gh2.Repository) string {
 	var des strings.Builder
 
-	if repo.IsSubRepo {
-		des.WriteString(fmt.Sprintf("[SUB#%s]", repo.MainRepo))
+	for flag, prefix := range map[bool]string{
+		repo.IsSubRepo:      "Sub",
+		repo.IsReplacedRepo: "Replaced",
+		repo.IsRelatedRepo:  "Related",
+	} {
+		if flag {
+			des.WriteString(fmt.Sprintf("[%s#%s]", prefix, repo.MainRepo))
+		}
 	}
 
 	if repo.Type != "" {
@@ -149,7 +155,7 @@ func buildDocsURL(repo gh2.Repository) string {
 
 	// 2. 如果是sub, rep, rel repos就跳转到对应的主repo
 	if repo.IsSubOrDepOrRelRepo() {
-		docsURL.WriteString(strings.ToLower(repo.MainRepo))
+		docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.MainRepo)))
 		return docsURL.String()
 	}
 
