@@ -70,11 +70,17 @@ func (r *Repository) SetGithubInfo(owner, name string) {
 }
 
 func (r *Repository) IsValid() bool {
-	return r.User != "" && r.Name != ""
+	return strings.Contains(r.URL, GhURL)
 }
 
 func (r *Repository) FullName() string {
-	return fmt.Sprintf("%s/%s", r.User, r.Name)
+	if !r.IsValid() {
+		return ""
+	}
+	if sx, found := strings.CutPrefix(r.URL, GhURL); found {
+		return sx
+	}
+	return ""
 }
 
 func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
@@ -162,13 +168,6 @@ func processMainRepo(repo Repository, configType string) *Repository {
 	if !isValidGithubURL(repo.URL) {
 		return nil
 	}
-
-	owner, name, ok := parseGithubURL(repo.URL)
-	if !ok {
-		return nil
-	}
-
-	repo.SetGithubInfo(owner, name)
 	repo.Type = configType
 
 	return &repo
@@ -179,27 +178,27 @@ func processAllSubRepos(repo Repository) Repos {
 	var repos Repos
 
 	// 处理子仓库
-	for _, subRepo := range repo.SubRepos {
-		subRepo.IsSubRepo = true
-		subRepo.Type = repo.Type
-		subRepo.MainRepo = repo.FullName()
-		repos = append(repos, processRepo(subRepo, subRepo.Type)...)
+	for i := range repo.SubRepos {
+		repo.SubRepos[i].IsSubRepo = true
+		repo.SubRepos[i].Type = repo.Type
+		repo.SubRepos[i].MainRepo = repo.FullName()
+		repos = append(repos, processRepo(repo.SubRepos[i], repo.SubRepos[i].Type)...)
 	}
 
 	// 处理替换仓库
-	for _, repRepo := range repo.ReplacedRepos {
-		repRepo.IsReplacedRepo = true
-		repRepo.Type = repo.Type
-		repRepo.MainRepo = repo.FullName()
-		repos = append(repos, processRepo(repRepo, repRepo.Type)...)
+	for i := range repo.ReplacedRepos {
+		repo.ReplacedRepos[i].IsReplacedRepo = true
+		repo.ReplacedRepos[i].Type = repo.Type
+		repo.ReplacedRepos[i].MainRepo = repo.FullName()
+		repos = append(repos, processRepo(repo.ReplacedRepos[i], repo.ReplacedRepos[i].Type)...)
 	}
 
 	// 处理相关仓库
-	for _, relRepo := range repo.RelatedRepos {
-		relRepo.IsRelatedRepo = true
-		relRepo.Type = repo.Type
-		relRepo.MainRepo = repo.FullName()
-		repos = append(repos, processRepo(relRepo, relRepo.Type)...)
+	for i := range repo.RelatedRepos {
+		repo.RelatedRepos[i].IsRelatedRepo = true
+		repo.RelatedRepos[i].Type = repo.Type
+		repo.RelatedRepos[i].MainRepo = repo.FullName()
+		repos = append(repos, processRepo(repo.RelatedRepos[i], repo.RelatedRepos[i].Type)...)
 	}
 
 	return repos
@@ -208,31 +207,6 @@ func processAllSubRepos(repo Repository) Repos {
 // 工具函数
 func isValidGithubURL(url string) bool {
 	return strings.Contains(url, GhURL)
-}
-
-func parseGithubURL(url string) (owner, name string, ok bool) {
-	sx, found := strings.CutPrefix(url, GhURL)
-	if !found {
-		return "", "", false
-	}
-
-	splits := strings.Split(sx, "/")
-	if len(splits) != 2 {
-		return "", "", false
-	}
-
-	return splits[0], splits[1], true
-}
-
-func extractMainRepoInfo(typeStr string) string {
-	parts := strings.Split(typeStr, "[")
-	if len(parts) == 2 {
-		repoInfo := strings.TrimSuffix(parts[1], "]")
-		repoInfo = strings.TrimPrefix(repoInfo, "SUB: ")
-		repoInfo = strings.TrimPrefix(repoInfo, "DEP: ")
-		return repoInfo
-	}
-	return ""
 }
 
 func formatQuestionSummary(q Question) string {
@@ -284,7 +258,7 @@ func RenderRepositoriesAsMarkdownTable(repos Repos) string {
 
 	var res strings.Builder
 	data := lo.Map(repos, func(item Repository, _ int) []string {
-		repoName, _ := strings.CutPrefix(item.URL, GhURL)
+		repoName := item.FullName()
 		return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
 	})
 
@@ -292,14 +266,14 @@ func RenderRepositoriesAsMarkdownTable(repos Repos) string {
 	return res.String()
 }
 
-// MergeConfig 相关结构和方法
+// MergeOptions 相关结构和方法
 type MergeOptions struct {
 	FolderPath string
 	OutputPath string
 	FileNames  []string
 }
 
-// Repository 相关方法
+// IsSubOrDepOrRelRepo 判断是否为
 func (r *Repository) IsSubOrDepOrRelRepo() bool {
 	return r.IsSubRepo || r.IsReplacedRepo || r.IsRelatedRepo
 }

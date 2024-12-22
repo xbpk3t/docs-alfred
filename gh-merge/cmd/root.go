@@ -63,8 +63,9 @@ func runMerge(cmd *cobra.Command, args []string) {
 				log.Fatalf("error reading file: %v", err)
 			}
 			// ft, _ := parser.NewParser[gh.ConfigRepo](fx).ParseFlatten()
-			ft := gh.NewConfigRepos(fx)
-			cr = append(cr, ft.WithTag(strings.TrimSuffix(file.Name(), ".yml")).WithType()...)
+			ft := gh.NewConfigRepos(fx).WithType().WithTag(strings.TrimSuffix(file.Name(), ".yml")).ToRepos()
+			// cr = append(cr, ft.WithTag(strings.TrimSuffix(file.Name(), ".yml")).WithType()...)
+			cr = append(cr, gh.ConfigRepo{Repos: ft})
 		}
 	}
 
