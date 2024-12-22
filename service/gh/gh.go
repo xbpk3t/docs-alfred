@@ -1,14 +1,18 @@
 package gh
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/pkg/parser"
-	"github.com/xbpk3t/docs-alfred/pkg/render"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
+	"github.com/xbpk3t/docs-alfred/pkg/render"
 
 	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/pkg"
@@ -252,7 +256,7 @@ func (g *GhRenderer) renderSubComponents(repo Repository) {
 func (g *GhRenderer) renderSubRepos(repos Repos) {
 	if len(repos) > 0 {
 		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonitions(render.AdmonitionTip, "Sub Repos", content)
+		g.RenderAdmonition(render.AdmonitionTip, "Sub Repos", content)
 	}
 }
 
@@ -419,7 +423,11 @@ func (m *ConfigMerger) processFile(fileName string) (ConfigRepos, error) {
 	}
 
 	tag := strings.TrimSuffix(fileName, ".yml")
-	rc, _ := parser.NewParser[ConfigRepos](content).ParseSingle()
+	rc := NewConfigRepos(content)
+	// rc, err := parser.NewParser[ConfigRepos](content).ParseFlatten()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("解析YAML失败: %w", err)
+	// }
 
 	return rc.WithTag(tag), nil
 }
@@ -448,4 +456,25 @@ func (m *ConfigMerger) writeResult(config ConfigRepos) error {
 	}
 
 	return nil
+}
+
+func NewConfigRepos(f []byte) ConfigRepos {
+	var ghs ConfigRepos
+
+	d := yaml.NewDecoder(bytes.NewReader(f))
+	for {
+		// create new spec here
+		spec := new(ConfigRepos)
+		// pass a reference to spec reference
+		if err := d.Decode(&spec); err != nil {
+			// break the loop in case of EOF
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			panic(err)
+		}
+
+		ghs = append(ghs, *spec...)
+	}
+	return ghs
 }

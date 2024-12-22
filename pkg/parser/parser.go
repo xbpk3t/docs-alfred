@@ -29,27 +29,7 @@ func (p *Parser[T]) ParseSingle() (T, error) {
 	return result, nil
 }
 
-// ParseMulti 解析多文档YAML
-// func (p *Parser[T]) ParseMulti() ([]T, error) {
-// 	var results []T
-// 	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
-//
-// 	for {
-// 		var item T
-// 		err := decoder.Decode(&item)
-// 		if err == io.EOF {
-// 			break
-// 		}
-// 		if err != nil {
-// 			return nil, fmt.Errorf("解析配置失败: %w", err)
-// 		}
-// 		results = append(results, item)
-// 	}
-// 	return results, nil
-// }
-
 // ParseMulti 解析多文档 YAML
-// T 可以是单个对象类型，也可以是切片类型
 func (p *Parser[T]) ParseMulti() ([]T, error) {
 	var results []T
 	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
@@ -67,3 +47,26 @@ func (p *Parser[T]) ParseMulti() ([]T, error) {
 	}
 	return results, nil
 }
+
+// ParseFlatten 解析多文档 YAML 并展开结果
+// 适用于每个文档都是 slice 且需要合并的情况
+// func (p *Parser[T]) ParseFlatten() (T, error) {
+// 	var result T
+//
+// 	d := yaml.NewDecoder(bytes.NewReader(p.data))
+// 	for {
+// 		// create new spec here
+// 		spec := new(T)
+// 		// pass a reference to spec reference
+// 		if err := d.Decode(&spec); err != nil {
+// 			// break the loop in case of EOF
+// 			if errors.Is(err, io.EOF) {
+// 				break
+// 			}
+// 			panic(err)
+// 		}
+//
+// 		result = append(result, *spec...)
+// 	}
+// 	return result
+// }
