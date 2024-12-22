@@ -43,39 +43,12 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	rootCmd.Flags().StringVar(&folderName, "folder", "", "配置文件所在文件夹")
-	rootCmd.Flags().StringSliceVar(&ghFiles, "yf", []string{}, "要合并的gh.yml文件列表")
+	rootCmd.Flags().StringVar(&folderName, "folder", "./", "配置文件所在文件夹")
+	rootCmd.Flags().StringSliceVar(&ghFiles, "gf", []string{}, "要合并的gh.yml文件列表")
 }
 
 func runMerge(cmd *cobra.Command, args []string) {
-	// err := merger.MergeFiles[gh.ConfigRepos](
-	// 	folderName, // 配置文件所在文件夹
-	// 	ghFiles,    // 要合并的文件列表
-	// 	"gh.yml",   // 输出文件路径
-	// )
-	// if err != nil {
-	// 	log.Fatalf("合并配置文件失败: %v", err)
-	// }
-	//
-	// fmt.Printf("成功创建合并后的YAML文件: gh.yml\n")
-
 	var cr gh.ConfigRepos
-
-	// err := filepath.WalkDir(folderName, func(path string, d fs.DirEntry, err error) error {
-	// 	if !d.IsDir() && slices.Contains(ghFiles, d.Name()) {
-	// 		fmt.Println(d.Name())
-	// 		fx, err := os.ReadFile(path)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 		cr = append(cr, gh.NewConfigRepos(fx).WithTag(strings.TrimSuffix(d.Name(), ".yml"))...)
-	// 	}
-	//
-	// 	return nil
-	// })
-	// if err != nil {
-	// 	return
-	// }
 
 	// 读取文件夹中的文件
 	files, err := os.ReadDir(folderName)
@@ -85,14 +58,13 @@ func runMerge(cmd *cobra.Command, args []string) {
 
 	for _, file := range files {
 		if !file.IsDir() && slices.Contains(ghFiles, file.Name()) {
-			fmt.Println(file.Name())
 			fx, err := os.ReadFile(filepath.Join(folderName, file.Name()))
 			if err != nil {
 				log.Fatalf("error reading file: %v", err)
 			}
 			// ft, _ := parser.NewParser[gh.ConfigRepo](fx).ParseFlatten()
 			ft := gh.NewConfigRepos(fx)
-			cr = append(cr, ft.WithTag(strings.TrimSuffix(file.Name(), ".yml"))...)
+			cr = append(cr, ft.WithTag(strings.TrimSuffix(file.Name(), ".yml")).WithType()...)
 		}
 	}
 

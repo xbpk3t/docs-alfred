@@ -14,11 +14,6 @@ const SyncJob = "sync"
 
 const expire = 60
 
-const (
-	// KeyGithubAPIToken /* #nosec */
-	KeyGithubAPIToken = "github-api-token"
-)
-
 // syncCmd represents the sync command
 var syncCmd = &cobra.Command{
 	Use:   "sync",

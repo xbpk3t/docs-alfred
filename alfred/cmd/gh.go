@@ -2,15 +2,15 @@ package cmd
 
 import (
 	"fmt"
-	"log/slog"
 	"slices"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 
 	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
 	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"
-	"github.com/xbpk3t/docs-alfred/pkg"
 	gh2 "github.com/xbpk3t/docs-alfred/service/gh"
 
 	aw "github.com/deanishe/awgo"
@@ -123,21 +123,20 @@ func buildRepoDescription(repo gh2.Repository) string {
 }
 
 // 构建文档 URL
+// 分为三种情况：
+// 1、如果有qs就直接跳转到对应repo
+// 2、如果是sub, rep, rel repos 就跳转到对应的主repo
+// 3、如果没有qs，也没有上面这几种repos的repo，就直接跳转到type
 func buildDocsURL(repo gh2.Repository) string {
 	var docsURL strings.Builder
-	docsPath := ""
+	docsPath := wf.Config.Get("docs")
 
-	if wf != nil {
-		docsURL.WriteString(fmt.Sprintf("%s/%s#", docsPath, strings.ToLower(repo.Tag)))
-	} else {
-		slog.Error("wf is nil", slog.String("repo.Tag", repo.Tag))
-		docsURL.WriteString(fmt.Sprintf("%s#", strings.ToLower(repo.Tag)))
-	}
+	docsURL.WriteString(fmt.Sprintf("%s/%s#", docsPath, strings.ToLower(repo.Tag)))
 
-	if repo.Qs == nil {
-		docsURL.WriteString(strings.ToLower(repo.Type))
-	} else {
+	if repo.Qs != nil {
 		docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.FullName())))
+	} else {
+		docsURL.WriteString(strings.ToLower(repo.Type))
 	}
 
 	return docsURL.String()

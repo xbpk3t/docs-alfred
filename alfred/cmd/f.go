@@ -10,21 +10,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	fCmd = &cobra.Command{
-		Use:              "f",
-		Short:            "Root search command",
-		PersistentPreRun: handlePreRun,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("f called")
-		},
-	}
-	data []byte
-)
+var data []byte
 
 const (
 	ConfigGithub = "gh.yml"
 )
+
+var fCmd = &cobra.Command{
+	Use:              "f",
+	Short:            "Root search command",
+	PersistentPreRun: handlePreRun,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("f called")
+	},
+}
 
 func handlePreRun(cmd *cobra.Command, args []string) {
 	if !wf.Cache.Exists(cfgFile) {

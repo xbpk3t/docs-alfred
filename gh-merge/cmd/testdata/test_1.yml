@@ -1,8 +1,0 @@
-- type: devops
-  repo:
-    - url: https://github.com/naiba/nezha
-      des: monitor
-    - url: https://github.com/chaitin/SafeLine
-      des: WAF
-    - url: https://github.com/gravitational/teleport
-      des: Protect access to all of your infrastructure

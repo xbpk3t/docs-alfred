@@ -16,10 +16,6 @@ var (
 	av   = aw.NewArgVars()
 )
 
-func ResetWorkflow() {
-	wf = nil
-}
-
 // ErrorHandle handle error
 func ErrorHandle(err error) {
 	av.Var("error", err.Error())
