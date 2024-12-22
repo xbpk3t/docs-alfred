@@ -44,7 +44,7 @@ type Repos []Repository
 // ConfigRepo 定义配置仓库结构
 type ConfigRepo struct {
 	Type  string `yaml:"type"`
-	Repos Repos  `yaml:"repos"`
+	Repos Repos  `yaml:"repo"`
 }
 
 type ConfigRepos []ConfigRepo
