@@ -1,0 +1,7 @@
+- type: k8s
+  repo:
+    - url: https://github.com/kubernetes/kubernetes
+      doc: https://kubernetes.io/zh-cn/docs/home/
+      sub:
+        - url: https://github.com/ahmetb/kubernetes-network-policy-recipes
+        - url: https://github.com/wuYin/k8s-in-action
