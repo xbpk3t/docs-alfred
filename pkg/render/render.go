@@ -7,14 +7,6 @@ import (
 	"strings"
 )
 
-// Docusaurus admonitions 常量
-const (
-	AdmonitionTip    = "tip"
-	AdmonitionInfo   = "info"
-	AdmonitionWarn   = "warning"
-	AdmonitionDanger = "danger"
-)
-
 // ContentRenderer 定义渲染器接口
 type MarkdownRender interface {
 	Render(data []byte) (string, error)
