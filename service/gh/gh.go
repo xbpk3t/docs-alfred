@@ -14,19 +14,23 @@ const GhURL = "https://github.com/"
 
 // Repository 定义仓库结构
 type Repository struct {
-	Doc           string `yaml:"doc,omitempty"`
-	Name          string `yaml:"name,omitempty"`
-	User          string
-	Des           string    `yaml:"des,omitempty"`
-	URL           string    `yaml:"url"`
-	Tag           string    `yaml:"tag,omitempty"`
-	Type          string    `yaml:"type"`
-	Qs            Questions `yaml:"qs,omitempty"`
-	SubRepos      Repos     `yaml:"sub,omitempty"`
-	ReplacedRepos Repos     `yaml:"rep,omitempty"`
-	RelatedRepos  Repos     `yaml:"rel,omitempty"`
-	Cmd           []string  `yaml:"cmd,omitempty"`
-	IsStar        bool
+	Doc            string `yaml:"doc,omitempty"`
+	Name           string `yaml:"name,omitempty"`
+	User           string
+	Des            string    `yaml:"des,omitempty"`
+	URL            string    `yaml:"url"`
+	Tag            string    `yaml:"tag,omitempty"`
+	Type           string    `yaml:"type"`
+	Qs             Questions `yaml:"qs,omitempty"`
+	SubRepos       Repos     `yaml:"sub,omitempty"`
+	ReplacedRepos  Repos     `yaml:"rep,omitempty"`
+	RelatedRepos   Repos     `yaml:"rel,omitempty"`
+	Cmd            []string  `yaml:"cmd,omitempty"`
+	IsStar         bool
+	IsSubRepo      bool
+	IsReplacedRepo bool
+	IsRelatedRepo  bool
+	MainRepo       string // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
 }
 
 type Repos []Repository
@@ -50,6 +54,14 @@ type Question struct {
 
 type Questions []Question
 
+// 存储原始配置数据
+var globalConfigRepos ConfigRepos
+
+// 设置全局配置
+func SetConfigRepos(cr ConfigRepos) {
+	globalConfigRepos = cr
+}
+
 // Repository 相关方法
 func (r *Repository) SetGithubInfo(owner, name string) {
 	r.User = owner
@@ -63,19 +75,6 @@ func (r *Repository) IsValid() bool {
 
 func (r *Repository) FullName() string {
 	return fmt.Sprintf("%s/%s", r.User, r.Name)
-}
-
-func (r *Repository) IsSubRepo() bool {
-	return r.Type == "sub" || r.Type == "rep"
-}
-
-func (r *Repository) GetMainRepo() string {
-	if r.IsSubRepo() {
-		if mainRepo := extractMainRepoInfo(r.Type); mainRepo != "" {
-			return mainRepo
-		}
-	}
-	return r.FullName()
 }
 
 func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
@@ -152,9 +151,8 @@ func processRepo(repo Repository, configType string) Repos {
 		repos = append(repos, *mainRepo)
 	}
 
-	// 处理子仓库和依赖仓库
-	repos = append(repos, processSubRepos(repo, configType)...)
-	repos = append(repos, processDepRepos(repo, configType)...)
+	// 处理所有类型的子仓库
+	repos = append(repos, processAllSubRepos(repo)...)
 
 	return repos
 }
@@ -176,27 +174,32 @@ func processMainRepo(repo Repository, configType string) *Repository {
 	return &repo
 }
 
-// processSubRepos 处理子仓库
-func processSubRepos(repo Repository, configType string) Repos {
+// processAllSubRepos 处理所有类型的子仓库
+func processAllSubRepos(repo Repository) Repos {
 	var repos Repos
-	parentFullName := repo.FullName()
 
+	// 处理子仓库
 	for _, subRepo := range repo.SubRepos {
-		subType := fmt.Sprintf("%s [SUB: %s]", configType, parentFullName)
-		repos = append(repos, processRepo(subRepo, subType)...)
+		subRepo.IsSubRepo = true
+		subRepo.Type = repo.Type
+		subRepo.MainRepo = repo.FullName()
+		repos = append(repos, processRepo(subRepo, subRepo.Type)...)
 	}
 
-	return repos
-}
+	// 处理替换仓库
+	for _, repRepo := range repo.ReplacedRepos {
+		repRepo.IsReplacedRepo = true
+		repRepo.Type = repo.Type
+		repRepo.MainRepo = repo.FullName()
+		repos = append(repos, processRepo(repRepo, repRepo.Type)...)
+	}
 
-// processDepRepos 处理依赖仓库
-func processDepRepos(repo Repository, configType string) Repos {
-	var repos Repos
-	parentFullName := repo.FullName()
-
-	for _, depRepo := range repo.ReplacedRepos {
-		depType := fmt.Sprintf("%s [DEP: %s]", configType, parentFullName)
-		repos = append(repos, processRepo(depRepo, depType)...)
+	// 处理相关仓库
+	for _, relRepo := range repo.RelatedRepos {
+		relRepo.IsRelatedRepo = true
+		relRepo.Type = repo.Type
+		relRepo.MainRepo = repo.FullName()
+		repos = append(repos, processRepo(relRepo, relRepo.Type)...)
 	}
 
 	return repos
@@ -294,4 +297,17 @@ type MergeOptions struct {
 	FolderPath string
 	OutputPath string
 	FileNames  []string
+}
+
+// Repository 相关方法
+func (r *Repository) IsSubOrDepOrRelRepo() bool {
+	return r.IsSubRepo || r.IsReplacedRepo || r.IsRelatedRepo
+}
+
+func (r *Repository) HasQs() bool {
+	return r.Qs != nil && len(r.Qs) > 0
+}
+
+func (r *Repository) HasSubRepos() bool {
+	return len(r.SubRepos) > 0 || len(r.ReplacedRepos) > 0 || len(r.RelatedRepos) > 0
 }
