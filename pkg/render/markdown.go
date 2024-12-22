@@ -213,7 +213,8 @@ func (r *MarkdownRenderer) RenderMetadata(metadata map[string]string) {
 func (r *MarkdownRenderer) RenderCheckboxList(items []struct {
 	Text    string
 	Checked bool
-}) {
+},
+) {
 	for _, item := range items {
 		mark := " "
 		if item.Checked {

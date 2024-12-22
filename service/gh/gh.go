@@ -24,19 +24,19 @@ const GhURL = "https://github.com/"
 // Repository 定义仓库结构
 type Repository struct {
 	LastUpdated time.Time
-	Type        string `yaml:"type"`
-	URL         string `yaml:"url"`
-	Name        string `yaml:"name,omitempty"`
-	User        string
-	Des         string    `yaml:"des,omitempty"`
-	Doc         string    `yaml:"doc,omitempty"`
-	Tag         string    `yaml:"tag,omitempty"`
-	Qs          Questions `yaml:"qs,omitempty"`
-	Sub         Repos     `yaml:"sub,omitempty"`
-	Rep         Repos     `yaml:"rep,omitempty"`
-	Cmd         []string  `yaml:"cmd,omitempty"`
-	IsStar      bool
 	pkg.URLInfo
+	Doc    string `yaml:"doc,omitempty"`
+	Name   string `yaml:"name,omitempty"`
+	User   string
+	Des    string    `yaml:"des,omitempty"`
+	URL    string    `yaml:"url"`
+	Tag    string    `yaml:"tag,omitempty"`
+	Type   string    `yaml:"type"`
+	Qs     Questions `yaml:"qs,omitempty"`
+	Sub    Repos     `yaml:"sub,omitempty"`
+	Rep    Repos     `yaml:"rep,omitempty"`
+	Cmd    []string  `yaml:"cmd,omitempty"`
+	IsStar bool
 }
 
 type Repos []Repository
@@ -361,9 +361,9 @@ func RenderRepositoriesAsMarkdownTable(repos Repos) string {
 
 // MergeConfig 相关结构和方法
 type MergeOptions struct {
-	FolderPath string   // 配置文件所在文件夹
-	FileNames  []string // 要合并的文件名列表
-	OutputPath string   // 输出文件路径
+	FolderPath string
+	OutputPath string
+	FileNames  []string
 }
 
 type ConfigMerger struct {

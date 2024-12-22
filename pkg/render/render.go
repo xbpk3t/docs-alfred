@@ -2,9 +2,10 @@ package render
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/olekukonko/tablewriter"
 	"github.com/xbpk3t/docs-alfred/pkg"
-	"strings"
 )
 
 // ContentRenderer 定义渲染器接口

@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"log/slog"
 	"slices"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
 
 	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
 	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"

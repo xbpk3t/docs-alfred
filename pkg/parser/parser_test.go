@@ -29,7 +29,6 @@ func TestParser(t *testing.T) {
 
 		parser := NewParser[TestConfig](input)
 		got, err := parser.ParseSingle()
-
 		if err != nil {
 			t.Errorf("ParseSingle() error = %v", err)
 			return
@@ -48,7 +47,6 @@ func TestParser(t *testing.T) {
 
 		parser := NewParser[TestConfig](input)
 		got, err := parser.ParseMulti()
-
 		if err != nil {
 			t.Errorf("ParseMulti() error = %v", err)
 			return

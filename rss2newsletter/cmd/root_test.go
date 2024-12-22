@@ -11,10 +11,10 @@ import (
 
 func TestGetItemTitle(t *testing.T) {
 	tests := []struct {
-		name          string
-		hideAuthor    bool
 		item          *feeds.Item
+		name          string
 		expectedTitle string
+		hideAuthor    bool
 	}{
 		{
 			name:       "with author not hidden",

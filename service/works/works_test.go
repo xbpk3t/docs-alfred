@@ -92,8 +92,8 @@ func TestParseConfig(t *testing.T) {
 func TestQA_Render(t *testing.T) {
 	tests := []struct {
 		name string
-		qa   QA
 		want string
+		qa   QA
 	}{
 		{
 			name: "基础问答",
@@ -375,8 +375,8 @@ func TestRenderPoetryContent(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name     string
 		validate func(*testing.T, string)
+		name     string
 	}{
 		{
 			name: "render markdown structure",

@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/pkg/render"
-	"github.com/xbpk3t/docs-alfred/service/ws"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/pkg/render"
+	"github.com/xbpk3t/docs-alfred/service/ws"
 
 	"github.com/xbpk3t/docs-alfred/service/gh"
 	"github.com/xbpk3t/docs-alfred/service/goods"
@@ -72,7 +73,6 @@ var ghCmd = &cobra.Command{
 	},
 }
 
-// Deprecated: func is deprecated.
 var worksCmd = &cobra.Command{
 	Use:   "works",
 	Short: "Convert works yaml to markdown",

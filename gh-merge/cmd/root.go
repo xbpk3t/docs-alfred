@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"log"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/service/gh"
@@ -20,7 +21,7 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "merge",
+	Use:   "gh-merge",
 	Short: "合并多个 gh.yml 文件",
 	Run:   runMerge,
 }
