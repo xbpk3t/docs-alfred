@@ -18,9 +18,10 @@ import (
 )
 
 var ghCmd = &cobra.Command{
-	Use:   "gh",
-	Short: "Searching from starred repositories and my repositories",
-	Run:   handleGhCommand,
+	Use:              "gh",
+	Short:            "Searching from starred repositories and my repositories",
+	PersistentPreRun: handlePreRun,
+	Run:              handleGhCommand,
 }
 
 // 主命令处理函数
@@ -137,6 +138,9 @@ func buildDocsURL(repo gh2.Repository) string {
 		docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.FullName())))
 	} else {
 		docsURL.WriteString(strings.ToLower(repo.Type))
+	}
+	if repo.Qs != nil && len(repo.SubRepos) == 0 && len(repo.ReplacedRepos) == 0 && len(repo.RelatedRepos) == 0 {
+
 	}
 
 	return docsURL.String()

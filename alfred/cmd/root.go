@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"fmt"
+	"github.com/xbpk3t/docs-alfred/pkg"
 	"log"
+	"log/slog"
 	"os"
+	"os/exec"
 
 	"github.com/deanishe/awgo/update"
 
@@ -26,11 +30,28 @@ func ErrorHandle(err error) {
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "docs-alfred",
-	Short: "",
+	Use: "docs-alfred",
 	Run: func(cmd *cobra.Command, args []string) {
 		wf.SendFeedback()
 	},
+}
+
+var data []byte
+
+func handlePreRun(cmd *cobra.Command, args []string) {
+	if !wf.Cache.Exists(cfgFile) {
+		ErrorHandle(&pkg.DocsAlfredError{Err: pkg.ErrConfigNotFound})
+	}
+
+	data, _ = wf.Cache.Load(cfgFile)
+
+	if !wf.IsRunning(SyncJob) {
+		cmd := exec.Command("./exe", SyncJob, fmt.Sprintf("--config=%s", cfgFile))
+		slog.Info("sync cmd: ", slog.Any("cmd", cmd.String()))
+		if err := wf.RunInBackground(SyncJob, cmd); err != nil {
+			ErrorHandle(err)
+		}
+	}
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -55,6 +76,8 @@ func InitWorkflow() {
 
 func init() {
 	InitWorkflow()
+	rootCmd.AddCommand(ghCmd)
+	rootCmd.AddCommand(wsCmd)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "qs.yml", "Config File To Parse")
 	// rootCmd.MarkPersistentFlagRequired("config")
