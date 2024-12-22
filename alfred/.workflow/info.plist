@@ -179,7 +179,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./exe f gh $1 --config=gh.yml</string>
+				<string>./exe gh $1 --config=gh.yml</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -289,7 +289,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./exe f ws $1 --config=ws.yml</string>
+				<string>./exe ws $1 --config=ws.yml</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
