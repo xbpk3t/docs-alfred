@@ -14,17 +14,17 @@ func TestExecute(t *testing.T) {
 	defer func() { os.Args = origArgs }()
 
 	tests := []struct {
+		setup    func() error
+		teardown func()
 		name     string
 		args     []string
 		wantErr  bool
-		setup    func() error
-		teardown func()
 	}{
 		{
 			name: "valid config file",
 			args: []string{"gh-merge", "--yf", "testdata/test_1.yml", "testdata/test_2.yml"},
 			setup: func() error {
-				return os.MkdirAll("testdata", 0755)
+				return os.MkdirAll("testdata", 0o755)
 			},
 			teardown: func() {
 				os.RemoveAll("testdata")

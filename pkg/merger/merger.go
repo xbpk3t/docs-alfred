@@ -11,9 +11,9 @@ import (
 
 // MergeOptions 合并选项
 type MergeOptions struct {
-	FolderPath string   // 配置文件所在文件夹
-	FileNames  []string // 要合并的文件名列表
-	OutputPath string   // 输出文件路径
+	FolderPath string
+	OutputPath string
+	FileNames  []string
 }
 
 // Merger 配置合并器

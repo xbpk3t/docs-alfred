@@ -10,9 +10,9 @@ const (
 
 // FeedError 自定义错误类型
 type FeedError struct {
+	Err     error
 	URL     string
 	Message string
-	Err     error
 }
 
 func (e *FeedError) Error() string {

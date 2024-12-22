@@ -27,8 +27,8 @@ var newsletterTpl embed.FS
 // EmailConfig 邮件配置
 type EmailConfig struct {
 	From  string
-	To    []string
 	Token string
+	To    []string
 }
 
 // NewsletterService 处理新闻通讯的服务
@@ -102,7 +102,10 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 
 	// 等待所有goroutine完成
 	go func() {
-		g.Wait()
+		err := g.Wait()
+		if err != nil {
+			return
+		}
 		close(resultChan)
 	}()
 

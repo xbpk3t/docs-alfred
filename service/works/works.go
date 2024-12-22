@@ -2,9 +2,10 @@ package works
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
-	"strings"
 
 	"github.com/samber/lo"
 )
@@ -30,8 +31,8 @@ type Docs []Doc
 
 // WorkRenderer Markdown渲染器
 type WorkRenderer struct {
-	render.MarkdownRenderer
 	seenTags map[string]bool
+	render.MarkdownRenderer
 }
 
 // NewWorkRenderer 创建新的渲染器

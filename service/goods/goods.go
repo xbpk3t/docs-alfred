@@ -2,9 +2,10 @@ package goods
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
-	"strings"
 )
 
 // Goods 定义商品配置结构
@@ -36,8 +37,8 @@ type QA struct {
 
 // GoodsRenderer Markdown渲染器
 type GoodsRenderer struct {
-	render.MarkdownRenderer
 	seenTags map[string]bool
+	render.MarkdownRenderer
 }
 
 // NewGoodsRenderer 创建新的渲染器

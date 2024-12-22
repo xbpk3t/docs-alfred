@@ -4,13 +4,13 @@ includes:
   alfred:
     taskfile: ./alfred/Taskfile.yml
     dir: alfred
-  y2m:
+  yaml2md:
     taskfile: ./yaml2md/Taskfile.yml
     dir: yaml2md
-  merge:
+  gh-merge:
     taskfile: ./gh-merge/Taskfile.yml
     dir: gh-merge
-  r2n:
+  rss2newsletter:
     taskfile: ./rss2newsletter/Taskfile.yml
     dir: rss2newsletter
 

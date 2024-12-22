@@ -2,9 +2,10 @@ package ws
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
-	"strings"
 )
 
 // URL 定义单个URL结构
