@@ -37,7 +37,7 @@ func NewWebStackRenderer() *WebStackRenderer {
 
 // ParseConfig 解析配置文件
 func ParseConfig(data []byte) (WebStacks, error) {
-	return parser.NewParser[WebStack](data).ParseMulti()
+	return parser.NewParser[[]WebStack](data).ParseSingle()
 }
 
 // Render 渲染为Markdown格式
