@@ -1,11 +1,13 @@
 version: "3"
 
 includes:
-  ak: Taskfile.ak.yml
-  y2m:
+  alfred:
+    taskfile: ./alfred/Taskfile.yml
+    dir: alfred
+  yaml2md:
     taskfile: ./yaml2md/Taskfile.yml
     dir: yaml2md
-  merge:
+  gh-merge:
     taskfile: ./gh-merge/Taskfile.yml
     dir: gh-merge
   rss2newsletter:
@@ -21,7 +23,8 @@ tasks:
   lint:
     desc: golang linter
     cmds:
-      - golangci-lint run --fix && gofumpt -l -w .
+      - golangci-lint run --fix
+      - gofumpt -l -w .
       - go mod tidy -v
       - fieldalignment -fix ./...
       - go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
@@ -30,3 +33,7 @@ tasks:
 #      - # go build -race cmd
 #      - # hadolint --config </path/to/config.yaml> Dockerfile
 #      - go vet -vettool=$(which shadow) -strict # 这个回去扫描官方pkg的版本，报错类似 shadow: package requires newer Go version go1.23，所以移除
+
+
+  test:
+    cmd: set -o pipefail && go test ./... -json | tparse -all

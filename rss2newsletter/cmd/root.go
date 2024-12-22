@@ -6,150 +6,227 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
-	"log"
 	"log/slog"
 	"os"
-	"sync"
 
 	"github.com/golang-module/carbon/v2"
-	feeds2 "github.com/gorilla/feeds"
+	"github.com/gorilla/feeds"
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
-	"github.com/xbpk3t/docs-alfred/rss2newsletter/pkg"
-	"github.com/xbpk3t/docs-alfred/utils"
-
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/rss"
+	"golang.org/x/sync/errgroup"
 )
 
-var wg sync.WaitGroup
+// 配置文件路径
+var cfgFile string
 
 //go:embed templates/newsletter.tpl
 var newsletterTpl embed.FS
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "rss2newsletter",
-	Short: "A brief description of your application",
-	Run: func(cmd *cobra.Command, args []string) {
-		f := pkg.NewConfig(cfgFile)
-
-		var res []feeds2.RssFeed
-
-		for _, feed := range f.Feeds {
-			wg.Add(1)
-			go func(feed pkg.FeedsDetail) {
-				defer wg.Done()
-				TypeName := feed.Type
-				feeds := feed.Urls
-
-				// 拼接urls
-				urls := lo.Map(feeds, func(item pkg.Feeds, index int) string {
-					return item.Feed
-				})
-
-				// 移除一些feed为空字符串的item
-				urls = lo.Compact(urls)
-
-				allFeeds := f.FetchURLs(urls)
-				if len(allFeeds) == 0 {
-					slog.Info("No feed Found", slog.String("Feed Type:", TypeName))
-					return
-				}
-
-				// 使用MergeAllFeeds合并feeds
-				combinedFeed, err := f.MergeAllFeeds(TypeName, allFeeds)
-				if err != nil {
-					slog.Info("Merge Feeds Error:", slog.Any("Error", err))
-					return
-				}
-
-				// 将合并后的Feed转换为所需的Feed格式，并填充Des和URL字段
-				newFeeds := make([]*feeds2.RssItem, len(combinedFeed.Items))
-				for i, item := range combinedFeed.Items {
-					var title string
-					if !f.Newsletter.IsHideAuthorInTitle && item.Author.Name != "" {
-						title = fmt.Sprintf("[%s] %s", item.Author.Name, item.Title)
-					} else {
-						title = item.Title
-					}
-
-					newFeeds[i] = &feeds2.RssItem{
-						Title:    title,
-						Link:     item.Link.Href,
-						Category: TypeName, // 使用分类的Type作为Name
-						PubDate:  utils.FormatDate(item.Created),
-					}
-				}
-
-				// 将新的Feeds添加到结果中
-				res = append(res, feeds2.RssFeed{
-					Category: TypeName,
-					Items:    newFeeds,
-				})
-			}(feed)
-		}
-		wg.Wait()
-
-		// 从嵌入的文件系统加载模板
-		tmpl, err := template.ParseFS(newsletterTpl, "templates/newsletter.tpl")
-		if err != nil {
-			log.Fatalf("[newsletter] Parse template error: %v", err)
-		}
-
-		// 创建一个用于存储模板渲染结果的缓冲区
-		var tplBytes bytes.Buffer
-		// 执行模板渲染，将结果写入缓冲区
-		if err := tmpl.Execute(&tplBytes, res); err != nil {
-			log.Fatalf("[newsletter] Render template error: %v", err)
-		}
-		// 渲染后的字符串现在存储在 tplBytes 中
-		renderedString := tplBytes.String()
-
-		// 打印出渲染后的字符串，或者根据需要进行其他操作
-		// fmt.Println(renderedString)
-
-		sendMailByResend(f.Resend.Token, renderedString)
-	},
+// EmailConfig 邮件配置
+type EmailConfig struct {
+	From  string
+	Token string
+	To    []string
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
+// NewsletterService 处理新闻通讯的服务
+type NewsletterService struct {
+	config *rss.Config
+	feed   *rss.Feed
+}
+
+// NewNewsletterService 创建新闻通讯服务
+func NewNewsletterService(cfg *rss.Config) *NewsletterService {
+	return &NewsletterService{
+		config: cfg,
+		feed:   rss.NewFeed(cfg),
 	}
 }
 
-var cfgFile string
-
-func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.rss2newsletter.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "rss2newsletter.yml", "config file path")
+// rootCmd 根命令
+var rootCmd = &cobra.Command{
+	Use:   "rss2newsletter",
+	Short: "RSS订阅转换为邮件推送工具",
+	RunE:  runNewsletter,
 }
 
-func sendMailByResend(token, renderedString string) {
-	ctx := context.TODO()
-	client := resend.NewClient(token)
+func runNewsletter(cmd *cobra.Command, args []string) error {
+	config, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	service := NewNewsletterService(config)
+	f, err := service.ProcessAllFeeds()
+	if err != nil {
+		return err
+	}
+
+	content, err := service.RenderNewsletter(f)
+	if err != nil {
+		return err
+	}
+
+	return service.SendNewsletter(content)
+}
+
+func loadConfig() (*rss.Config, error) {
+	config, err := rss.NewConfig(cfgFile)
+	if err != nil {
+		slog.Error("rss2newsletter config file load error:", slog.Any("err", err))
+		return nil, err
+	}
+	return config, nil
+}
+
+// ProcessAllFeeds 并发处理所有Feed源
+func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
+	g, ctx := errgroup.WithContext(context.Background())
+	resultChan := make(chan feeds.RssFeed, len(s.config.Feeds))
+
+	// 启动goroutine处理每个feed
+	for _, feed := range s.config.Feeds {
+		feed := feed // 避免闭包问题
+		g.Go(func() error {
+			rssFeed, err := s.processSingleFeed(feed)
+			if err != nil {
+				return err
+			}
+			select {
+			case resultChan <- rssFeed:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		})
+	}
+
+	// 等待所有goroutine完成或出错
+	go func() {
+		if err := g.Wait(); err != nil {
+			close(resultChan)
+			return
+		}
+		close(resultChan)
+	}()
+
+	// 收集结果
+	var results []feeds.RssFeed
+	for result := range resultChan {
+		results = append(results, result)
+	}
+
+	// 检查是否有错误发生
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+// processSingleFeed 处理单个Feed源
+func (s *NewsletterService) processSingleFeed(feed rss.FeedsDetail) (feeds.RssFeed, error) {
+	urls := lo.Compact(lo.Map(feed.Urls, func(item rss.Feeds, _ int) string {
+		return item.Feed
+	}))
+
+	allFeeds := s.feed.FetchURLs(context.TODO(), urls)
+	if len(allFeeds) == 0 {
+		return feeds.RssFeed{}, fmt.Errorf("no feed found for type: %s", feed.Type)
+	}
+
+	combinedFeed, err := s.feed.MergeAllFeeds(feed.Type, allFeeds)
+	if err != nil {
+		return feeds.RssFeed{}, fmt.Errorf("merge feeds error: %w", err)
+	}
+
+	return s.convertToRssFeed(feed.Type, combinedFeed), nil
+}
+
+// convertToRssFeed 将Feed转换为RssFeed格式
+func (s *NewsletterService) convertToRssFeed(typeName string, combinedFeed *feeds.Feed) feeds.RssFeed {
+	newFeeds := make([]*feeds.RssItem, len(combinedFeed.Items))
+	for i, item := range combinedFeed.Items {
+		title := s.getItemTitle(item)
+		newFeeds[i] = &feeds.RssItem{
+			Title:    title,
+			Link:     item.Link.Href,
+			Category: typeName,
+			PubDate:  carbon.CreateFromStdTime(item.Created).ToDateTimeString(),
+		}
+	}
+	return feeds.RssFeed{
+		Category: typeName,
+		Items:    newFeeds,
+	}
+}
+
+// getItemTitle 生成文章标题
+func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
+	if !s.config.Newsletter.IsHideAuthorInTitle && item.Author.Name != "" {
+		return fmt.Sprintf("[%s] %s", item.Author.Name, item.Title)
+	}
+	return item.Title
+}
+
+// RenderNewsletter 渲染邮件模板
+func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed) (string, error) {
+	tmpl, err := template.ParseFS(newsletterTpl, "templates/newsletter.tpl")
+	if err != nil {
+		return "", fmt.Errorf("解析模板失败: %w", err)
+	}
+
+	var tplBytes bytes.Buffer
+	if err := tmpl.Execute(&tplBytes, feeds); err != nil {
+		return "", fmt.Errorf("渲染模板失败: %w", err)
+	}
+
+	return tplBytes.String(), nil
+}
+
+// SendNewsletter 发送邮件
+func (s *NewsletterService) SendNewsletter(content string) error {
+	emailCfg := EmailConfig{
+		From:  "Acme <onboarding@resend.dev>",
+		To:    []string{"jeffcottlu@gmail.com"},
+		Token: s.config.Resend.Token,
+	}
+
+	ctx := context.Background()
+	client := resend.NewClient(emailCfg.Token)
 
 	params := &resend.SendEmailRequest{
-		From:    "Acme <onboarding@resend.dev>",
-		To:      []string{"jeffcottlu@gmail.com"},
-		Subject: fmt.Sprintf("new items on %s (w%d)", carbon.Now().ToDateString(), utils.WeekNumOfYear()),
-		Html:    renderedString,
+		From:    emailCfg.From,
+		To:      emailCfg.To,
+		Subject: s.generateEmailSubject(),
+		Html:    content,
 	}
 
 	sent, err := client.Emails.SendWithContext(ctx, params)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("发送邮件失败: %w", err)
 	}
-	fmt.Println(sent.Id)
+
+	slog.Info("邮件发送成功", "id", sent.Id)
+	return nil
+}
+
+// generateEmailSubject 生成邮件主题
+func (s *NewsletterService) generateEmailSubject() string {
+	now := carbon.Now()
+	return fmt.Sprintf("新内容更新 %s (第%d周)", now.ToDateString(), now.WeekOfYear())
+}
+
+// Execute 执行根命令
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		slog.Error("执行命令失败", "error", err)
+		os.Exit(1)
+	}
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "rss2newsletter.yml", "配置文件路径")
 }

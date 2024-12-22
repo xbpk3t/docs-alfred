@@ -5,12 +5,17 @@ go 1.23.1
 require (
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/deanishe/awgo v0.29.1
+	github.com/go-resty/resty/v2 v2.16.2
 	github.com/golang-module/carbon/v2 v2.4.1
-	github.com/google/go-github/v56 v56.0.0
 	github.com/google/go-github/v67 v67.0.0
-	github.com/gorilla/feeds v1.2.0
-	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79
-	github.com/joho/godotenv v1.5.1
+	github.com/mmcdole/gofeed v1.3.0
+	github.com/olekukonko/tablewriter v0.0.5
+	github.com/resend/resend-go/v2 v2.12.0
+	github.com/samber/lo v1.47.0
+	github.com/spf13/cobra v1.8.1
+	github.com/spf13/viper v1.18.2
+	github.com/stretchr/testify v1.10.0
+	golang.org/x/sync v0.10.0
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/olekukonko/tablewriter v0.0.5
@@ -25,8 +30,8 @@ require (
 require (
 	github.com/PuerkitoBio/goquery v1.8.0 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -51,8 +56,8 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81 // indirect
-	golang.org/x/net v0.23.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
+	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
