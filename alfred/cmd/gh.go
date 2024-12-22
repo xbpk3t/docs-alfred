@@ -110,10 +110,12 @@ func renderSearchGithub(args []string) {
 func buildRepoDescription(repo gh2.Repository) string {
 	var des strings.Builder
 
+	if repo.IsSubRepo {
+		des.WriteString(fmt.Sprintf("[SUB#%s]", repo.MainRepo))
+	}
+
 	if repo.Type != "" {
-		des.WriteString(fmt.Sprintf("【#%s】", repo.Type))
-	} else {
-		des.WriteString(repo.Des)
+		des.WriteString(fmt.Sprintf("[#%s]", repo.Type))
 	}
 
 	if repo.Des != "" {
@@ -132,17 +134,27 @@ func buildDocsURL(repo gh2.Repository) string {
 	var docsURL strings.Builder
 	docsPath := wf.Config.Get("docs")
 
+	if docsPath == "" {
+		return ""
+	}
+
+	// 构建基础URL
 	docsURL.WriteString(fmt.Sprintf("%s/%s#", docsPath, strings.ToLower(repo.Tag)))
 
-	if repo.Qs != nil {
+	// 1. 如果有qs就直接跳转到对应repo
+	if repo.HasQs() {
 		docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.FullName())))
-	} else {
-		docsURL.WriteString(strings.ToLower(repo.Type))
-	}
-	if repo.Qs != nil && len(repo.SubRepos) == 0 && len(repo.ReplacedRepos) == 0 && len(repo.RelatedRepos) == 0 {
-
+		return docsURL.String()
 	}
 
+	// 2. 如果是sub, rep, rel repos就跳转到对应的主repo
+	if repo.IsSubOrDepOrRelRepo() {
+		docsURL.WriteString(strings.ToLower(repo.MainRepo))
+		return docsURL.String()
+	}
+
+	// 3. 如果没有qs，也没有上面这几种repos的repo，就直接跳转到type
+	docsURL.WriteString(strings.ToLower(repo.Type))
 	return docsURL.String()
 }
 
