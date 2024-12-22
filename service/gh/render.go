@@ -38,7 +38,7 @@ func (g *GhRenderer) renderContent() (string, error) {
 func (g *GhRenderer) renderRepos(repos Repos) {
 	for _, repo := range repos {
 		if repo.Qs != nil {
-			g.RenderHeader(3, g.RenderLink(repo.URL, repo.URL))
+			g.RenderHeader(3, g.RenderLink(repo.FullName(), repo.URL))
 			g.renderSubComponents(repo)
 			g.renderQuestions(repo.Qs)
 		}
