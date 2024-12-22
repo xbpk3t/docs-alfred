@@ -77,7 +77,7 @@ var worksCmd = &cobra.Command{
 	Use:   "works",
 	Short: "Convert works yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		renderer := &works.WorkRenderer{}
+		renderer := works.NewWorkRenderer()
 		return ProcessFile(cfgFile, renderer)
 	},
 }
@@ -86,7 +86,7 @@ var wsCmd = &cobra.Command{
 	Use:   "ws",
 	Short: "Convert website links yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		renderer := &ws.WebStackRenderer{}
+		renderer := ws.NewWebStackRenderer()
 		return ProcessFile(cfgFile, renderer)
 	},
 }
@@ -96,7 +96,7 @@ var goodsCmd = &cobra.Command{
 	Use:   "goods",
 	Short: "Convert goods yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		renderer := &goods.GoodsRenderer{}
+		renderer := goods.NewGoodsRenderer()
 		return ProcessFile(cfgFile, renderer)
 	},
 }
