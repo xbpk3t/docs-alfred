@@ -44,7 +44,7 @@ func (g *GhRenderer) Render(data []byte) (string, error) {
 func (g *GhRenderer) renderContent() (string, error) {
 	for _, repo := range g.Config {
 		g.RenderHeader(2, repo.Type)
-		RenderRepositoriesAsMarkdownTable(repo.Repos)
+		g.RenderRepositoriesAsMarkdownTable(repo.Repos)
 		g.renderRepos(repo.Repos)
 	}
 	return g.String(), nil
@@ -78,7 +78,7 @@ func (g *GhRenderer) renderSubComponents(repo Repository) {
 }
 
 func (g *GhRenderer) renderSubRepoComponent(config repoRenderConfig) {
-	content := RenderRepositoriesAsMarkdownTable(config.repos)
+	content := g.RepositoriesAsMarkdownTable(config.repos)
 	g.RenderAdmonition(config.admonitionType, config.title, content)
 }
 

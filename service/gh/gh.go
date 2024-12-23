@@ -243,18 +243,22 @@ func formatQuestionDetails(q Question) string {
 }
 
 // RenderRepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
-func RenderRepositoriesAsMarkdownTable(repos Repos) string {
+func (g *GhRenderer) RenderRepositoriesAsMarkdownTable(repos Repos) {
+	g.Write(g.RepositoriesAsMarkdownTable(repos))
+}
+
+// RepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
+func (g *GhRenderer) RepositoriesAsMarkdownTable(repos Repos) string {
 	if len(repos) == 0 {
 		return ""
 	}
-
 	var res strings.Builder
 	data := lo.Map(repos, func(item Repository, _ int) []string {
 		repoName := item.FullName()
 		return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
 	})
 
-	render.NewMarkdownRenderer().RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
+	g.RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
 	return res.String()
 }
 
