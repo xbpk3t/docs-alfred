@@ -111,9 +111,9 @@ func buildRepoDescription(repo gh2.Repository) string {
 	var des strings.Builder
 
 	for flag, prefix := range map[bool]string{
-		repo.IsSubRepo:      "Sub",
-		repo.IsReplacedRepo: "Replaced",
-		repo.IsRelatedRepo:  "Related",
+		repo.IsSubRepo:      "SUB",
+		repo.IsReplacedRepo: "REP",
+		repo.IsRelatedRepo:  "REL",
 	} {
 		if flag {
 			des.WriteString(fmt.Sprintf("[%s#%s]", prefix, repo.MainRepo))
@@ -135,7 +135,7 @@ func buildRepoDescription(repo gh2.Repository) string {
 // 分为三种情况：
 // 1、如果有qs就直接跳转到对应repo
 // 2、如果是sub, rep, rel repos 就跳转到对应的主repo
-// 3、如果没有qs，也没有上面这几种repos的repo，就直接跳转到type
+// 3、如果没有qs，也没有上面这几种repos的repo（说明是某个type下面的repo），就直接跳转到type
 func buildDocsURL(repo gh2.Repository) string {
 	var docsURL strings.Builder
 	docsPath := wf.Config.Get("docs")
@@ -143,23 +143,16 @@ func buildDocsURL(repo gh2.Repository) string {
 	if docsPath == "" {
 		return ""
 	}
-
-	// 构建基础URL
 	docsURL.WriteString(fmt.Sprintf("%s/%s#", docsPath, strings.ToLower(repo.Tag)))
 
-	// 1. 如果有qs就直接跳转到对应repo
 	if repo.HasQs() {
 		docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.FullName())))
 		return docsURL.String()
 	}
-
-	// 2. 如果是sub, rep, rel repos就跳转到对应的主repo
 	if repo.IsSubOrDepOrRelRepo() {
 		docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.MainRepo)))
 		return docsURL.String()
 	}
-
-	// 3. 如果没有qs，也没有上面这几种repos的repo，就直接跳转到type
 	docsURL.WriteString(strings.ToLower(repo.Type))
 	return docsURL.String()
 }
@@ -173,10 +166,8 @@ func determineRepoIcon(repo gh2.Repository) string {
 		return cons.IconQs
 	case repo.Doc != "":
 		return cons.IconDoc
-	case repo.IsStar:
-		return cons.IconStar
 	default:
-		return cons.IconRepo
+		return cons.IconCheck
 	}
 }
 

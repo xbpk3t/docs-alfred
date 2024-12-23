@@ -10,12 +10,26 @@ import (
 // GhRenderer Markdown渲染器
 type GhRenderer struct {
 	render.MarkdownRenderer
-	Config ConfigRepos
+	Config      ConfigRepos
+	repoConfigs []repoRenderConfig
+}
+
+// 定义仓库类型和对应的渲染配置
+type repoRenderConfig struct {
+	repos          Repos
+	admonitionType render.AdmonitionType
+	title          string
 }
 
 // Renderer 相关方法
 func NewGhRenderer() *GhRenderer {
-	return &GhRenderer{}
+	return &GhRenderer{
+		repoConfigs: []repoRenderConfig{
+			{admonitionType: render.AdmonitionTip, title: "Sub Repos"},
+			{admonitionType: render.AdmonitionWarning, title: "Replaced Repos"},
+			{admonitionType: render.AdmonitionInfo, title: "Related Repos"},
+		},
+	}
 }
 
 func (g *GhRenderer) Render(data []byte) (string, error) {
@@ -30,6 +44,7 @@ func (g *GhRenderer) Render(data []byte) (string, error) {
 func (g *GhRenderer) renderContent() (string, error) {
 	for _, repo := range g.Config {
 		g.RenderHeader(2, repo.Type)
+		RenderRepositoriesAsMarkdownTable(repo.Repos)
 		g.renderRepos(repo.Repos)
 	}
 	return g.String(), nil
@@ -46,44 +61,25 @@ func (g *GhRenderer) renderRepos(repos Repos) {
 }
 
 func (g *GhRenderer) renderSubComponents(repo Repository) {
-	// 渲染子仓库
-	if len(repo.SubRepos) > 0 {
-		g.renderSubRepos(repo.SubRepos)
+
+	reposSlices := []Repos{repo.SubRepos, repo.ReplacedRepos, repo.RelatedRepos}
+
+	for i, repos := range reposSlices {
+		if len(repos) > 0 {
+			config := g.repoConfigs[i]
+			config.repos = repos
+			g.renderRepoComponent(config)
+		}
 	}
 
-	if len(repo.ReplacedRepos) > 0 {
-		g.renderReplacedRepos(repo.ReplacedRepos)
-	}
-
-	if len(repo.RelatedRepos) > 0 {
-		g.renderRelatedRepos(repo.RelatedRepos)
-	}
-
-	// 渲染命令
 	if len(repo.Cmd) > 0 {
 		g.RenderCodeBlock("shell", strings.Join(repo.Cmd, "\n"))
 	}
 }
 
-func (g *GhRenderer) renderSubRepos(repos Repos) {
-	if len(repos) > 0 {
-		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonition(render.AdmonitionTip, "SubRepos Repos", content)
-	}
-}
-
-func (g *GhRenderer) renderReplacedRepos(repos Repos) {
-	if len(repos) > 0 {
-		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonition(render.AdmonitionWarning, "Replaced Repos", content)
-	}
-}
-
-func (g *GhRenderer) renderRelatedRepos(repos Repos) {
-	if len(repos) > 0 {
-		content := RenderRepositoriesAsMarkdownTable(repos)
-		g.RenderAdmonition(render.AdmonitionInfo, "Related Repos", content)
-	}
+func (g *GhRenderer) renderRepoComponent(config repoRenderConfig) {
+	content := RenderRepositoriesAsMarkdownTable(config.repos)
+	g.RenderAdmonition(config.admonitionType, config.title, content)
 }
 
 func (g *GhRenderer) renderQuestions(qs Questions) {
