@@ -8,10 +8,10 @@ import (
 )
 
 var wsCmd = &cobra.Command{
-	Use:   "ws",
-	Short: "Workspace search command",
-	// PersistentPreRun: handlePreRun,
-	Run: handleWsCommand,
+	Use:              "ws",
+	Short:            "Workspace search command",
+	PersistentPreRun: handlePreRun,
+	Run:              handleWsCommand,
 }
 
 func handleWsCommand(cmd *cobra.Command, args []string) {
