@@ -29,7 +29,7 @@ func handleWsCommand(cmd *cobra.Command, args []string) {
 			tk.Name,
 			tk.Des,
 			tk.URL,
-			cons.IconStar,
+			cons.IconCheck,
 		)
 		builder.AddCommonModifiers(item, tk.URL, tk.Des)
 	}

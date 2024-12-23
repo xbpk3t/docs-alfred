@@ -2,8 +2,7 @@ package cons
 
 const (
 	// Icons
-	IconStar   = "icons/check.svg"
-	IconRepo   = "icons/repo.png"
+	IconCheck  = "icons/check.svg"
 	IconSearch = "icons/search.svg"
 	IconQs     = "icons/a.svg"
 	IconDoc    = "icons/b.svg"
