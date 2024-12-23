@@ -43,7 +43,7 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	rootCmd.Flags().StringVar(&folderName, "folder", "./", "配置文件所在文件夹")
+	rootCmd.Flags().StringVar(&folderName, "folder", "./", "配置文件���在文件夹")
 	rootCmd.Flags().StringSliceVar(&ghFiles, "gf", []string{}, "要合并的gh.yml文件列表")
 }
 
@@ -56,16 +56,34 @@ func runMerge(cmd *cobra.Command, args []string) {
 		log.Fatalf("error reading directory: %v", err)
 	}
 
+	// 用于去重的map
+	seen := make(map[string]struct{})
+
 	for _, file := range files {
 		if !file.IsDir() && slices.Contains(ghFiles, file.Name()) {
 			fx, err := os.ReadFile(filepath.Join(folderName, file.Name()))
 			if err != nil {
 				log.Fatalf("error reading file: %v", err)
 			}
-			// ft, _ := parser.NewParser[gh.ConfigRepo](fx).ParseFlatten()
+
+			// 解析并处理仓库
 			ft := gh.NewConfigRepos(fx).WithType().WithTag(strings.TrimSuffix(file.Name(), ".yml")).ToRepos()
-			// cr = append(cr, ft.WithTag(strings.TrimSuffix(file.Name(), ".yml")).WithType()...)
-			cr = append(cr, gh.ConfigRepo{Repos: ft})
+
+			// 过滤掉作为子仓库的仓库
+			var mainRepos gh.Repos
+			for _, repo := range ft {
+				if !repo.IsSubOrDepOrRelRepo() {
+					if _, exists := seen[repo.URL]; !exists {
+						seen[repo.URL] = struct{}{}
+						mainRepos = append(mainRepos, repo)
+					}
+				}
+			}
+
+			cr = append(cr, gh.ConfigRepo{
+				Type:  strings.TrimSuffix(file.Name(), ".yml"),
+				Repos: mainRepos,
+			})
 		}
 	}
 

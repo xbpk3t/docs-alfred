@@ -182,7 +182,7 @@ func processAllSubRepos(repo Repository) Repos {
 		repo.SubRepos[i].IsSubRepo = true
 		repo.SubRepos[i].Type = repo.Type
 		repo.SubRepos[i].MainRepo = repo.FullName()
-		repos = append(repos, processRepo(repo.SubRepos[i], repo.SubRepos[i].Type)...)
+		repos = append(repos, processRepo(repo.SubRepos[i], repo.Type)...)
 	}
 
 	// 处理替换仓库
@@ -190,7 +190,7 @@ func processAllSubRepos(repo Repository) Repos {
 		repo.ReplacedRepos[i].IsReplacedRepo = true
 		repo.ReplacedRepos[i].Type = repo.Type
 		repo.ReplacedRepos[i].MainRepo = repo.FullName()
-		repos = append(repos, processRepo(repo.ReplacedRepos[i], repo.ReplacedRepos[i].Type)...)
+		repos = append(repos, processRepo(repo.ReplacedRepos[i], repo.Type)...)
 	}
 
 	// 处理相关仓库
@@ -198,7 +198,7 @@ func processAllSubRepos(repo Repository) Repos {
 		repo.RelatedRepos[i].IsRelatedRepo = true
 		repo.RelatedRepos[i].Type = repo.Type
 		repo.RelatedRepos[i].MainRepo = repo.FullName()
-		repos = append(repos, processRepo(repo.RelatedRepos[i], repo.RelatedRepos[i].Type)...)
+		repos = append(repos, processRepo(repo.RelatedRepos[i], repo.Type)...)
 	}
 
 	return repos

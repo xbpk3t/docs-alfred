@@ -28,7 +28,7 @@ var ghCmd = &cobra.Command{
 func handleGhCommand(cmd *cobra.Command, args []string) {
 	builder := alfred.NewItemBuilder(wf)
 	r, _ := parser.NewParser[gh2.ConfigRepos](data).ParseSingle()
-	repos := r.ToRepos()
+	repos := r.WithType().ToRepos()
 
 	if len(args) > 0 && strings.HasPrefix(args[0], "#") {
 		handleTagSearch(repos, args, builder)
