@@ -54,14 +54,6 @@ type Question struct {
 
 type Questions []Question
 
-// 存储原始配置数据
-var globalConfigRepos ConfigRepos
-
-// 设置全局配置
-func SetConfigRepos(cr ConfigRepos) {
-	globalConfigRepos = cr
-}
-
 // Repository 相关方法
 func (r *Repository) SetGithubInfo(owner, name string) {
 	r.User = owner

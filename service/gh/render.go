@@ -68,7 +68,7 @@ func (g *GhRenderer) renderSubComponents(repo Repository) {
 		if len(repos) > 0 {
 			config := g.repoConfigs[i]
 			config.repos = repos
-			g.renderRepoComponent(config)
+			g.renderSubRepoComponent(config)
 		}
 	}
 
@@ -77,7 +77,7 @@ func (g *GhRenderer) renderSubComponents(repo Repository) {
 	}
 }
 
-func (g *GhRenderer) renderRepoComponent(config repoRenderConfig) {
+func (g *GhRenderer) renderSubRepoComponent(config repoRenderConfig) {
 	content := RenderRepositoriesAsMarkdownTable(config.repos)
 	g.RenderAdmonition(config.admonitionType, config.title, content)
 }
