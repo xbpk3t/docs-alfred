@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"strings"
 )
 
 // RenderListItems 渲染多个列表项
@@ -223,4 +224,10 @@ func (r *MarkdownRenderer) RenderCheckboxList(items []struct {
 		r.Write(fmt.Sprintf("- [%s] %s\n", mark, item.Text))
 	}
 	r.Write("\n")
+}
+
+// ReplaceUnorderedListWithTask 将无序列表替换为任务列表
+func (r *MarkdownRenderer) ReplaceUnorderedListWithTask(str string) string {
+	// return "- [ ] " + strings.Replace(str, "- ", "", -1) + "\n\n"
+	return "- [ ] " + strings.Replace(str, "- ", "", -1) + "\n"
 }

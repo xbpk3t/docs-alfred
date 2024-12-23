@@ -68,7 +68,7 @@ var ghCmd = &cobra.Command{
 	Use:   "gh",
 	Short: "Convert GitHub repos yaml to markdown",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		renderer := &gh.GhRenderer{}
+		renderer := gh.NewGhRenderer()
 		return ProcessFile(cfgFile, renderer)
 	},
 }
