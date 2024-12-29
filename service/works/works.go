@@ -52,12 +52,12 @@ func (r *WorkRenderer) Render(data []byte) (string, error) {
 	for _, doc := range docs {
 		for _, d := range doc {
 			if !r.seenTags[d.Tag] {
-				r.RenderHeader(2, d.Tag)
+				r.RenderHeader(render.HeadingLevel2, d.Tag)
 				r.seenTags[d.Tag] = true
 			}
 
 			if d.Tag != d.Type {
-				r.RenderHeader(3, d.Type)
+				r.RenderHeader(render.HeadingLevel3, d.Type)
 			}
 
 			r.Write(d.RenderContent())

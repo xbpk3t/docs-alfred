@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/pkg"
 	"log"
 	"log/slog"
 	"os"
 	"os/exec"
+
+	"github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/deanishe/awgo/update"
 

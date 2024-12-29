@@ -2,8 +2,8 @@ package errcode
 
 // Error 定义错误码结构
 type Error struct {
-	code    int    // 错误码
 	message string // 错误信息
+	code    int    // 错误码
 }
 
 // NewError 创建新的错误码

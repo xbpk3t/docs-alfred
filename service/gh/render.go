@@ -16,9 +16,9 @@ type GhRenderer struct {
 
 // 定义仓库类型和对应的渲染配置
 type repoRenderConfig struct {
-	repos          Repos
 	admonitionType render.AdmonitionType
 	title          string
+	repos          Repos
 }
 
 // Renderer 相关方法
@@ -43,7 +43,7 @@ func (g *GhRenderer) Render(data []byte) (string, error) {
 
 func (g *GhRenderer) renderContent() (string, error) {
 	for _, repo := range g.Config {
-		g.RenderHeader(2, repo.Type)
+		g.RenderHeader(render.HeadingLevel2, repo.Type)
 		g.RenderRepositoriesAsMarkdownTable(repo.Repos)
 		g.renderRepos(repo.Repos)
 	}
@@ -53,7 +53,7 @@ func (g *GhRenderer) renderContent() (string, error) {
 func (g *GhRenderer) renderRepos(repos Repos) {
 	for _, repo := range repos {
 		if repo.Qs != nil {
-			g.RenderHeader(3, g.RenderLink(repo.FullName(), repo.URL))
+			g.RenderHeader(render.HeadingLevel3, g.RenderLink(repo.FullName(), repo.URL))
 			g.renderSubComponents(repo)
 			g.renderQuestions(repo.Qs)
 		}
@@ -61,7 +61,6 @@ func (g *GhRenderer) renderRepos(repos Repos) {
 }
 
 func (g *GhRenderer) renderSubComponents(repo Repository) {
-
 	reposSlices := []Repos{repo.SubRepos, repo.ReplacedRepos, repo.RelatedRepos}
 
 	for i, repos := range reposSlices {
