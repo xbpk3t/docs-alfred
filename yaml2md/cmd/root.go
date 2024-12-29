@@ -20,8 +20,10 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "yaml2md",
-	Short: "A brief description of your application",
+	Use:       "yaml2md",
+	ValidArgs: []string{"gh", "works", "ws", "goods", "x"},
+	Args:      cobra.OnlyValidArgs,
+	Short:     "A brief description of your application",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -43,6 +45,8 @@ func init() {
 	rootCmd.AddCommand(wsCmd)
 	rootCmd.AddCommand(goodsCmd)
 	rootCmd.AddCommand(xCmd)
+	rootCmd.AddCommand(diaryCmd)
+	rootCmd.AddCommand(taskCmd)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "src/data/qs.yml", "config file (default is src/data/qs.yml)")
 }
@@ -107,6 +111,36 @@ var xCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		renderer := &gh.XRenderer{}
 		return ProcessFile(cfgFile, renderer)
+	},
+}
+
+// diaryCmd represents the diary command
+var diaryCmd = &cobra.Command{
+	Use:   "diary",
+	Short: "A brief description of your command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("diary called")
+	},
+}
+
+// taskCmd represents the task command
+var taskCmd = &cobra.Command{
+	Use:   "task",
+	Short: "A brief description of your command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("task called")
 	},
 }
 
