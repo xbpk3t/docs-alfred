@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
@@ -52,7 +53,7 @@ func NewGoodsRenderer() *GoodsRenderer {
 func (r *GoodsRenderer) Render(data []byte) (string, error) {
 	goods, err := ParseConfig(data)
 	if err != nil {
-		return "", fmt.Errorf("解析配置失败: %w", err)
+		return "", errcode.WithError(errcode.ErrParseConfig, err)
 	}
 
 	for _, item := range goods {

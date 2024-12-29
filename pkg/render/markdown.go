@@ -231,3 +231,8 @@ func (r *MarkdownRenderer) ReplaceUnorderedListWithTask(str string) string {
 	// return "- [ ] " + strings.Replace(str, "- ", "", -1) + "\n\n"
 	return "- [ ] " + strings.Replace(str, "- ", "", -1) + "\n"
 }
+
+// RenderImport 渲染导入语句
+func (r *MarkdownRenderer) RenderImport(importName, relativePath string) {
+	r.RenderParagraph(fmt.Sprintf("import %s from '!!raw-loader!%s';", importName, relativePath))
+}

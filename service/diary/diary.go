@@ -1,14 +1,14 @@
 package diary
 
 import (
-	"fmt"
-	"github.com/spf13/cast"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/golang-module/carbon/v2"
+	"github.com/spf13/cast"
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
@@ -55,7 +55,7 @@ func (r *DiaryRenderer) getAbsolutePath(dir string) (string, error) {
 	if !filepath.IsAbs(dir) {
 		workDir, err := os.Getwd()
 		if err != nil {
-			return "", fmt.Errorf("获取工作目录失败: %w", err)
+			return "", errcode.WithError(errcode.ErrWorkDir, err)
 		}
 		return filepath.Join(workDir, dir), nil
 	}
@@ -67,7 +67,7 @@ func (r *DiaryRenderer) processYearDirectories(diaryDir string) error {
 	// 获取所有年份目录
 	years, err := filepath.Glob(filepath.Join(diaryDir, "202*"))
 	if err != nil {
-		return fmt.Errorf("获取年份目录失败: %w", err)
+		return errcode.WithError(errcode.ErrListDir, err)
 	}
 
 	// 按年份排序
@@ -90,7 +90,7 @@ func (r *DiaryRenderer) processYearDirectory(yearPath string) error {
 	// 获取该年份下的所有yaml文件
 	yamlFiles, err := filepath.Glob(filepath.Join(yearPath, "*.yml"))
 	if err != nil {
-		return fmt.Errorf("获取yaml文件失败: %w", err)
+		return errcode.WithError(errcode.ErrListDir, err)
 	}
 
 	// 按文件名排序
@@ -99,7 +99,7 @@ func (r *DiaryRenderer) processYearDirectory(yearPath string) error {
 	// 处理每个yaml文件
 	for _, yamlFile := range yamlFiles {
 		if err := r.processYamlFile(yamlFile, year); err != nil {
-			return err
+			return errcode.WithError(errcode.ErrFileProcess, err)
 		}
 	}
 
@@ -121,9 +121,11 @@ func (r *DiaryRenderer) processYamlFile(yamlFile, year string) error {
 // calculateDate 计算日期
 func (r *DiaryRenderer) calculateDate(year, weekNum string) (carbon.Carbon, error) {
 	weekNumber := 0
-	if _, err := fmt.Sscanf(weekNum, "w%d", &weekNumber); err != nil {
-		return carbon.Carbon{}, fmt.Errorf("解析周数失败: %w", err)
+	numStr, ok := strings.CutPrefix(weekNum, "w")
+	if !ok {
+		return carbon.Carbon{}, errcode.ErrParseWeekNumber
 	}
+	weekNumber = cast.ToInt(numStr)
 
 	yearStart := carbon.CreateFromDate(cast.ToInt(year), 1, 1)
 	return yearStart.AddDays((weekNumber - 1) * 7), nil
@@ -132,13 +134,13 @@ func (r *DiaryRenderer) calculateDate(year, weekNum string) (carbon.Carbon, erro
 // renderWeekContent 渲染周内容
 func (r *DiaryRenderer) renderWeekContent(date carbon.Carbon, weekNum, year string) {
 	// 写入标题
-	r.RenderHeader(2, fmt.Sprintf("%s (%s)", date.ToDateString(), weekNum))
+	r.RenderHeader(2, date.ToDateString()+" ("+weekNum+")")
 
 	// 写入导入语句
-	r.RenderParagraph(fmt.Sprintf("import %s from '!!raw-loader!../diary/%s/%s.yml';", weekNum, year, weekNum))
+	r.RenderImport(weekNum, filepath.Join("../diary", year, weekNum+".yml"))
 
 	// 写入代码块
-	r.RenderContainer(fmt.Sprintf("{%s}", weekNum), "yaml")
+	r.RenderContainer("{"+weekNum+"}", "yaml")
 }
 
 // writeToFileIfNeeded 如果需要则写入文件
@@ -148,13 +150,13 @@ func (r *DiaryRenderer) writeToFileIfNeeded() error {
 	}
 
 	if err := os.MkdirAll(r.targetDir, 0755); err != nil {
-		return fmt.Errorf("创建目标目录失败: %w", err)
+		return errcode.WithError(errcode.ErrCreateDir, err)
 	}
 
 	content := r.String()
 	outputPath := filepath.Join(r.targetDir, r.fileName)
 	if err := os.WriteFile(outputPath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("写入文件失败: %w", err)
+		return errcode.WithError(errcode.ErrWriteFile, err)
 	}
 
 	return nil
