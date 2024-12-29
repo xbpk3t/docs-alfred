@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,67 +10,98 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"github.com/xbpk3t/docs-alfred/service/gh"
 )
 
 var (
-	ghFiles    []string
-	folderName string
+	folderName = "."
+	ghFiles    = []string{"gh.yml", "gh-sub.yml", "gh-rel.yml"}
 )
 
-// rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "gh-merge",
-	Short: "合并多个 gh.yml 文件",
+	Short: "Merge multiple gh.yml files",
 	Run:   runMerge,
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
-func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
+// validateInput 验证输入参数
+func validateInput() error {
+	if folderName == "" {
+		return errcode.ErrInvalidInput
+	}
+	return nil
+}
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	rootCmd.Flags().StringVar(&folderName, "folder", "./", "配置文件���在文件夹")
-	rootCmd.Flags().StringSliceVar(&ghFiles, "gf", []string{}, "要合并的gh.yml文件列表")
+// writeResult 写入结果到文件
+func writeResult(repos gh.ConfigRepos) error {
+	// 定义输出文件路径
+	outputPath := "gh.yml"
+
+	// 将合并后的数据写入 YAML 文件
+	data, err := yaml.Marshal(repos)
+	if err != nil {
+		return errcode.WithError(errcode.ErrEncodeYAML, err)
+	}
+
+	if err := os.WriteFile(outputPath, data, 0o644); err != nil {
+		return errcode.WithError(errcode.ErrWriteFile, err)
+	}
+
+	fmt.Printf("Merged YAML file created: %s\n", outputPath)
+	return nil
 }
 
 func runMerge(cmd *cobra.Command, args []string) {
-	var cr gh.ConfigRepos
+	if err := executeMerge(cmd, args); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func executeMerge(cmd *cobra.Command, args []string) error {
+	// 验证输入
+	if err := validateInput(); err != nil {
+		return err
+	}
 
 	// 读取文件夹中的文件
 	files, err := os.ReadDir(folderName)
 	if err != nil {
-		log.Fatalf("error reading directory: %v", err)
+		return errcode.WithError(errcode.ErrListDir, err)
 	}
 
-	// 用于去重的map
+	var cr gh.ConfigRepos
 	seen := make(map[string]struct{})
 
 	for _, file := range files {
 		if !file.IsDir() && slices.Contains(ghFiles, file.Name()) {
 			fx, err := os.ReadFile(filepath.Join(folderName, file.Name()))
 			if err != nil {
-				log.Fatalf("error reading file: %v", err)
+				return errcode.WithError(errcode.ErrReadFile, err)
 			}
 
 			// 解析并处理仓库
-			ft := gh.NewConfigRepos(fx).WithType().WithTag(strings.TrimSuffix(file.Name(), ".yml")).ToRepos()
+			rc := gh.NewConfigRepos(fx)
+			if rc == nil {
+				return errcode.ErrParseConfig
+			}
+
+			repos := rc.WithType().WithTag(strings.TrimSuffix(file.Name(), ".yml")).ToRepos()
+			if repos == nil {
+				return errcode.ErrInvalidConfig
+			}
 
 			// 过滤掉作为子仓库的仓库
 			var mainRepos gh.Repos
-			for _, repo := range ft {
+			for _, repo := range repos {
 				if !repo.IsSubOrDepOrRelRepo() {
 					if _, exists := seen[repo.URL]; !exists {
 						seen[repo.URL] = struct{}{}
@@ -87,32 +117,5 @@ func runMerge(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// 定义输出文件路径
-	outputPath := "gh.yml"
-
-	// 将合并后的数据写入 YAML 文件
-	if err := WriteYAMLToFile(cr, outputPath); err != nil {
-		log.Fatalf("error writing to YAML file: %v", err)
-	}
-
-	fmt.Printf("Merged YAML file created: %s\n", outputPath)
-}
-
-type Gh []string
-
-// WriteYAMLToFile 将 YAML 数据写入文件
-func WriteYAMLToFile(data gh.ConfigRepos, outputPath string) error {
-	file, err := os.Create(outputPath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := yaml.NewEncoder(file)
-	defer encoder.Close()
-
-	if err := encoder.Encode(data); err != nil {
-		return err
-	}
-	return nil
+	return writeResult(cr)
 }
