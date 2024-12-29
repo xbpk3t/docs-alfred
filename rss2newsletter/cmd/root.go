@@ -14,6 +14,7 @@ import (
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
 	"golang.org/x/sync/errgroup"
 )
@@ -133,13 +134,15 @@ func (s *NewsletterService) processSingleFeed(feed rss.FeedsDetail) (feeds.RssFe
 	}))
 
 	allFeeds := s.feed.FetchURLs(context.TODO(), urls)
-	if len(allFeeds) == 0 {
-		return feeds.RssFeed{}, fmt.Errorf("no feed found for type: %s", feed.Type)
-	}
+
+	// FIXME 这里只需要加个logging，即使整个type都报错也不应该直接return，否则会导致挂掉
+	// if len(allFeeds) == 0 {
+	// 	return feeds.RssFeed{}, errcode.WithError(errcode.ErrR2NRenderTemplateFailed, feed.Type)
+	// }
 
 	combinedFeed, err := s.feed.MergeAllFeeds(feed.Type, allFeeds)
 	if err != nil {
-		return feeds.RssFeed{}, fmt.Errorf("merge feeds error: %w", err)
+		return feeds.RssFeed{}, errcode.WithError(errcode.ErrR2NMergeFeedsError, err)
 	}
 
 	return s.convertToRssFeed(feed.Type, combinedFeed), nil
@@ -175,12 +178,12 @@ func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
 func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed) (string, error) {
 	tmpl, err := template.ParseFS(newsletterTpl, "templates/newsletter.tpl")
 	if err != nil {
-		return "", fmt.Errorf("解析模板失败: %w", err)
+		return "", errcode.WithError(errcode.ErrR2NParseTemplateFailed, err)
 	}
 
 	var tplBytes bytes.Buffer
 	if err := tmpl.Execute(&tplBytes, feeds); err != nil {
-		return "", fmt.Errorf("渲染模板失败: %w", err)
+		return "", errcode.WithError(errcode.ErrR2NRenderTemplateFailed, err)
 	}
 
 	return tplBytes.String(), nil
@@ -206,7 +209,7 @@ func (s *NewsletterService) SendNewsletter(content string) error {
 
 	sent, err := client.Emails.SendWithContext(ctx, params)
 	if err != nil {
-		return fmt.Errorf("发送邮件失败: %w", err)
+		return errcode.WithError(errcode.ErrR2NSendMailFailed, err)
 	}
 
 	slog.Info("邮件发送成功", "id", sent.Id)

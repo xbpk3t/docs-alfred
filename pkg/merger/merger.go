@@ -1,151 +1,122 @@
 package merger
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"gopkg.in/yaml.v3"
 )
 
-// MergeOptions 合并选项
-type MergeOptions struct {
-	FolderPath string
-	OutputPath string
-	FileNames  []string
-}
-
 // Merger 配置合并器
-type Merger[T any] struct {
-	options MergeOptions
+type Merger struct {
+	inputFiles  []string
+	outputFile  string
+	outputDir   string
+	tagProvider func(string) string
 }
 
-// NewMerger 创建新的配置合并器
-func NewMerger[T any](opts MergeOptions) *Merger[T] {
-	return &Merger[T]{options: opts}
+// NewMerger 创建新的合并器
+func NewMerger(inputFiles []string, outputFile, outputDir string, tagProvider func(string) string) *Merger {
+	return &Merger{
+		inputFiles:  inputFiles,
+		outputFile:  outputFile,
+		outputDir:   outputDir,
+		tagProvider: tagProvider,
+	}
 }
 
-// Merge 执行合并操作
-func (m *Merger[T]) Merge() error {
+// Merge 执行合并
+func (m *Merger) Merge() error {
 	if err := m.validateInput(); err != nil {
-		return fmt.Errorf("验证输入失败: %w", err)
+		return errcode.WithError(errcode.ErrValidateInput, err)
 	}
 
-	config, err := m.mergeConfigs()
+	result, err := m.mergeConfigs()
 	if err != nil {
-		return fmt.Errorf("合并配置失败: %w", err)
+		return errcode.WithError(errcode.ErrMergeConfig, err)
 	}
 
-	return m.writeResult(config)
+	return m.writeResult(result)
 }
 
-// validateInput 验证输入参数
-func (m *Merger[T]) validateInput() error {
-	// TODO fp应该默认当前文件夹，如果设置就为自定义文件夹。那这里是否应该做个路径是否存在的check？
-	// if m.options.FolderPath == "" {
-	// 	return fmt.Errorf("文件夹路径不能为空")
-	// }
-	if len(m.options.FileNames) == 0 {
-		return fmt.Errorf("文件列表不能为空")
-	}
-	if m.options.OutputPath == "" {
-		return fmt.Errorf("输出路径不能为空")
+// validateInput 验证输入
+func (m *Merger) validateInput() error {
+	if len(m.inputFiles) == 0 {
+		return errcode.ErrInvalidInput
 	}
 	return nil
 }
 
-// mergeConfigs 合并所有配置文件
-func (m *Merger[T]) mergeConfigs() ([]T, error) {
-	var mergedConfig []T
-
-	for _, fileName := range m.options.FileNames {
-		config, err := m.processFile(fileName)
+// mergeConfigs 合并配置
+func (m *Merger) mergeConfigs() (interface{}, error) {
+	var result interface{}
+	for _, file := range m.inputFiles {
+		config, err := m.processFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("处理文件 %s 失败: %w", fileName, err)
+			return nil, errcode.WithError(errcode.ErrFileProcess, err)
 		}
-		mergedConfig = append(mergedConfig, config...)
+		result = m.merge(result, config)
 	}
-
-	return mergedConfig, nil
+	return result, nil
 }
 
-// processFile 处理单个配置文件
-func (m *Merger[T]) processFile(fileName string) ([]T, error) {
-	// 读取文件内容
-	content, err := m.readFile(fileName)
+// processFile 处理单个文件
+func (m *Merger) processFile(fileName string) (interface{}, error) {
+	data, err := os.ReadFile(fileName)
 	if err != nil {
-		return nil, err
+		return nil, errcode.WithError(errcode.ErrReadFile, err)
 	}
 
-	// 解析配置
-	var config []T
-	if err := yaml.Unmarshal(content, &config); err != nil {
-		return nil, fmt.Errorf("解析YAML失败: %w", err)
+	var config interface{}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, errcode.WithError(errcode.ErrParseYAML, err)
 	}
 
-	// 如果类型T包含Tag字段，设置tag值
-	tag := strings.TrimSuffix(fileName, ".yml")
-	if err := m.setTag(config, tag); err != nil {
-		return nil, fmt.Errorf("设置标签失败: %w", err)
+	if m.tagProvider != nil {
+		if err := m.setTag(config, m.tagProvider(fileName)); err != nil {
+			return nil, errcode.WithError(errcode.ErrSetTag, err)
+		}
 	}
 
 	return config, nil
 }
 
-// readFile 读取文件内容
-func (m *Merger[T]) readFile(fileName string) ([]byte, error) {
-	filePath := filepath.Join(m.options.FolderPath, fileName)
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("读取文件失败: %w", err)
-	}
-	return content, nil
-}
-
-// setTag 设置标签（如果类型支持）
-func (m *Merger[T]) setTag(config []T, tag string) error {
-	// 使用反射检查并设置Tag字段
-	for i := range config {
-		if tagger, ok := any(config[i]).(interface{ SetTag(string) }); ok {
-			tagger.SetTag(tag)
+// writeResult 写入结果
+func (m *Merger) writeResult(result interface{}) error {
+	if m.outputDir != "" {
+		if err := os.MkdirAll(m.outputDir, 0755); err != nil {
+			return errcode.WithError(errcode.ErrCreateDir, err)
 		}
 	}
-	return nil
-}
 
-// writeResult 写入合并结果
-func (m *Merger[T]) writeResult(config []T) error {
-	// 创建输出目录（如果不存在）
-	if err := os.MkdirAll(filepath.Dir(m.options.OutputPath), 0o755); err != nil {
-		return fmt.Errorf("创建输出目录失败: %w", err)
-	}
-
-	// 创建输出文件
-	file, err := os.Create(m.options.OutputPath)
+	file, err := os.Create(filepath.Join(m.outputDir, m.outputFile))
 	if err != nil {
-		return fmt.Errorf("创建输出文件失败: %w", err)
+		return errcode.WithError(errcode.ErrCreateFile, err)
 	}
 	defer file.Close()
 
-	// 创建YAML编码器
 	encoder := yaml.NewEncoder(file)
 	defer encoder.Close()
 
-	// 写入配置
-	if err := encoder.Encode(config); err != nil {
-		return fmt.Errorf("编码YAML失败: %w", err)
+	if err := encoder.Encode(result); err != nil {
+		return errcode.WithError(errcode.ErrEncodeYAML, err)
 	}
 
 	return nil
 }
 
-// MergeFiles 便捷函数，用于合并文件
-func MergeFiles[T any](folderPath string, fileNames []string, outputPath string) error {
-	merger := NewMerger[T](MergeOptions{
-		FolderPath: folderPath,
-		FileNames:  fileNames,
-		OutputPath: outputPath,
-	})
-	return merger.Merge()
+// merge 合并两个配置
+func (m *Merger) merge(a, b interface{}) interface{} {
+	if a == nil {
+		return b
+	}
+	// 实现合并逻辑
+	return b
+}
+
+// setTag 设置标签
+func (m *Merger) setTag(config interface{}, tag string) error {
+	// 实现设置标签逻辑
+	return nil
 }

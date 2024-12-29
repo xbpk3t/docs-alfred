@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -160,18 +161,18 @@ func ProcessFile(inputFile string, renderer render.MarkdownRender) error {
 	// 读取文件
 	data, err := fp.ReadInput()
 	if err != nil {
-		return fmt.Errorf("读取文件失败: %w", err)
+		return errcode.WithError(errcode.ErrReadFile, err)
 	}
 
 	// 渲染内容
 	content, err := renderer.Render(data)
 	if err != nil {
-		return fmt.Errorf("渲染失败: %w", err)
+		return errcode.WithError(errcode.ErrRender, err)
 	}
 
 	// 写入文件
 	if err := fp.WriteOutput([]byte(content)); err != nil {
-		return fmt.Errorf("写入文件失败: %w", err)
+		return errcode.WithError(errcode.ErrWriteFile, err)
 	}
 
 	return nil

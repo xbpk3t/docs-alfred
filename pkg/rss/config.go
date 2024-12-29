@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"gopkg.in/yaml.v3"
 )
 
@@ -44,23 +45,23 @@ type Feeds struct {
 	Feed string `yaml:"feed"`
 }
 
-// NewConfig 创建新的配置
-func NewConfig(cfgFile string) (*Config, error) {
-	fx, err := os.ReadFile(cfgFile)
+// LoadConfig 加载配置文件
+func LoadConfig(configFile string) (*Config, error) {
+	data, err := os.ReadFile(configFile)
 	if err != nil {
-		return nil, fmt.Errorf("reading config file: %w", err)
+		return nil, errcode.WithError(errcode.ErrReadConfig, err)
 	}
 
-	var cfg Config
-	if err := yaml.Unmarshal(fx, &cfg); err != nil {
-		return nil, fmt.Errorf("unmarshaling config: %w", err)
+	var config Config
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, errcode.WithError(errcode.ErrUnmarshalConfig, err)
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("validating config: %w", err)
+	if err := config.Validate(); err != nil {
+		return nil, errcode.WithError(errcode.ErrValidateConfig, err)
 	}
 
-	return &cfg, nil
+	return &config, nil
 }
 
 // Validate 验证配置

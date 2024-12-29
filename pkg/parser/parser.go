@@ -1,72 +1,52 @@
 package parser
 
 import (
-	"bytes"
-	"errors"
-	"fmt"
-	"io"
+	"os"
 
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"gopkg.in/yaml.v3"
 )
 
-// Parser YAML配置解析器
+// Parser YAML解析器
 type Parser[T any] struct {
 	data []byte
 }
 
-// NewParser 创建解析器
+// NewParser 创建新的解析器
 func NewParser[T any](data []byte) *Parser[T] {
 	return &Parser[T]{
 		data: data,
 	}
 }
 
-// ParseSingle 解析单个YAML文档
+// ParseSingle 解析单个配置
 func (p *Parser[T]) ParseSingle() (T, error) {
 	var result T
-	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
-	if err := decoder.Decode(&result); err != nil {
-		return result, fmt.Errorf("解析配置失败: %w", err)
+	if err := yaml.Unmarshal(p.data, &result); err != nil {
+		return result, errcode.WithError(errcode.ErrParseConfig, err)
 	}
 	return result, nil
 }
 
-// ParseMulti 解析多文档 YAML
-func (p *Parser[T]) ParseMulti() ([]T, error) {
-	var results []T
-	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
-
-	for {
-		var item T
-		err := decoder.Decode(&item)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("解析配置失败: %w", err)
-		}
-		results = append(results, item)
+// ParseFlatten 解析并展平配置
+func (p *Parser[T]) ParseFlatten() ([]T, error) {
+	var result []T
+	if err := yaml.Unmarshal(p.data, &result); err != nil {
+		return nil, errcode.WithError(errcode.ErrParseConfig, err)
 	}
-	return results, nil
+	return result, nil
 }
 
-// ParseFlatten 解析多文档 YAML 并展开结果
-// 适用于每个文档都是 slice 且需要合并的情况
-func (p *Parser[T]) ParseFlatten() ([]T, error) {
-	var results []T
-	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
-
-	for {
-		var item []T
-		err := decoder.Decode(&item)
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("解析配置失败: %w", err)
-		}
-		results = append(results, item...)
+// ParseFromFile 从文件解析
+func (p *Parser[T]) ParseFromFile(file string) ([]T, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, errcode.WithError(errcode.ErrReadFile, err)
 	}
 
-	return results, nil
+	var result []T
+	if err := yaml.Unmarshal(data, &result); err != nil {
+		return nil, errcode.WithError(errcode.ErrParseConfig, err)
+	}
+	return result, nil
 }
