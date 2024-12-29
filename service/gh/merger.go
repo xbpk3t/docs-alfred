@@ -1,122 +1,126 @@
 package gh
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"gopkg.in/yaml.v3"
 )
 
-// Merger 配置合并器
-type Merger struct {
-	inputFiles  []string
-	outputFile  string
-	outputDir   string
-	tagProvider func(string) string
+type ConfigMerger struct {
+	options MergeOptions
 }
 
-// NewMerger 创建新的合并器
-func NewMerger(inputFiles []string, outputFile, outputDir string, tagProvider func(string) string) *Merger {
-	return &Merger{
-		inputFiles:  inputFiles,
-		outputFile:  outputFile,
-		outputDir:   outputDir,
-		tagProvider: tagProvider,
-	}
+func NewConfigMerger(opts MergeOptions) *ConfigMerger {
+	return &ConfigMerger{options: opts}
 }
 
-// Merge 执行合并
-func (m *Merger) Merge() error {
+// Merge
+func (m *ConfigMerger) Merge() error {
 	if err := m.validateInput(); err != nil {
-		return errcode.WithError(errcode.ErrValidateInput, err)
+		return fmt.Errorf("验证输入失败: %w", err)
 	}
 
-	result, err := m.mergeConfigs()
+	config, err := m.mergeConfigs()
 	if err != nil {
-		return errcode.WithError(errcode.ErrMergeConfig, err)
+		return fmt.Errorf("合并配置失败: %w", err)
 	}
 
-	return m.writeResult(result)
+	return m.writeResult(config)
 }
 
-// validateInput 验证输入
-func (m *Merger) validateInput() error {
-	if len(m.inputFiles) == 0 {
-		return errcode.ErrInvalidInput
+func (m *ConfigMerger) validateInput() error {
+	if m.options.FolderPath == "" {
+		return fmt.Errorf("文件夹路径不能为空")
+	}
+	if len(m.options.FileNames) == 0 {
+		return fmt.Errorf("文件列表不能为空")
+	}
+	if m.options.OutputPath == "" {
+		return fmt.Errorf("输出路径不能为空")
 	}
 	return nil
 }
 
-// mergeConfigs 合并配置
-func (m *Merger) mergeConfigs() (interface{}, error) {
-	var result interface{}
-	for _, file := range m.inputFiles {
-		config, err := m.processFile(file)
+// mergeConfigs
+func (m *ConfigMerger) mergeConfigs() (ConfigRepos, error) {
+	var mergedConfig ConfigRepos
+
+	for _, fileName := range m.options.FileNames {
+		config, err := m.processFile(fileName)
 		if err != nil {
-			return nil, errcode.WithError(errcode.ErrFileProcess, err)
+			return nil, fmt.Errorf("处理文件 %s 失败: %w", fileName, err)
 		}
-		result = m.merge(result, config)
+		mergedConfig = append(mergedConfig, config...)
 	}
-	return result, nil
+
+	return mergedConfig, nil
 }
 
-// processFile 处理单个文件
-func (m *Merger) processFile(fileName string) (interface{}, error) {
-	data, err := os.ReadFile(fileName)
+func (m *ConfigMerger) processFile(fileName string) (ConfigRepos, error) {
+	content, err := m.readFile(fileName)
 	if err != nil {
-		return nil, errcode.WithError(errcode.ErrReadFile, err)
+		return nil, err
 	}
 
-	var config interface{}
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, errcode.WithError(errcode.ErrParseYAML, err)
-	}
+	tag := strings.TrimSuffix(fileName, ".yml")
+	rc := NewConfigRepos(content)
+	// rc, err := parser.NewParser[ConfigRepos](content).ParseFlatten()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("解析YAML失败: %w", err)
+	// }
 
-	if m.tagProvider != nil {
-		if err := m.setTag(config, m.tagProvider(fileName)); err != nil {
-			return nil, errcode.WithError(errcode.ErrSetTag, err)
-		}
-	}
-
-	return config, nil
+	return rc.WithTag(tag), nil
 }
 
-// writeResult 写入结果
-func (m *Merger) writeResult(result interface{}) error {
-	if m.outputDir != "" {
-		if err := os.MkdirAll(m.outputDir, 0755); err != nil {
-			return errcode.WithError(errcode.ErrCreateDir, err)
-		}
-	}
-
-	file, err := os.Create(filepath.Join(m.outputDir, m.outputFile))
+func (m *ConfigMerger) readFile(fileName string) ([]byte, error) {
+	filePath := filepath.Join(m.options.FolderPath, fileName)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return errcode.WithError(errcode.ErrCreateFile, err)
+		return nil, fmt.Errorf("读取文件失败: %w", err)
+	}
+	return content, nil
+}
+
+func (m *ConfigMerger) writeResult(config ConfigRepos) error {
+	file, err := os.Create(m.options.OutputPath)
+	if err != nil {
+		return fmt.Errorf("创建输出文件失败: %w", err)
 	}
 	defer file.Close()
 
 	encoder := yaml.NewEncoder(file)
 	defer encoder.Close()
 
-	if err := encoder.Encode(result); err != nil {
-		return errcode.WithError(errcode.ErrEncodeYAML, err)
+	if err := encoder.Encode(config); err != nil {
+		return fmt.Errorf("编码YAML失败: %w", err)
 	}
 
 	return nil
 }
 
-// merge 合并两个配置
-func (m *Merger) merge(a, b interface{}) interface{} {
-	if a == nil {
-		return b
-	}
-	// 实现合并逻辑
-	return b
-}
+func NewConfigRepos(f []byte) ConfigRepos {
+	var ghs ConfigRepos
 
-// setTag 设置标签
-func (m *Merger) setTag(config interface{}, tag string) error {
-	// 实现设置标签逻辑
-	return nil
+	d := yaml.NewDecoder(bytes.NewReader(f))
+	for {
+		// create new spec here
+		spec := new(ConfigRepos)
+		// pass a reference to spec reference
+		if err := d.Decode(&spec); err != nil {
+			// break the loop in case of EOF
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			panic(err)
+		}
+
+		ghs = append(ghs, *spec...)
+	}
+	return ghs
 }

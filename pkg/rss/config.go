@@ -45,8 +45,8 @@ type Feeds struct {
 	Feed string `yaml:"feed"`
 }
 
-// LoadConfig 加载配置文件
-func LoadConfig(configFile string) (*Config, error) {
+// NewConfig 加载配置文件
+func NewConfig(configFile string) (*Config, error) {
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, errcode.WithError(errcode.ErrReadConfig, err)
