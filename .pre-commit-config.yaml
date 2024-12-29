@@ -53,12 +53,12 @@ repos:
         types: [yaml]
         language: python
 
-#  - repo: https://github.com/gitleaks/gitleaks
-#    rev: v8.19.2
-#    hooks:
-#      - id: gitleaks
-#        name: Scan Secrets
-#        entry: gitleaks detect --source . -v
+  #  - repo: https://github.com/gitleaks/gitleaks
+  #    rev: v8.19.2
+  #    hooks:
+  #      - id: gitleaks
+  #        name: Scan Secrets
+  #        entry: gitleaks detect --source . -v
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
     rev: v1.96.1
@@ -101,6 +101,7 @@ repos:
         entry: gofumpt -l -w .
         language: golang
         types: [go]
+        pass_filenames: false
 
       - id: go-mod-tidy
         name: go-mod-tidy
@@ -108,12 +109,27 @@ repos:
         language: golang
         pass_filenames: false
 
-#      - id: betteralign
-#        name: betteralign
-#        entry: betteralign -apply ./...
-#        language: system
-#        types: [go]
-#        pass_filenames: false
+      - id: betteralign
+        name: betteralign
+        entry: betteralign -apply ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+        additional_dependencies: []
+
+
+      - id: nilaway
+        name: nilaway
+        entry: nilaway ./...
+        language: golang
+        pass_filenames: false
+
+      - id: race-test
+        name: race-test
+        entry: go build -race cmd
+        language: golang
+        pass_filenames: false
+
 
 #      - id: go-test
 #        name: go-test
@@ -126,15 +142,3 @@ repos:
 #        entry: go vet -vettool=$(which shadow) -strict
 #        language: golang
 #        pass_filenames: false
-
-#      - id: nilaway
-#        name: nilaway
-#        entry: nilaway ./...
-#        language: golang
-#        pass_filenames: false
-
-      - id: race-test
-        name: race-test
-        entry: go build -race cmd
-        language: golang
-        pass_filenames: false
