@@ -32,7 +32,9 @@ type WebStackRenderer struct {
 
 // NewWebStackRenderer 创建新的渲染器
 func NewWebStackRenderer() *WebStackRenderer {
-	return &WebStackRenderer{}
+	return &WebStackRenderer{
+		MarkdownRenderer: render.NewMarkdownRenderer(),
+	}
 }
 
 // ParseConfig 解析配置文件
