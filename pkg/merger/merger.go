@@ -10,10 +10,10 @@ import (
 
 // Merger 配置合并器
 type Merger struct {
-	inputFiles  []string
+	tagProvider func(string) string
 	outputFile  string
 	outputDir   string
-	tagProvider func(string) string
+	inputFiles  []string
 }
 
 // NewMerger 创建新的合并器
@@ -85,7 +85,7 @@ func (m *Merger) processFile(fileName string) (interface{}, error) {
 // writeResult 写入结果
 func (m *Merger) writeResult(result interface{}) error {
 	if m.outputDir != "" {
-		if err := os.MkdirAll(m.outputDir, 0755); err != nil {
+		if err := os.MkdirAll(m.outputDir, 0o755); err != nil {
 			return errcode.WithError(errcode.ErrCreateDir, err)
 		}
 	}

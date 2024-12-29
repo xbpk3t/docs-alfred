@@ -59,12 +59,12 @@ func (r *GoodsRenderer) Render(data []byte) (string, error) {
 	for _, item := range goods {
 		// 渲染标签标题
 		if !r.seenTags[item.Tag] {
-			r.RenderHeader(2, item.Tag)
+			r.RenderHeader(render.HeadingLevel2, item.Tag)
 			r.seenTags[item.Tag] = true
 		}
 
 		// 渲染类型标题
-		r.RenderHeader(3, item.Type)
+		r.RenderHeader(render.HeadingLevel3, item.Type)
 
 		// 渲染商品内容
 		r.Write(item.RenderMarkdown())

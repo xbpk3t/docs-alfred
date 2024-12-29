@@ -21,6 +21,7 @@ type Repository struct {
 	URL            string    `yaml:"url"`
 	Tag            string    `yaml:"tag,omitempty"`
 	Type           string    `yaml:"type"`
+	MainRepo       string    // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
 	Qs             Questions `yaml:"qs,omitempty"`
 	SubRepos       Repos     `yaml:"sub,omitempty"`
 	ReplacedRepos  Repos     `yaml:"rep,omitempty"`
@@ -30,7 +31,6 @@ type Repository struct {
 	IsSubRepo      bool
 	IsReplacedRepo bool
 	IsRelatedRepo  bool
-	MainRepo       string // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
 }
 
 type Repos []Repository
@@ -275,7 +275,7 @@ func (r *Repository) IsSubOrDepOrRelRepo() bool {
 }
 
 func (r *Repository) HasQs() bool {
-	return r.Qs != nil && len(r.Qs) > 0
+	return len(r.Qs) > 0
 }
 
 func (r *Repository) HasSubRepos() bool {

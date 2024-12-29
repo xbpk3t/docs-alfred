@@ -48,7 +48,7 @@ func (r *WebStackRenderer) Render(data []byte) (string, error) {
 	}
 
 	for _, stack := range ws {
-		r.RenderHeader(2, stack.Type)
+		r.RenderHeader(render.HeadingLevel2, stack.Type)
 		r.renderURLs(stack.URLs)
 	}
 

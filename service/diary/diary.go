@@ -14,10 +14,10 @@ import (
 
 // DiaryRenderer 实现 markdown 渲染器接口
 type DiaryRenderer struct {
-	render.MarkdownRenderer
 	srcDir    string // 源目录
 	targetDir string // 目标目录
 	fileName  string // 自定义文件名
+	render.MarkdownRenderer
 }
 
 // NewDiaryRenderer 创建新的渲染器
@@ -134,13 +134,10 @@ func (r *DiaryRenderer) calculateDate(year, weekNum string) (carbon.Carbon, erro
 // renderWeekContent 渲染周内容
 func (r *DiaryRenderer) renderWeekContent(date carbon.Carbon, weekNum, year string) {
 	// 写入标题
-	r.RenderHeader(2, date.ToDateString()+" ("+weekNum+")")
+	r.RenderHeader(render.HeadingLevel2, date.ToDateString()+" ("+weekNum+")")
 
-	// 写入导入语句
-	r.RenderImport(weekNum, filepath.Join("../diary", year, weekNum+".yml"))
-
-	// 写入代码块
-	r.RenderContainer("{"+weekNum+"}", "yaml")
+	// 使用RenderDocusaurusRawLoader渲染导入和代码块
+	r.RenderDocusaurusRawLoader(weekNum, filepath.Join("../diary", year, weekNum+".yml"))
 }
 
 // writeToFileIfNeeded 如果需要则写入文件
@@ -149,13 +146,13 @@ func (r *DiaryRenderer) writeToFileIfNeeded() error {
 		return nil
 	}
 
-	if err := os.MkdirAll(r.targetDir, 0755); err != nil {
+	if err := os.MkdirAll(r.targetDir, 0o755); err != nil {
 		return errcode.WithError(errcode.ErrCreateDir, err)
 	}
 
 	content := r.String()
 	outputPath := filepath.Join(r.targetDir, r.fileName)
-	if err := os.WriteFile(outputPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {
 		return errcode.WithError(errcode.ErrWriteFile, err)
 	}
 
