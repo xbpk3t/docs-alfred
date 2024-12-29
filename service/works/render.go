@@ -38,7 +38,8 @@ type WorkRenderer struct {
 // NewWorkRenderer 创建新的渲染器
 func NewWorkRenderer() *WorkRenderer {
 	return &WorkRenderer{
-		seenTags: make(map[string]bool),
+		seenTags:         make(map[string]bool),
+		MarkdownRenderer: render.NewMarkdownRenderer(),
 	}
 }
 
