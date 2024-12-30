@@ -25,8 +25,8 @@ func NewDiaryRenderer() *DiaryRenderer {
 
 type weekFile struct {
 	name     string
-	week     int
 	filename string
+	week     int
 }
 
 // Render 渲染内容
