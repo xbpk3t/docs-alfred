@@ -1,7 +1,6 @@
 package task
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -28,6 +27,9 @@ func (r *TaskRenderer) Render(data []byte) (string, error) {
 	dirPath := string(data)
 	dirPath = strings.TrimSpace(dirPath)
 
+	// 获取相对路径
+	parentDir := filepath.Base(filepath.Dir(dirPath)) // 获取父目录名
+
 	// 读取目录下的所有文件
 	files, err := os.ReadDir(dirPath)
 	if err != nil {
@@ -44,19 +46,23 @@ func (r *TaskRenderer) Render(data []byte) (string, error) {
 	}
 	sort.Strings(ymlFiles)
 
-	var content strings.Builder
 	// 添加头部内容
-	content.WriteString("---\nslug: /\n---\n\n")
+	r.RenderMetadata(map[string]string{
+		"slug": "/",
+	})
 
 	for _, file := range ymlFiles {
 		name := strings.TrimSuffix(file, ".yml")
 		// 移除 task- 前缀
 		name = strings.TrimPrefix(name, "task-")
 
-		fmt.Fprintf(&content, "## %s\n", name)
-		fmt.Fprintf(&content, "import %s from '!!raw-loader!../task/%s';\n\n", name, file)
-		fmt.Fprintf(&content, "<CodeBlock language=\"yaml\">{%s}</CodeBlock>\n\n", name)
+		// 渲染标题
+		r.RenderHeader(render.HeadingLevel2, name)
+
+		// 渲染导入语句和代码块
+		r.RenderImport(name, "../"+parentDir+"/"+file)
+		r.RenderContainer("{"+name+"}", "yaml")
 	}
 
-	return content.String(), nil
+	return r.String(), nil
 }
