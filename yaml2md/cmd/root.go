@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/service/diary"
+	"github.com/xbpk3t/docs-alfred/service/task"
+
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/service/ws"
 
@@ -16,12 +19,15 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "yaml2md",
-	Short: "A brief description of your application",
+	Use:       "yaml2md",
+	ValidArgs: []string{"gh", "works", "ws", "goods", "x"},
+	Args:      cobra.OnlyValidArgs,
+	Short:     "A brief description of your application",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -43,6 +49,8 @@ func init() {
 	rootCmd.AddCommand(wsCmd)
 	rootCmd.AddCommand(goodsCmd)
 	rootCmd.AddCommand(xCmd)
+	rootCmd.AddCommand(diaryCmd)
+	rootCmd.AddCommand(taskCmd)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "src/data/qs.yml", "config file (default is src/data/qs.yml)")
 }
@@ -110,6 +118,26 @@ var xCmd = &cobra.Command{
 	},
 }
 
+// diaryCmd represents the diary command
+var diaryCmd = &cobra.Command{
+	Use:   "diary",
+	Short: "A brief description of your command",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		renderer := diary.NewDiaryRenderer()
+		return ProcessFile(cfgFile, renderer)
+	},
+}
+
+// taskCmd represents the task command
+var taskCmd = &cobra.Command{
+	Use:   "task",
+	Short: "A brief description of your command",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		renderer := task.NewTaskRenderer()
+		return ProcessFile(cfgFile, renderer)
+	},
+}
+
 // ChangeFileExtFromYamlToMd 将yaml文件扩展名改为md
 func ChangeFileExtFromYamlToMd(filename string) string {
 	ext := filepath.Ext(filename)
@@ -126,18 +154,18 @@ func ProcessFile(inputFile string, renderer render.MarkdownRender) error {
 	// 读取文件
 	data, err := fp.ReadInput()
 	if err != nil {
-		return fmt.Errorf("读取文件失败: %w", err)
+		return errcode.WithError(errcode.ErrReadFile, err)
 	}
 
 	// 渲染内容
 	content, err := renderer.Render(data)
 	if err != nil {
-		return fmt.Errorf("渲染失败: %w", err)
+		return errcode.WithError(errcode.ErrRender, err)
 	}
 
 	// 写入文件
 	if err := fp.WriteOutput([]byte(content)); err != nil {
-		return fmt.Errorf("写入文件失败: %w", err)
+		return errcode.WithError(errcode.ErrWriteFile, err)
 	}
 
 	return nil

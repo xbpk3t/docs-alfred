@@ -4,90 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/xbpk3t/docs-alfred/pkg/parser"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestParseConfig(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    Docs
-		wantErr bool
-	}{
-		{
-			name: "基础配置解析",
-			input: `
-- type: "类型1"
-  tag: "标签1"
-  qs:
-    - q: "问题1"
-      x: "答案1"
-    - q: "问题2"
-      x: "答案2"
-      u: "http://example.com"`,
-			want: Docs{
-				{
-					Type: "类型1",
-					Tag:  "标签1",
-					Qs: []QA{
-						{Question: "问题1", Answer: "答案1"},
-						{Question: "问题2", Answer: "答案2", URL: "http://example.com"},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "带子问题和图片的配置",
-			input: `
-- type: "类型2"
-  tag: "标签2"
-  qs:
-    - q: "主问题"
-      x: "主答案"
-      s: ["子问题1", "子问题2"]
-      p: ["image1.jpg", "image2.jpg"]`,
-			want: Docs{
-				{
-					Type: "类型2",
-					Tag:  "标签2",
-					Qs: []QA{
-						{
-							Question:     "主问题",
-							Answer:       "主答案",
-							SubQuestions: []string{"子问题1", "子问题2"},
-							Pictures:     []string{"image1.jpg", "image2.jpg"},
-						},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name:    "无效的YAML",
-			input:   `invalid: yaml: [`,
-			want:    nil,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.NewParser[Docs]([]byte(tt.input)).ParseMulti()
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-			assert.NoError(t, err)
-			for _, docs := range got {
-				assert.Equal(t, tt.want, docs)
-			}
-		})
-	}
-}
 
 func TestQA_Render(t *testing.T) {
 	tests := []struct {

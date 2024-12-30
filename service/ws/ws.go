@@ -32,7 +32,9 @@ type WebStackRenderer struct {
 
 // NewWebStackRenderer 创建新的渲染器
 func NewWebStackRenderer() *WebStackRenderer {
-	return &WebStackRenderer{}
+	return &WebStackRenderer{
+		MarkdownRenderer: render.NewMarkdownRenderer(),
+	}
 }
 
 // ParseConfig 解析配置文件
@@ -48,7 +50,7 @@ func (r *WebStackRenderer) Render(data []byte) (string, error) {
 	}
 
 	for _, stack := range ws {
-		r.RenderHeader(2, stack.Type)
+		r.RenderHeader(render.HeadingLevel2, stack.Type)
 		r.renderURLs(stack.URLs)
 	}
 

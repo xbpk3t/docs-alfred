@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
@@ -52,18 +53,18 @@ func NewGoodsRenderer() *GoodsRenderer {
 func (r *GoodsRenderer) Render(data []byte) (string, error) {
 	goods, err := ParseConfig(data)
 	if err != nil {
-		return "", fmt.Errorf("解析配置失败: %w", err)
+		return "", errcode.WithError(errcode.ErrParseConfig, err)
 	}
 
 	for _, item := range goods {
 		// 渲染标签标题
 		if !r.seenTags[item.Tag] {
-			r.RenderHeader(2, item.Tag)
+			r.RenderHeader(render.HeadingLevel2, item.Tag)
 			r.seenTags[item.Tag] = true
 		}
 
 		// 渲染类型标题
-		r.RenderHeader(3, item.Type)
+		r.RenderHeader(render.HeadingLevel3, item.Type)
 
 		// 渲染商品内容
 		r.Write(item.RenderMarkdown())
