@@ -1,7 +1,11 @@
 package task
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
@@ -20,14 +24,39 @@ func NewTaskRenderer() *TaskRenderer {
 
 // Render 渲染文档
 func (r *TaskRenderer) Render(data []byte) (string, error) {
-	// 写入头部内容
-	r.RenderMetadata(map[string]string{
-		"slug": "/",
-	})
+	// 获取目录路径
+	dirPath := string(data)
+	dirPath = strings.TrimSpace(dirPath)
 
-	// 渲染任务内容
-	r.RenderHeader(render.HeadingLevel2, "Task")
-	r.RenderDocusaurusRawLoader("task", filepath.Join("..", "task.yml"))
+	// 读取目录下的所有文件
+	files, err := os.ReadDir(dirPath)
+	if err != nil {
+		return "", err
+	}
 
-	return r.String(), nil
+	// 收集所有 yml 文件
+	var ymlFiles []string
+	for _, file := range files {
+		if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
+			continue
+		}
+		ymlFiles = append(ymlFiles, file.Name())
+	}
+	sort.Strings(ymlFiles)
+
+	var content strings.Builder
+	// 添加头部内容
+	content.WriteString("---\nslug: /\n---\n\n")
+
+	for _, file := range ymlFiles {
+		name := strings.TrimSuffix(file, ".yml")
+		// 移除 task- 前缀
+		name = strings.TrimPrefix(name, "task-")
+
+		fmt.Fprintf(&content, "## %s\n", name)
+		fmt.Fprintf(&content, "import %s from '!!raw-loader!../task/%s';\n\n", name, file)
+		fmt.Fprintf(&content, "<CodeBlock language=\"yaml\">{%s}</CodeBlock>\n\n", name)
+	}
+
+	return content.String(), nil
 }
