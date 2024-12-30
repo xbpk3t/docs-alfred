@@ -21,13 +21,14 @@ var cfgFile string
 
 // TaskConfig 定义任务结构
 type TaskConfig struct {
-	SrcDir  string   `yaml:"srcDir"`  // 源目录
-	Cmd     string   `yaml:"cmd"`     // 命令类型
-	Fn      string   `yaml:"fn"`      // 输出文件名
-	MoveTo  string   `yaml:"moveTo"`  // 移动目标目录
-	Exclude []string `yaml:"exclude"` // 排除的目录
-	X       []string `yaml:"x"`       // 额外参数
-	IsMerge bool     `yaml:"isMerge"` // 是否合并
+	SrcDir    string   `yaml:"srcDir"`    // 源目录
+	Cmd       string   `yaml:"cmd"`       // 命令类型
+	Fn        string   `yaml:"fn"`        // 输出文件名
+	MoveTo    string   `yaml:"moveTo"`    // 移动目标目录
+	Exclude   []string `yaml:"exclude"`   // 排除的目录
+	X         []string `yaml:"x"`         // 额外参数
+	IsMerge   bool     `yaml:"isMerge"`   // 是否合并
+	IsRawLoad bool     `yaml:"isRawLoad"` // 是否直接加载
 }
 
 // Config 定义配置结构
