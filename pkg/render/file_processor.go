@@ -112,3 +112,34 @@ func (fp *FileProcessor) WriteOutput(content []byte) error {
 
 	return nil
 }
+
+// ProcessFile 处理单个文件
+func ProcessFile(fp *FileProcessor, renderer MarkdownRender) error {
+	// 读取文件
+	data, err := fp.ReadInput()
+	if err != nil {
+		return errcode.WithError(errcode.ErrReadFile, err)
+	}
+
+	// 渲染内容
+	content, err := renderer.Render(data)
+	if err != nil {
+		return errcode.WithError(errcode.ErrRender, err)
+	}
+
+	// 写入文件
+	if err := fp.WriteOutput([]byte(content)); err != nil {
+		return errcode.WithError(errcode.ErrWriteFile, err)
+	}
+
+	return nil
+}
+
+// ChangeFileExtFromYamlToMd 将文件扩展名从 .yml/.yaml 改为 .md
+func ChangeFileExtFromYamlToMd(filename string) string {
+	ext := filepath.Ext(filename)
+	if ext == ".yml" || ext == ".yaml" {
+		return strings.TrimSuffix(filename, ext) + ".md"
+	}
+	return filename + ".md"
+}

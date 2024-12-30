@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
@@ -39,6 +39,135 @@ type Config struct {
 	IsRawLoad  bool         `yaml:"isRawLoad"`  // 是否直接加载
 }
 
+// processRawLoad 处理 raw-loader 模式
+func processRawLoad(srcDir, targetDir string, config Config, task TaskConfig) error {
+	inputDir := filepath.Join(srcDir, task.SrcDir)
+	outputFile := task.TargetFile
+	if outputFile == "" {
+		outputFile = config.TargetFile
+	}
+
+	// 创建渲染器
+	renderer, err := createRenderer(task.Cmd)
+	if err != nil {
+		return err
+	}
+
+	// 渲染内容
+	content, err := renderer.Render([]byte(inputDir))
+	if err != nil {
+		return err
+	}
+
+	// 写入输出文件
+	outputPath := filepath.Join(targetDir, outputFile)
+	return os.WriteFile(outputPath, []byte(content), 0o644)
+}
+
+// processSingleFile 处理单个文件
+func processSingleFile(processor *render.FileProcessor, file os.DirEntry, cmd string) error {
+	if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
+		return nil
+	}
+
+	// 创建渲染器
+	renderer, err := createRenderer(cmd)
+	if err != nil {
+		return err
+	}
+
+	// 设置文件处理器
+	processor.InputFile = file.Name()
+	processor.OutputFile = render.ChangeFileExtFromYamlToMd(file.Name())
+
+	// 处理文件
+	return render.ProcessFile(processor, renderer)
+}
+
+// processNonMergeMode 处理非合并模式
+func processNonMergeMode(processor *render.FileProcessor, cmd string) error {
+	// 确保输入目录存在
+	if _, err := os.Stat(processor.InputDir); os.IsNotExist(err) {
+		return err
+	}
+
+	// 确保输出目录存在
+	if err := os.MkdirAll(processor.OutputDir, 0o755); err != nil {
+		return err
+	}
+
+	files, err := os.ReadDir(processor.InputDir)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if err := processSingleFile(processor, file, cmd); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// processMergeMode 处理合并模式
+func processMergeMode(processor *render.FileProcessor, cmd string) error {
+	renderer, err := createRenderer(cmd)
+	if err != nil {
+		return err
+	}
+
+	return render.ProcessFile(processor, renderer)
+}
+
+// processTask 处理单个任务
+func processTask(srcDir, targetDir string, config Config, task TaskConfig) error {
+	// 如果配置了 isRawLoad，直接处理整个目录
+	if config.IsRawLoad {
+		return processRawLoad(srcDir, targetDir, config, task)
+	}
+
+	// 创建文件处理器
+	processor := &render.FileProcessor{
+		InputDir:  filepath.Join(srcDir, task.SrcDir),
+		OutputDir: filepath.Join(targetDir, task.SrcDir),
+		IsMerge:   task.IsMerge,
+	}
+
+	// 根据合并模式选择处理方式
+	if task.IsMerge {
+		return processMergeMode(processor, task.Cmd)
+	}
+	return processNonMergeMode(processor, task.Cmd)
+}
+
+// processConfig 处理单个配置
+func processConfig(config Config) error {
+	// 获取绝对路径
+	srcDir, err := getAbsPath(config.SrcDir)
+	if err != nil {
+		return err
+	}
+	targetDir, err := getAbsPath(config.TargetDir)
+	if err != nil {
+		return err
+	}
+
+	// 确保目标目录存在
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return err
+	}
+
+	// 处理每个任务
+	for _, task := range config.Tasks {
+		if err := processTask(srcDir, targetDir, config, task); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "docs-alfred",
@@ -58,144 +187,13 @@ var rootCmd = &cobra.Command{
 
 		// 处理每个配置
 		for _, config := range configs {
-			// 获取绝对路径
-			srcDir, err := getAbsPath(config.SrcDir)
-			if err != nil {
+			if err := processConfig(config); err != nil {
 				return err
-			}
-			targetDir, err := getAbsPath(config.TargetDir)
-			if err != nil {
-				return err
-			}
-
-			// 确保目标目录存在
-			if err := os.MkdirAll(targetDir, 0o755); err != nil {
-				return err
-			}
-
-			for _, task := range config.Tasks {
-				// 如果配置了 isRawLoad，直接处理整个目录
-				if config.IsRawLoad {
-					inputDir := filepath.Join(srcDir, task.SrcDir)
-					outputFile := task.TargetFile
-					if outputFile == "" {
-						outputFile = config.TargetFile
-					}
-
-					// 创建渲染器
-					renderer, err := renderContent(task.Cmd, []byte(inputDir))
-					if err != nil {
-						return err
-					}
-
-					// 写入输出文件
-					outputPath := filepath.Join(targetDir, outputFile)
-					if err := os.WriteFile(outputPath, []byte(renderer), 0o644); err != nil {
-						return err
-					}
-					continue
-				}
-
-				// 创建文件处理器
-				processor := &render.FileProcessor{
-					InputDir:  filepath.Join(srcDir, task.SrcDir),
-					OutputDir: filepath.Join(targetDir, task.SrcDir),
-					IsMerge:   task.IsMerge,
-				}
-
-				// 如果不是合并模式，则需要先列出目录下的文件
-				if !task.IsMerge {
-					// 确保输入目录存在
-					if _, err := os.Stat(processor.InputDir); os.IsNotExist(err) {
-						return err
-					}
-
-					// 确保输出目录存在
-					if err := os.MkdirAll(processor.OutputDir, 0o755); err != nil {
-						return err
-					}
-
-					files, err := os.ReadDir(processor.InputDir)
-					if err != nil {
-						return err
-					}
-
-					for _, file := range files {
-						if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
-							continue
-						}
-
-						processor.InputFile = file.Name()
-						processor.OutputFile = strings.TrimSuffix(file.Name(), ".yml") + ".md"
-
-						// 读取输入文件
-						data, err := processor.ReadInput()
-						if err != nil {
-							return err
-						}
-
-						// 渲染内容
-						content, err := renderContent(task.Cmd, data)
-						if err != nil {
-							return err
-						}
-
-						// 写入输出
-						if err := processor.WriteOutput([]byte(content)); err != nil {
-							return err
-						}
-					}
-					continue
-				}
-
-				// 合并模式的处理
-				data, err := processor.ReadInput()
-				if err != nil {
-					return err
-				}
-
-				content, err := renderContent(task.Cmd, data)
-				if err != nil {
-					return err
-				}
-
-				if err := processor.WriteOutput([]byte(content)); err != nil {
-					return err
-				}
 			}
 		}
 
 		return nil
 	},
-}
-
-// renderContent 根据命令类型渲染内容
-func renderContent(cmd string, data []byte) (string, error) {
-	var content string
-	var err error
-
-	switch cmd {
-	case "works":
-		renderer := works.NewWorkRenderer()
-		content, err = renderer.Render(data)
-	case "gh":
-		renderer := gh.NewGhRenderer()
-		content, err = renderer.Render(data)
-	case "ws":
-		renderer := ws.NewWebStackRenderer()
-		content, err = renderer.Render(data)
-	case "diary":
-		renderer := diary.NewDiaryRenderer()
-		content, err = renderer.Render(data)
-	case "goods":
-		renderer := goods.NewGoodsRenderer()
-		content, err = renderer.Render(data)
-	case "task":
-		renderer := taskService.NewTaskRenderer()
-		content, err = renderer.Render(data)
-	}
-
-	return content, err
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -217,4 +215,24 @@ func getAbsPath(path string) (string, error) {
 		return path, nil
 	}
 	return filepath.Abs(path)
+}
+
+// createRenderer 根据命令类型创建渲染器
+func createRenderer(cmd string) (render.MarkdownRender, error) {
+	switch cmd {
+	case "works":
+		return works.NewWorkRenderer(), nil
+	case "gh":
+		return gh.NewGhRenderer(), nil
+	case "ws":
+		return ws.NewWebStackRenderer(), nil
+	case "diary":
+		return diary.NewDiaryRenderer(), nil
+	case "goods":
+		return goods.NewGoodsRenderer(), nil
+	case "task":
+		return taskService.NewTaskRenderer(), nil
+	default:
+		return nil, fmt.Errorf("unknown command: %s", cmd)
+	}
 }
