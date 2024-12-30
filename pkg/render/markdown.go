@@ -91,12 +91,12 @@ func (m *MarkdownRenderer) RenderListItem(text string) {
 
 // RenderFold 渲染折叠块
 func (m *MarkdownRenderer) RenderFold(summary, details string) {
-	m.Write(fmt.Sprintf("<details><summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details))
+	m.Write(fmt.Sprintf("<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n", summary, details))
 }
 
 // RenderAdmonition 渲染提示块
 func (m *MarkdownRenderer) RenderAdmonition(admonitionType AdmonitionType, title, content string) {
-	m.Write(fmt.Sprintf(":::%s %s\n\n%s\n\n:::\n\n", admonitionType, title, content))
+	m.Write(fmt.Sprintf(":::%s[%s]\n\n%s\n\n:::\n\n", admonitionType, title, content))
 }
 
 // RenderMarkdownTable 渲染Markdown表格
