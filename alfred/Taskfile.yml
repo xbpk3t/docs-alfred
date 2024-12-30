@@ -19,6 +19,25 @@ tasks:
     cmds:
       - GOOS=darwin GOARCH={{.ARCH}} CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/xbpk3t/docs-alfred/cmd.EnabledAutoUpdate={{.ENABLED_AUTO_UPDATE}}" -o exe_{{.ARCH}}
 
+  build-and-pack:
+    cmds:
+      - task: release
+        vars:
+          ARCH: amd64
+      - task: release
+        vars:
+          ARCH: arm64
+      - lipo -create -output .workflow/exe exe_amd64 exe_arm64
+      - rm  exe_amd64
+      - rm  exe_arm64
+
+      # pack
+      - cd .workflow
+      - plutil -replace version -string "${{ env.tag }}" info.plist
+      - zip -r ../"docs-alfred_auto_update-${{ env.tag }}.alfredworkflow" .
+      - cd ..
+      - echo "artifact=$(echo "docs-alfred_auto_update-${{ env.tag }}.alfredworkflow")" >> $GITHUB_ENV
+
 
   test:
     desc: "run tests"
@@ -55,3 +74,10 @@ tasks:
     cmds:
       - |
         awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_0-9-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
+
+  tag:
+    cmd: echo "tag=$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)" >> $GITHUB_ENV
+
+
+
+
