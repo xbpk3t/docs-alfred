@@ -28,7 +28,7 @@ func (r *TaskRenderer) Render(data []byte) (string, error) {
 	dirPath = strings.TrimSpace(dirPath)
 
 	// 获取相对路径
-	parentDir := filepath.Base(filepath.Dir(dirPath)) // 获取父目录名
+	parentDir := filepath.Base(dirPath) // 获取父目录名
 
 	// 读取目录下的所有文件
 	files, err := os.ReadDir(dirPath)
@@ -39,7 +39,7 @@ func (r *TaskRenderer) Render(data []byte) (string, error) {
 	// 收集所有 yml 文件
 	var ymlFiles []string
 	for _, file := range files {
-		if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
+		if file.IsDir() || filepath.Ext(file.Name()) != ".yml" || !strings.HasPrefix(file.Name(), "task") {
 			continue
 		}
 		ymlFiles = append(ymlFiles, file.Name())

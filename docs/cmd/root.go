@@ -157,7 +157,7 @@ func renderContent(cmd string, data []byte) (string, error) {
 	case "goods":
 		renderer := goods.NewGoodsRenderer()
 		content, err = renderer.Render(data)
-	case "cmd":
+	case "task":
 		renderer := taskService.NewTaskRenderer()
 		content, err = renderer.Render(data)
 	}

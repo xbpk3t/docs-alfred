@@ -82,7 +82,7 @@ func (m *ConfigMerger) readFile(fileName string) ([]byte, error) {
 	filePath := filepath.Join(m.options.FolderPath, fileName)
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("读取文件失败: %w", err)
+		return nil, errcode.WithError(errcode.ErrReadFile, err)
 	}
 	return content, nil
 }

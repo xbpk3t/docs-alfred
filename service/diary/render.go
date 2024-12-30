@@ -35,8 +35,9 @@ func (r *DiaryRenderer) Render(data []byte) (string, error) {
 	dirPath := string(data)
 	dirPath = strings.TrimSpace(dirPath)
 
-	x := strings.Split(dirPath, "/")
-	fp, year := x[len(x)-2], x[len(x)-1]
+	// x := strings.Split(dirPath, "/")
+	// fp, year := x[len(x)-2], x[len(x)-1]
+	fp, year := filepath.Base(dirPath), filepath.Base(filepath.Dir(dirPath))
 
 	// 读取目录下的所有文件
 	files, err := os.ReadDir(dirPath)
