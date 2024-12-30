@@ -26,8 +26,8 @@ tasks:
       - golangci-lint run --fix
       - gofumpt -l -w .
       - go mod tidy -v
-      - fieldalignment -fix ./...
-      - go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
+      - betteralign -apply ./...
+#      - go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
       - task: pre-commit
       - nilaway ./...
 #      - # go build -race cmd

@@ -1,13 +1,10 @@
 package gh
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/pkg/render"
-
-	"github.com/samber/lo"
+	"github.com/xbpk3t/docs-alfred/pkg/repo"
 )
 
 const GhURL = "https://github.com/"
@@ -21,6 +18,7 @@ type Repository struct {
 	URL            string    `yaml:"url"`
 	Tag            string    `yaml:"tag,omitempty"`
 	Type           string    `yaml:"type"`
+	MainRepo       string    // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
 	Qs             Questions `yaml:"qs,omitempty"`
 	SubRepos       Repos     `yaml:"sub,omitempty"`
 	ReplacedRepos  Repos     `yaml:"rep,omitempty"`
@@ -30,7 +28,6 @@ type Repository struct {
 	IsSubRepo      bool
 	IsReplacedRepo bool
 	IsRelatedRepo  bool
-	MainRepo       string // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
 }
 
 type Repos []Repository
@@ -73,6 +70,35 @@ func (r *Repository) FullName() string {
 		return sx
 	}
 	return ""
+}
+
+// GetName 获取仓库名称
+func (r *Repository) GetName() string {
+	return r.Name
+}
+
+// GetDes 获取仓库描述
+func (r *Repository) GetDes() string {
+	return r.Des
+}
+
+// GetURL 获取仓库URL
+func (r *Repository) GetURL() string {
+	return r.URL
+}
+
+// AsRepoInfo 将Repository转换为RepoInfo接口
+func (r *Repository) AsRepoInfo() repo.RepoInfo {
+	return r
+}
+
+// AsRepoInfoList 将Repos转换为RepoInfo列表
+func (r Repos) AsRepoInfoList() []repo.RepoInfo {
+	result := make([]repo.RepoInfo, len(r))
+	for i, repo := range r {
+		result[i] = repo.AsRepoInfo()
+	}
+	return result
 }
 
 func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
@@ -201,67 +227,6 @@ func isValidGithubURL(url string) bool {
 	return strings.Contains(url, GhURL)
 }
 
-func formatQuestionSummary(q Question) string {
-	if q.U != "" {
-		return fmt.Sprintf("[%s](%s)", q.Q, q.U)
-	}
-	return q.Q
-}
-
-func formatQuestionDetails(q Question) string {
-	var parts []string
-	renderer := render.NewMarkdownRenderer()
-
-	// 处理图片
-	if len(q.P) > 0 {
-		var images strings.Builder
-		for _, img := range q.P {
-			renderer.RenderImageWithFigcaption(img)
-			images.WriteString(renderer.String())
-		}
-		parts = append(parts, images.String())
-	}
-
-	// 处理子问题
-	if len(q.S) > 0 {
-		var subQuestions strings.Builder
-		for _, sq := range q.S {
-			subQuestions.WriteString(fmt.Sprintf("- %s\n", sq))
-		}
-		parts = append(parts, subQuestions.String())
-	}
-
-	// 处理答案
-	if q.X != "" {
-		if len(parts) > 0 {
-			parts = append(parts, "---")
-		}
-		parts = append(parts, q.X)
-	}
-
-	return strings.Join(parts, "\n\n")
-}
-
-// RenderRepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
-func (g *GhRenderer) RenderRepositoriesAsMarkdownTable(repos Repos) {
-	g.Write(g.RepositoriesAsMarkdownTable(repos))
-}
-
-// RepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
-func (g *GhRenderer) RepositoriesAsMarkdownTable(repos Repos) string {
-	if len(repos) == 0 {
-		return ""
-	}
-	var res strings.Builder
-	data := lo.Map(repos, func(item Repository, _ int) []string {
-		repoName := item.FullName()
-		return []string{fmt.Sprintf("[%s](%s)", repoName, item.URL), item.Des}
-	})
-
-	g.RenderMarkdownTable([]string{"Repo", "Des"}, &res, data)
-	return res.String()
-}
-
 // MergeOptions 相关结构和方法
 type MergeOptions struct {
 	FolderPath string
@@ -275,7 +240,7 @@ func (r *Repository) IsSubOrDepOrRelRepo() bool {
 }
 
 func (r *Repository) HasQs() bool {
-	return r.Qs != nil && len(r.Qs) > 0
+	return len(r.Qs) > 0
 }
 
 func (r *Repository) HasSubRepos() bool {

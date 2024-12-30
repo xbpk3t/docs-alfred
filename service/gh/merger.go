@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"gopkg.in/yaml.v3"
 )
 
@@ -70,10 +71,9 @@ func (m *ConfigMerger) processFile(fileName string) (ConfigRepos, error) {
 
 	tag := strings.TrimSuffix(fileName, ".yml")
 	rc := NewConfigRepos(content)
-	// rc, err := parser.NewParser[ConfigRepos](content).ParseFlatten()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("解析YAML失败: %w", err)
-	// }
+	if rc == nil {
+		return nil, errcode.ErrParseConfig
+	}
 
 	return rc.WithTag(tag), nil
 }
@@ -82,7 +82,7 @@ func (m *ConfigMerger) readFile(fileName string) ([]byte, error) {
 	filePath := filepath.Join(m.options.FolderPath, fileName)
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("读取文件失败: %w", err)
+		return nil, errcode.WithError(errcode.ErrReadFile, err)
 	}
 	return content, nil
 }
@@ -109,18 +109,21 @@ func NewConfigRepos(f []byte) ConfigRepos {
 
 	d := yaml.NewDecoder(bytes.NewReader(f))
 	for {
-		// create new spec here
 		spec := new(ConfigRepos)
-		// pass a reference to spec reference
 		if err := d.Decode(&spec); err != nil {
-			// break the loop in case of EOF
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			panic(err)
+			return nil
 		}
-
+		if spec == nil {
+			continue
+		}
 		ghs = append(ghs, *spec...)
+	}
+
+	if len(ghs) == 0 {
+		return nil
 	}
 	return ghs
 }

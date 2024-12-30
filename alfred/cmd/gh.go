@@ -27,8 +27,29 @@ var ghCmd = &cobra.Command{
 // 主命令处理函数
 func handleGhCommand(cmd *cobra.Command, args []string) {
 	builder := alfred.NewItemBuilder(wf)
-	r, _ := parser.NewParser[gh2.ConfigRepos](data).ParseSingle()
+	r, err := parser.NewParser[gh2.ConfigRepos](data).ParseSingle()
+	if err != nil {
+		builder.BuildBasicItem(
+			"Error parsing config",
+			err.Error(),
+			"",
+			cons.IconError,
+		)
+		wf.SendFeedback()
+		return
+	}
+
 	repos := r.WithType().ToRepos()
+	if repos == nil {
+		builder.BuildBasicItem(
+			"Invalid configuration",
+			"No repositories found in config",
+			"",
+			cons.IconWarning,
+		)
+		wf.SendFeedback()
+		return
+	}
 
 	if len(args) > 0 && strings.HasPrefix(args[0], "#") {
 		handleTagSearch(repos, args, builder)
@@ -43,15 +64,47 @@ func handleGhCommand(cmd *cobra.Command, args []string) {
 
 // 处理标签搜索
 func handleTagSearch(repos gh2.Repos, args []string, builder *alfred.ItemBuilder) {
+	if repos == nil {
+		builder.BuildBasicItem(
+			"Invalid configuration",
+			"No repositories found",
+			"",
+			cons.IconWarning,
+		)
+		wf.SendFeedback()
+		return
+	}
+
 	// 参数验证
 	if len(args) == 0 || !strings.HasPrefix(args[0], "#") {
-		renderTagItems(repos.ExtractTags())
+		tags := repos.ExtractTags()
+		if len(tags) == 0 {
+			builder.BuildBasicItem(
+				"No tags found",
+				"No tags available in repositories",
+				"",
+				cons.IconWarning,
+			)
+		} else {
+			renderTagItems(tags)
+		}
 		wf.SendFeedback()
 		return
 	}
 
 	// 提取标签
 	tags := repos.ExtractTags()
+	if len(tags) == 0 {
+		builder.BuildBasicItem(
+			"No tags found",
+			"No tags available in repositories",
+			"",
+			cons.IconWarning,
+		)
+		wf.SendFeedback()
+		return
+	}
+
 	ptag := strings.TrimPrefix(args[0], "#")
 
 	// 如果输入的标签存在
@@ -60,10 +113,12 @@ func handleTagSearch(repos gh2.Repos, args []string, builder *alfred.ItemBuilder
 		if len(filteredRepos) > 0 {
 			renderRepos(filteredRepos, builder)
 		} else {
-			// 没有找到相关仓库时显示提示
-			wf.NewItem("No repositories found").
-				Subtitle(fmt.Sprintf("No repositories found with tag: %s", ptag)).
-				Icon(aw.IconWarning)
+			builder.BuildBasicItem(
+				"No repositories found",
+				fmt.Sprintf("No repositories found with tag: %s", ptag),
+				"",
+				cons.IconWarning,
+			)
 		}
 	} else {
 		// 显示所有标签并根据输入进行过滤
