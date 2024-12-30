@@ -8,6 +8,10 @@ on:
 #      - 'v*'
 #  workflow_dispatch:
 
+
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -52,3 +56,29 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: "${{ env.artifact }}"
+
+
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+        with:
+          fetch-depth: 0 # note the fetch-depth: 0 input in Checkout step. It is required for the changelog to work correctly.
+      - uses: actions/setup-go@main
+
+      - name: Install Task
+        uses: arduino/setup-task@main
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: goreleaser/goreleaser-action@v6
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
+          # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}

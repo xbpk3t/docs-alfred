@@ -1,0 +1,43 @@
+version: 2
+
+project_name: docs-alfred
+
+#before:
+#  hooks:
+#    - yarn install
+#    - task y2m
+#    - yarn build
+
+builds:
+  - skip: true
+
+#release:
+#  github:
+#    owner: xbpk3t
+#    name: docs
+##    release_name_template: "{{ .Tag }}"
+##    draft: false
+##    prerelease: false
+
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: Bug fixes
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: Documentation updates
+      regexp: "^.*docs[(\\w)]*:+.*$"
+      order: 2
+    - title: Refactoring
+      regexp: "^.*refactor[(\\w)]*:+.*$"
+      order: 3
+    - title: CI
+      regexp: "^.*ci[(\\w)]*:+.*$"
+      order: 4
+    - title: Others
+      order: 5
