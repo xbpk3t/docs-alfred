@@ -33,10 +33,14 @@ tasks:
 
       # pack
       - cd .workflow
-      - plutil -replace version -string "${{ env.tag }}" info.plist
-      - zip -r ../"docs-alfred_auto_update-${{ env.tag }}.alfredworkflow" .
+      #      - plutil -replace version -string "${{ env.tag }}" info.plist
+      #      - zip -r ../"docs-alfred_auto_update-${{ env.tag }}.alfredworkflow" .
+      #      - cd ..
+      #      - echo "artifact=$(echo "docs-alfred_auto_update-${{ env.tag }}.alfredworkflow")" >> $GITHUB_ENV
+      #      - plutil -replace version -string 111 info.plist
+      - zip -r ../"docs-alfred.alfredworkflow" .
       - cd ..
-      - echo "artifact=$(echo "docs-alfred_auto_update-${{ env.tag }}.alfredworkflow")" >> $GITHUB_ENV
+      - echo "artifact=$(echo "docs-alfred.alfredworkflow")" >> $GITHUB_ENV
 
 
   test:
