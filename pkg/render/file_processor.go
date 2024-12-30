@@ -1,8 +1,10 @@
 package render
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 )
@@ -26,6 +28,28 @@ func (fp *FileProcessor) ReadInput() ([]byte, error) {
 
 // readSingleFile 读取单个文件
 func (fp *FileProcessor) readSingleFile() ([]byte, error) {
+	if fp.InputFile == "" {
+		// 如果没有指定输入文件，但指定了输入目录，读取目录下的第一个 yml 文件
+		if fp.InputDir != "" {
+			files, err := os.ReadDir(fp.InputDir)
+			if err != nil {
+				return nil, errcode.WithError(errcode.ErrListDir, err)
+			}
+
+			for _, file := range files {
+				if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
+					continue
+				}
+				fp.InputFile = file.Name()
+				break
+			}
+		}
+
+		if fp.InputFile == "" {
+			return nil, errcode.WithError(errcode.ErrReadFile, fmt.Errorf("no input file specified"))
+		}
+	}
+
 	inputPath := fp.InputFile
 	if fp.InputDir != "" {
 		inputPath = filepath.Join(fp.InputDir, fp.InputFile)
@@ -64,42 +88,26 @@ func (fp *FileProcessor) readAndMergeFiles() ([]byte, error) {
 // WriteOutput 写入输出
 func (fp *FileProcessor) WriteOutput(content []byte) error {
 	// 确保输出目录存在
-	if fp.OutputDir != "" {
-		if err := os.MkdirAll(fp.OutputDir, 0o755); err != nil {
-			return errcode.WithError(errcode.ErrCreateDir, err)
-		}
+	if err := os.MkdirAll(fp.OutputDir, 0o755); err != nil {
+		return errcode.WithError(errcode.ErrCreateDir, err)
 	}
 
 	// 确定输出文件路径
 	outputPath := fp.OutputFile
-	if fp.OutputDir != "" {
-		if outputPath == "" {
-			// 如果没有指定输出文件名，使用输入目录名
+	if outputPath == "" {
+		// 如果没有指定输出文件名，使用输入文件名
+		if fp.InputFile != "" {
+			outputPath = strings.TrimSuffix(fp.InputFile, ".yml") + ".md"
+		} else {
+			// 如果没有输入文件名，使用目录名
 			outputPath = filepath.Base(fp.InputDir) + ".md"
 		}
-		outputPath = filepath.Join(fp.OutputDir, outputPath)
 	}
+	outputPath = filepath.Join(fp.OutputDir, outputPath)
 
-	// 创建临时目录
-	tmpDir := filepath.Join(fp.OutputDir, filepath.Base(fp.InputDir))
-	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
-		return errcode.WithError(errcode.ErrCreateDir, err)
-	}
-
-	// 写入临时文件
-	tmpFile := filepath.Join(tmpDir, filepath.Base(outputPath))
-	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
+	// 直接写入文件
+	if err := os.WriteFile(outputPath, content, 0o644); err != nil {
 		return errcode.WithError(errcode.ErrWriteFile, err)
-	}
-
-	// 移动到最终位置
-	if err := os.Rename(tmpFile, outputPath); err != nil {
-		return errcode.WithError(errcode.ErrFileProcess, err)
-	}
-
-	// 清理临时目录
-	if err := os.RemoveAll(tmpDir); err != nil {
-		return errcode.WithError(errcode.ErrFileProcess, err)
 	}
 
 	return nil
