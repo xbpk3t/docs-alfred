@@ -11,11 +11,12 @@ import (
 
 // FileProcessor 文件处理器
 type FileProcessor struct {
-	InputDir   string // 输入目录
-	OutputDir  string // 输出目录
-	InputFile  string // 输入文件（单文件模式）
-	OutputFile string // 输出文件（单文件模式）
-	IsMerge    bool   // 是否合并模式
+	InputDir   string   // 输入目录
+	OutputDir  string   // 输出目录
+	InputFile  string   // 输入文件（单文件模式）
+	OutputFile string   // 输出文件（单文件模式）
+	Exclude    []string // 输入目录下排除掉的文件
+	IsMerge    bool     // 是否合并模式
 }
 
 // ReadInput 读取输入
