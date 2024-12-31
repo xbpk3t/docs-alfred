@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
@@ -25,7 +26,7 @@ type TaskConfig struct {
 	Cmd        string   `yaml:"cmd"`        // 命令类型
 	TargetFile string   `yaml:"targetFile"` // 输出文件名
 	MoveTo     string   `yaml:"moveTo"`     // 移动目标目录
-	Exclude    []string `yaml:"exclude"`    // 排除的目录
+	Exclude    []string `yaml:"exclude"`    // 排除的文件
 	X          []string `yaml:"x"`          // 额外参数
 	IsMerge    bool     `yaml:"isMerge"`    // 是否合并
 }
@@ -102,8 +103,10 @@ func processNonMergeMode(processor *render.FileProcessor, cmd string) error {
 	}
 
 	for _, file := range files {
-		if err := processSingleFile(processor, file, cmd); err != nil {
-			return err
+		if !slices.Contains(processor.Exclude, file.Name()) {
+			if err := processSingleFile(processor, file, cmd); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -132,6 +135,7 @@ func processTask(srcDir, targetDir string, config Config, task TaskConfig) error
 		InputDir:  filepath.Join(srcDir, task.SrcDir),
 		OutputDir: filepath.Join(targetDir, task.SrcDir),
 		IsMerge:   task.IsMerge,
+		Exclude:   task.Exclude,
 	}
 
 	// 根据合并模式选择处理方式
