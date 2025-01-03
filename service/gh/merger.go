@@ -1,13 +1,12 @@
 package gh
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
 
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"gopkg.in/yaml.v3"
@@ -70,8 +69,8 @@ func (m *ConfigMerger) processFile(fileName string) (ConfigRepos, error) {
 	}
 
 	tag := strings.TrimSuffix(fileName, ".yml")
-	rc := NewConfigRepos(content)
-	if rc == nil {
+	rc, err := parser.NewParser[ConfigRepos](content).ParseSingle()
+	if err != nil {
 		return nil, errcode.ErrParseConfig
 	}
 
@@ -102,28 +101,4 @@ func (m *ConfigMerger) writeResult(config ConfigRepos) error {
 	}
 
 	return nil
-}
-
-func NewConfigRepos(f []byte) ConfigRepos {
-	var ghs ConfigRepos
-
-	d := yaml.NewDecoder(bytes.NewReader(f))
-	for {
-		spec := new(ConfigRepos)
-		if err := d.Decode(&spec); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil
-		}
-		if spec == nil {
-			continue
-		}
-		ghs = append(ghs, *spec...)
-	}
-
-	if len(ghs) == 0 {
-		return nil
-	}
-	return ghs
 }
