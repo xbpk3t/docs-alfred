@@ -122,6 +122,11 @@ func (m *MarkdownRenderer) RenderImageWithFigcaption(url string) {
 	m.Write(fmt.Sprintf("![image](%s)\n<center>*%s*</center>\n\n", url, title))
 }
 
+// RenderImageWithLink GFM支持的通过点击图片跳转第三方URL方法
+func (m *MarkdownRenderer) RenderImageWithLink(image, link string) {
+	m.Write(fmt.Sprintf("[![image](%s)](%s)\n\n", image, link))
+}
+
 // extractTitleFromURL 从 URL 中提取标题 (私有方法)
 func extractTitleFromURL(url string) string {
 	parts := strings.Split(url, "/")

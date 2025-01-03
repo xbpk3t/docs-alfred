@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
+
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 
 	"gopkg.in/yaml.v3"
@@ -69,14 +71,14 @@ func runMerge(cmd *cobra.Command, args []string) error {
 			}
 
 			// 解析并处理仓库
-			rc := gh.NewConfigRepos(fx)
-			if rc == nil {
-				return errcode.ErrParseConfig
+			rc, err := parser.NewParser[gh.ConfigRepos](fx).ParseSingle()
+			if err != nil {
+				return errcode.WithError(errcode.ErrParseConfig, err)
 			}
 
 			repos := rc.WithType().WithTag(strings.TrimSuffix(file.Name(), ".yml")).ToRepos()
 			if repos == nil {
-				return errcode.ErrInvalidConfig
+				return errcode.WithError(errcode.ErrInvalidConfig, err)
 			}
 
 			// 过滤掉作为子仓库的仓库
