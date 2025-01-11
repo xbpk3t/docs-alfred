@@ -81,6 +81,11 @@ func processSingleFile(processor *render.FileProcessor, file os.DirEntry, cmd st
 	processor.InputFile = file.Name()
 	processor.OutputFile = render.ChangeFileExtFromYamlToMd(file.Name())
 
+	// 如果是 GhRenderer，设置处理器
+	if gh, ok := renderer.(*gh.GhRenderer); ok {
+		gh.SetProcessor(processor)
+	}
+
 	// 处理文件
 	return render.ProcessFile(processor, renderer)
 }
@@ -88,16 +93,16 @@ func processSingleFile(processor *render.FileProcessor, file os.DirEntry, cmd st
 // processNonMergeMode 处理非合并模式
 func processNonMergeMode(processor *render.FileProcessor, cmd string) error {
 	// 确保输入目录存在
-	if _, err := os.Stat(processor.InputDir); os.IsNotExist(err) {
+	if _, err := os.Stat(processor.SrcDir); os.IsNotExist(err) {
 		return err
 	}
 
 	// 确保输出目录存在
-	if err := os.MkdirAll(processor.OutputDir, 0o755); err != nil {
+	if err := os.MkdirAll(processor.TargetDir, 0o755); err != nil {
 		return err
 	}
 
-	files, err := os.ReadDir(processor.InputDir)
+	files, err := os.ReadDir(processor.SrcDir)
 	if err != nil {
 		return err
 	}
@@ -120,6 +125,11 @@ func processMergeMode(processor *render.FileProcessor, cmd string) error {
 		return err
 	}
 
+	// 如果是 GhRenderer，设置处理器
+	if gh, ok := renderer.(*gh.GhRenderer); ok {
+		gh.SetProcessor(processor)
+	}
+
 	return render.ProcessFile(processor, renderer)
 }
 
@@ -132,8 +142,8 @@ func processTask(srcDir, targetDir string, config Config, task TaskConfig) error
 
 	// 创建文件处理器
 	processor := &render.FileProcessor{
-		InputDir:  filepath.Join(srcDir, task.SrcDir),
-		OutputDir: filepath.Join(targetDir, task.SrcDir),
+		SrcDir:    filepath.Join(srcDir, task.SrcDir),
+		TargetDir: filepath.Join(targetDir, task.SrcDir),
 		IsMerge:   task.IsMerge,
 		Exclude:   task.Exclude,
 	}

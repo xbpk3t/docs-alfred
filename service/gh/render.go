@@ -15,13 +15,10 @@ import (
 
 // GhRenderer Markdown渲染器
 type GhRenderer struct {
-	srcDir     string
-	targetDir  string
-	targetFile string
+	processor *render.FileProcessor
 	render.MarkdownRenderer
 	Config      ConfigRepos
 	repoConfigs []repoRenderConfig
-	isMerge     bool
 }
 
 // 定义仓库类型和对应的渲染配置
@@ -31,9 +28,15 @@ type repoRenderConfig struct {
 	repos          Repos
 }
 
+// SetProcessor 设置文件处理器
+func (g *GhRenderer) SetProcessor(processor *render.FileProcessor) {
+	g.processor = processor
+}
+
 // NewGhRenderer 创建新的渲染器
 func NewGhRenderer() *GhRenderer {
 	return &GhRenderer{
+		processor: &render.FileProcessor{},
 		repoConfigs: []repoRenderConfig{
 			{admonitionType: render.AdmonitionTip, title: "Sub Repos"},
 			{admonitionType: render.AdmonitionWarning, title: "Replaced Repos"},
@@ -44,7 +47,7 @@ func NewGhRenderer() *GhRenderer {
 
 // RenderToFile 渲染并写入文件
 func (g *GhRenderer) RenderToFile() error {
-	if g.isMerge {
+	if g.processor.IsMerge {
 		return g.renderMerged()
 	}
 	return g.renderSeparate()
@@ -64,7 +67,7 @@ func (g *GhRenderer) RenderMarkdownTable(header []string, res *strings.Builder, 
 // renderMerged 合并渲染
 func (g *GhRenderer) renderMerged() error {
 	// 读取并合并所有YAML文件
-	files, err := os.ReadDir(g.srcDir)
+	files, err := os.ReadDir(g.processor.SrcDir)
 	if err != nil {
 		return errcode.WithError(errcode.ErrListDir, err)
 	}
@@ -75,7 +78,7 @@ func (g *GhRenderer) renderMerged() error {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(g.srcDir, file.Name()))
+		data, err := os.ReadFile(filepath.Join(g.processor.SrcDir, file.Name()))
 		if err != nil {
 			return errcode.WithError(errcode.ErrReadFile, err)
 		}
@@ -89,9 +92,9 @@ func (g *GhRenderer) renderMerged() error {
 	}
 
 	// 确定输出文件名
-	outputFn := g.targetFile
+	outputFn := g.processor.TargetFile
 	if outputFn == "" {
-		outputFn = fmt.Sprintf("%s.md", filepath.Base(g.srcDir))
+		outputFn = fmt.Sprintf("%s.md", filepath.Base(g.processor.SrcDir))
 	}
 
 	// 写入文件
@@ -100,7 +103,7 @@ func (g *GhRenderer) renderMerged() error {
 
 // renderSeparate 分别渲染
 func (g *GhRenderer) renderSeparate() error {
-	files, err := os.ReadDir(g.srcDir)
+	files, err := os.ReadDir(g.processor.SrcDir)
 	if err != nil {
 		return errcode.WithError(errcode.ErrListDir, err)
 	}
@@ -111,7 +114,7 @@ func (g *GhRenderer) renderSeparate() error {
 		}
 
 		// 读取YAML文件
-		data, err := os.ReadFile(filepath.Join(g.srcDir, file.Name()))
+		data, err := os.ReadFile(filepath.Join(g.processor.SrcDir, file.Name()))
 		if err != nil {
 			return errcode.WithError(errcode.ErrReadFile, err)
 		}
@@ -137,7 +140,7 @@ func (g *GhRenderer) renderSeparate() error {
 // writeFile 写入文件
 func (g *GhRenderer) writeFile(filename, content string) error {
 	// 创建以srcDir命名的中间目录
-	tmpDir := filepath.Join(g.targetDir, filepath.Base(g.srcDir))
+	tmpDir := filepath.Join(g.processor.TargetDir, filepath.Base(g.processor.SrcDir))
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return errcode.WithError(errcode.ErrCreateDir, err)
 	}
@@ -149,7 +152,7 @@ func (g *GhRenderer) writeFile(filename, content string) error {
 	}
 
 	// 移动文件到最终目标目录
-	finalFile := filepath.Join(g.targetDir, filename)
+	finalFile := filepath.Join(g.processor.TargetDir, filename)
 	if err := os.Rename(tmpFile, finalFile); err != nil {
 		return errcode.WithError(errcode.ErrFileProcess, err)
 	}
@@ -163,7 +166,7 @@ func (g *GhRenderer) writeFile(filename, content string) error {
 }
 
 func (g *GhRenderer) Render(data []byte) (string, error) {
-	config, err := parser.NewParser[ConfigRepos](data).ParseSingle()
+	config, err := parser.NewParser[ConfigRepos](data).WithFileName(g.processor.GetCurrentFileName()).ParseSingle()
 	if err != nil {
 		return "", err
 	}
