@@ -11,7 +11,8 @@ import (
 
 // Parser YAML配置解析器
 type Parser[T any] struct {
-	data []byte
+	fileName string
+	data     []byte
 }
 
 // NewParser 创建解析器
@@ -21,11 +22,20 @@ func NewParser[T any](data []byte) *Parser[T] {
 	}
 }
 
+// WithFileName 设置文件名
+func (p *Parser[T]) WithFileName(fileName string) *Parser[T] {
+	p.fileName = fileName
+	return p
+}
+
 // ParseSingle 解析单个YAML文档
 func (p *Parser[T]) ParseSingle() (T, error) {
 	var result T
 	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
 	if err := decoder.Decode(&result); err != nil {
+		if p.fileName != "" {
+			return result, fmt.Errorf("%s 解析配置失败: %w", p.fileName, err)
+		}
 		return result, fmt.Errorf("解析配置失败: %w", err)
 	}
 	return result, nil

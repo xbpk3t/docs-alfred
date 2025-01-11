@@ -11,12 +11,34 @@ import (
 
 // FileProcessor 文件处理器
 type FileProcessor struct {
-	InputDir   string   // 输入目录
-	OutputDir  string   // 输出目录
-	InputFile  string   // 输入文件（单文件模式）
-	OutputFile string   // 输出文件（单文件模式）
-	Exclude    []string // 输入目录下排除掉的文件
+	SrcDir     string   // 输入目录
+	TargetDir  string   // 输出目录
+	InputFile  string   // 输入文件名
+	OutputFile string   // 输出文件名
+	TargetFile string   // 目标文件名（用于合并模式）
+	Exclude    []string // 排除的文件
 	IsMerge    bool     // 是否合并模式
+}
+
+// GetInputFilePath 获取输入文件完整路径
+func (p *FileProcessor) GetInputFilePath() string {
+	return filepath.Join(p.SrcDir, p.InputFile)
+}
+
+// GetOutputFilePath 获取输出文件完整路径
+func (p *FileProcessor) GetOutputFilePath() string {
+	if p.TargetFile != "" {
+		return filepath.Join(p.TargetDir, p.TargetFile)
+	}
+	return filepath.Join(p.TargetDir, p.OutputFile)
+}
+
+// GetCurrentFileName 获取当前处理的文件名
+func (p *FileProcessor) GetCurrentFileName() string {
+	if p.InputFile != "" {
+		return p.InputFile
+	}
+	return p.TargetFile
 }
 
 // ReadInput 读取输入
@@ -31,8 +53,8 @@ func (fp *FileProcessor) ReadInput() ([]byte, error) {
 func (fp *FileProcessor) readSingleFile() ([]byte, error) {
 	if fp.InputFile == "" {
 		// 如果没有指定输入文件，但指定了输入目录，读取目录下的第一个 yml 文件
-		if fp.InputDir != "" {
-			files, err := os.ReadDir(fp.InputDir)
+		if fp.SrcDir != "" {
+			files, err := os.ReadDir(fp.SrcDir)
 			if err != nil {
 				return nil, errcode.WithError(errcode.ErrListDir, err)
 			}
@@ -52,8 +74,8 @@ func (fp *FileProcessor) readSingleFile() ([]byte, error) {
 	}
 
 	inputPath := fp.InputFile
-	if fp.InputDir != "" {
-		inputPath = filepath.Join(fp.InputDir, fp.InputFile)
+	if fp.SrcDir != "" {
+		inputPath = filepath.Join(fp.SrcDir, fp.InputFile)
 	}
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -64,7 +86,7 @@ func (fp *FileProcessor) readSingleFile() ([]byte, error) {
 
 // readAndMergeFiles 读取并合并文件
 func (fp *FileProcessor) readAndMergeFiles() ([]byte, error) {
-	files, err := os.ReadDir(fp.InputDir)
+	files, err := os.ReadDir(fp.SrcDir)
 	if err != nil {
 		return nil, errcode.WithError(errcode.ErrListDir, err)
 	}
@@ -75,7 +97,7 @@ func (fp *FileProcessor) readAndMergeFiles() ([]byte, error) {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(fp.InputDir, file.Name()))
+		data, err := os.ReadFile(filepath.Join(fp.SrcDir, file.Name()))
 		if err != nil {
 			return nil, errcode.WithError(errcode.ErrReadFile, err)
 		}
@@ -89,7 +111,7 @@ func (fp *FileProcessor) readAndMergeFiles() ([]byte, error) {
 // WriteOutput 写入输出
 func (fp *FileProcessor) WriteOutput(content []byte) error {
 	// 确保输出目录存在
-	if err := os.MkdirAll(fp.OutputDir, 0o755); err != nil {
+	if err := os.MkdirAll(fp.TargetDir, 0o755); err != nil {
 		return errcode.WithError(errcode.ErrCreateDir, err)
 	}
 
@@ -101,10 +123,10 @@ func (fp *FileProcessor) WriteOutput(content []byte) error {
 			outputPath = strings.TrimSuffix(fp.InputFile, ".yml") + ".md"
 		} else {
 			// 如果没有输入文件名，使用目录名
-			outputPath = filepath.Base(fp.InputDir) + ".md"
+			outputPath = filepath.Base(fp.SrcDir) + ".md"
 		}
 	}
-	outputPath = filepath.Join(fp.OutputDir, outputPath)
+	outputPath = filepath.Join(fp.TargetDir, outputPath)
 
 	// 直接写入文件
 	if err := os.WriteFile(outputPath, content, 0o644); err != nil {
@@ -114,7 +136,7 @@ func (fp *FileProcessor) WriteOutput(content []byte) error {
 	return nil
 }
 
-// ProcessFile 处理单个文件
+// ProcessFile 核心方法：处理单个文件
 func ProcessFile(fp *FileProcessor, renderer MarkdownRender) error {
 	// 读取文件
 	data, err := fp.ReadInput()
