@@ -22,14 +22,14 @@ var cfgFile string
 
 // Config 定义配置结构
 type Config struct {
-	Markdown *YAML  `yaml:"markdown"` // Using pointer to allow nil checks
-	JSON     *JSON  `yaml:"json"`     // Using pointer to allow nil checks
-	SrcDir   string `yaml:"srcDir"`   // 源目录
-	Cmd      string `yaml:"cmd"`      // 命令类型
+	Markdown *Markdown `yaml:"markdown"` // Using pointer to allow nil checks
+	JSON     *JSON     `yaml:"json"`     // Using pointer to allow nil checks
+	SrcDir   string    `yaml:"srcDir"`   // 源目录
+	Cmd      string    `yaml:"cmd"`      // 命令类型
 }
 
-type YAML struct {
-	YamlDst         string   `yaml:"yamlDst"`
+type Markdown struct {
+	Dst             string   `yaml:"dst"`
 	MergeOutputFile string   `yaml:"mergeOutputFile"` // 合并后的输出文件名
 	Exclude         []string `yaml:"exclude"`
 	IsMerge         bool     `yaml:"isMerge"`
@@ -38,17 +38,17 @@ type YAML struct {
 }
 
 type JSON struct {
-	JSONDst string `yaml:"jsonDst"`
+	Dst string `yaml:"dst"`
 }
 
 // processSingleFile 处理单个文件
-func processSingleFile(processor *render.FileProcessor, file os.DirEntry, cmd string) error {
+func processSingleFile(processor *render.FileProcessor, file os.DirEntry, cmd string, config Config) error {
 	if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
 		return nil
 	}
 
 	// 创建渲染器
-	renderer, err := createRenderer(cmd)
+	renderer, err := createRenderer(cmd, config)
 	if err != nil {
 		return err
 	}
@@ -57,8 +57,8 @@ func processSingleFile(processor *render.FileProcessor, file os.DirEntry, cmd st
 	processor.InputFile = file.Name()
 	processor.OutputFile = render.ChangeFileExtFromYamlToMd(file.Name())
 
-	// 如果是 GhRenderer，设置处理器
-	if gh, ok := renderer.(*gh.GhRenderer); ok {
+	// 如果是 GithubMarkdownRender，设置处理器
+	if gh, ok := renderer.(*gh.GithubMarkdownRender); ok {
 		gh.SetProcessor(processor)
 	}
 
@@ -67,7 +67,7 @@ func processSingleFile(processor *render.FileProcessor, file os.DirEntry, cmd st
 }
 
 // processNonMergeMode 处理非合并模式
-func processNonMergeMode(processor *render.FileProcessor, cmd string) error {
+func processNonMergeMode(processor *render.FileProcessor, cmd string, config Config) error {
 	// 确保输入目录存在
 	if _, err := os.Stat(processor.SrcDir); os.IsNotExist(err) {
 		return err
@@ -85,7 +85,7 @@ func processNonMergeMode(processor *render.FileProcessor, cmd string) error {
 
 	for _, file := range files {
 		if !slices.Contains(processor.Exclude, file.Name()) {
-			if err := processSingleFile(processor, file, cmd); err != nil {
+			if err := processSingleFile(processor, file, cmd, config); err != nil {
 				return err
 			}
 		}
@@ -95,21 +95,21 @@ func processNonMergeMode(processor *render.FileProcessor, cmd string) error {
 }
 
 // processMergeMode 处理合并模式
-func processMergeMode(processor *render.FileProcessor, cmd string) error {
-	renderer, err := createRenderer(cmd)
+func processMergeMode(processor *render.FileProcessor, cmd string, config Config) error {
+	renderer, err := createRenderer(cmd, config)
 	if err != nil {
 		return err
 	}
 
-	// 如果是 GhRenderer，设置处理器
-	if gh, ok := renderer.(*gh.GhRenderer); ok {
+	// 如果是 GithubMarkdownRender，设置处理器
+	if gh, ok := renderer.(*gh.GithubMarkdownRender); ok {
 		gh.SetProcessor(processor)
 	}
 
 	return render.ProcessFile(processor, renderer)
 }
 
-// parseMarkdown handles YAML configuration processing
+// parseMarkdown handles Markdown configuration processing
 func parseMarkdown(config Config) error {
 	if config.Markdown == nil {
 		return nil
@@ -122,7 +122,7 @@ func parseMarkdown(config Config) error {
 	}
 
 	// 获取目标路径
-	targetDir := config.Markdown.YamlDst
+	targetDir := config.Markdown.Dst
 	if targetDir == "" {
 		targetDir = "docs" // 默认输出到docs目录
 	}
@@ -137,9 +137,9 @@ func parseMarkdown(config Config) error {
 
 	// 根据合并模式选择处理方式
 	if config.Markdown.IsMerge {
-		return processMergeMode(processor, config.Cmd)
+		return processMergeMode(processor, config.Cmd, config)
 	}
-	return processNonMergeMode(processor, config.Cmd)
+	return processNonMergeMode(processor, config.Cmd, config)
 }
 
 // parseJSON handles JSON configuration processing
@@ -157,18 +157,30 @@ func parseJSON(config Config) error {
 	// 创建文件处理器
 	processor := &render.FileProcessor{
 		SrcDir:     srcDir,
-		TargetDir:  filepath.Dir(config.JSON.JSONDst),
-		OutputFile: filepath.Base(config.JSON.JSONDst),
+		TargetDir:  filepath.Dir(config.JSON.Dst),
+		OutputFile: filepath.Base(config.JSON.Dst),
+		IsMerge:    true, // JSON 输出总是合并模式
 	}
 
-	// 创建渲染器
-	renderer, err := createRenderer(config.Cmd)
+	// 读取所有文件
+	data, err := processor.ReadInput()
 	if err != nil {
-		return err
+		return fmt.Errorf("read input error: %w", err)
 	}
 
-	// 处理文件
-	return render.ProcessFile(processor, renderer)
+	// 创建渲染器并渲染
+	renderer := render.NewJSONRenderer(config.Cmd, true)
+	content, err := renderer.Render(data)
+	if err != nil {
+		return fmt.Errorf("render error: %w", err)
+	}
+
+	// 写入文件
+	if err := processor.WriteOutput(content); err != nil {
+		return fmt.Errorf("write output error: %w", err)
+	}
+
+	return nil
 }
 
 // processConfig 处理单个配置
@@ -238,18 +250,24 @@ func getAbsPath(path string) (string, error) {
 }
 
 // createRenderer 根据命令类型创建渲染器
-func createRenderer(cmd string) (render.Renderer, error) {
+func createRenderer(cmd string, config Config) (render.Renderer, error) {
+	// 如果配置了JSON输出，使用JSON渲染器
+	if config.JSON != nil {
+		return render.NewJSONRenderer(cmd, true), nil
+	}
+
+	// 否则使用对应的Markdown渲染器
 	switch cmd {
 	case "works":
 		return works.NewWorkRenderer(), nil
 	case "gh":
-		return gh.NewGhRenderer(), nil
+		return gh.NewGithubMarkdownRender(), nil
 	case "ws":
 		return ws.NewWebStackRenderer(), nil
 	case "diary":
-		return diary.NewDiaryRenderer(), nil
+		return diary.NewDiaryMarkdownRender(), nil
 	case "goods":
-		return goods.NewGoodsRenderer(), nil
+		return goods.NewGoodsMarkdownRenderer(), nil
 	case "task":
 		return taskService.NewTaskRenderer(), nil
 	default:

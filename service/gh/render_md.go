@@ -13,8 +13,8 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
-// GhRenderer Markdown渲染器
-type GhRenderer struct {
+// GithubMarkdownRender Markdown渲染器
+type GithubMarkdownRender struct {
 	processor *render.FileProcessor
 	render.MarkdownRenderer
 	Config      ConfigRepos
@@ -29,13 +29,13 @@ type repoRenderConfig struct {
 }
 
 // SetProcessor 设置文件处理器
-func (g *GhRenderer) SetProcessor(processor *render.FileProcessor) {
+func (g *GithubMarkdownRender) SetProcessor(processor *render.FileProcessor) {
 	g.processor = processor
 }
 
-// NewGhRenderer 创建新的渲染器
-func NewGhRenderer() *GhRenderer {
-	return &GhRenderer{
+// NewGithubMarkdownRender 创建新的渲染器
+func NewGithubMarkdownRender() *GithubMarkdownRender {
+	return &GithubMarkdownRender{
 		processor: &render.FileProcessor{},
 		repoConfigs: []repoRenderConfig{
 			{admonitionType: render.AdmonitionTip, title: "Sub Repos"},
@@ -46,7 +46,7 @@ func NewGhRenderer() *GhRenderer {
 }
 
 // RenderToFile 渲染并写入文件
-func (g *GhRenderer) RenderToFile() error {
+func (g *GithubMarkdownRender) RenderToFile() error {
 	if g.processor.IsMerge {
 		return g.renderMerged()
 	}
@@ -54,7 +54,7 @@ func (g *GhRenderer) RenderToFile() error {
 }
 
 // RenderMarkdownTable 渲染Markdown表格
-func (g *GhRenderer) RenderMarkdownTable(header []string, res *strings.Builder, data [][]string) {
+func (g *GithubMarkdownRender) RenderMarkdownTable(header []string, res *strings.Builder, data [][]string) {
 	table := tablewriter.NewWriter(res)
 	table.SetAutoWrapText(false)
 	table.SetHeader(header)
@@ -65,7 +65,7 @@ func (g *GhRenderer) RenderMarkdownTable(header []string, res *strings.Builder, 
 }
 
 // renderMerged 合并渲染
-func (g *GhRenderer) renderMerged() error {
+func (g *GithubMarkdownRender) renderMerged() error {
 	// 读取并合并所有YAML文件
 	files, err := os.ReadDir(g.processor.SrcDir)
 	if err != nil {
@@ -102,7 +102,7 @@ func (g *GhRenderer) renderMerged() error {
 }
 
 // renderSeparate 分别渲染
-func (g *GhRenderer) renderSeparate() error {
+func (g *GithubMarkdownRender) renderSeparate() error {
 	files, err := os.ReadDir(g.processor.SrcDir)
 	if err != nil {
 		return errcode.WithError(errcode.ErrListDir, err)
@@ -138,7 +138,7 @@ func (g *GhRenderer) renderSeparate() error {
 }
 
 // writeFile 写入文件
-func (g *GhRenderer) writeFile(filename, content string) error {
+func (g *GithubMarkdownRender) writeFile(filename, content string) error {
 	// 创建以srcDir命名的中间目录
 	tmpDir := filepath.Join(g.processor.TargetDir, filepath.Base(g.processor.SrcDir))
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
@@ -165,7 +165,7 @@ func (g *GhRenderer) writeFile(filename, content string) error {
 	return nil
 }
 
-func (g *GhRenderer) Render(data []byte) (string, error) {
+func (g *GithubMarkdownRender) Render(data []byte) (string, error) {
 	config, err := parser.NewParser[ConfigRepos](data).WithFileName(g.processor.GetCurrentFileName()).ParseSingle()
 	if err != nil {
 		return "", err
@@ -174,7 +174,7 @@ func (g *GhRenderer) Render(data []byte) (string, error) {
 	return g.renderContent()
 }
 
-func (g *GhRenderer) renderContent() (string, error) {
+func (g *GithubMarkdownRender) renderContent() (string, error) {
 	for _, repo := range g.Config {
 		g.RenderHeader(render.HeadingLevel2, repo.Type)
 		g.RenderRepositoriesAsMarkdownTable(repo.Repos)
@@ -183,7 +183,7 @@ func (g *GhRenderer) renderContent() (string, error) {
 	return g.String(), nil
 }
 
-func (g *GhRenderer) renderRepos(repos Repos) {
+func (g *GithubMarkdownRender) renderRepos(repos Repos) {
 	for _, repo := range repos {
 		if repo.Qs != nil {
 			g.RenderHeader(render.HeadingLevel3, g.RenderLink(repo.FullName(), repo.URL))
@@ -193,7 +193,7 @@ func (g *GhRenderer) renderRepos(repos Repos) {
 	}
 }
 
-func (g *GhRenderer) renderSubComponents(repo Repository) {
+func (g *GithubMarkdownRender) renderSubComponents(repo Repository) {
 	reposSlices := []Repos{repo.SubRepos, repo.ReplacedRepos, repo.RelatedRepos}
 
 	for i, repos := range reposSlices {
@@ -209,12 +209,12 @@ func (g *GhRenderer) renderSubComponents(repo Repository) {
 	}
 }
 
-func (g *GhRenderer) renderSubRepoComponent(config repoRenderConfig) {
+func (g *GithubMarkdownRender) renderSubRepoComponent(config repoRenderConfig) {
 	content := g.RepositoriesAsMarkdownTable(config.repos)
 	g.RenderAdmonition(config.admonitionType, config.title, content)
 }
 
-func (g *GhRenderer) renderQuestions(qs Questions) {
+func (g *GithubMarkdownRender) renderQuestions(qs Questions) {
 	for _, q := range qs {
 		summary := formatQuestionSummary(q)
 		details := formatQuestionDetails(q)
@@ -227,12 +227,12 @@ func (g *GhRenderer) renderQuestions(qs Questions) {
 }
 
 // RenderRepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
-func (g *GhRenderer) RenderRepositoriesAsMarkdownTable(repos Repos) {
+func (g *GithubMarkdownRender) RenderRepositoriesAsMarkdownTable(repos Repos) {
 	g.Write(g.RepositoriesAsMarkdownTable(repos))
 }
 
 // RepositoriesAsMarkdownTable 将仓库列表渲染为Markdown表格
-func (g *GhRenderer) RepositoriesAsMarkdownTable(repos Repos) string {
+func (g *GithubMarkdownRender) RepositoriesAsMarkdownTable(repos Repos) string {
 	if len(repos) == 0 {
 		return ""
 	}
