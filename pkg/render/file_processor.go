@@ -11,7 +11,7 @@ import (
 
 // FileProcessor 文件处理器
 type FileProcessor struct {
-	SrcDir     string   // 输入目录
+	Src        string   // 输入目录
 	TargetDir  string   // 输出目录
 	InputFile  string   // 输入文件名
 	OutputFile string   // 输出文件名
@@ -22,7 +22,7 @@ type FileProcessor struct {
 
 // GetInputFilePath 获取输入文件完整路径
 func (p *FileProcessor) GetInputFilePath() string {
-	return filepath.Join(p.SrcDir, p.InputFile)
+	return filepath.Join(p.Src, p.InputFile)
 }
 
 // GetOutputFilePath 获取输出文件完整路径
@@ -53,8 +53,8 @@ func (fp *FileProcessor) ReadInput() ([]byte, error) {
 func (fp *FileProcessor) readSingleFile() ([]byte, error) {
 	if fp.InputFile == "" {
 		// 如果没有指定输入文件，但指定了输入目录，读取目录下的第一个 yml 文件
-		if fp.SrcDir != "" {
-			files, err := os.ReadDir(fp.SrcDir)
+		if fp.Src != "" {
+			files, err := os.ReadDir(fp.Src)
 			if err != nil {
 				return nil, errcode.WithError(errcode.ErrListDir, err)
 			}
@@ -74,8 +74,8 @@ func (fp *FileProcessor) readSingleFile() ([]byte, error) {
 	}
 
 	inputPath := fp.InputFile
-	if fp.SrcDir != "" {
-		inputPath = filepath.Join(fp.SrcDir, fp.InputFile)
+	if fp.Src != "" {
+		inputPath = filepath.Join(fp.Src, fp.InputFile)
 	}
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -86,7 +86,7 @@ func (fp *FileProcessor) readSingleFile() ([]byte, error) {
 
 // readAndMergeFiles 读取并合并文件
 func (fp *FileProcessor) readAndMergeFiles() ([]byte, error) {
-	files, err := os.ReadDir(fp.SrcDir)
+	files, err := os.ReadDir(fp.Src)
 	if err != nil {
 		return nil, errcode.WithError(errcode.ErrListDir, err)
 	}
@@ -97,7 +97,7 @@ func (fp *FileProcessor) readAndMergeFiles() ([]byte, error) {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(fp.SrcDir, file.Name()))
+		data, err := os.ReadFile(filepath.Join(fp.Src, file.Name()))
 		if err != nil {
 			return nil, errcode.WithError(errcode.ErrReadFile, err)
 		}
@@ -123,7 +123,7 @@ func (fp *FileProcessor) WriteOutput(content string) error {
 			outputPath = strings.TrimSuffix(fp.InputFile, ".yml") + ".md"
 		} else {
 			// 如果没有输入文件名，使用目录名
-			outputPath = filepath.Base(fp.SrcDir) + ".md"
+			outputPath = filepath.Base(fp.Src) + ".md"
 		}
 	}
 	outputPath = filepath.Join(fp.TargetDir, outputPath)

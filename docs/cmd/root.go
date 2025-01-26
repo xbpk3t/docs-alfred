@@ -24,8 +24,9 @@ var cfgFile string
 type Config struct {
 	Markdown *Markdown `yaml:"markdown"` // Using pointer to allow nil checks
 	JSON     *JSON     `yaml:"json"`     // Using pointer to allow nil checks
-	SrcDir   string    `yaml:"srcDir"`   // 源目录
+	Src      string    `yaml:"src"`      // 源目录
 	Cmd      string    `yaml:"cmd"`      // 命令类型
+	IsDir    bool      `yaml:"isdir"`    // 是否为文件夹
 }
 
 type Markdown struct {
@@ -69,7 +70,7 @@ func processSingleFile(processor *render.FileProcessor, file os.DirEntry, cmd st
 // processNonMergeMode 处理非合并模式
 func processNonMergeMode(processor *render.FileProcessor, cmd string, config Config) error {
 	// 确保输入目录存在
-	if _, err := os.Stat(processor.SrcDir); os.IsNotExist(err) {
+	if _, err := os.Stat(processor.Src); os.IsNotExist(err) {
 		return err
 	}
 
@@ -78,7 +79,7 @@ func processNonMergeMode(processor *render.FileProcessor, cmd string, config Con
 		return err
 	}
 
-	files, err := os.ReadDir(processor.SrcDir)
+	files, err := os.ReadDir(processor.Src)
 	if err != nil {
 		return err
 	}
@@ -116,7 +117,7 @@ func parseMarkdown(config Config) error {
 	}
 
 	// 获取绝对路径
-	srcDir, err := getAbsPath(config.SrcDir)
+	src, err := getAbsPath(config.Src)
 	if err != nil {
 		return err
 	}
@@ -129,7 +130,7 @@ func parseMarkdown(config Config) error {
 
 	// 创建文件处理器
 	processor := &render.FileProcessor{
-		SrcDir:    srcDir,
+		Src:       src,
 		TargetDir: targetDir,
 		IsMerge:   config.Markdown.IsMerge,
 		Exclude:   config.Markdown.Exclude,
@@ -149,14 +150,14 @@ func parseJSON(config Config) error {
 	}
 
 	// 获取绝对路径
-	srcDir, err := getAbsPath(config.SrcDir)
+	src, err := getAbsPath(config.Src)
 	if err != nil {
 		return err
 	}
 
 	// 创建文件处理器
 	processor := &render.FileProcessor{
-		SrcDir:     srcDir,
+		Src:        src,
 		TargetDir:  filepath.Dir(config.JSON.Dst),
 		OutputFile: filepath.Base(config.JSON.Dst),
 		IsMerge:    true, // JSON 输出总是合并模式
