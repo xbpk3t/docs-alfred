@@ -5,7 +5,7 @@ package main
 
 import (
 	_ "github.com/joho/godotenv/autoload"
-	"github.com/xbpk3t/docs-alfred/alfred/cmd"
+	"github.com/xbpk3t/docs-alfred/alfred/gh/cmd"
 )
 
 func main() {

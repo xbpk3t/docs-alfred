@@ -3,10 +3,11 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/xbpk3t/docs-alfred/alfred/gh/internal/alfred"
+	"github.com/xbpk3t/docs-alfred/alfred/gh/internal/cons"
+
 	aw "github.com/deanishe/awgo"
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
-	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"
 	"github.com/xbpk3t/docs-alfred/service/ws"
 )
 
