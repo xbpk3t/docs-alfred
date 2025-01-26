@@ -1,37 +1,56 @@
 package render
 
 import (
+	"bytes"
+
 	"github.com/bytedance/sonic"
+	"gopkg.in/yaml.v3"
 )
 
 // JSONRenderer JSON渲染器
 type JSONRenderer struct {
-	// 可以添加配置选项
+	Cmd         string
 	PrettyPrint bool
 }
 
 // NewJSONRenderer 创建新的JSON渲染器
-func NewJSONRenderer(prettyPrint bool) *JSONRenderer {
+func NewJSONRenderer(cmd string, prettyPrint bool) *JSONRenderer {
 	return &JSONRenderer{
 		PrettyPrint: prettyPrint,
+		Cmd:         cmd,
 	}
 }
 
 // Render 实现 Renderer 接口
 func (j *JSONRenderer) Render(data []byte) (string, error) {
-	// 首先解析YAML数据到通用接口
-	var parsedData interface{}
-	if err := sonic.Unmarshal(data, &parsedData); err != nil {
-		return "", err
+	// 分割多个YAML文档
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	var documents []interface{}
+
+	for {
+		var doc interface{}
+		err := decoder.Decode(&doc)
+		if err != nil {
+			break // 到达文件末尾
+		}
+		if doc != nil {
+			documents = append(documents, doc)
+		}
 	}
 
-	// 根据配置选择是否美化输出
+	// 如果只有一个文档，直接返回它
+	var dataToEncode interface{} = documents
+	if len(documents) == 1 {
+		dataToEncode = documents[0]
+	}
+
+	// 转换为JSON
 	var result []byte
 	var err error
 	if j.PrettyPrint {
-		result, err = sonic.MarshalIndent(parsedData, "", "  ")
+		result, err = sonic.MarshalIndent(dataToEncode, "", "  ")
 	} else {
-		result, err = sonic.Marshal(parsedData)
+		result, err = sonic.Marshal(dataToEncode)
 	}
 
 	if err != nil {

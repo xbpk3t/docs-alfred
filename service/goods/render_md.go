@@ -9,21 +9,21 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
-// GoodsRenderer Markdown渲染器
-type GoodsRenderer struct {
+// GoodsMarkdownRender Markdown渲染器
+type GoodsMarkdownRender struct {
 	seenTags map[string]bool
 	render.MarkdownRenderer
 }
 
-// NewGoodsRenderer 创建新的渲染器
-func NewGoodsRenderer() *GoodsRenderer {
-	return &GoodsRenderer{
+// NewGoodsMarkdownRenderer 创建新的渲染器
+func NewGoodsMarkdownRenderer() *GoodsMarkdownRender {
+	return &GoodsMarkdownRender{
 		seenTags: make(map[string]bool),
 	}
 }
 
 // Render 渲染商品数据
-func (r *GoodsRenderer) Render(data []byte) (string, error) {
+func (r *GoodsMarkdownRender) Render(data []byte) (string, error) {
 	goods, err := ParseConfig(data)
 	if err != nil {
 		return "", errcode.WithError(errcode.ErrParseConfig, err)
