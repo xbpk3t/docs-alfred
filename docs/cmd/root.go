@@ -238,7 +238,7 @@ func getAbsPath(path string) (string, error) {
 }
 
 // createRenderer 根据命令类型创建渲染器
-func createRenderer(cmd string) (render.MarkdownRender, error) {
+func createRenderer(cmd string) (render.Renderer, error) {
 	switch cmd {
 	case "works":
 		return works.NewWorkRenderer(), nil
