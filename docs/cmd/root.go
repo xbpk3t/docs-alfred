@@ -20,49 +20,25 @@ import (
 
 var cfgFile string
 
-// TaskConfig 定义任务结构
-type TaskConfig struct {
-	SrcDir     string   `yaml:"srcDir"`     // 源目录
-	Cmd        string   `yaml:"cmd"`        // 命令类型
-	TargetFile string   `yaml:"targetFile"` // 输出文件名
-	MoveTo     string   `yaml:"moveTo"`     // 移动目标目录
-	Exclude    []string `yaml:"exclude"`    // 排除的文件
-	X          []string `yaml:"x"`          // 额外参数
-	IsMerge    bool     `yaml:"isMerge"`    // 是否合并
-}
-
 // Config 定义配置结构
 type Config struct {
-	SrcDir     string       `yaml:"srcDir"`     // 源目录
-	TargetDir  string       `yaml:"targetDir"`  // 目标目录
-	TargetFile string       `yaml:"targetFile"` // 输出文件名
-	Tasks      []TaskConfig `yaml:"tasks"`      // 任务列表
-	IsRawLoad  bool         `yaml:"isRawLoad"`  // 是否直接加载
+	Markdown *YAML  `yaml:"markdown"` // Using pointer to allow nil checks
+	JSON     *JSON  `yaml:"json"`     // Using pointer to allow nil checks
+	SrcDir   string `yaml:"srcDir"`   // 源目录
+	Cmd      string `yaml:"cmd"`      // 命令类型
 }
 
-// processRawLoad 处理 raw-loader 模式
-func processRawLoad(srcDir, targetDir string, config Config, task TaskConfig) error {
-	inputDir := filepath.Join(srcDir, task.SrcDir)
-	outputFile := task.TargetFile
-	if outputFile == "" {
-		outputFile = config.TargetFile
-	}
+type YAML struct {
+	YamlDst         string   `yaml:"yamlDst"`
+	MergeOutputFile string   `yaml:"mergeOutputFile"` // 合并后的输出文件名
+	Exclude         []string `yaml:"exclude"`
+	IsMerge         bool     `yaml:"isMerge"`
+	IsRawLoad       bool     `yaml:"isRawLoad"` // 是否直接加载
+	IsExpand        bool     `yaml:"isExpand"`  // 在docusaurus中是否展开
+}
 
-	// 创建渲染器
-	renderer, err := createRenderer(task.Cmd)
-	if err != nil {
-		return err
-	}
-
-	// 渲染内容
-	content, err := renderer.Render([]byte(inputDir))
-	if err != nil {
-		return err
-	}
-
-	// 写入输出文件
-	outputPath := filepath.Join(targetDir, outputFile)
-	return os.WriteFile(outputPath, []byte(content), 0o644)
+type JSON struct {
+	JSONDst string `yaml:"jsonDst"`
 }
 
 // processSingleFile 处理单个文件
@@ -133,49 +109,79 @@ func processMergeMode(processor *render.FileProcessor, cmd string) error {
 	return render.ProcessFile(processor, renderer)
 }
 
-// processTask 处理单个任务
-func processTask(srcDir, targetDir string, config Config, task TaskConfig) error {
-	// 如果配置了 isRawLoad，直接处理整个目录
-	if config.IsRawLoad {
-		return processRawLoad(srcDir, targetDir, config, task)
+// parseMarkdown handles YAML configuration processing
+func parseMarkdown(config Config) error {
+	if config.Markdown == nil {
+		return nil
 	}
 
-	// 创建文件处理器
-	processor := &render.FileProcessor{
-		SrcDir:    filepath.Join(srcDir, task.SrcDir),
-		TargetDir: filepath.Join(targetDir, task.SrcDir),
-		IsMerge:   task.IsMerge,
-		Exclude:   task.Exclude,
-	}
-
-	// 根据合并模式选择处理方式
-	if task.IsMerge {
-		return processMergeMode(processor, task.Cmd)
-	}
-	return processNonMergeMode(processor, task.Cmd)
-}
-
-// processConfig 处理单个配置
-func processConfig(config Config) error {
 	// 获取绝对路径
 	srcDir, err := getAbsPath(config.SrcDir)
 	if err != nil {
 		return err
 	}
-	targetDir, err := getAbsPath(config.TargetDir)
+
+	// 获取目标路径
+	targetDir := config.Markdown.YamlDst
+	if targetDir == "" {
+		targetDir = "docs" // 默认输出到docs目录
+	}
+
+	// 创建文件处理器
+	processor := &render.FileProcessor{
+		SrcDir:    srcDir,
+		TargetDir: targetDir,
+		IsMerge:   config.Markdown.IsMerge,
+		Exclude:   config.Markdown.Exclude,
+	}
+
+	// 根据合并模式选择处理方式
+	if config.Markdown.IsMerge {
+		return processMergeMode(processor, config.Cmd)
+	}
+	return processNonMergeMode(processor, config.Cmd)
+}
+
+// parseJSON handles JSON configuration processing
+func parseJSON(config Config) error {
+	if config.JSON == nil {
+		return nil
+	}
+
+	// 获取绝对路径
+	srcDir, err := getAbsPath(config.SrcDir)
 	if err != nil {
 		return err
 	}
 
-	// 确保目标目录存在
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+	// 创建文件处理器
+	processor := &render.FileProcessor{
+		SrcDir:     srcDir,
+		TargetDir:  filepath.Dir(config.JSON.JSONDst),
+		OutputFile: filepath.Base(config.JSON.JSONDst),
+	}
+
+	// 创建渲染器
+	renderer, err := createRenderer(config.Cmd)
+	if err != nil {
 		return err
 	}
 
-	// 处理每个任务
-	for _, task := range config.Tasks {
-		if err := processTask(srcDir, targetDir, config, task); err != nil {
-			return err
+	// 处理文件
+	return render.ProcessFile(processor, renderer)
+}
+
+// processConfig 处理单个配置
+func processConfig(config Config) error {
+	if config.Markdown != nil {
+		if err := parseMarkdown(config); err != nil {
+			return fmt.Errorf("parse Markdown error: %w", err)
+		}
+	}
+
+	if config.JSON != nil {
+		if err := parseJSON(config); err != nil {
+			return fmt.Errorf("parse JSON error: %w", err)
 		}
 	}
 
