@@ -67,7 +67,7 @@ func (g *GithubMarkdownRender) RenderMarkdownTable(header []string, res *strings
 // renderMerged 合并渲染
 func (g *GithubMarkdownRender) renderMerged() error {
 	// 读取并合并所有YAML文件
-	files, err := os.ReadDir(g.processor.SrcDir)
+	files, err := os.ReadDir(g.processor.Src)
 	if err != nil {
 		return errcode.WithError(errcode.ErrListDir, err)
 	}
@@ -78,7 +78,7 @@ func (g *GithubMarkdownRender) renderMerged() error {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(g.processor.SrcDir, file.Name()))
+		data, err := os.ReadFile(filepath.Join(g.processor.Src, file.Name()))
 		if err != nil {
 			return errcode.WithError(errcode.ErrReadFile, err)
 		}
@@ -94,7 +94,7 @@ func (g *GithubMarkdownRender) renderMerged() error {
 	// 确定输出文件名
 	outputFn := g.processor.TargetFile
 	if outputFn == "" {
-		outputFn = fmt.Sprintf("%s.md", filepath.Base(g.processor.SrcDir))
+		outputFn = fmt.Sprintf("%s.md", filepath.Base(g.processor.Src))
 	}
 
 	// 写入文件
@@ -103,7 +103,7 @@ func (g *GithubMarkdownRender) renderMerged() error {
 
 // renderSeparate 分别渲染
 func (g *GithubMarkdownRender) renderSeparate() error {
-	files, err := os.ReadDir(g.processor.SrcDir)
+	files, err := os.ReadDir(g.processor.Src)
 	if err != nil {
 		return errcode.WithError(errcode.ErrListDir, err)
 	}
@@ -114,7 +114,7 @@ func (g *GithubMarkdownRender) renderSeparate() error {
 		}
 
 		// 读取YAML文件
-		data, err := os.ReadFile(filepath.Join(g.processor.SrcDir, file.Name()))
+		data, err := os.ReadFile(filepath.Join(g.processor.Src, file.Name()))
 		if err != nil {
 			return errcode.WithError(errcode.ErrReadFile, err)
 		}
@@ -140,7 +140,7 @@ func (g *GithubMarkdownRender) renderSeparate() error {
 // writeFile 写入文件
 func (g *GithubMarkdownRender) writeFile(filename, content string) error {
 	// 创建以srcDir命名的中间目录
-	tmpDir := filepath.Join(g.processor.TargetDir, filepath.Base(g.processor.SrcDir))
+	tmpDir := filepath.Join(g.processor.TargetDir, filepath.Base(g.processor.Src))
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return errcode.WithError(errcode.ErrCreateDir, err)
 	}
