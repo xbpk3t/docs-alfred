@@ -184,10 +184,10 @@ Temporary Items
 
 # Custom rules (everything added below won't be overriden by 'Generate .gitignore File' if you use 'Update' option)
 
-alfred/.workflow/exe
-alfred/testenv
+alfred/gh/.workflow/exe
+alfred/gh/testenv
 coverage.txt
-alfred/.workflow/prefs.plist
+alfred/gh/.workflow/prefs.plist
 test
 /qs.md
 /coverage.out
