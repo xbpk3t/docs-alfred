@@ -243,23 +243,27 @@ func (dc *DocsConfig) createRenderer() (render.Renderer, error) {
 		return render.NewJSONRenderer(dc.Cmd, true), nil
 	}
 
-	// 否则使用对应的Markdown渲染器
-	switch dc.Cmd {
-	case "works":
-		return works.NewWorkRenderer(), nil
-	case "gh":
-		return gh.NewGithubMarkdownRender(), nil
-	case "ws":
-		return ws.NewWebStackRenderer(), nil
-	case "diary":
-		return diary.NewDiaryMarkdownRender(), nil
-	case "goods":
-		return goods.NewGoodsMarkdownRenderer(), nil
-	case "task":
-		return taskService.NewTaskRenderer(), nil
-	default:
-		return nil, fmt.Errorf("unknown command: %s", dc.Cmd)
+	if dc.Markdown != nil {
+		// 否则使用对应的Markdown渲染器
+		switch dc.Cmd {
+		case "works":
+			return works.NewWorkRenderer(), nil
+		case "gh":
+			return gh.NewGithubMarkdownRender(), nil
+		case "ws":
+			return ws.NewWebStackRenderer(), nil
+		case "diary":
+			return diary.NewDiaryMarkdownRender(), nil
+		case "goods":
+			return goods.NewGoodsMarkdownRenderer(), nil
+		case "task":
+			return taskService.NewTaskRenderer(), nil
+		default:
+			return nil, fmt.Errorf("markdown Render fail: unknown command: %s", dc.Cmd)
+		}
 	}
+
+	return nil, fmt.Errorf("please add markdown/json for entity: %s", dc.Cmd)
 }
 
 // parseJSONFile 处理单个JSON文件
