@@ -109,7 +109,7 @@ func (fp *FileProcessor) readAndMergeFiles() ([]byte, error) {
 }
 
 // WriteOutput 写入输出
-func (fp *FileProcessor) WriteOutput(content []byte) error {
+func (fp *FileProcessor) WriteOutput(content string) error {
 	// 确保输出目录存在
 	if err := os.MkdirAll(fp.TargetDir, 0o755); err != nil {
 		return errcode.WithError(errcode.ErrCreateDir, err)
@@ -129,7 +129,7 @@ func (fp *FileProcessor) WriteOutput(content []byte) error {
 	outputPath = filepath.Join(fp.TargetDir, outputPath)
 
 	// 直接写入文件
-	if err := os.WriteFile(outputPath, content, 0o644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {
 		return errcode.WithError(errcode.ErrWriteFile, err)
 	}
 
@@ -137,7 +137,7 @@ func (fp *FileProcessor) WriteOutput(content []byte) error {
 }
 
 // ProcessFile 核心方法：处理单个文件
-func ProcessFile(fp *FileProcessor, renderer MarkdownRender) error {
+func ProcessFile(fp *FileProcessor, renderer Renderer) error {
 	// 读取文件
 	data, err := fp.ReadInput()
 	if err != nil {
@@ -151,7 +151,7 @@ func ProcessFile(fp *FileProcessor, renderer MarkdownRender) error {
 	}
 
 	// 写入文件
-	if err := fp.WriteOutput([]byte(content)); err != nil {
+	if err := fp.WriteOutput(content); err != nil {
 		return errcode.WithError(errcode.ErrWriteFile, err)
 	}
 
