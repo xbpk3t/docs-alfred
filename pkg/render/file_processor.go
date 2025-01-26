@@ -54,17 +54,29 @@ func (fp *FileProcessor) readSingleFile() ([]byte, error) {
 	if fp.InputFile == "" {
 		// 如果没有指定输入文件，但指定了输入目录，读取目录下的第一个 yml 文件
 		if fp.Src != "" {
-			files, err := os.ReadDir(fp.Src)
+			// 检查Src是否是目录
+			fileInfo, err := os.Stat(fp.Src)
 			if err != nil {
 				return nil, errcode.WithError(errcode.ErrListDir, err)
 			}
 
-			for _, file := range files {
-				if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
-					continue
+			if fileInfo.IsDir() {
+				files, err := os.ReadDir(fp.Src)
+				if err != nil {
+					return nil, errcode.WithError(errcode.ErrListDir, err)
 				}
-				fp.InputFile = file.Name()
-				break
+
+				for _, file := range files {
+					if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
+						continue
+					}
+					fp.InputFile = file.Name()
+					break
+				}
+			} else {
+				// 如果Src是文件，直接使用它
+				fp.InputFile = filepath.Base(fp.Src)
+				fp.Src = filepath.Dir(fp.Src)
 			}
 		}
 
@@ -73,10 +85,7 @@ func (fp *FileProcessor) readSingleFile() ([]byte, error) {
 		}
 	}
 
-	inputPath := fp.InputFile
-	if fp.Src != "" {
-		inputPath = filepath.Join(fp.Src, fp.InputFile)
-	}
+	inputPath := filepath.Join(fp.Src, fp.InputFile)
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return nil, errcode.WithError(errcode.ErrReadFile, err)
