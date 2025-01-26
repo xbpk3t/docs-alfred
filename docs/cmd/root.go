@@ -42,6 +42,162 @@ type JSON struct {
 	Dst string `yaml:"dst"`
 }
 
+// processConfig 处理单个配置
+func processConfig(config Config) error {
+	// 获取绝对路径
+	src, err := getAbsPath(config.Src)
+	if err != nil {
+		return fmt.Errorf("get absolute path error: %w", err)
+	}
+
+	// 检查路径是否存在
+	fileInfo, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("stat path error: %w", err)
+	}
+
+	// 检查路径类型是否与配置匹配
+	pathIsDir := fileInfo.IsDir()
+	if config.IsDir && !pathIsDir {
+		return fmt.Errorf("path %s is configured as directory but is a file", src)
+	}
+	if !config.IsDir && pathIsDir {
+		return fmt.Errorf("path %s is configured as file but is a directory", src)
+	}
+
+	// 处理 Markdown 输出
+	if config.Markdown != nil {
+		if err := parseMarkdown(config); err != nil {
+			return fmt.Errorf("parse Markdown error: %w", err)
+		}
+	}
+
+	// 处理 JSON 输出
+	if config.JSON != nil {
+		if config.IsDir {
+			if err := parseJSON(config); err != nil {
+				return fmt.Errorf("parse JSON error: %w", err)
+			}
+		} else {
+			if err := parseJSONFile(config); err != nil {
+				return fmt.Errorf("parse JSON file error: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// parseJSONFile 处理单个JSON文件
+func parseJSONFile(config Config) error {
+	if config.JSON == nil {
+		return nil
+	}
+
+	// 读取单个文件
+	data, err := os.ReadFile(config.Src)
+	if err != nil {
+		return fmt.Errorf("read file error: %w", err)
+	}
+
+	// 创建文件处理器
+	processor := &render.FileProcessor{
+		Src:        filepath.Dir(config.Src),
+		InputFile:  filepath.Base(config.Src),
+		TargetDir:  filepath.Dir(config.JSON.Dst),
+		OutputFile: filepath.Base(config.JSON.Dst),
+		IsMerge:    false, // 单文件模式不需要合并
+	}
+
+	// 创建渲染器并渲染
+	renderer := render.NewJSONRenderer(config.Cmd, true)
+	content, err := renderer.Render(data)
+	if err != nil {
+		return fmt.Errorf("render error: %w", err)
+	}
+
+	// 写入文件
+	if err := processor.WriteOutput(content); err != nil {
+		return fmt.Errorf("write output error: %w", err)
+	}
+
+	return nil
+}
+
+// parseJSON handles JSON configuration processing
+func parseJSON(config Config) error {
+	if config.JSON == nil {
+		return nil
+	}
+
+	// 获取绝对路径
+	src, err := getAbsPath(config.Src)
+	if err != nil {
+		return err
+	}
+
+	// 创建文件处理器
+	processor := &render.FileProcessor{
+		Src:        src,
+		TargetDir:  filepath.Dir(config.JSON.Dst),
+		OutputFile: filepath.Base(config.JSON.Dst),
+		IsMerge:    true, // JSON 输出总是合并模式
+	}
+
+	// 读取所有文件
+	data, err := processor.ReadInput()
+	if err != nil {
+		return fmt.Errorf("read input error: %w", err)
+	}
+
+	// 创建渲染器并渲染
+	renderer := render.NewJSONRenderer(config.Cmd, true)
+	content, err := renderer.Render(data)
+	if err != nil {
+		return fmt.Errorf("render error: %w", err)
+	}
+
+	// 写入文件
+	if err := processor.WriteOutput(content); err != nil {
+		return fmt.Errorf("write output error: %w", err)
+	}
+
+	return nil
+}
+
+// parseMarkdown handles Markdown configuration processing
+func parseMarkdown(config Config) error {
+	if config.Markdown == nil {
+		return nil
+	}
+
+	// 获取绝对路径
+	src, err := getAbsPath(config.Src)
+	if err != nil {
+		return err
+	}
+
+	// 获取目标路径
+	targetDir := config.Markdown.Dst
+	if targetDir == "" {
+		targetDir = "docs" // 默认输出到docs目录
+	}
+
+	// 创建文件处理器
+	processor := &render.FileProcessor{
+		Src:       src,
+		TargetDir: targetDir,
+		IsMerge:   config.Markdown.IsMerge,
+		Exclude:   config.Markdown.Exclude,
+	}
+
+	// 根据合并模式选择处理方式
+	if config.Markdown.IsMerge {
+		return processMergeMode(processor, config.Cmd, config)
+	}
+	return processNonMergeMode(processor, config.Cmd, config)
+}
+
 // processSingleFile 处理单个文件
 func processSingleFile(processor *render.FileProcessor, file os.DirEntry, cmd string, config Config) error {
 	if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
@@ -108,97 +264,6 @@ func processMergeMode(processor *render.FileProcessor, cmd string, config Config
 	}
 
 	return render.ProcessFile(processor, renderer)
-}
-
-// parseMarkdown handles Markdown configuration processing
-func parseMarkdown(config Config) error {
-	if config.Markdown == nil {
-		return nil
-	}
-
-	// 获取绝对路径
-	src, err := getAbsPath(config.Src)
-	if err != nil {
-		return err
-	}
-
-	// 获取目标路径
-	targetDir := config.Markdown.Dst
-	if targetDir == "" {
-		targetDir = "docs" // 默认输出到docs目录
-	}
-
-	// 创建文件处理器
-	processor := &render.FileProcessor{
-		Src:       src,
-		TargetDir: targetDir,
-		IsMerge:   config.Markdown.IsMerge,
-		Exclude:   config.Markdown.Exclude,
-	}
-
-	// 根据合并模式选择处理方式
-	if config.Markdown.IsMerge {
-		return processMergeMode(processor, config.Cmd, config)
-	}
-	return processNonMergeMode(processor, config.Cmd, config)
-}
-
-// parseJSON handles JSON configuration processing
-func parseJSON(config Config) error {
-	if config.JSON == nil {
-		return nil
-	}
-
-	// 获取绝对路径
-	src, err := getAbsPath(config.Src)
-	if err != nil {
-		return err
-	}
-
-	// 创建文件处理器
-	processor := &render.FileProcessor{
-		Src:        src,
-		TargetDir:  filepath.Dir(config.JSON.Dst),
-		OutputFile: filepath.Base(config.JSON.Dst),
-		IsMerge:    true, // JSON 输出总是合并模式
-	}
-
-	// 读取所有文件
-	data, err := processor.ReadInput()
-	if err != nil {
-		return fmt.Errorf("read input error: %w", err)
-	}
-
-	// 创建渲染器并渲染
-	renderer := render.NewJSONRenderer(config.Cmd, true)
-	content, err := renderer.Render(data)
-	if err != nil {
-		return fmt.Errorf("render error: %w", err)
-	}
-
-	// 写入文件
-	if err := processor.WriteOutput(content); err != nil {
-		return fmt.Errorf("write output error: %w", err)
-	}
-
-	return nil
-}
-
-// processConfig 处理单个配置
-func processConfig(config Config) error {
-	if config.Markdown != nil {
-		if err := parseMarkdown(config); err != nil {
-			return fmt.Errorf("parse Markdown error: %w", err)
-		}
-	}
-
-	if config.JSON != nil {
-		if err := parseJSON(config); err != nil {
-			return fmt.Errorf("parse JSON error: %w", err)
-		}
-	}
-
-	return nil
 }
 
 // rootCmd represents the base command when called without any subcommands
