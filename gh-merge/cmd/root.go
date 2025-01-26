@@ -73,7 +73,7 @@ func runMerge(cmd *cobra.Command, args []string) error {
 			// 解析并处理仓库
 			rc, err := parser.NewParser[gh.ConfigRepos](fx).ParseSingle()
 			if err != nil {
-				return errcode.WithError(errcode.ErrParseConfig, err)
+				return errcode.WithError(errcode.ErrParseConfig, fmt.Errorf("%s: %w", file.Name(), err))
 			}
 
 			repos := rc.WithType().WithTag(strings.TrimSuffix(file.Name(), ".yml")).ToRepos()
