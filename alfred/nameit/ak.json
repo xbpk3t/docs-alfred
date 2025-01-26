@@ -1,0 +1,26 @@
+{
+  "go_mod_package": "github.com/xbpk3t/docs-alfred",
+  "workflow": {
+    "folder": ".workflow",
+    "name": "docs-alfred",
+    "description": "",
+    "category_comment": "category: Tools, Internet, Productivity, Uncategorised",
+    "category": "",
+    "bundle_id": "com.xbpk3t.docs",
+    "created_by": "",
+    "web_address": "https://github.com/xbpk3t/docs-alfred",
+    "version": "0.1.0"
+  },
+  "update": {
+    "github_repo": "https://github.com/xbpk3t/docs-alfred"
+  },
+  "license": {
+    "type_comment": "support license https://github.com/nishanths/license",
+    "type": "mit",
+    "year": "",
+    "name": ""
+  },
+  "gon": {
+    "application_identity": ""
+  }
+}
