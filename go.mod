@@ -8,6 +8,7 @@ require (
 	github.com/deanishe/awgo v0.29.1
 	github.com/go-resty/resty/v2 v2.16.2
 	github.com/golang-module/carbon/v2 v2.4.1
+	github.com/gookit/goutil v0.6.18
 	github.com/gorilla/feeds v1.2.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mmcdole/gofeed v1.3.0
