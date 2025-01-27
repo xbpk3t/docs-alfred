@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/gookit/goutil/fsutil"
 
@@ -28,16 +29,303 @@ type DocsConfig struct {
 }
 
 type Markdown struct {
-	Dst             string   `yaml:"dst"`
-	MergeOutputFile string   `yaml:"mergeOutputFile"` // 合并后的输出文件名
-	Exclude         []string `yaml:"exclude"`
-	IsMerge         bool     `yaml:"isMerge"`
-	IsRawLoad       bool     `yaml:"isRawLoad"` // 是否直接加载
-	IsExpand        bool     `yaml:"isExpand"`  // 在docusaurus中是否展开
+	Dst             string `yaml:"dst"`             // 输出目录
+	MergeOutputFile string `yaml:"mergeOutputFile"` // 合并后的输出文件名
+
+	// 内部使用的字段
+	currentFile string   // 当前处理的文件名
+	Exclude     []string `yaml:"exclude"`   // 排除的文件
+	IsMerge     bool     `yaml:"isMerge"`   // 是否合并模式
+	IsRawLoad   bool     `yaml:"isRawLoad"` // 是否直接加载
+	IsExpand    bool     `yaml:"isExpand"`  // 在docusaurus中是否展开
+}
+
+// GetCurrentFileName 获取当前处理的文件名
+func (m *Markdown) GetCurrentFileName() string {
+	return m.currentFile
+}
+
+// SetCurrentFile 设置当前处理的文件名
+func (m *Markdown) SetCurrentFile(filename string) {
+	m.currentFile = filename
+}
+
+// GetInputPath 获取输入文件完整路径
+func (m *Markdown) GetInputPath(src string) string {
+	if fsutil.IsFile(src) {
+		return src
+	}
+	return filepath.Join(src, m.MergeOutputFile)
+}
+
+// GetOutputPath 获取输出文件完整路径
+func (m *Markdown) GetOutputPath(filename string) string {
+	if m.MergeOutputFile != "" {
+		return filepath.Join(m.Dst, m.MergeOutputFile)
+	}
+	return filepath.Join(m.Dst, filename)
+}
+
+// ReadInput 读取输入
+func (m *Markdown) ReadInput(src string, isDir bool) ([]byte, error) {
+	if m.IsMerge && isDir {
+		return m.readAndMergeFiles(src)
+	}
+	return m.readSingleFile(src)
+}
+
+// readSingleFile 读取单个文件
+func (m *Markdown) readSingleFile(src string) ([]byte, error) {
+	// 检查src是否是目录
+	fileInfo, err := os.Stat(src)
+	if err != nil {
+		return nil, fmt.Errorf("stat path error: %w", err)
+	}
+
+	var inputPath string
+	if fileInfo.IsDir() {
+		// 如果是目录，读取第一个yml文件
+		files, err := os.ReadDir(src)
+		if err != nil {
+			return nil, fmt.Errorf("read dir error: %w", err)
+		}
+
+		for _, file := range files {
+			if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
+				continue
+			}
+			inputPath = filepath.Join(src, file.Name())
+			m.SetCurrentFile(file.Name())
+			break
+		}
+
+		if inputPath == "" {
+			return nil, fmt.Errorf("no yml file found in directory: %s", src)
+		}
+	} else {
+		// 如果是文件，直接使用
+		inputPath = src
+		m.SetCurrentFile(filepath.Base(src))
+	}
+
+	data, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("read file error: %w", err)
+	}
+	return data, nil
+}
+
+// readAndMergeFiles 读取并合并文件
+func (m *Markdown) readAndMergeFiles(src string) ([]byte, error) {
+	files, err := os.ReadDir(src)
+	if err != nil {
+		return nil, fmt.Errorf("read dir error: %w", err)
+	}
+
+	var mergedData []byte
+	for _, file := range files {
+		if file.IsDir() || filepath.Ext(file.Name()) != ".yml" || slices.Contains(m.Exclude, file.Name()) {
+			continue
+		}
+
+		m.SetCurrentFile(file.Name())
+		data, err := os.ReadFile(filepath.Join(src, file.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("read file error: %w", err)
+		}
+		mergedData = append(mergedData, data...)
+		mergedData = append(mergedData, '\n')
+	}
+
+	return mergedData, nil
+}
+
+// WriteOutput 写入输出
+func (m *Markdown) WriteOutput(content string, filename string) error {
+	// 确保输出目录存在
+	if err := os.MkdirAll(m.Dst, 0o755); err != nil {
+		return fmt.Errorf("create dir error: %w", err)
+	}
+
+	outputPath := filepath.Join(m.Dst, filename)
+	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write file error: %w", err)
+	}
+
+	return nil
+}
+
+// ProcessFile 核心方法：处理单个文件
+func (m *Markdown) ProcessFile(src string, renderer render.Renderer) error {
+	// 读取文件
+	data, err := m.ReadInput(src, fsutil.IsDir(src))
+	if err != nil {
+		return fmt.Errorf("read file error: %w", err)
+	}
+
+	// 渲染内容
+	content, err := renderer.Render(data)
+	if err != nil {
+		return fmt.Errorf("render error: %w", err)
+	}
+
+	// 确定输出文件名
+	outputFilename := m.MergeOutputFile
+	if outputFilename == "" {
+		if fsutil.IsDir(src) {
+			outputFilename = filepath.Base(src) + ".md"
+		} else {
+			outputFilename = strings.TrimSuffix(filepath.Base(src), filepath.Ext(filepath.Base(src))) + ".md"
+		}
+	}
+
+	// 写入文件
+	if err := m.WriteOutput(content, outputFilename); err != nil {
+		return fmt.Errorf("write file error: %w", err)
+	}
+
+	return nil
 }
 
 type JSON struct {
-	Dst string `yaml:"dst"`
+	Dst             string `yaml:"dst"`             // 输出目录
+	MergeOutputFile string `yaml:"mergeOutputFile"` // 合并后的输出文件名
+
+	// 内部使用的字段
+	currentFile string   // 当前处理的文件名
+	Exclude     []string `yaml:"exclude"` // 排除的文件
+	IsMerge     bool     `yaml:"isMerge"` // 是否合并模式
+}
+
+// GetCurrentFileName 获取当前处理的文件名
+func (j *JSON) GetCurrentFileName() string {
+	return j.currentFile
+}
+
+// SetCurrentFile 设置当前处理的文件名
+func (j *JSON) SetCurrentFile(filename string) {
+	j.currentFile = filename
+}
+
+// ReadInput 读取输入
+func (j *JSON) ReadInput(src string, isDir bool) ([]byte, error) {
+	if j.IsMerge && isDir {
+		return j.readAndMergeFiles(src)
+	}
+	return j.readSingleFile(src)
+}
+
+// readSingleFile 读取单个文件
+func (j *JSON) readSingleFile(src string) ([]byte, error) {
+	// 检查src是否是目录
+	fileInfo, err := os.Stat(src)
+	if err != nil {
+		return nil, fmt.Errorf("stat path error: %w", err)
+	}
+
+	var inputPath string
+	if fileInfo.IsDir() {
+		// 如果是目录，读取第一个yml文件
+		files, err := os.ReadDir(src)
+		if err != nil {
+			return nil, fmt.Errorf("read dir error: %w", err)
+		}
+
+		for _, file := range files {
+			if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
+				continue
+			}
+			inputPath = filepath.Join(src, file.Name())
+			j.SetCurrentFile(file.Name())
+			break
+		}
+
+		if inputPath == "" {
+			return nil, fmt.Errorf("no yml file found in directory: %s", src)
+		}
+	} else {
+		// 如果是文件，直接使用
+		inputPath = src
+		j.SetCurrentFile(filepath.Base(src))
+	}
+
+	data, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("read file error: %w", err)
+	}
+	return data, nil
+}
+
+// readAndMergeFiles 读取并合并文件
+func (j *JSON) readAndMergeFiles(src string) ([]byte, error) {
+	files, err := os.ReadDir(src)
+	if err != nil {
+		return nil, fmt.Errorf("read dir error: %w", err)
+	}
+
+	var mergedData []byte
+	for _, file := range files {
+		if file.IsDir() || filepath.Ext(file.Name()) != ".yml" || slices.Contains(j.Exclude, file.Name()) {
+			continue
+		}
+
+		j.SetCurrentFile(file.Name())
+		data, err := os.ReadFile(filepath.Join(src, file.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("read file error: %w", err)
+		}
+		mergedData = append(mergedData, data...)
+		mergedData = append(mergedData, '\n')
+	}
+
+	return mergedData, nil
+}
+
+// WriteOutput 写入输出
+func (j *JSON) WriteOutput(content string, filename string) error {
+	// 确保输出目录存在
+	outputDir := filepath.Dir(j.Dst)
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return fmt.Errorf("create dir error: %w", err)
+	}
+
+	if err := os.WriteFile(j.Dst, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write file error: %w", err)
+	}
+
+	return nil
+}
+
+// ProcessFile 核心方法：处理单个文件
+func (j *JSON) ProcessFile(src string, renderer render.Renderer) error {
+	// 读取文件
+	data, err := j.ReadInput(src, fsutil.IsDir(src))
+	if err != nil {
+		return fmt.Errorf("read file error: %w", err)
+	}
+
+	// 渲染内容
+	content, err := renderer.Render(data)
+	if err != nil {
+		return fmt.Errorf("render error: %w", err)
+	}
+
+	// 确定输出文件名
+	outputFilename := j.MergeOutputFile
+	if outputFilename == "" {
+		if fsutil.IsDir(src) {
+			outputFilename = filepath.Base(src) + ".json"
+		} else {
+			outputFilename = strings.TrimSuffix(filepath.Base(src), filepath.Ext(filepath.Base(src))) + ".json"
+		}
+	}
+
+	// 写入文件
+	if err := j.WriteOutput(content, outputFilename); err != nil {
+		return fmt.Errorf("write file error: %w", err)
+	}
+
+	return nil
 }
 
 // NewDocsConfig 创建新的配置实例
@@ -81,156 +369,41 @@ func (dc *DocsConfig) Process() error {
 	return nil
 }
 
-// parseJSON 处理JSON配置
-func (dc *DocsConfig) parseJSON() error {
-	if dc.JSON == nil {
-		return nil
-	}
-
-	// 创建文件处理器
-	processor := &render.FileProcessor{
-		Src:        dc.Src,
-		TargetDir:  filepath.Dir(dc.JSON.Dst),
-		OutputFile: filepath.Base(dc.JSON.Dst),
-		IsMerge:    dc.IsDir, // 根据路径类型决定是否合并
-	}
-
-	// 如果是单个文件，设置文件信息
-	if !dc.IsDir {
-		processor.InputFile = filepath.Base(dc.Src)
-		processor.Src = filepath.Dir(dc.Src)
-	}
-
-	// 读取文件
-	data, err := processor.ReadInput()
-	if err != nil {
-		return fmt.Errorf("read input error: %w", err)
-	}
-
-	// 创建渲染器并渲染
-	renderer, err := dc.createJSONRenderer()
-	if err != nil {
-		return fmt.Errorf("create json renderer error: %w", err)
-	}
-	content, err := renderer.Render(data)
-	if err != nil {
-		return fmt.Errorf("render error: %w", err)
-	}
-
-	// 写入文件
-	if err := processor.WriteOutput(content); err != nil {
-		return fmt.Errorf("write output error: %w", err)
-	}
-
-	return nil
-}
-
 // parseMarkdown 处理Markdown配置
 func (dc *DocsConfig) parseMarkdown() error {
 	if dc.Markdown == nil {
 		return nil
 	}
 
-	// 获取目标路径
-	targetDir := dc.Markdown.Dst
-	if targetDir == "" {
-		targetDir = "docs" // 默认输出到docs目录
+	// 创建渲染器
+	renderer, err := dc.createMarkdownRenderer()
+	if err != nil {
+		return fmt.Errorf("create renderer error: %w", err)
 	}
 
-	// 创建文件处理器
-	processor := &render.FileProcessor{
-		Src:       dc.Src,
-		TargetDir: targetDir,
-		IsMerge:   dc.Markdown.IsMerge,
-		Exclude:   dc.Markdown.Exclude,
+	// 如果是 GithubMarkdownRender，设置当前文件
+	if gr, ok := renderer.(*gh.GithubMarkdownRender); ok {
+		gr.SetCurrentFile(filepath.Base(dc.Src))
 	}
 
-	switch dc.IsDir {
-	case true:
-		return dc.parseDir(processor)
-	case false:
-		return dc.processSingleFile(processor)
-	default:
-		return fmt.Errorf("%s neither dir nor file", dc.Src)
-	}
+	// 处理文件
+	return dc.Markdown.ProcessFile(dc.Src, renderer)
 }
 
-func (dc *DocsConfig) parseDir(processor *render.FileProcessor) error {
-	// 处理目录
-	if dc.Markdown.IsMerge {
-		return dc.processMergeMode(processor)
-	}
-	return dc.processNonMergeMode(processor)
-}
-
-// processSingleFile 处理单个文件
-func (dc *DocsConfig) processSingleFile(processor *render.FileProcessor) error {
-	fn := processor.Src
-
-	if fsutil.IsDir(fn) || filepath.Ext(fn) != ".yml" {
+// parseJSON 处理JSON配置
+func (dc *DocsConfig) parseJSON() error {
+	if dc.JSON == nil {
 		return nil
 	}
 
 	// 创建渲染器
-	renderer, err := dc.createMarkdownRenderer()
+	renderer, err := dc.createJSONRenderer()
 	if err != nil {
-		return err
-	}
-
-	// 设置文件处理器
-	// processor.InputFile = file.Name()
-	// processor.OutputFile = render.ChangeFileExtFromYamlToMd(fn)
-
-	// 如果是 GithubMarkdownRender，设置处理器
-	if gr, ok := renderer.(*gh.GithubMarkdownRender); ok {
-		gr.SetProcessor(processor)
+		return fmt.Errorf("create renderer error: %w", err)
 	}
 
 	// 处理文件
-	return render.ProcessFile(processor, renderer)
-}
-
-// processNonMergeMode 处理非合并模式
-func (dc *DocsConfig) processNonMergeMode(processor *render.FileProcessor) error {
-	// 确保输入目录存在
-	if _, err := os.Stat(processor.Src); os.IsNotExist(err) {
-		return err
-	}
-
-	// 确保输出目录存在
-	if err := os.MkdirAll(processor.TargetDir, 0o755); err != nil {
-		return err
-	}
-
-	files, err := os.ReadDir(processor.Src)
-	if err != nil {
-		return err
-	}
-
-	for _, file := range files {
-		if !slices.Contains(processor.Exclude, file.Name()) {
-			if err := dc.processSingleFile(processor); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// processMergeMode 处理合并模式
-func (dc *DocsConfig) processMergeMode(processor *render.FileProcessor) error {
-	renderer, err := dc.createMarkdownRenderer()
-	if err != nil {
-		return err
-	}
-
-	// 如果是 GithubMarkdownRender，设置处理器
-	if ghr, ok := renderer.(*gh.GithubMarkdownRender); ok {
-		ghr.SetProcessor(processor)
-	}
-
-	return render.ProcessFile(processor, renderer)
+	return dc.JSON.ProcessFile(dc.Src, renderer)
 }
 
 func (dc *DocsConfig) createJSONRenderer() (render.Renderer, error) {

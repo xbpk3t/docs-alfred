@@ -2,20 +2,17 @@ package gh
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
-	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
 // GithubMarkdownRender Markdown渲染器
 type GithubMarkdownRender struct {
-	processor *render.FileProcessor
+	currentFile string
 	render.MarkdownRenderer
 	Config      ConfigRepos
 	repoConfigs []repoRenderConfig
@@ -28,15 +25,9 @@ type repoRenderConfig struct {
 	repos          Repos
 }
 
-// SetProcessor 设置文件处理器
-func (g *GithubMarkdownRender) SetProcessor(processor *render.FileProcessor) {
-	g.processor = processor
-}
-
 // NewGithubMarkdownRender 创建新的渲染器
 func NewGithubMarkdownRender() *GithubMarkdownRender {
 	return &GithubMarkdownRender{
-		processor: &render.FileProcessor{},
 		repoConfigs: []repoRenderConfig{
 			{admonitionType: render.AdmonitionTip, title: "Sub Repos"},
 			{admonitionType: render.AdmonitionWarning, title: "Replaced Repos"},
@@ -45,12 +36,14 @@ func NewGithubMarkdownRender() *GithubMarkdownRender {
 	}
 }
 
-// RenderToFile 渲染并写入文件
-func (g *GithubMarkdownRender) RenderToFile() error {
-	if g.processor.IsMerge {
-		return g.renderMerged()
-	}
-	return g.renderSeparate()
+// GetCurrentFileName 获取当前处理的文件名
+func (g *GithubMarkdownRender) GetCurrentFileName() string {
+	return g.currentFile
+}
+
+// SetCurrentFile 设置当前处理的文件名
+func (g *GithubMarkdownRender) SetCurrentFile(filename string) {
+	g.currentFile = filename
 }
 
 // RenderMarkdownTable 渲染Markdown表格
@@ -64,109 +57,8 @@ func (g *GithubMarkdownRender) RenderMarkdownTable(header []string, res *strings
 	table.Render()
 }
 
-// renderMerged 合并渲染
-func (g *GithubMarkdownRender) renderMerged() error {
-	// 读取并合并所有YAML文件
-	files, err := os.ReadDir(g.processor.Src)
-	if err != nil {
-		return errcode.WithError(errcode.ErrListDir, err)
-	}
-
-	var mergedData []byte
-	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(file.Name(), ".yml") {
-			continue
-		}
-
-		data, err := os.ReadFile(filepath.Join(g.processor.Src, file.Name()))
-		if err != nil {
-			return errcode.WithError(errcode.ErrReadFile, err)
-		}
-		mergedData = append(mergedData, data...)
-	}
-
-	// 渲染内容
-	content, err := g.Render(mergedData)
-	if err != nil {
-		return err
-	}
-
-	// 确定输出文件名
-	outputFn := g.processor.TargetFile
-	if outputFn == "" {
-		outputFn = fmt.Sprintf("%s.md", filepath.Base(g.processor.Src))
-	}
-
-	// 写入文件
-	return g.writeFile(outputFn, content)
-}
-
-// renderSeparate 分别渲染
-func (g *GithubMarkdownRender) renderSeparate() error {
-	files, err := os.ReadDir(g.processor.Src)
-	if err != nil {
-		return errcode.WithError(errcode.ErrListDir, err)
-	}
-
-	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(file.Name(), ".yml") {
-			continue
-		}
-
-		// 读取YAML文件
-		data, err := os.ReadFile(filepath.Join(g.processor.Src, file.Name()))
-		if err != nil {
-			return errcode.WithError(errcode.ErrReadFile, err)
-		}
-
-		// 渲染内容
-		content, err := g.Render(data)
-		if err != nil {
-			return err
-		}
-
-		// 使用YAML文件名作为MD文件名
-		outputFn := strings.TrimSuffix(file.Name(), ".yml") + ".md"
-
-		// 写入文件
-		if err := g.writeFile(outputFn, content); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// writeFile 写入文件
-func (g *GithubMarkdownRender) writeFile(filename, content string) error {
-	// 创建以srcDir命名的中间目录
-	tmpDir := filepath.Join(g.processor.TargetDir, filepath.Base(g.processor.Src))
-	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
-		return errcode.WithError(errcode.ErrCreateDir, err)
-	}
-
-	// 写入文件到中间目录
-	tmpFile := filepath.Join(tmpDir, filename)
-	if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
-		return errcode.WithError(errcode.ErrWriteFile, err)
-	}
-
-	// 移动文件到最终目标目录
-	finalFile := filepath.Join(g.processor.TargetDir, filename)
-	if err := os.Rename(tmpFile, finalFile); err != nil {
-		return errcode.WithError(errcode.ErrFileProcess, err)
-	}
-
-	// 删除临时目录
-	if err := os.RemoveAll(tmpDir); err != nil {
-		return errcode.WithError(errcode.ErrFileProcess, err)
-	}
-
-	return nil
-}
-
 func (g *GithubMarkdownRender) Render(data []byte) (string, error) {
-	config, err := parser.NewParser[ConfigRepos](data).WithFileName(g.processor.GetCurrentFileName()).ParseSingle()
+	config, err := parser.NewParser[ConfigRepos](data).WithFileName(g.GetCurrentFileName()).ParseSingle()
 	if err != nil {
 		return "", err
 	}
