@@ -73,7 +73,7 @@ func runMerge(cmd *cobra.Command, args []string) error {
 			// 解析并处理仓库
 			rc, err := parser.NewParser[gh.ConfigRepos](fx).ParseSingle()
 			if err != nil {
-				return errcode.WithError(errcode.ErrParseConfig, err)
+				return errcode.WithError(errcode.ErrParseConfig, fmt.Errorf("%s: %w", file.Name(), err))
 			}
 
 			repos := rc.WithType().WithTag(strings.TrimSuffix(file.Name(), ".yml")).ToRepos()
@@ -102,18 +102,18 @@ func runMerge(cmd *cobra.Command, args []string) error {
 	// 定义输出文件路径
 	outputPath := "gh.yml"
 
-	// 将合并后的数据写入 YAML 文件
+	// 将合并后的数据写入 Markdown 文件
 	if err := WriteYAMLToFile(cr, outputPath); err != nil {
-		log.Fatalf("error writing to YAML file: %v", err)
+		log.Fatalf("error writing to Markdown file: %v", err)
 	}
 
-	fmt.Printf("Merged YAML file created: %s\n", outputPath)
+	fmt.Printf("Merged Markdown file created: %s\n", outputPath)
 	return nil
 }
 
 type Gh []string
 
-// WriteYAMLToFile 将 YAML 数据写入文件
+// WriteYAMLToFile 将 Markdown 数据写入文件
 func WriteYAMLToFile(data gh.ConfigRepos, outputPath string) error {
 	file, err := os.Create(outputPath)
 	if err != nil {
