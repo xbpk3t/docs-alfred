@@ -11,14 +11,14 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
-// DiaryRenderer 日记渲染器
-type DiaryRenderer struct {
+// DiaryMarkdownRender 日记渲染器
+type DiaryMarkdownRender struct {
 	render.MarkdownRenderer
 }
 
-// NewDiaryRenderer 创建日记渲染器
-func NewDiaryRenderer() *DiaryRenderer {
-	return &DiaryRenderer{
+// NewDiaryMarkdownRender 创建日记渲染器
+func NewDiaryMarkdownRender() *DiaryMarkdownRender {
+	return &DiaryMarkdownRender{
 		MarkdownRenderer: render.NewMarkdownRenderer(),
 	}
 }
@@ -30,7 +30,7 @@ type weekFile struct {
 }
 
 // Render 渲染内容
-func (r *DiaryRenderer) Render(data []byte) (string, error) {
+func (r *DiaryMarkdownRender) Render(data []byte) (string, error) {
 	// 获取目录路径
 	dirPath := string(data)
 	dirPath = strings.TrimSpace(dirPath)
