@@ -188,3 +188,4 @@ test
 /coverage.out
 /rss2newsletter/rss2newsletter.yml
 /admin/
+/alfred/gh/.workflow/exe
