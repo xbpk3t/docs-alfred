@@ -1,10 +1,12 @@
-package docs
+package pkg
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+
+	"github.com/gookit/goutil/fsutil"
 
 	"github.com/xbpk3t/docs-alfred/service/diary"
 	"github.com/xbpk3t/docs-alfred/service/goods"
@@ -106,7 +108,10 @@ func (dc *DocsConfig) parseJSON() error {
 	}
 
 	// 创建渲染器并渲染
-	renderer := render.NewJSONRenderer(dc.Cmd, true)
+	renderer, err := dc.createJSONRenderer()
+	if err != nil {
+		return fmt.Errorf("create json renderer error: %w", err)
+	}
 	content, err := renderer.Render(data)
 	if err != nil {
 		return fmt.Errorf("render error: %w", err)
@@ -140,27 +145,17 @@ func (dc *DocsConfig) parseMarkdown() error {
 		Exclude:   dc.Markdown.Exclude,
 	}
 
-	// 如果是单个文件，设置文件信息
-	if !dc.IsDir {
-		processor.InputFile = filepath.Base(dc.Src)
-		processor.Src = filepath.Dir(dc.Src)
-		processor.OutputFile = render.ChangeFileExtFromYamlToMd(processor.InputFile)
-
-		// 创建渲染器
-		renderer, err := dc.createRenderer()
-		if err != nil {
-			return err
-		}
-
-		// 如果是 GithubMarkdownRender，设置处理器
-		if gh, ok := renderer.(*gh.GithubMarkdownRender); ok {
-			gh.SetProcessor(processor)
-		}
-
-		// 处理文件
-		return render.ProcessFile(processor, renderer)
+	switch dc.IsDir {
+	case true:
+		return dc.parseDir(processor)
+	case false:
+		return dc.processSingleFile(processor)
+	default:
+		return fmt.Errorf("%s neither dir nor file", dc.Src)
 	}
+}
 
+func (dc *DocsConfig) parseDir(processor *render.FileProcessor) error {
 	// 处理目录
 	if dc.Markdown.IsMerge {
 		return dc.processMergeMode(processor)
@@ -169,24 +164,26 @@ func (dc *DocsConfig) parseMarkdown() error {
 }
 
 // processSingleFile 处理单个文件
-func (dc *DocsConfig) processSingleFile(processor *render.FileProcessor, file os.DirEntry) error {
-	if file.IsDir() || filepath.Ext(file.Name()) != ".yml" {
+func (dc *DocsConfig) processSingleFile(processor *render.FileProcessor) error {
+	fn := processor.Src
+
+	if fsutil.IsDir(fn) || filepath.Ext(fn) != ".yml" {
 		return nil
 	}
 
 	// 创建渲染器
-	renderer, err := dc.createRenderer()
+	renderer, err := dc.createMarkdownRenderer()
 	if err != nil {
 		return err
 	}
 
 	// 设置文件处理器
-	processor.InputFile = file.Name()
-	processor.OutputFile = render.ChangeFileExtFromYamlToMd(file.Name())
+	// processor.InputFile = file.Name()
+	// processor.OutputFile = render.ChangeFileExtFromYamlToMd(fn)
 
 	// 如果是 GithubMarkdownRender，设置处理器
-	if gh, ok := renderer.(*gh.GithubMarkdownRender); ok {
-		gh.SetProcessor(processor)
+	if gr, ok := renderer.(*gh.GithubMarkdownRender); ok {
+		gr.SetProcessor(processor)
 	}
 
 	// 处理文件
@@ -212,7 +209,7 @@ func (dc *DocsConfig) processNonMergeMode(processor *render.FileProcessor) error
 
 	for _, file := range files {
 		if !slices.Contains(processor.Exclude, file.Name()) {
-			if err := dc.processSingleFile(processor, file); err != nil {
+			if err := dc.processSingleFile(processor); err != nil {
 				return err
 			}
 		}
@@ -223,7 +220,7 @@ func (dc *DocsConfig) processNonMergeMode(processor *render.FileProcessor) error
 
 // processMergeMode 处理合并模式
 func (dc *DocsConfig) processMergeMode(processor *render.FileProcessor) error {
-	renderer, err := dc.createRenderer()
+	renderer, err := dc.createMarkdownRenderer()
 	if err != nil {
 		return err
 	}
@@ -236,13 +233,16 @@ func (dc *DocsConfig) processMergeMode(processor *render.FileProcessor) error {
 	return render.ProcessFile(processor, renderer)
 }
 
-// createRenderer 创建渲染器
-func (dc *DocsConfig) createRenderer() (render.Renderer, error) {
+func (dc *DocsConfig) createJSONRenderer() (render.Renderer, error) {
 	// 如果配置了JSON输出，使用JSON渲染器
 	if dc.JSON != nil {
 		return render.NewJSONRenderer(dc.Cmd, true), nil
 	}
+	return nil, fmt.Errorf("please add JSON for entity: %s", dc.Cmd)
+}
 
+// createMarkdownRenderer 创建渲染器
+func (dc *DocsConfig) createMarkdownRenderer() (render.Renderer, error) {
 	if dc.Markdown != nil {
 		// 否则使用对应的Markdown渲染器
 		switch dc.Cmd {
@@ -263,7 +263,7 @@ func (dc *DocsConfig) createRenderer() (render.Renderer, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("please add markdown/json for entity: %s", dc.Cmd)
+	return nil, fmt.Errorf("please add markdown for entity: %s", dc.Cmd)
 }
 
 // parseJSONFile 处理单个JSON文件

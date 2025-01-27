@@ -6,14 +6,17 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gookit/goutil/fsutil"
+
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 )
 
 // FileProcessor 文件处理器
 type FileProcessor struct {
-	Src        string   // 输入目录
+	Src       string // 输入目录
+	InputFile string // 输入文件名
+
 	TargetDir  string   // 输出目录
-	InputFile  string   // 输入文件名
 	OutputFile string   // 输出文件名
 	TargetFile string   // 目标文件名（用于合并模式）
 	Exclude    []string // 排除的文件
@@ -43,7 +46,8 @@ func (p *FileProcessor) GetCurrentFileName() string {
 
 // ReadInput 读取输入
 func (fp *FileProcessor) ReadInput() ([]byte, error) {
-	if fp.IsMerge {
+	// 加了一个IsDir判断，这样即使在手滑给单yaml文件加了isMerge，也不至于报错。降低心智负担。
+	if fp.IsMerge && fsutil.IsDir(fp.Src) {
 		return fp.readAndMergeFiles()
 	}
 	return fp.readSingleFile()
@@ -126,16 +130,7 @@ func (fp *FileProcessor) WriteOutput(content string) error {
 
 	// 确定输出文件路径
 	outputPath := fp.OutputFile
-	if outputPath == "" {
-		// 如果没有指定输出文件名，使用输入文件名
-		if fp.InputFile != "" {
-			outputPath = strings.TrimSuffix(fp.InputFile, ".yml") + ".md"
-		} else {
-			// 如果没有输入文件名，使用目录名
-			outputPath = filepath.Base(fp.Src) + ".md"
-		}
-	}
-	outputPath = filepath.Join(fp.TargetDir, outputPath)
+	// outputPath = filepath.Join(fp.TargetDir, outputPath)
 
 	// 直接写入文件
 	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {

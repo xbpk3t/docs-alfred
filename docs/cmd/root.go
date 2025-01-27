@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/docs/docs"
+	"github.com/xbpk3t/docs-alfred/docs/pkg"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
 
@@ -22,7 +22,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		// 解析配置
-		configs, err := parser.NewParser[[]docs.DocsConfig](configData).ParseSingle()
+		configs, err := parser.NewParser[[]pkg.DocsConfig](configData).ParseSingle()
 		if err != nil {
 			return err
 		}
