@@ -23,11 +23,6 @@ const (
 	AdmonitionDanger  AdmonitionType = "danger"
 )
 
-// MarkdownRender 定义渲染器接口
-type MarkdownRender interface {
-	Render(data []byte) (string, error)
-}
-
 // MarkdownRenderer Markdown渲染器
 type MarkdownRenderer struct {
 	builder strings.Builder
@@ -37,6 +32,12 @@ func NewMarkdownRenderer() MarkdownRenderer {
 	return MarkdownRenderer{
 		builder: strings.Builder{},
 	}
+}
+
+// Render 实现 Renderer 接口
+func (m MarkdownRenderer) Render(data []byte) (string, error) {
+	// 这里可以添加 Markdown 特定的渲染逻辑
+	return m.builder.String(), nil
 }
 
 // Write 写入内容
