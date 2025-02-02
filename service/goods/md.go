@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
-	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
@@ -44,11 +43,6 @@ func (r *GoodsMarkdownRender) Render(data []byte) (string, error) {
 	}
 
 	return r.String(), nil
-}
-
-// ParseConfig 解析配置文件
-func ParseConfig(data []byte) ([]Goods, error) {
-	return parser.NewParser[Goods](data).ParseFlatten()
 }
 
 // RenderMarkdown 渲染为 Markdown 格式

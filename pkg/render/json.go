@@ -1,16 +1,24 @@
 package render
 
 import (
-	"bytes"
-
 	"github.com/bytedance/sonic"
-	"gopkg.in/yaml.v3"
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
+)
+
+// ParseMode 解析模式
+type ParseMode int
+
+const (
+	ParseSingle ParseMode = iota
+	ParseMulti
+	ParseFlatten
 )
 
 // JSONRenderer JSON渲染器
 type JSONRenderer struct {
 	Cmd         string
 	PrettyPrint bool
+	ParseMode   ParseMode
 }
 
 // NewJSONRenderer 创建新的JSON渲染器
@@ -18,35 +26,39 @@ func NewJSONRenderer(cmd string, prettyPrint bool) *JSONRenderer {
 	return &JSONRenderer{
 		PrettyPrint: prettyPrint,
 		Cmd:         cmd,
+		ParseMode:   ParseSingle, // 默认使用单文档模式
 	}
+}
+
+// WithParseMode 设置解析模式
+func (j *JSONRenderer) WithParseMode(mode ParseMode) *JSONRenderer {
+	j.ParseMode = mode
+	return j
 }
 
 // Render 实现 Renderer 接口
 func (j *JSONRenderer) Render(data []byte) (string, error) {
-	// 分割多个YAML文档
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	var documents []interface{}
+	var dataToEncode interface{}
 
-	for {
-		var doc interface{}
-		err := decoder.Decode(&doc)
-		if err != nil {
-			break // 到达文件末尾
-		}
-		if doc != nil {
-			documents = append(documents, doc)
-		}
+	// 根据解析模式选择不同的解析方法
+	parser := parser.NewParser[interface{}](data)
+	var err error
+
+	switch j.ParseMode {
+	case ParseMulti:
+		dataToEncode, err = parser.ParseMulti()
+	case ParseFlatten:
+		dataToEncode, err = parser.ParseFlatten()
+	default: // ParseSingle
+		dataToEncode, err = parser.ParseSingle()
 	}
 
-	// 如果只有一个文档，直接返回它
-	var dataToEncode interface{} = documents
-	if len(documents) == 1 {
-		dataToEncode = documents[0]
+	if err != nil {
+		return "", err
 	}
 
 	// 转换为JSON
 	var result []byte
-	var err error
 	if j.PrettyPrint {
 		result, err = sonic.MarshalIndent(dataToEncode, "", "  ")
 	} else {
