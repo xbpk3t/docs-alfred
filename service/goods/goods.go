@@ -1,5 +1,7 @@
 package goods
 
+import "github.com/xbpk3t/docs-alfred/pkg/parser"
+
 // Goods 定义商品配置结构
 type Goods struct {
 	Type  string `yaml:"type"`
@@ -25,4 +27,9 @@ type QA struct {
 	Question     string   `yaml:"q"`
 	Answer       string   `yaml:"x"`
 	SubQuestions []string `yaml:"s"`
+}
+
+// ParseConfig 解析配置文件
+func ParseConfig(data []byte) ([]Goods, error) {
+	return parser.NewParser[Goods](data).ParseFlatten()
 }

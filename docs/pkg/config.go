@@ -409,7 +409,19 @@ func (dc *DocsConfig) parseJSON() error {
 func (dc *DocsConfig) createJSONRenderer() (render.Renderer, error) {
 	// 如果配置了JSON输出，使用JSON渲染器
 	if dc.JSON != nil {
-		return render.NewJSONRenderer(dc.Cmd, true), nil
+		renderer := render.NewJSONRenderer(dc.Cmd, true)
+
+		// 根据不同的命令类型设置解析模式
+		switch dc.Cmd {
+		case "goods", "books":
+			renderer.WithParseMode(render.ParseFlatten)
+		case "works":
+			renderer.WithParseMode(render.ParseMulti)
+		default:
+			renderer.WithParseMode(render.ParseSingle)
+		}
+
+		return renderer, nil
 	}
 	return nil, fmt.Errorf("please add JSON for entity: %s", dc.Cmd)
 }
