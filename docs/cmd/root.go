@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/docs/pkg"
@@ -9,6 +10,8 @@ import (
 )
 
 var cfgFile string
+
+var wg sync.WaitGroup
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -27,12 +30,17 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
+		wg.Add(len(configs))
+
 		// 处理每个配置
 		for _, config := range configs {
-			if err := config.Process(); err != nil {
-				return err
-			}
+			go func() {
+				defer wg.Done()
+				_ = config.Process()
+			}()
 		}
+
+		wg.Wait()
 
 		return nil
 	},
