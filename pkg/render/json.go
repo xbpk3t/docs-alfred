@@ -41,16 +41,16 @@ func (j *JSONRenderer) Render(data []byte) (string, error) {
 	var dataToEncode interface{}
 
 	// 根据解析模式选择不同的解析方法
-	parser := parser.NewParser[interface{}](data)
+	ps := parser.NewParser[interface{}](data)
 	var err error
 
 	switch j.ParseMode {
 	case ParseMulti:
-		dataToEncode, err = parser.ParseMulti()
+		dataToEncode, err = ps.ParseMulti()
 	case ParseFlatten:
-		dataToEncode, err = parser.ParseFlatten()
+		dataToEncode, err = ps.ParseFlatten()
 	default: // ParseSingle
-		dataToEncode, err = parser.ParseSingle()
+		dataToEncode, err = ps.ParseSingle()
 	}
 
 	if err != nil {
@@ -71,11 +71,3 @@ func (j *JSONRenderer) Render(data []byte) (string, error) {
 
 	return string(result), nil
 }
-
-//type JSONWriter interface {
-//	Render(data []byte) (string, error)
-//}
-//
-//type JSONBuilder struct {
-//	builder strings.Builder
-//}

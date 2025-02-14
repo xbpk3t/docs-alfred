@@ -12,14 +12,14 @@ import (
 // WorkRenderer Markdown渲染器
 type WorkRenderer struct {
 	seenTags map[string]bool
-	render.MarkdownRenderer
+	renderer render.MarkdownRenderer
 }
 
 // NewWorkRenderer 创建新的渲染器
 func NewWorkRenderer() *WorkRenderer {
 	return &WorkRenderer{
-		seenTags:         make(map[string]bool),
-		MarkdownRenderer: render.NewMarkdownRenderer(),
+		seenTags: make(map[string]bool),
+		renderer: render.NewMarkdownRenderer(),
 	}
 }
 
@@ -152,4 +152,29 @@ func (docs Docs) SearchQuestions(query string) []string {
 	}
 
 	return results
+}
+
+// Write implements writing content
+func (r *WorkRenderer) Write(s string) {
+	r.renderer.Write(s)
+}
+
+// String implements getting result
+func (r *WorkRenderer) String() string {
+	return r.renderer.String()
+}
+
+// RenderHeader implements rendering header
+func (r *WorkRenderer) RenderHeader(level int, text string) {
+	r.renderer.RenderHeader(level, text)
+}
+
+// RenderFold implements rendering fold content
+func (r *WorkRenderer) RenderFold(summary, details string) {
+	r.renderer.RenderFold(summary, details)
+}
+
+// RenderListItem implements rendering list item
+func (r *WorkRenderer) RenderListItem(text string) {
+	r.renderer.RenderListItem(text)
 }

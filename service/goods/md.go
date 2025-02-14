@@ -11,13 +11,14 @@ import (
 // GoodsMarkdownRender Markdown渲染器
 type GoodsMarkdownRender struct {
 	seenTags map[string]bool
-	render.MarkdownRenderer
+	renderer render.MarkdownRenderer
 }
 
 // NewGoodsMarkdownRenderer 创建新的渲染器
 func NewGoodsMarkdownRenderer() *GoodsMarkdownRender {
 	return &GoodsMarkdownRender{
 		seenTags: make(map[string]bool),
+		renderer: render.NewMarkdownRenderer(),
 	}
 }
 
@@ -163,4 +164,29 @@ func (qa *QA) formatContent() string {
 	}
 
 	return strings.Join(parts, "\n\n")
+}
+
+// Write implements writing content
+func (r *GoodsMarkdownRender) Write(s string) {
+	r.renderer.Write(s)
+}
+
+// String implements getting result
+func (r *GoodsMarkdownRender) String() string {
+	return r.renderer.String()
+}
+
+// RenderHeader implements rendering header
+func (r *GoodsMarkdownRender) RenderHeader(level int, text string) {
+	r.renderer.RenderHeader(level, text)
+}
+
+// RenderFold implements rendering fold content
+func (r *GoodsMarkdownRender) RenderFold(summary, details string) {
+	r.renderer.RenderFold(summary, details)
+}
+
+// RenderListItem implements rendering list item
+func (r *GoodsMarkdownRender) RenderListItem(text string) {
+	r.renderer.RenderListItem(text)
 }
