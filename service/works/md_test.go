@@ -228,14 +228,14 @@ func TestWorkRenderer_Render(t *testing.T) {
 // 				assert.Len(t, docs, 4)
 //
 // 				// 验证第一个poetry部分
-// 				assert.Equal(t, "poetry", docs[0].Type)
+// 				assert.Equal(t, "poetry", docs[0].Category)
 // 				assert.Equal(t, "verse", docs[0].Tag)
 // 				assert.Len(t, docs[0].Qs, 1)
 // 				assert.Equal(t, "What are common poetic devices in English poetry?", docs[0].Qs[0].Question)
 //
 // 				// 验证classic部分
 // 				classicDoc := docs[2]
-// 				assert.Equal(t, "classic", classicDoc.Type)
+// 				assert.Equal(t, "classic", classicDoc.Category)
 // 				assert.Equal(t, "literature", classicDoc.Tag)
 // 				assert.Contains(t, classicDoc.Qs[0].Answer, "iambic pentameter")
 // 			},

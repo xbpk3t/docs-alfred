@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/golang-module/carbon/v2"
+	"github.com/dromara/carbon/v2"
 	"github.com/gorilla/feeds"
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
@@ -137,7 +137,7 @@ func (s *NewsletterService) processSingleFeed(feed rss.FeedsDetail) (feeds.RssFe
 
 	// FIXME 这里只需要加个logging，即使整个type都报错也不应该直接return，否则会导致挂掉
 	// if len(allFeeds) == 0 {
-	// 	return feeds.RssFeed{}, errcode.WithError(errcode.ErrR2NRenderTemplateFailed, feed.Type)
+	// 	return feeds.RssFeed{}, errcode.WithError(errcode.ErrR2NRenderTemplateFailed, feed.Category)
 	// }
 
 	combinedFeed, err := s.feed.MergeAllFeeds(feed.Type, allFeeds)

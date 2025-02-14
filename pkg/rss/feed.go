@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
-	"github.com/golang-module/carbon/v2"
+	"github.com/dromara/carbon/v2"
 	"github.com/gorilla/feeds"
 	"github.com/mmcdole/gofeed"
 )

@@ -13,7 +13,7 @@ import (
 // GithubMarkdownRender Markdown渲染器
 type GithubMarkdownRender struct {
 	currentFile string
-	render.MarkdownRenderer
+	renderer    render.MarkdownRenderer
 	Config      ConfigRepos
 	repoConfigs []repoRenderConfig
 }
@@ -28,6 +28,7 @@ type repoRenderConfig struct {
 // NewGithubMarkdownRender 创建新的渲染器
 func NewGithubMarkdownRender() *GithubMarkdownRender {
 	return &GithubMarkdownRender{
+		renderer: render.NewMarkdownRenderer(),
 		repoConfigs: []repoRenderConfig{
 			{admonitionType: render.AdmonitionTip, title: "Sub Repos"},
 			{admonitionType: render.AdmonitionWarning, title: "Replaced Repos"},
@@ -179,4 +180,44 @@ func formatQuestionDetails(q Question) string {
 	}
 
 	return strings.Join(parts, "\n\n")
+}
+
+// Write implements writing content
+func (g *GithubMarkdownRender) Write(s string) {
+	g.renderer.Write(s)
+}
+
+// RenderFold implements rendering fold content
+func (g *GithubMarkdownRender) RenderFold(summary, details string) {
+	g.renderer.RenderFold(summary, details)
+}
+
+// String implements getting result
+func (g *GithubMarkdownRender) String() string {
+	return g.renderer.String()
+}
+
+// RenderHeader implements rendering header
+func (g *GithubMarkdownRender) RenderHeader(level int, text string) {
+	g.renderer.RenderHeader(level, text)
+}
+
+// RenderLink implements rendering link
+func (g *GithubMarkdownRender) RenderLink(text, url string) string {
+	return g.renderer.RenderLink(text, url)
+}
+
+// RenderCodeBlock implements rendering code block
+func (g *GithubMarkdownRender) RenderCodeBlock(language, code string) {
+	g.renderer.RenderCodeBlock(language, code)
+}
+
+// RenderAdmonition implements rendering admonition
+func (g *GithubMarkdownRender) RenderAdmonition(admonitionType render.AdmonitionType, title, content string) {
+	g.renderer.RenderAdmonition(admonitionType, title, content)
+}
+
+// RenderListItem implements rendering list item
+func (g *GithubMarkdownRender) RenderListItem(text string) {
+	g.renderer.RenderListItem(text)
 }

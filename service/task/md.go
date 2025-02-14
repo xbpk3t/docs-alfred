@@ -11,13 +11,13 @@ import (
 
 // TaskRenderer Markdown渲染器
 type TaskRenderer struct {
-	render.MarkdownRenderer
+	renderer render.MarkdownRenderer
 }
 
 // NewTaskRenderer 创建新的渲染器
 func NewTaskRenderer() *TaskRenderer {
 	return &TaskRenderer{
-		MarkdownRenderer: render.NewMarkdownRenderer(),
+		renderer: render.NewMarkdownRenderer(),
 	}
 }
 
@@ -47,7 +47,7 @@ func (r *TaskRenderer) Render(data []byte) (string, error) {
 	sort.Strings(ymlFiles)
 
 	// 添加头部内容
-	r.RenderMetadata(map[string]string{
+	r.renderer.RenderMetadata(map[string]string{
 		"slug": "/",
 	})
 
@@ -57,12 +57,12 @@ func (r *TaskRenderer) Render(data []byte) (string, error) {
 		name = strings.TrimPrefix(name, "task-")
 
 		// 渲染标题
-		r.RenderHeader(render.HeadingLevel2, name)
+		r.renderer.RenderHeader(render.HeadingLevel2, name)
 
 		// 渲染导入语句和代码块
-		r.RenderImport(name, "../"+parentDir+"/"+file)
-		r.RenderContainer("{"+name+"}", "yaml")
+		r.renderer.RenderImport(name, "../"+parentDir+"/"+file)
+		r.renderer.RenderContainer("{"+name+"}", "yaml")
 	}
 
-	return r.String(), nil
+	return r.renderer.String(), nil
 }

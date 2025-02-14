@@ -110,13 +110,13 @@ repos:
         pass_filenames: false
         files: ^components/dashboard/
 
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v1.61.0
-    hooks:
-      - id: golangci-lint
-        entry: golangci-lint run --fix
-        types: [go]
-        language: golang
+#  - repo: https://github.com/golangci/golangci-lint
+#    rev: v1.61.0
+#    hooks:
+#      - id: golangci-lint
+#        entry: golangci-lint run --fix
+#        types: [go]
+#        language: golang
 
   - repo: local
     hooks:

@@ -6,8 +6,8 @@ require (
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/bytedance/sonic v1.12.7
 	github.com/deanishe/awgo v0.29.1
-	github.com/go-resty/resty/v2 v2.16.2
-	github.com/golang-module/carbon/v2 v2.4.1
+	github.com/dromara/carbon/v2 v2.5.2
+	github.com/go-resty/resty/v2 v2.16.5
 	github.com/gookit/goutil v0.6.18
 	github.com/gorilla/feeds v1.2.0
 	github.com/joho/godotenv v1.5.1
@@ -42,6 +42,6 @@ require (
 	go.deanishe.net/env v0.5.1 // indirect
 	go.deanishe.net/fuzzy v1.0.0 // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 )

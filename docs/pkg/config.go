@@ -413,7 +413,7 @@ func (dc *DocsConfig) createJSONRenderer() (render.Renderer, error) {
 
 		// 根据不同的命令类型设置解析模式
 		switch dc.Cmd {
-		case "goods", "books":
+		case "goods":
 			renderer.WithParseMode(render.ParseFlatten)
 		case "works":
 			renderer.WithParseMode(render.ParseMulti)

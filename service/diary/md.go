@@ -7,19 +7,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang-module/carbon/v2"
+	"github.com/dromara/carbon/v2"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
 // DiaryMarkdownRender 日记渲染器
 type DiaryMarkdownRender struct {
-	render.MarkdownRenderer
+	renderer render.MarkdownRenderer
 }
 
 // NewDiaryMarkdownRender 创建日记渲染器
 func NewDiaryMarkdownRender() *DiaryMarkdownRender {
 	return &DiaryMarkdownRender{
-		MarkdownRenderer: render.NewMarkdownRenderer(),
+		renderer: render.NewMarkdownRenderer(),
 	}
 }
 
@@ -76,13 +76,13 @@ func (r *DiaryMarkdownRender) Render(data []byte) (string, error) {
 		date := carbon.CreateFromDate(yearNum, 1, 1).AddWeeks(wf.week - 1)
 
 		// 渲染标题
-		r.RenderHeader(render.HeadingLevel2, date.Format("Y-m-d")+" ("+wf.name+")")
+		r.renderer.RenderHeader(render.HeadingLevel2, date.Format("Y-m-d")+" ("+wf.name+")")
 
 		// 渲染导入语句和代码块
 		importPath := filepath.Join(fp, year, wf.filename)
-		r.RenderImport(wf.name, "../"+importPath)
-		r.RenderContainer("{"+wf.name+"}", "yaml")
+		r.renderer.RenderImport(wf.name, "../"+importPath)
+		r.renderer.RenderContainer("{"+wf.name+"}", "yaml")
 	}
 
-	return r.String(), nil
+	return r.renderer.String(), nil
 }
