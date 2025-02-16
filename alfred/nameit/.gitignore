@@ -6,14 +6,6 @@
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio, WebStorm and Rider
 # Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
 
-codecov
-
-# 用来放各种yaml
-data
-
-../.idea
-
-
 # User-specific stuff
 .idea/**/workspace.xml
 .idea/**/tasks.xml
@@ -179,13 +171,8 @@ Temporary Items
 
 # Custom rules (everything added below won't be overriden by 'Generate .gitignore File' if you use 'Update' option)
 
-alfred/gh/.workflow/exe
-alfred/gh/testenv
+.workflow/exe
+testenv
 coverage.txt
-alfred/gh/.workflow/prefs.plist
+.workflow/prefs.plist
 test
-/qs.md
-/coverage.out
-/rss2newsletter/rss2newsletter.yml
-/admin/
-/alfred/gh/.workflow/exe
