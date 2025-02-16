@@ -5,12 +5,13 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/alfred/gh/internal/alfred"
+	"github.com/xbpk3t/docs-alfred/alfred/gh/internal/cons"
+
 	"github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 
-	"github.com/xbpk3t/docs-alfred/alfred/internal/alfred"
-	"github.com/xbpk3t/docs-alfred/alfred/internal/cons"
 	gh2 "github.com/xbpk3t/docs-alfred/service/gh"
 
 	aw "github.com/deanishe/awgo"

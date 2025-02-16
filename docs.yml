@@ -1,0 +1,111 @@
+---
+# yaml2md
+# src: 源文件的文件夹
+# cmd: 该item用来执行yaml2md的子命令，比如说gh, works, ws 之类的
+# json:
+## dst: json文件目标路径
+# markdown:
+## dst: 目标文件的文件夹
+## exclude: 用来排除指定文件夹中的文件
+## isExpand (默认true 展开): 在docusaurus中是否展开 （这个需要修改sidebars.ts里的相应配置，有点复杂，不搞了）
+## isMerge: 是否需要merge为一个yaml
+## mergeOutputFile（默认为<fp>.yml）: algo.yml 如果isMerge为true，就需要设置该key
+
+
+- src: data/gh
+  cmd: gh
+  markdown:
+    dst: admin/apps/mocking/data
+    isMerge: true
+  json:
+    dst: admin/apps/mocking/data/gh.json
+
+
+- src: data/life/me
+  cmd: works
+  markdown:
+    isMerge: true
+    dst: admin/apps/mocking/data/life
+    exclude: [ntl.yml]
+
+
+- src: data/life/ss
+  cmd: works
+  markdown:
+    isMerge: true
+    dst: admin/apps/mocking/data/life
+
+
+- src: data/goods
+  cmd: goods
+  json:
+    dst: admin/apps/mocking/data/goods.json
+  markdown:
+    isMerge: true
+    dst: admin/apps/mocking/data/goods.md
+
+
+- src: data/books
+  cmd: books
+  markdown:
+    isMerge: true
+    dst: admin/apps/mocking/data/books.md
+  json:
+    dst: admin/apps/mocking/data/books.json
+
+
+- src: data/life/eng.yml
+  cmd: works
+  markdown:
+    isMerge: true
+    dst: admin/apps/mocking/data/eng.md
+
+
+#- src: data/task/OKR
+#  cmd: okr
+#  json:
+#    dst: admin/apps/mocking/data/okr.json
+
+
+- src: data/x/fc2.yml
+  cmd: fc2
+  json:
+    dst: admin/apps/mocking/data/fc2.json
+
+
+- src: data/x/movies.yml
+  cmd: movies
+  json:
+    dst: admin/apps/mocking/data/movies.json
+
+
+- src: data/x/tv.yml
+  cmd: tv
+  json:
+    dst: admin/apps/mocking/data/tv.json
+
+
+
+
+
+#- src: task/diary
+#  dst: docs
+#  isRawLoad: true
+#  tasks:
+#    - src: 2025
+#      cmd: diary
+#      isMerge: true
+#      targetFile: diary-2025.md
+#    - src: 2024
+#      cmd: diary
+#      isMerge: true
+#      targetFile: diary-2024.md
+
+
+
+#- src: task
+#  dst: docs
+#  targetFile: TASK.md
+#  isRawLoad: true
+#  tasks:
+#    - cmd: task
