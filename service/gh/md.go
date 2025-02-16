@@ -59,7 +59,8 @@ func (g *GithubMarkdownRender) RenderMarkdownTable(header []string, res *strings
 }
 
 func (g *GithubMarkdownRender) Render(data []byte) (string, error) {
-	config, err := parser.NewParser[ConfigRepos](data).WithFileName(g.GetCurrentFileName()).ParseSingle()
+	// config, err := parser.NewParser[ConfigRepos](data).WithFileName(g.GetCurrentFileName()).ParseSingle()
+	config, err := parser.NewParser[ConfigRepo](data).WithFileName(g.GetCurrentFileName()).ParseFlatten()
 	if err != nil {
 		return "", err
 	}

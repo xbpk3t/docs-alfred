@@ -21,11 +21,11 @@ import (
 
 // DocsConfig 定义配置结构
 type DocsConfig struct {
-	Markdown *Markdown `yaml:"markdown"` // Using pointer to allow nil checks
-	JSON     *JSON     `yaml:"json"`     // Using pointer to allow nil checks
-	Src      string    `yaml:"src"`      // 源路径
-	Cmd      string    `yaml:"cmd"`      // 命令类型
-	IsDir    bool      `yaml:"-"`        // 是否为文件夹，根据src自动判断
+	Markdown *Markdown `yaml:"md"`   // Using pointer to allow nil checks
+	JSON     *JSON     `yaml:"json"` // Using pointer to allow nil checks
+	Src      string    `yaml:"src"`  // 源路径
+	Cmd      string    `yaml:"cmd"`  // 命令类型
+	IsDir    bool      `yaml:"-"`    // 是否为文件夹，根据src自动判断
 }
 
 type Markdown struct {
