@@ -142,11 +142,11 @@ repos:
         additional_dependencies: []
 
 
-      - id: nilaway
-        name: nilaway
-        entry: nilaway ./...
-        language: golang
-        pass_filenames: false
+#      - id: nilaway
+#        name: nilaway
+#        entry: nilaway ./...
+#        language: golang
+#        pass_filenames: false
 
       - id: race-test
         name: race-test

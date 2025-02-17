@@ -452,7 +452,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://docs.hxha.xyz/data/</string>
+				<string>https://docs.lucas1.xyz/data/</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>
@@ -473,7 +473,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://docs.hxha.xyz/x</string>
+				<string>https://docs.lucas1.xyz/x</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>

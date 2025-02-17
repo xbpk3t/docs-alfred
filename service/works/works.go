@@ -23,5 +23,6 @@ type Docs []Doc
 
 // ParseConfig 解析配置文件
 func ParseConfig(data []byte) ([]Docs, error) {
-	return parser.NewParser[Docs](data).ParseMulti()
+	// return parser.NewParser[Docs](data).ParseMulti()
+	return parser.NewParser[Docs](data).ParseFlatten()
 }

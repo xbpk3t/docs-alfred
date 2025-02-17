@@ -8,6 +8,7 @@ require (
 	github.com/deanishe/awgo v0.29.1
 	github.com/dromara/carbon/v2 v2.5.2
 	github.com/go-resty/resty/v2 v2.16.5
+	github.com/goccy/go-yaml v1.15.23
 	github.com/gookit/goutil v0.6.18
 	github.com/gorilla/feeds v1.2.0
 	github.com/joho/godotenv v1.5.1
@@ -18,7 +19,6 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.10.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -44,4 +44,5 @@ require (
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

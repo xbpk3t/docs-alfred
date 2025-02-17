@@ -9,7 +9,8 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
-	"gopkg.in/yaml.v3"
+
+	"github.com/goccy/go-yaml"
 )
 
 type ConfigMerger struct {

@@ -1,7 +1,5 @@
 package books
 
-import "github.com/xbpk3t/docs-alfred/pkg/parser"
-
 type BooksZ []struct {
 	Item []struct {
 		Cate  string `yaml:"cate"`
@@ -24,9 +22,4 @@ type BookFlattenJSON struct {
 	Year string
 	Type string `yaml:"type,omitempty"`
 	Sub  string `yaml:"sub,omitempty"`
-}
-
-// ParseConfig 解析配置文件
-func ParseConfig(data []byte) (BooksZ, error) {
-	return parser.NewParser[BooksZ](data).ParseSingle()
 }
