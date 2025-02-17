@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
-	"gopkg.in/yaml.v3"
 )
 
 // Merger 配置合并器

@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/parser"
 )
 
 // Parser YAML配置解析器
@@ -79,4 +80,13 @@ func (p *Parser[T]) ParseFlatten() ([]T, error) {
 	}
 
 	return results, nil
+}
+
+// IsMultiDocument checks if the YAML content contains multiple documents
+func (p *Parser[T]) IsMultiDocument() (bool, error) {
+	file, err := parser.ParseBytes(p.data, parser.ParseComments)
+	if err != nil {
+		return false, fmt.Errorf("解析YAML失败: %w", err)
+	}
+	return len(file.Docs) > 1, nil
 }

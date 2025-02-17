@@ -6,7 +6,8 @@ import (
 	"os"
 
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
-	"gopkg.in/yaml.v3"
+
+	"github.com/goccy/go-yaml"
 )
 
 // Config 主配置结构
