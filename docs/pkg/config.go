@@ -9,9 +9,7 @@ import (
 
 	"github.com/gookit/goutil/fsutil"
 
-	"github.com/xbpk3t/docs-alfred/service/diary"
 	"github.com/xbpk3t/docs-alfred/service/goods"
-	taskService "github.com/xbpk3t/docs-alfred/service/task"
 	"github.com/xbpk3t/docs-alfred/service/works"
 	"github.com/xbpk3t/docs-alfred/service/ws"
 
@@ -209,7 +207,7 @@ func (j *JSON) SetCurrentFile(filename string) {
 
 // ReadInput 读取输入
 func (j *JSON) ReadInput(src string, isDir bool) ([]byte, error) {
-	if j.IsMerge && isDir {
+	if isDir {
 		return j.readAndMergeFiles(src)
 	}
 	return j.readSingleFile(src)
@@ -437,12 +435,8 @@ func (dc *DocsConfig) createMarkdownRenderer() (render.Renderer, error) {
 			return gh.NewGithubMarkdownRender(), nil
 		case "ws":
 			return ws.NewWebStackRenderer(), nil
-		case "diary":
-			return diary.NewDiaryMarkdownRender(), nil
 		case "goods":
 			return goods.NewGoodsMarkdownRenderer(), nil
-		case "task":
-			return taskService.NewTaskRenderer(), nil
 		default:
 			return nil, fmt.Errorf("markdown Render fail: unknown command: %s", dc.Cmd)
 		}
