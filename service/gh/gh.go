@@ -95,25 +95,25 @@ func (r *Repository) AsRepoInfo() repo.RepoInfo {
 // AsRepoInfoList 将Repos转换为RepoInfo列表
 func (r Repos) AsRepoInfoList() []repo.RepoInfo {
 	result := make([]repo.RepoInfo, len(r))
-	for i, repo := range r {
-		result[i] = repo.AsRepoInfo()
+	for i, rp := range r {
+		result[i] = rp.AsRepoInfo()
 	}
 	return result
 }
 
 func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
-	for _, repo := range cr {
-		for i := range repo.Repos {
-			repo.Repos[i].Tag = tag
+	for _, rp := range cr {
+		for i := range rp.Repos {
+			rp.Repos[i].Tag = tag
 		}
 	}
 	return cr
 }
 
 func (cr ConfigRepos) WithType() ConfigRepos {
-	for _, repo := range cr {
-		for i := range repo.Repos {
-			repo.Repos[i].Type = repo.Type
+	for _, rp := range cr {
+		for i := range rp.Repos {
+			rp.Repos[i].Type = rp.Type
 		}
 	}
 	return cr
@@ -122,8 +122,8 @@ func (cr ConfigRepos) WithType() ConfigRepos {
 func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
 	for _, config := range cr {
-		for _, repo := range config.Repos {
-			repos = append(repos, processRepo(repo, config.Type)...)
+		for _, rp := range config.Repos {
+			repos = append(repos, processRepo(rp, config.Type)...)
 		}
 	}
 	return repos
@@ -135,9 +135,9 @@ func (r Repos) ExtractTags() []string {
 	tagMap := make(map[string]struct{})
 
 	// 遍历所有仓库收集标签
-	for _, repo := range r {
-		if repo.Type != "" {
-			tagMap[repo.Type] = struct{}{}
+	for _, rp := range r {
+		if rp.Type != "" {
+			tagMap[rp.Type] = struct{}{}
 		}
 	}
 
@@ -157,9 +157,9 @@ func (r Repos) QueryReposByTag(tag string) Repos {
 	var filtered Repos
 
 	// 遍历所有仓库，找出匹配标签的仓库
-	for _, repo := range r {
-		if repo.Type == tag {
-			filtered = append(filtered, repo)
+	for _, rp := range r {
+		if rp.Type == tag {
+			filtered = append(filtered, rp)
 		}
 	}
 
