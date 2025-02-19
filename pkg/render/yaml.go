@@ -1,29 +1,20 @@
 package render
 
 import (
-	"github.com/bytedance/sonic"
+	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
 
-// ParseMode 解析模式
-type ParseMode int
-
-const (
-	ParseSingle ParseMode = iota
-	ParseMulti
-	ParseFlatten
-)
-
 // YAMLRenderer JSON渲染器
-type JSONRenderer struct {
+type YAMLRenderer struct {
 	Cmd         string
 	PrettyPrint bool
 	ParseMode   ParseMode
 }
 
 // NewJSONRenderer 创建新的JSON渲染器
-func NewJSONRenderer(cmd string, prettyPrint bool) *JSONRenderer {
-	return &JSONRenderer{
+func NewYAMLRenderer(cmd string, prettyPrint bool) *YAMLRenderer {
+	return &YAMLRenderer{
 		PrettyPrint: prettyPrint,
 		Cmd:         cmd,
 		ParseMode:   ParseSingle, // 默认使用单文档模式
@@ -31,13 +22,13 @@ func NewJSONRenderer(cmd string, prettyPrint bool) *JSONRenderer {
 }
 
 // WithParseMode 设置解析模式
-func (j *JSONRenderer) WithParseMode(mode ParseMode) *JSONRenderer {
+func (j *YAMLRenderer) WithParseMode(mode ParseMode) *YAMLRenderer {
 	j.ParseMode = mode
 	return j
 }
 
 // Render 实现 Renderer 接口
-func (j *JSONRenderer) Render(data []byte) (string, error) {
+func (j *YAMLRenderer) Render(data []byte) (string, error) {
 	var dataToEncode interface{}
 
 	// 根据解析模式选择不同的解析方法
@@ -57,14 +48,9 @@ func (j *JSONRenderer) Render(data []byte) (string, error) {
 		return "", err
 	}
 
-	// 转换为JSON
+	// 转换为YAML
 	var result []byte
-	if j.PrettyPrint {
-		result, err = sonic.MarshalIndent(dataToEncode, "", "  ")
-	} else {
-		result, err = sonic.Marshal(dataToEncode)
-	}
-
+	result, err = yaml.Marshal(dataToEncode)
 	if err != nil {
 		return "", err
 	}

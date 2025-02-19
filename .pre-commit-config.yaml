@@ -70,11 +70,11 @@ repos:
 #        additional_dependencies:
 #          - tomli
 
-  - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.5
-    hooks:
-      - id: actionlint-docker
-        args: ["-ignore", "SC2102"]
+#  - repo: https://github.com/rhysd/actionlint
+#    rev: v1.7.5
+#    hooks:
+#      - id: actionlint-docker
+#        args: ["-ignore", "SC2102"]
 
 
   #  - repo: https://github.com/gitleaks/gitleaks
