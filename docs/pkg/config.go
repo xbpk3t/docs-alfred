@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -66,7 +67,7 @@ func (m *Markdown) GetOutputPath(filename string) string {
 
 // ReadInput 读取输入
 func (m *Markdown) ReadInput(src string, isDir bool) ([]byte, error) {
-	if m.IsMerge && isDir {
+	if isDir {
 		return m.readAndMergeFiles(src)
 	}
 	return m.readSingleFile(src)
@@ -113,8 +114,8 @@ func (m *Markdown) readSingleFile(src string) ([]byte, error) {
 	return data, nil
 }
 
-// readAndMergeFiles 读取并合并文件
-func (m *Markdown) readAndMergeFiles(src string) ([]byte, error) {
+// readAndMergeFilesRecursively 递归读取并合并文件
+func readAndMergeFilesRecursively(src string, exclude []string, setCurrentFile func(string)) ([]byte, error) {
 	files, err := os.ReadDir(src)
 	if err != nil {
 		return nil, fmt.Errorf("read dir error: %w", err)
@@ -122,20 +123,47 @@ func (m *Markdown) readAndMergeFiles(src string) ([]byte, error) {
 
 	var mergedData []byte
 	for _, file := range files {
-		if file.IsDir() || filepath.Ext(file.Name()) != ".yml" || slices.Contains(m.Exclude, file.Name()) {
+		fullPath := filepath.Join(src, file.Name())
+
+		if file.IsDir() {
+			// 递归处理子目录
+			subData, err := readAndMergeFilesRecursively(fullPath, exclude, setCurrentFile)
+			if err != nil {
+				return nil, err
+			}
+			if len(subData) > 0 {
+				mergedData = append(mergedData, subData...)
+				mergedData = append(mergedData, '\n')
+			}
 			continue
 		}
 
-		m.SetCurrentFile(file.Name())
-		data, err := os.ReadFile(filepath.Join(src, file.Name()))
+		// 跳过非 yml 文件和被排除的文件
+		if filepath.Ext(file.Name()) != ".yml" || slices.Contains(exclude, file.Name()) {
+			continue
+		}
+
+		// 设置当前处理的文件名
+		if setCurrentFile != nil {
+			setCurrentFile(file.Name())
+		}
+
+		// 读取文件内容
+		data, err := os.ReadFile(fullPath)
 		if err != nil {
 			return nil, fmt.Errorf("read file error: %w", err)
 		}
+
 		mergedData = append(mergedData, data...)
 		mergedData = append(mergedData, '\n')
 	}
 
 	return mergedData, nil
+}
+
+// readAndMergeFiles 读取并合并文件
+func (m *Markdown) readAndMergeFiles(src string) ([]byte, error) {
+	return readAndMergeFilesRecursively(src, m.Exclude, m.SetCurrentFile)
 }
 
 // WriteOutput 写入输出
@@ -158,12 +186,14 @@ func (m *Markdown) ProcessFile(src string, renderer render.Renderer) error {
 	// 读取文件
 	data, err := m.ReadInput(src, fsutil.IsDir(src))
 	if err != nil {
+		slog.Error("read file error", slog.String("file", src), slog.String("error", err.Error()))
 		return fmt.Errorf("read file error: %w", err)
 	}
 
 	// 渲染内容
 	content, err := renderer.Render(data)
 	if err != nil {
+		slog.Error("render error", slog.String("file", src), slog.String("error", err.Error()))
 		return fmt.Errorf("render error: %w", err)
 	}
 
@@ -256,27 +286,7 @@ func (j *JSON) readSingleFile(src string) ([]byte, error) {
 
 // readAndMergeFiles 读取并合并文件
 func (j *JSON) readAndMergeFiles(src string) ([]byte, error) {
-	files, err := os.ReadDir(src)
-	if err != nil {
-		return nil, fmt.Errorf("read dir error: %w", err)
-	}
-
-	var mergedData []byte
-	for _, file := range files {
-		if file.IsDir() || filepath.Ext(file.Name()) != ".yml" || slices.Contains(j.Exclude, file.Name()) {
-			continue
-		}
-
-		j.SetCurrentFile(file.Name())
-		data, err := os.ReadFile(filepath.Join(src, file.Name()))
-		if err != nil {
-			return nil, fmt.Errorf("read file error: %w", err)
-		}
-		mergedData = append(mergedData, data...)
-		mergedData = append(mergedData, '\n')
-	}
-
-	return mergedData, nil
+	return readAndMergeFilesRecursively(src, j.Exclude, j.SetCurrentFile)
 }
 
 // WriteOutput 写入输出
@@ -299,12 +309,14 @@ func (j *JSON) ProcessFile(src string, renderer render.Renderer) error {
 	// 读取文件
 	data, err := j.ReadInput(src, fsutil.IsDir(src))
 	if err != nil {
+		slog.Error("read file error", slog.String("file", src), slog.String("error", err.Error()))
 		return fmt.Errorf("read file error: %w", err)
 	}
 
 	// 渲染内容
 	content, err := renderer.Render(data)
 	if err != nil {
+		slog.Error("render error", slog.String("file", src), slog.String("error", err.Error()))
 		return fmt.Errorf("render error: %w", err)
 	}
 
@@ -413,7 +425,7 @@ func (dc *DocsConfig) createJSONRenderer() (render.Renderer, error) {
 		switch dc.Cmd {
 		case "goods":
 			renderer.WithParseMode(render.ParseFlatten)
-		case "works":
+		case "works", "diary", "gh":
 			renderer.WithParseMode(render.ParseMulti)
 		default:
 			renderer.WithParseMode(render.ParseSingle)

@@ -7,7 +7,7 @@ type Task struct {
 	Des      string   `yaml:"des,omitempty" json:"des,omitempty"`
 	Okr      string   `yaml:"okr,omitempty" json:"okr,omitempty"`
 	Progress string   `yaml:"progress,omitempty" json:"progress,omitempty"`
-	Item     []string `yaml:"item,omitempty" json:"item,omitempty"`
+	Item     []string `yaml:"item,omitempty" json:"item,omitempty"` // 附加内容，类似tracking
 	Sub      Tasks    `yaml:"sub,omitempty" json:"sub,omitempty"`
 	X        bool     `yaml:"x,omitempty" json:"x,omitempty"`
 }
