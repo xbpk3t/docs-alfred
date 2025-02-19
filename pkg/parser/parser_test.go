@@ -39,20 +39,39 @@ func TestParser(t *testing.T) {
 	})
 
 	t.Run("test multiple documents", func(t *testing.T) {
-		input := readTestFile(t, "multi.yaml")
-		want := []TestConfig{
-			{Name: "test1", Value: 1},
-			{Name: "test2", Value: 2},
-		}
+		t.Run("test multi document", func(t *testing.T) {
+			input := readTestFile(t, "multi-1.yaml")
+			want := []TestConfig{
+				{Name: "test1", Value: 1},
+				{Name: "test2", Value: 2},
+			}
 
-		parser := NewParser[TestConfig](input)
-		got, err := parser.ParseMulti()
-		if err != nil {
-			t.Errorf("ParseMulti() error = %v", err)
-			return
-		}
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("ParseMulti() = %v, want %v", got, want)
-		}
+			parser := NewParser[TestConfig](input)
+			got, err := parser.ParseMulti()
+			if err != nil {
+				t.Errorf("ParseMulti() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("ParseMulti() = %v, want %v", got, want)
+			}
+		})
+
+		t.Run("test blank document", func(t *testing.T) {
+			input := readTestFile(t, "multi-2.yaml")
+			want := []TestConfig{
+				{Name: "test1", Value: 1},
+			}
+
+			parser := NewParser[TestConfig](input)
+			got, err := parser.ParseMulti()
+			if err != nil {
+				t.Errorf("ParseMulti() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("ParseMulti() = %v, want %v", got, want)
+			}
+		})
 	})
 }
