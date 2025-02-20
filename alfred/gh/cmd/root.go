@@ -42,6 +42,7 @@ var data []byte
 func handlePreRun(cmd *cobra.Command, args []string) {
 	if !wf.Cache.Exists(cfgFile) {
 		ErrorHandle(&pkg.DocsAlfredError{Err: pkg.ErrConfigNotFound})
+		return
 	}
 
 	data, _ = wf.Cache.Load(cfgFile)
