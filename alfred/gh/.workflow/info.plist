@@ -452,7 +452,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://docs.lucas1.xyz/data/</string>
+				<string>https://blog.lucc.dev/data/</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>
@@ -473,7 +473,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://docs.lucas1.xyz/x</string>
+				<string>https://blog.lucc.dev/x</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>

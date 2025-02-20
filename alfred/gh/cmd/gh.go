@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/alfred/gh/internal/alfred"
@@ -40,7 +39,7 @@ func handleGhCommand(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	repos := r.WithType().ToRepos()
+	repos := r.ToRepos()
 	if repos == nil {
 		builder.BuildBasicItem(
 			"Invalid configuration",
@@ -76,57 +75,18 @@ func handleTagSearch(repos gh2.Repos, args []string, builder *alfred.ItemBuilder
 		return
 	}
 
-	// 参数验证
-	if len(args) == 0 || !strings.HasPrefix(args[0], "#") {
-		tags := repos.ExtractTags()
-		if len(tags) == 0 {
-			builder.BuildBasicItem(
-				"No tags found",
-				"No tags available in repositories",
-				"",
-				cons.IconWarning,
-			)
-		} else {
-			renderTagItems(tags)
-		}
-		wf.SendFeedback()
-		return
-	}
+	ptag := strings.TrimPrefix(args[0], "#")
 
-	// 提取标签
-	tags := repos.ExtractTags()
-	if len(tags) == 0 {
+	filteredRepos := repos.QueryReposByTag(ptag)
+	if len(filteredRepos) > 0 {
+		renderRepos(filteredRepos, builder)
+	} else {
 		builder.BuildBasicItem(
-			"No tags found",
-			"No tags available in repositories",
+			"No repositories found",
+			fmt.Sprintf("No repositories found with tag: %s", ptag),
 			"",
 			cons.IconWarning,
 		)
-		wf.SendFeedback()
-		return
-	}
-
-	ptag := strings.TrimPrefix(args[0], "#")
-
-	// 如果输入的标签存在
-	if slices.Contains(tags, ptag) {
-		filteredRepos := repos.QueryReposByTag(ptag)
-		if len(filteredRepos) > 0 {
-			renderRepos(filteredRepos, builder)
-		} else {
-			builder.BuildBasicItem(
-				"No repositories found",
-				fmt.Sprintf("No repositories found with tag: %s", ptag),
-				"",
-				cons.IconWarning,
-			)
-		}
-	} else {
-		// 显示所有标签并根据输入进行过滤
-		renderTagItems(tags)
-		if len(ptag) > 0 {
-			wf.Filter(ptag) // 使用去掉#的标签进行过滤
-		}
 	}
 
 	wf.SendFeedback()
@@ -177,7 +137,7 @@ func buildRepoDescription(repo gh2.Repository) string {
 	}
 
 	if repo.Type != "" {
-		des.WriteString(fmt.Sprintf("[#%s]", repo.Type))
+		des.WriteString(fmt.Sprintf("[%s#%s]", repo.Tag, repo.Type))
 	}
 
 	if repo.Des != "" {

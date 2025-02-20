@@ -1,7 +1,6 @@
 package gh
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/repo"
@@ -35,6 +34,7 @@ type Repos []Repository
 // ConfigRepo 定义配置仓库结构
 type ConfigRepo struct {
 	Type  string `yaml:"type"`
+	Tag   string `yaml:"tag"`
 	Repos Repos  `yaml:"repo"`
 }
 
@@ -101,23 +101,23 @@ func (r Repos) AsRepoInfoList() []repo.RepoInfo {
 	return result
 }
 
-func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
-	for _, rp := range cr {
-		for i := range rp.Repos {
-			rp.Repos[i].Tag = tag
-		}
-	}
-	return cr
-}
+//func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
+//	for _, rp := range cr {
+//		for i := range rp.Repos {
+//			rp.Repos[i].Tag = tag
+//		}
+//	}
+//	return cr
+//}
 
-func (cr ConfigRepos) WithType() ConfigRepos {
-	for _, rp := range cr {
-		for i := range rp.Repos {
-			rp.Repos[i].Type = rp.Type
-		}
-	}
-	return cr
-}
+//func (cr ConfigRepos) WithType() ConfigRepos {
+//	for _, rp := range cr {
+//		for i := range rp.Repos {
+//			rp.Repos[i].Type = rp.Type
+//		}
+//	}
+//	return cr
+//}
 
 func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
@@ -127,29 +127,6 @@ func (cr ConfigRepos) ToRepos() Repos {
 		}
 	}
 	return repos
-}
-
-// ExtractTags 从所有仓库中提取唯一的标签列表
-func (r Repos) ExtractTags() []string {
-	// 使用 map 来去重
-	tagMap := make(map[string]struct{})
-
-	// 遍历所有仓库收集标签
-	for _, rp := range r {
-		if rp.Type != "" {
-			tagMap[rp.Type] = struct{}{}
-		}
-	}
-
-	// 将 map 转换为切片
-	tags := make([]string, 0, len(tagMap))
-	for tag := range tagMap {
-		tags = append(tags, tag)
-	}
-
-	// 对标签进行排序，使结果稳定
-	slices.Sort(tags)
-	return tags
 }
 
 // QueryReposByTag 根据标签筛选仓库
