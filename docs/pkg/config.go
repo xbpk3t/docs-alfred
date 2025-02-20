@@ -5,34 +5,159 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/gookit/goutil/fsutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
+	"github.com/xbpk3t/docs-alfred/pkg/utils"
 	"github.com/xbpk3t/docs-alfred/service/gh"
 	"github.com/xbpk3t/docs-alfred/service/goods"
 	"github.com/xbpk3t/docs-alfred/service/works"
 	"github.com/xbpk3t/docs-alfred/service/ws"
 )
 
+type FileType string
+
+const (
+	FileTypeMarkdown FileType = "md"
+	FileTypeJSON     FileType = "json"
+	FileTypeYAML     FileType = "yml"
+)
+
+// DocProcessor 统一的处理器结构
+type DocProcessor struct {
+	Dst             string   `yaml:"dst"`             // 输出目录
+	MergeOutputFile string   `yaml:"mergeOutputFile"` // 合并后的输出文件名
+	currentFile     string   // 当前处理的文件名
+	fileType        FileType // 内部字段，指定文件类型
+	Exclude         []string `yaml:"exclude"` // 排除的文件
+}
+
 // DocsConfig 定义配置结构
 type DocsConfig struct {
-	Markdown *Markdown `yaml:"md"`   // Using pointer to allow nil checks
-	JSON     *JSON     `yaml:"json"` // Using pointer to allow nil checks
-	YAML     *YAML     `yaml:"yaml"`
-	Src      string    `yaml:"src"` // 源路径
-	Cmd      string    `yaml:"cmd"` // 命令类型
-	IsDir    bool      `yaml:"-"`   // 是否为文件夹，根据src自动判断
+	Markdown *DocProcessor `yaml:"md"`
+	JSON     *DocProcessor `yaml:"json"`
+	YAML     *DocProcessor `yaml:"yaml"`
+	Src      string        `yaml:"src"` // 源路径
+	Cmd      string        `yaml:"cmd"` // 命令类型
+	IsDir    bool          `yaml:"-"`   // 是否为文件夹，根据src自动判断
+}
+
+// NewDocProcessor 创建新的处理器
+func NewDocProcessor(fileType FileType) *DocProcessor {
+	return &DocProcessor{
+		fileType: fileType,
+	}
 }
 
 // NewDocsConfig 创建新的配置实例
 func NewDocsConfig(src, cmd string) *DocsConfig {
 	return &DocsConfig{
-		Src: src,
-		Cmd: cmd,
+		Markdown: NewDocProcessor(FileTypeMarkdown),
+		JSON:     NewDocProcessor(FileTypeJSON),
+		YAML:     NewDocProcessor(FileTypeYAML),
+		Src:      src,
+		Cmd:      cmd,
 	}
 }
 
-// Process 处理配置
+// DocProcessor 的方法实现
+func (p *DocProcessor) SetCurrentFile(filename string) {
+	p.currentFile = filename
+}
+
+func (p *DocProcessor) GetCurrentFile() string {
+	return p.currentFile
+}
+
+func (p *DocProcessor) ProcessFile(src string, renderer render.Renderer) error {
+	data, err := p.ReadInput(src, fsutil.IsDir(src))
+	if err != nil {
+		slog.Error("read file error",
+			slog.String("file", src),
+			slog.String("error", err.Error()),
+		)
+		return fmt.Errorf("read file error: %w", err)
+	}
+
+	content, err := renderer.Render(data)
+	if err != nil {
+		slog.Error("render error",
+			slog.String("file", src),
+			slog.String("error", err.Error()),
+		)
+		return fmt.Errorf("render error: %w", err)
+	}
+
+	outputFilename := p.getOutputFilename(src)
+	if err := p.WriteOutput(content, outputFilename); err != nil {
+		slog.Error("write file error",
+			slog.String("file", outputFilename),
+			slog.String("error", err.Error()),
+		)
+		return fmt.Errorf("write file error: %w", err)
+	}
+
+	return nil
+}
+
+func (p *DocProcessor) ReadInput(src string, isDir bool) ([]byte, error) {
+	if isDir {
+		return p.readAndMergeFiles(src)
+	}
+	return p.readSingleFile(src)
+}
+
+func (p *DocProcessor) readSingleFile(src string) ([]byte, error) {
+	if fsutil.IsDir(src) {
+		return []byte(""), fmt.Errorf("stat path error")
+	}
+	return utils.ReadSingleFileWithExt(src, p.SetCurrentFile)
+}
+
+func (p *DocProcessor) readAndMergeFiles(src string) ([]byte, error) {
+	if !fsutil.IsDir(src) {
+		return []byte(""), fmt.Errorf("stat path error")
+	}
+	return utils.ReadAndMergeFilesRecursively(src, p.Exclude, p.SetCurrentFile)
+}
+
+func (p *DocProcessor) WriteOutput(content string, filename string) error {
+	if err := os.MkdirAll(p.Dst, os.ModePerm); err != nil {
+		return fmt.Errorf("create dir error: %w", err)
+	}
+
+	outputPath := filepath.Join(p.Dst, filename)
+	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write file error: %w", err)
+	}
+
+	return nil
+}
+
+func (p *DocProcessor) getOutputFilename(src string) string {
+	if p.MergeOutputFile != "" {
+		return p.MergeOutputFile
+	}
+
+	base := filepath.Base(src)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	return name + "." + string(p.fileType)
+}
+
+// DocsConfig 的方法实现
 func (dc *DocsConfig) Process() error {
+	if err := dc.initializePath(); err != nil {
+		return err
+	}
+
+	processors := dc.getProcessors()
+	return dc.processAll(processors)
+}
+
+// initializePath 初始化路径相关的设置
+func (dc *DocsConfig) initializePath() error {
 	// 获取绝对路径
 	absPath, err := filepath.Abs(dc.Src)
 	if err != nil {
@@ -46,142 +171,122 @@ func (dc *DocsConfig) Process() error {
 		return fmt.Errorf("stat path error: %w", err)
 	}
 	dc.IsDir = fileInfo.IsDir()
+	return nil
+}
 
-	// 处理 Markdown 输出
-	if dc.Markdown != nil {
-		if err := dc.parseMarkdown(); err != nil {
-			return fmt.Errorf("parse Markdown error: %w", err)
+// getProcessors 获取所有处理器
+func (dc *DocsConfig) getProcessors() map[FileType]*DocProcessor {
+	return map[FileType]*DocProcessor{
+		FileTypeMarkdown: dc.Markdown,
+		FileTypeJSON:     dc.JSON,
+		FileTypeYAML:     dc.YAML,
+	}
+}
+
+// processAll 处理所有文件
+func (dc *DocsConfig) processAll(processors map[FileType]*DocProcessor) error {
+	for fileType, processor := range processors {
+		if processor == nil {
+			continue
+		}
+
+		if err := dc.processSingle(fileType, processor); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
-	// 处理 JSON 输出
-	if dc.JSON != nil {
-		if err := dc.parseJSON(); err != nil {
-			return fmt.Errorf("parse JSON error: %w", err)
-		}
+// processSingle 处理单个文件
+func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) error {
+	// 创建对应的渲染器
+	renderer, err := dc.createRenderer(fileType)
+	if err != nil {
+		slog.Error("create renderer error",
+			slog.String("type", string(fileType)),
+			slog.String("file", dc.Src),
+		)
+		return fmt.Errorf("create renderer error for %s: %w", fileType, err)
 	}
 
-	if dc.YAML != nil {
-		if err := dc.parseYAML(); err != nil {
-			slog.Error("parse YAML error", slog.String("file", dc.Src))
-			return fmt.Errorf("parse JSON error: %w", err)
-		}
+	// 处理文件
+	if err := processor.ProcessFile(dc.Src, renderer); err != nil {
+		slog.Error("process file error",
+			slog.String("type", string(fileType)),
+			slog.String("file", dc.Src),
+		)
+		return fmt.Errorf("process %s error: %w", fileType, err)
 	}
 
 	return nil
 }
 
-// parseMarkdown 处理Markdown配置
-func (dc *DocsConfig) parseMarkdown() error {
-	if dc.Markdown == nil {
-		return nil
+func (dc *DocsConfig) createRenderer(fileType FileType) (render.Renderer, error) {
+	switch fileType {
+	case FileTypeMarkdown:
+		return dc.createMarkdownRenderer()
+	case FileTypeJSON:
+		return dc.createJSONRenderer()
+	case FileTypeYAML:
+		return dc.createYAMLRenderer()
 	}
-
-	// 创建渲染器
-	renderer, err := dc.createMarkdownRenderer()
-	if err != nil {
-		return fmt.Errorf("create renderer error: %w", err)
-	}
-
-	// 如果是 GithubMarkdownRender，设置当前文件
-	if gr, ok := renderer.(*gh.GithubMarkdownRender); ok {
-		gr.SetCurrentFile(filepath.Base(dc.Src))
-	}
-
-	// 处理文件
-	return dc.Markdown.ProcessFile(dc.Src, renderer)
+	return nil, fmt.Errorf("unknown file type: %s", fileType)
 }
 
-// parseJSON 处理JSON配置
-func (dc *DocsConfig) parseJSON() error {
-	if dc.JSON == nil {
-		return nil
-	}
-
-	// 创建渲染器
-	renderer, err := dc.createJSONRenderer()
-	if err != nil {
-		return fmt.Errorf("create renderer error: %w", err)
-	}
-
-	// 处理文件
-	return dc.JSON.ProcessFile(dc.Src, renderer)
-}
-
-func (dc *DocsConfig) parseYAML() error {
-	if dc.YAML == nil {
-		return nil
-	}
-
-	// 创建渲染器
-	renderer, err := dc.createYAMLRenderer()
-	if err != nil {
-		return fmt.Errorf("create renderer error: %w", err)
-	}
-
-	// 处理文件
-	return dc.YAML.ProcessFile(dc.Src, renderer)
-}
-
-func (dc *DocsConfig) createJSONRenderer() (render.Renderer, error) {
-	// 如果配置了JSON输出，使用JSON渲染器
-	if dc.JSON != nil {
-		renderer := render.NewJSONRenderer(dc.Cmd, true)
-
-		// 根据不同的命令类型设置解析模式
-		switch dc.Cmd {
-		case "goods":
-			renderer.WithParseMode(render.ParseFlatten)
-		case "works", "diary", "gh":
-			renderer.WithParseMode(render.ParseMulti)
-		default:
-			renderer.WithParseMode(render.ParseSingle)
-		}
-
-		return renderer, nil
-	}
-	return nil, fmt.Errorf("please add JSON for entity: %s", dc.Cmd)
-}
-
-func (dc *DocsConfig) createYAMLRenderer() (render.Renderer, error) {
-	// 如果配置了JSON输出，使用JSON渲染器
-	if dc.YAML != nil {
-		renderer := render.NewYAMLRenderer(dc.Cmd, true)
-
-		// 根据不同的命令类型设置解析模式
-		switch dc.Cmd {
-		case "gh":
-			gh.NewGithubYAMLRender()
-		case "goods":
-			renderer.WithParseMode(render.ParseFlatten)
-		case "works", "diary":
-			renderer.WithParseMode(render.ParseMulti)
-		default:
-			renderer.WithParseMode(render.ParseSingle)
-		}
-
-		return renderer, nil
-	}
-	return nil, fmt.Errorf("please add JSON for entity: %s", dc.Cmd)
-}
-
-// createMarkdownRenderer 创建渲染器
+// createMarkdownRenderer 创建 Markdown 渲染器
 func (dc *DocsConfig) createMarkdownRenderer() (render.Renderer, error) {
-	if dc.Markdown != nil {
-		// 否则使用对应的Markdown渲染器
-		switch dc.Cmd {
-		case "works":
-			return works.NewWorkRenderer(), nil
-		case "gh":
-			return gh.NewGithubMarkdownRender(), nil
-		case "ws":
-			return ws.NewWebStackRenderer(), nil
-		case "goods":
-			return goods.NewGoodsMarkdownRenderer(), nil
-		default:
-			return nil, fmt.Errorf("markdown Render fail: unknown command: %s", dc.Cmd)
-		}
+	switch dc.Cmd {
+	case "works":
+		return works.NewWorkRenderer(), nil
+	case "gh":
+		return gh.NewGithubMarkdownRender(), nil
+	case "ws":
+		return ws.NewWebStackRenderer(), nil
+	case "goods":
+		return goods.NewGoodsMarkdownRenderer(), nil
+	default:
+		return nil, fmt.Errorf("unknown markdown command: %s", dc.Cmd)
+	}
+}
+
+// createJSONRenderer 创建 JSON 渲染器
+func (dc *DocsConfig) createJSONRenderer() (render.Renderer, error) {
+	renderer := render.NewJSONRenderer(dc.Cmd, true)
+	if err := dc.configureParseMode(renderer); err != nil {
+		return nil, err
+	}
+	return renderer, nil
+}
+
+// createYAMLRenderer 创建 YAML 渲染器
+func (dc *DocsConfig) createYAMLRenderer() (render.Renderer, error) {
+	if dc.Cmd == "gh" {
+		return gh.NewGithubYAMLRender(), nil
 	}
 
-	return nil, fmt.Errorf("please add markdown for entity: %s", dc.Cmd)
+	renderer := render.NewYAMLRenderer(dc.Cmd, true)
+	if err := dc.configureParseMode(renderer); err != nil {
+		return nil, err
+	}
+	return renderer, nil
+}
+
+// configureParseMode 配置渲染器的解析模式
+func (dc *DocsConfig) configureParseMode(renderer interface{}) error {
+	type parseModeRenderer interface {
+		WithParseMode(mode render.ParseMode)
+	}
+
+	if r, ok := renderer.(parseModeRenderer); ok {
+		switch dc.Cmd {
+		case "goods":
+			r.WithParseMode(render.ParseFlatten)
+		case "works", "diary", "gh":
+			r.WithParseMode(render.ParseMulti)
+		default:
+			r.WithParseMode(render.ParseSingle)
+		}
+		return nil
+	}
+	return fmt.Errorf("renderer does not support parse mode configuration")
 }

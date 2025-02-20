@@ -31,9 +31,8 @@ func NewJSONRenderer(cmd string, prettyPrint bool) *JSONRenderer {
 }
 
 // WithParseMode 设置解析模式
-func (j *JSONRenderer) WithParseMode(mode ParseMode) *JSONRenderer {
+func (j *JSONRenderer) WithParseMode(mode ParseMode) {
 	j.ParseMode = mode
-	return j
 }
 
 // Render 实现 Renderer 接口
