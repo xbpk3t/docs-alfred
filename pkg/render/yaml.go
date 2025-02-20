@@ -22,9 +22,8 @@ func NewYAMLRenderer(cmd string, prettyPrint bool) *YAMLRenderer {
 }
 
 // WithParseMode 设置解析模式
-func (j *YAMLRenderer) WithParseMode(mode ParseMode) *YAMLRenderer {
+func (j *YAMLRenderer) WithParseMode(mode ParseMode) {
 	j.ParseMode = mode
-	return j
 }
 
 // Render 实现 Renderer 接口

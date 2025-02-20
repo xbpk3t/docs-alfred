@@ -1,12 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"sync"
 
+	"github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/docs/pkg"
-	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
 
 var cfgFile string
@@ -25,9 +26,42 @@ var rootCmd = &cobra.Command{
 		}
 
 		// 解析配置
-		configs, err := parser.NewParser[[]pkg.DocsConfig](configData).ParseSingle()
-		if err != nil {
+		var rawConfigs []struct {
+			Src      string            `yaml:"src"`
+			Cmd      string            `yaml:"cmd"`
+			Markdown *pkg.DocProcessor `yaml:"md"`
+			JSON     *pkg.DocProcessor `yaml:"json"`
+			YAML     *pkg.DocProcessor `yaml:"yaml"`
+		}
+		if err := yaml.NewDecoder(bytes.NewReader(configData)).Decode(&rawConfigs); err != nil {
 			return err
+		}
+
+		configs := make([]pkg.DocsConfig, 0, len(rawConfigs))
+		for _, raw := range rawConfigs {
+			config := &pkg.DocsConfig{
+				Src: raw.Src,
+				Cmd: raw.Cmd,
+			}
+			if raw.Markdown != nil {
+				config.Markdown = pkg.NewDocProcessor(pkg.FileTypeMarkdown)
+				config.Markdown.Dst = raw.Markdown.Dst
+				config.Markdown.MergeOutputFile = raw.Markdown.MergeOutputFile
+				config.Markdown.Exclude = raw.Markdown.Exclude
+			}
+			if raw.JSON != nil {
+				config.JSON = pkg.NewDocProcessor(pkg.FileTypeJSON)
+				config.JSON.Dst = raw.JSON.Dst
+				config.JSON.MergeOutputFile = raw.JSON.MergeOutputFile
+				config.JSON.Exclude = raw.JSON.Exclude
+			}
+			if raw.YAML != nil {
+				config.YAML = pkg.NewDocProcessor(pkg.FileTypeYAML)
+				config.YAML.Dst = raw.YAML.Dst
+				config.YAML.MergeOutputFile = raw.YAML.MergeOutputFile
+				config.YAML.Exclude = raw.YAML.Exclude
+			}
+			configs = append(configs, *config)
 		}
 
 		wg.Add(len(configs))

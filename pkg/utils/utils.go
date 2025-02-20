@@ -7,6 +7,29 @@ import (
 	"slices"
 )
 
+// ReadSingleFileWithExt 读取指定扩展名的单个文件
+func ReadSingleFileWithExt(src string, setCurrentFile func(string)) ([]byte, error) {
+	fileInfo, err := os.Stat(src)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat file %s: %w", src, err)
+	}
+
+	if fileInfo.IsDir() {
+		return nil, fmt.Errorf("expected file but got directory: %s", src)
+	}
+
+	if setCurrentFile != nil {
+		setCurrentFile(filepath.Base(src))
+	}
+
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file %s: %w", src, err)
+	}
+
+	return data, nil
+}
+
 // ReadAndMergeFilesRecursively 递归读取并合并文件
 func ReadAndMergeFilesRecursively(src string, exclude []string, setCurrentFile func(string)) ([]byte, error) {
 	files, err := os.ReadDir(src)
