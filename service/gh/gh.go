@@ -2,17 +2,13 @@ package gh
 
 import (
 	"strings"
-
-	"github.com/xbpk3t/docs-alfred/pkg/repo"
 )
 
 const GhURL = "https://github.com/"
 
 // Repository 定义仓库结构
 type Repository struct {
-	Doc            string `yaml:"doc,omitempty"`
-	Name           string `yaml:"name,omitempty"`
-	User           string
+	Doc            string    `yaml:"doc,omitempty"`
 	Des            string    `yaml:"des,omitempty"`
 	URL            string    `yaml:"url"`
 	Tag            string    `yaml:"tag,omitempty"`
@@ -23,10 +19,10 @@ type Repository struct {
 	ReplacedRepos  Repos     `yaml:"rep,omitempty"`
 	RelatedRepos   Repos     `yaml:"rel,omitempty"`
 	Cmd            []string  `yaml:"cmd,omitempty"`
-	IsStar         bool
 	IsSubRepo      bool
 	IsReplacedRepo bool
 	IsRelatedRepo  bool
+	IsX            bool `yaml:"isX,omitempty"`
 }
 
 type Repos []Repository
@@ -51,13 +47,6 @@ type Question struct {
 
 type Questions []Question
 
-// Repository 相关方法
-func (r *Repository) SetGithubInfo(owner, name string) {
-	r.User = owner
-	r.Name = name
-	r.IsStar = true
-}
-
 func (r *Repository) IsValid() bool {
 	return strings.Contains(r.URL, GhURL)
 }
@@ -72,11 +61,6 @@ func (r *Repository) FullName() string {
 	return ""
 }
 
-// GetName 获取仓库名称
-func (r *Repository) GetName() string {
-	return r.Name
-}
-
 // GetDes 获取仓库描述
 func (r *Repository) GetDes() string {
 	return r.Des
@@ -86,38 +70,6 @@ func (r *Repository) GetDes() string {
 func (r *Repository) GetURL() string {
 	return r.URL
 }
-
-// AsRepoInfo 将Repository转换为RepoInfo接口
-func (r *Repository) AsRepoInfo() repo.RepoInfo {
-	return r
-}
-
-// AsRepoInfoList 将Repos转换为RepoInfo列表
-func (r Repos) AsRepoInfoList() []repo.RepoInfo {
-	result := make([]repo.RepoInfo, len(r))
-	for i, rp := range r {
-		result[i] = rp.AsRepoInfo()
-	}
-	return result
-}
-
-//func (cr ConfigRepos) WithTag(tag string) ConfigRepos {
-//	for _, rp := range cr {
-//		for i := range rp.Repos {
-//			rp.Repos[i].Tag = tag
-//		}
-//	}
-//	return cr
-//}
-
-//func (cr ConfigRepos) WithType() ConfigRepos {
-//	for _, rp := range cr {
-//		for i := range rp.Repos {
-//			rp.Repos[i].Type = rp.Type
-//		}
-//	}
-//	return cr
-//}
 
 func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
