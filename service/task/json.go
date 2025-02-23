@@ -1,4 +1,4 @@
-package diary
+package task
 
 import (
 	"github.com/bytedance/sonic"
@@ -6,15 +6,15 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
-// DiaryJSONRender 日记渲染器
-type DiaryJSONRender struct {
+// TaskJSONRender 日记渲染器
+type TaskJSONRender struct {
 	currentFile string
 	renderer    render.JSONRenderer
 }
 
-// NewDiaryJSONRender 创建日记渲染器
-func NewDiaryJSONRender() *DiaryJSONRender {
-	return &DiaryJSONRender{
+// NewTaskJSONRender 创建日记渲染器
+func NewTaskJSONRender() *TaskJSONRender {
+	return &TaskJSONRender{
 		renderer: render.JSONRenderer{
 			PrettyPrint: true,
 			ParseMode:   render.ParseFlatten,
@@ -23,12 +23,12 @@ func NewDiaryJSONRender() *DiaryJSONRender {
 }
 
 // GetCurrentFileName 获取当前处理的文件名
-func (djr *DiaryJSONRender) GetCurrentFileName() string {
+func (djr *TaskJSONRender) GetCurrentFileName() string {
 	return djr.currentFile
 }
 
 // SetCurrentFile 设置当前处理的文件名
-func (djr *DiaryJSONRender) SetCurrentFile(filename string) {
+func (djr *TaskJSONRender) SetCurrentFile(filename string) {
 	djr.currentFile = filename
 }
 
@@ -36,7 +36,7 @@ func ParseConfig(data []byte) ([]Task, error) {
 	return parser.NewParser[Task](data).ParseFlatten()
 }
 
-func (djr *DiaryJSONRender) Render(data []byte) (string, error) {
+func (djr *TaskJSONRender) Render(data []byte) (string, error) {
 	// 使用 Tasks 类型来解析 YAML，使用 ParseFlatten 来处理多文档
 	tasks, err := ParseConfig(data)
 	if err != nil {

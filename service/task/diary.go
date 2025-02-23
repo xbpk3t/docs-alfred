@@ -1,4 +1,4 @@
-package diary
+package task
 
 type Task struct {
 	Task   string   `yaml:"task" json:"task"`

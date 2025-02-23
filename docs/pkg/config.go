@@ -281,7 +281,7 @@ func (dc *DocsConfig) configureParseMode(renderer interface{}) error {
 		switch dc.Cmd {
 		case "goods":
 			r.WithParseMode(render.ParseFlatten)
-		case "works", "diary", "gh":
+		case "works", "task", "gh":
 			r.WithParseMode(render.ParseMulti)
 		default:
 			r.WithParseMode(render.ParseSingle)
