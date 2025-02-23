@@ -3,13 +3,14 @@ package books
 type BooksZ []struct {
 	Item []struct {
 		Cate  string `yaml:"cate"`
-		Sub   string `yaml:"sub,omitempty"`
+		Sc    string `yaml:"sc,omitempty"`
 		Books []struct {
 			Name   string   `yaml:"name"`
 			Author string   `yaml:"author,omitempty"`
 			Des    string   `yaml:"des,omitempty"`
 			URL    string   `yaml:"url,omitempty"`
 			Tags   []string `yaml:"tags,omitempty"`
+			Sub    []string `yaml:"sub,omitempty"`
 			Score  int      `yaml:"score,omitempty"`
 			IsOk   bool     `yaml:"isOk,omitempty"`
 		} `yaml:"books"`
