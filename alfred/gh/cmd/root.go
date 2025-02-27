@@ -79,7 +79,6 @@ func InitWorkflow() {
 func init() {
 	InitWorkflow()
 	rootCmd.AddCommand(ghCmd)
-	rootCmd.AddCommand(wsCmd)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "qs.yml", "Config File To Parse")
 	// rootCmd.MarkPersistentFlagRequired("config")

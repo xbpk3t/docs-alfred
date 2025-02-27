@@ -1,4 +1,4 @@
-package works
+package wiki
 
 import "github.com/xbpk3t/docs-alfred/pkg/parser"
 
