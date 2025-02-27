@@ -1,4 +1,4 @@
-package tv
+package video
 
 type TV struct {
 	Item []struct {
