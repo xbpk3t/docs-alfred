@@ -8,7 +8,7 @@ type Fc2 struct {
 		URL   string   `yaml:"url"`
 		Name  string   `yaml:"name,omitempty"`
 		Des   string   `yaml:"des,omitempty"`
-		Tag   []string `yaml:"tag,omitempty"`
+		Tags  []string `yaml:"tags,omitempty"`
 		Score int      `yaml:"score,omitempty"`
 	} `yaml:"cast,omitempty"`
 }

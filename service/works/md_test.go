@@ -229,14 +229,14 @@ func TestWorkRenderer_Render(t *testing.T) {
 //
 // 				// 验证第一个poetry部分
 // 				assert.Equal(t, "poetry", docs[0].Category)
-// 				assert.Equal(t, "verse", docs[0].Tag)
+// 				assert.Equal(t, "verse", docs[0].Tags)
 // 				assert.Len(t, docs[0].Qs, 1)
 // 				assert.Equal(t, "What are common poetic devices in English poetry?", docs[0].Qs[0].Question)
 //
 // 				// 验证classic部分
 // 				classicDoc := docs[2]
 // 				assert.Equal(t, "classic", classicDoc.Category)
-// 				assert.Equal(t, "literature", classicDoc.Tag)
+// 				assert.Equal(t, "literature", classicDoc.Tags)
 // 				assert.Contains(t, classicDoc.Qs[0].Answer, "iambic pentameter")
 // 			},
 // 		},
@@ -245,12 +245,12 @@ func TestWorkRenderer_Render(t *testing.T) {
 // 			validate: func(t *testing.T, docs Docs) {
 // 				// 验证相同tag的文档
 // 				verseDocs := lo.Filter(docs, func(d Doc, _ int) bool {
-// 					return d.Tag == "verse"
+// 					return d.Tags == "verse"
 // 				})
 // 				assert.Len(t, verseDocs, 2)
 //
 // 				literatureDocs := lo.Filter(docs, func(d Doc, _ int) bool {
-// 					return d.Tag == "literature"
+// 					return d.Tags == "literature"
 // 				})
 // 				assert.Len(t, literatureDocs, 2)
 // 			},
