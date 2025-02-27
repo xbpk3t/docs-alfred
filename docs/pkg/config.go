@@ -10,6 +10,7 @@ import (
 	"github.com/gookit/goutil/fsutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/pkg/utils"
+	"github.com/xbpk3t/docs-alfred/service"
 	"github.com/xbpk3t/docs-alfred/service/gh"
 	"github.com/xbpk3t/docs-alfred/service/goods"
 	"github.com/xbpk3t/docs-alfred/service/wiki"
@@ -223,49 +224,33 @@ func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) 
 func (dc *DocsConfig) createRenderer(fileType FileType) (render.Renderer, error) {
 	switch fileType {
 	case FileTypeMarkdown:
-		return dc.createMarkdownRenderer()
+		switch service.ServiceType(dc.Cmd) {
+		case service.ServiceWiki:
+			return wiki.NewWorkRenderer(), nil
+		case service.ServiceGithub:
+			return gh.NewGithubMarkdownRender(), nil
+		case service.ServiceGoods:
+			return goods.NewGoodsMarkdownRenderer(), nil
+		default:
+			return nil, fmt.Errorf("unknown markdown command: %s", dc.Cmd)
+		}
 	case FileTypeJSON:
-		return dc.createJSONRenderer()
+		renderer := render.NewJSONRenderer(dc.Cmd, true)
+		if err := dc.configureParseMode(renderer); err != nil {
+			return nil, err
+		}
+		return renderer, nil
 	case FileTypeYAML:
-		return dc.createYAMLRenderer()
+		if service.ServiceType(dc.Cmd) == service.ServiceGithub {
+			return gh.NewGithubYAMLRender(), nil
+		}
+		renderer := render.NewYAMLRenderer(dc.Cmd, true)
+		if err := dc.configureParseMode(renderer); err != nil {
+			return nil, err
+		}
+		return renderer, nil
 	}
 	return nil, fmt.Errorf("unknown file type: %s", fileType)
-}
-
-// createMarkdownRenderer 创建 Markdown 渲染器
-func (dc *DocsConfig) createMarkdownRenderer() (render.Renderer, error) {
-	switch dc.Cmd {
-	case "wiki":
-		return wiki.NewWorkRenderer(), nil
-	case "gh":
-		return gh.NewGithubMarkdownRender(), nil
-	case "goods":
-		return goods.NewGoodsMarkdownRenderer(), nil
-	default:
-		return nil, fmt.Errorf("unknown markdown command: %s", dc.Cmd)
-	}
-}
-
-// createJSONRenderer 创建 JSON 渲染器
-func (dc *DocsConfig) createJSONRenderer() (render.Renderer, error) {
-	renderer := render.NewJSONRenderer(dc.Cmd, true)
-	if err := dc.configureParseMode(renderer); err != nil {
-		return nil, err
-	}
-	return renderer, nil
-}
-
-// createYAMLRenderer 创建 YAML 渲染器
-func (dc *DocsConfig) createYAMLRenderer() (render.Renderer, error) {
-	if dc.Cmd == "gh" {
-		return gh.NewGithubYAMLRender(), nil
-	}
-
-	renderer := render.NewYAMLRenderer(dc.Cmd, true)
-	if err := dc.configureParseMode(renderer); err != nil {
-		return nil, err
-	}
-	return renderer, nil
 }
 
 // configureParseMode 配置渲染器的解析模式
@@ -275,10 +260,10 @@ func (dc *DocsConfig) configureParseMode(renderer interface{}) error {
 	}
 
 	if r, ok := renderer.(parseModeRenderer); ok {
-		switch dc.Cmd {
-		case "goods":
+		switch service.ServiceType(dc.Cmd) {
+		case service.ServiceGoods:
 			r.WithParseMode(render.ParseFlatten)
-		case "wiki", "task", "gh":
+		case service.ServiceWiki, service.ServiceTask, service.ServiceGithub:
 			r.WithParseMode(render.ParseMulti)
 		default:
 			r.WithParseMode(render.ParseSingle)
