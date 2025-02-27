@@ -12,8 +12,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/utils"
 	"github.com/xbpk3t/docs-alfred/service/gh"
 	"github.com/xbpk3t/docs-alfred/service/goods"
-	"github.com/xbpk3t/docs-alfred/service/works"
-	"github.com/xbpk3t/docs-alfred/service/ws"
+	"github.com/xbpk3t/docs-alfred/service/wiki"
 )
 
 type FileType string
@@ -236,12 +235,10 @@ func (dc *DocsConfig) createRenderer(fileType FileType) (render.Renderer, error)
 // createMarkdownRenderer 创建 Markdown 渲染器
 func (dc *DocsConfig) createMarkdownRenderer() (render.Renderer, error) {
 	switch dc.Cmd {
-	case "works":
-		return works.NewWorkRenderer(), nil
+	case "wiki":
+		return wiki.NewWorkRenderer(), nil
 	case "gh":
 		return gh.NewGithubMarkdownRender(), nil
-	case "ws":
-		return ws.NewWebStackRenderer(), nil
 	case "goods":
 		return goods.NewGoodsMarkdownRenderer(), nil
 	default:
@@ -281,7 +278,7 @@ func (dc *DocsConfig) configureParseMode(renderer interface{}) error {
 		switch dc.Cmd {
 		case "goods":
 			r.WithParseMode(render.ParseFlatten)
-		case "works", "task", "gh":
+		case "wiki", "task", "gh":
 			r.WithParseMode(render.ParseMulti)
 		default:
 			r.WithParseMode(render.ParseSingle)

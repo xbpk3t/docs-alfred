@@ -1,4 +1,4 @@
-package works
+package wiki
 
 import (
 	"os"
