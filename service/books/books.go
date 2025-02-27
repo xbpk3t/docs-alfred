@@ -1,33 +1,5 @@
 package books
 
-//type BooksZ []struct {
-//	Item []struct {
-//		Cate  string `yaml:"cate"`
-//		Sc    string `yaml:"sc"`
-//		Books []struct {
-//			Name   string   `yaml:"name"`
-//			Author string   `yaml:"author,omitempty"`
-//			Des    string   `yaml:"des,omitempty"`
-//			URL    string   `yaml:"url,omitempty"`
-//			Tags   []string `yaml:"tags,omitempty"`
-//			Sub    []string `yaml:"sub,omitempty"`
-//			Score  int      `yaml:"score,omitempty"`
-//			IsOk   bool     `yaml:"isOk,omitempty"`
-//			PQ4R []struct {
-//				Section string `yaml:"section"`
-//				Summary string `yaml:"summary,omitempty"`
-//				Qs []struct{
-//					Q string `yaml:"q"` // 问题
-//					X string `yaml:"x,omitempty"` // 书中对该问题的解答
-//					R string `yaml:"r,omitempty"` // review 反思
-//				} `yaml:"qs"`
-//				Review []string `yaml:"review,omitempty"`
-//			} `yaml:"pq4r,omitempty"`
-//		} `yaml:"books"`
-//	} `yaml:"item"`
-//	Year int `yaml:"year"`
-//}
-
 type BooksZ []struct {
 	novel struct {
 		webnovel []Book `yaml:"webnovel"`
@@ -61,14 +33,10 @@ type Book struct {
 
 // Pq4R 定义 PQ4R 结构体
 type Pq4R struct {
-	Section string `yaml:"section"`
-	Summary string `yaml:"summary,omitempty"`
-	Qs      []struct {
-		Q string `yaml:"q"`
-		X string `yaml:"x"`
-		R string `yaml:"r"`
-	} `yaml:"qs,omitempty"`
-	Review []string `yaml:"review,omitempty"`
+	Section string   `yaml:"section"`
+	Summary string   `yaml:"summary,omitempty"`
+	Qs      []string `yaml:"qs,omitempty"`
+	Review  []string `yaml:"review,omitempty"`
 }
 
 // BookFlattenJSON JSON打平数据，方便admin使用
