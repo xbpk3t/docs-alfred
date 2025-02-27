@@ -69,7 +69,7 @@ func (g *Goods) RenderMarkdown() string {
 // renderItems 渲染商品项
 func (g *Goods) renderItems() string {
 	var content strings.Builder
-	for _, item := range g.Items {
+	for _, item := range g.Item {
 		summary := item.formatSummary()
 		if details := item.formatDetails(); details != "" {
 			content.WriteString(fmt.Sprintf("\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n",
@@ -104,9 +104,6 @@ func (i *Item) formatDetails() string {
 	}
 	if i.Price != "" {
 		details = append(details, fmt.Sprintf("- 价格: %s", i.Price))
-	}
-	if len(i.Date) > 0 {
-		details = append(details, fmt.Sprintf("- 购买时间: %s", strings.Join(i.Date, ", ")))
 	}
 
 	// 添加商品描述

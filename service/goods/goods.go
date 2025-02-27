@@ -6,20 +6,22 @@ import "github.com/xbpk3t/docs-alfred/pkg/parser"
 type Goods struct {
 	Type  string `yaml:"type"`
 	Tag   string `yaml:"tag"`
-	Items []Item `yaml:"goods"`
+	Using []Item `yaml:"using"`
+	Item  []Item `yaml:"item"`
 	Des   string `yaml:"des,omitempty"`
 	QA    []QA   `yaml:"qs,omitempty"`
+	Score int    `yaml:"score"`
 }
 
 // Item 定义单个商品项
 type Item struct {
-	Name  string   `yaml:"name"`
-	Param string   `yaml:"param,omitempty"`
-	Price string   `yaml:"price,omitempty"`
-	Des   string   `yaml:"des,omitempty"`
-	URL   string   `yaml:"url,omitempty"`
-	Date  []string `yaml:"date,omitempty"`
-	Use   bool     `yaml:"use,omitempty"`
+	Name   string   `yaml:"name"`
+	Param  string   `yaml:"param,omitempty"`
+	Price  string   `yaml:"price,omitempty"`
+	Des    string   `yaml:"des,omitempty"`
+	URL    string   `yaml:"url,omitempty"`
+	Record []string `yaml:"record,omitempty"`
+	Use    bool     `yaml:"use,omitempty"`
 }
 
 // QA 定义问答结构
