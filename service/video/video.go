@@ -1,6 +1,6 @@
 package video
 
-type TV struct {
+type Video struct {
 	Item []struct {
 		Name  string   `yaml:"name"`
 		Dict  string   `yaml:"dict,omitempty"`
@@ -11,4 +11,4 @@ type TV struct {
 	Year int `yaml:"year"`
 }
 
-type TVs []TV
+type Videos []Video

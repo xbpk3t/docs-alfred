@@ -141,22 +141,22 @@ func (g *GithubMarkdownRender) RepositoriesAsMarkdownTable(repos Repos) string {
 }
 
 // formatQuestionSummary 格式化问题摘要
-func formatQuestionSummary(q Question) string {
-	if q.U != "" {
-		return fmt.Sprintf("[%s](%s)", q.Q, q.U)
+func formatQuestionSummary(q QA) string {
+	if q.URLs != "" {
+		return fmt.Sprintf("[%s](%s)", q.Question, q.URLs)
 	}
-	return q.Q
+	return q.Question
 }
 
 // formatQuestionDetails 格式化问题详情
-func formatQuestionDetails(q Question) string {
+func formatQuestionDetails(q QA) string {
 	var parts []string
 	renderer := render.NewMarkdownRenderer()
 
 	// 处理图片
-	if len(q.P) > 0 {
+	if len(q.Pictures) > 0 {
 		var images strings.Builder
-		for _, img := range q.P {
+		for _, img := range q.Pictures {
 			renderer.RenderImageWithFigcaption(img)
 			images.WriteString(renderer.String())
 		}
@@ -164,20 +164,20 @@ func formatQuestionDetails(q Question) string {
 	}
 
 	// 处理子问题
-	if len(q.S) > 0 {
+	if len(q.SubQuestions) > 0 {
 		var subQuestions strings.Builder
-		for _, sq := range q.S {
+		for _, sq := range q.SubQuestions {
 			subQuestions.WriteString(fmt.Sprintf("- %s\n", sq))
 		}
 		parts = append(parts, subQuestions.String())
 	}
 
 	// 处理答案
-	if q.X != "" {
+	if q.Answer != "" {
 		if len(parts) > 0 {
 			parts = append(parts, "---")
 		}
-		parts = append(parts, q.X)
+		parts = append(parts, q.Answer)
 	}
 
 	return strings.Join(parts, "\n\n")

@@ -4,51 +4,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/xbpk3t/docs-alfred/service/gh"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestQA_Render(t *testing.T) {
-	tests := []struct {
-		name string
-		want string
-		qa   QA
-	}{
-		{
-			name: "基础问答",
-			qa: QA{
-				Question: "问题1",
-				Answer:   "答案1",
-			},
-			want: "\n<details>\n<summary>问题1</summary>\n\n答案1\n\n</details>\n\n",
-		},
-		{
-			name: "带URL的问答",
-			qa: QA{
-				Question: "问题2",
-				Answer:   "答案2",
-				URL:      "http://example.com",
-			},
-			want: "\n<details>\n<summary>[问题2](http://example.com)</summary>\n\n答案2\n\n</details>\n\n",
-		},
-		{
-			name: "带子问题的问答",
-			qa: QA{
-				Question:     "主问题",
-				Answer:       "主答案",
-				SubQuestions: []string{"子问题1", "子问题2"},
-			},
-			want: "\n<details>\n<summary>主问题</summary>\n\n- 子问题1\n- 子问题2\n\n\n---\n\n主答案\n\n</details>\n\n",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.qa.Render()
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
 
 func TestDocs_GetTypes(t *testing.T) {
 	tests := []struct {
@@ -126,13 +86,13 @@ func TestDocs_SearchQuestions(t *testing.T) {
 			name: "搜索问题",
 			docs: Docs{
 				{
-					Qs: []QA{
+					Qs: []gh.QA{
 						{Question: "如何使用Go"},
 						{Question: "Go的优势"},
 					},
 				},
 				{
-					Qs: []QA{
+					Qs: []gh.QA{
 						{Question: "Python教程"},
 					},
 				},
@@ -144,7 +104,7 @@ func TestDocs_SearchQuestions(t *testing.T) {
 			name: "不存在的问题",
 			docs: Docs{
 				{
-					Qs: []QA{
+					Qs: []gh.QA{
 						{Question: "如何使用Go"},
 					},
 				},

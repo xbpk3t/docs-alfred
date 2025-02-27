@@ -41,7 +41,7 @@ type DocsConfig struct {
 }
 
 var serviceParseModeMap = map[service.ServiceType]render.ParseMode{
-	service.ServiceGoods:  render.ParseFlatten,
+	service.ServiceGoods:  render.ParseMulti,
 	service.ServiceWiki:   render.ParseMulti,
 	service.ServiceTask:   render.ParseMulti,
 	service.ServiceGithub: render.ParseMulti,
