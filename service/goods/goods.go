@@ -1,16 +1,21 @@
 package goods
 
-import "github.com/xbpk3t/docs-alfred/pkg/parser"
+import (
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
+	"github.com/xbpk3t/docs-alfred/service/gh"
+)
 
 // Goods 定义商品配置结构
 type Goods struct {
-	Type  string `yaml:"type"`
-	Tag   string `yaml:"tag"`
-	Using []Item `yaml:"using"`
-	Item  []Item `yaml:"item"`
-	Des   string `yaml:"des,omitempty"`
-	QA    []QA   `yaml:"qs,omitempty"`
-	Score int    `yaml:"score"`
+	Tag        string `yaml:"tag"`
+	GoodsItems []struct {
+		Type  string  `yaml:"type"`
+		Des   string  `yaml:"des,omitempty"`
+		QA    []gh.QA `yaml:"qs,omitempty"`
+		Using []Item  `yaml:"using"`
+		Item  []Item  `yaml:"item"`
+		Score int     `yaml:"score"`
+	} `yaml:"item"`
 }
 
 // Item 定义单个商品项
@@ -22,13 +27,6 @@ type Item struct {
 	URL    string   `yaml:"url,omitempty"`
 	Record []string `yaml:"record,omitempty"`
 	Use    bool     `yaml:"use,omitempty"`
-}
-
-// QA 定义问答结构
-type QA struct {
-	Question     string   `yaml:"q"`
-	Answer       string   `yaml:"x"`
-	SubQuestions []string `yaml:"s"`
 }
 
 // ParseConfig 解析配置文件

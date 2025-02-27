@@ -36,16 +36,16 @@ type ConfigRepo struct {
 
 type ConfigRepos []ConfigRepo
 
-// Question 定义问题结构
-type Question struct {
-	Q string   `yaml:"q"` // 问题
-	X string   `yaml:"x"` // 简要回答
-	P []string `yaml:"p"` // 图片
-	U string   `yaml:"u"` // url
-	S []string `yaml:"s"` // 子问题
+// QA 定义问题结构
+type QA struct {
+	Question     string   `yaml:"q"` // 问题
+	Answer       string   `yaml:"x"` // 简要回答
+	Pictures     []string `yaml:"p"` // 图片
+	URLs         string   `yaml:"u"` // url
+	SubQuestions []string `yaml:"s"` // 子问题
 }
 
-type Questions []Question
+type Questions []QA
 
 func (r *Repository) IsValid() bool {
 	return strings.Contains(r.URL, GhURL)

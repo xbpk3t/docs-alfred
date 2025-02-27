@@ -1,21 +1,15 @@
 package wiki
 
-import "github.com/xbpk3t/docs-alfred/pkg/parser"
+import (
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
+	"github.com/xbpk3t/docs-alfred/service/gh"
+)
 
 // Doc 定义文档结构
 type Doc struct {
-	Type string `yaml:"type"`
-	Tag  string `yaml:"tag"`
-	Qs   []QA   `yaml:"qs"`
-}
-
-// QA 定义问答结构
-type QA struct {
-	Question     string   `yaml:"q"` // 问题
-	Answer       string   `yaml:"x"` // 答案
-	URL          string   `yaml:"u"` // 链接
-	Pictures     []string `yaml:"p"` // 图片
-	SubQuestions []string `yaml:"s"` // 子问题
+	Type string  `yaml:"type"`
+	Tag  string  `yaml:"tag"`
+	Qs   []gh.QA `yaml:"qs"`
 }
 
 // Docs 文档集合

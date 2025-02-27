@@ -1,7 +1,6 @@
 package wiki
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/render"
@@ -55,63 +54,11 @@ func (d *Doc) RenderContent() string {
 	}
 
 	var content strings.Builder
-	for _, qa := range d.Qs {
-		content.WriteString(qa.Render())
-	}
+	// TODO wiki里的qs直接复用gh的qs之后，导致之前渲染qs的代码已经不可用了。所以全部移除掉了，之后这部分代码都直接调用gh里的渲染qs代码。
+	//for _, qa := range d.Qs {
+	//	content.WriteString(qa.Render())
+	//}
 	return content.String()
-}
-
-// Render 渲染问答内容
-func (qa *QA) Render() string {
-	summary := qa.formatSummary()
-	if details := qa.formatDetails(); details != "" {
-		return fmt.Sprintf("\n<details>\n<summary>%s</summary>\n\n%s\n\n</details>\n\n",
-			summary, details)
-	}
-	return fmt.Sprintf("- %s\n", summary)
-}
-
-// formatSummary 格式化问答摘要
-func (qa *QA) formatSummary() string {
-	if qa.URL != "" {
-		return fmt.Sprintf("[%s](%s)", qa.Question, qa.URL)
-	}
-	return qa.Question
-}
-
-// formatDetails 格式化问答详情
-func (qa *QA) formatDetails() string {
-	var parts []string
-	renderer := render.NewMarkdownRenderer()
-
-	// 处理图片
-	if len(qa.Pictures) > 0 {
-		var pictures strings.Builder
-		for _, pic := range qa.Pictures {
-			renderer.RenderImageWithFigcaption(pic)
-			pictures.WriteString(renderer.String())
-		}
-		parts = append(parts, pictures.String())
-	}
-
-	// 处理子问题
-	if len(qa.SubQuestions) > 0 {
-		var steps strings.Builder
-		for _, subQ := range qa.SubQuestions {
-			steps.WriteString(fmt.Sprintf("- %s\n", subQ))
-		}
-		parts = append(parts, steps.String())
-	}
-
-	// 处理答案
-	if qa.Answer != "" {
-		if len(parts) > 0 {
-			parts = append(parts, "---")
-		}
-		parts = append(parts, qa.Answer)
-	}
-
-	return strings.Join(parts, "\n\n")
 }
 
 // GetTypes 获取所有类型
