@@ -46,6 +46,7 @@ var serviceParseModeMap = map[service.ServiceType]render.ParseMode{
 	service.ServiceTask:   render.ParseMulti,
 	service.ServiceGithub: render.ParseMulti,
 	service.ServiceBooks:  render.ParseMulti,
+	service.ServiceVideo:  render.ParseMulti,
 }
 
 // NewDocProcessor 创建新的处理器
