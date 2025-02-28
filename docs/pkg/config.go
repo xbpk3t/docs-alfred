@@ -44,7 +44,7 @@ var serviceParseModeMap = map[service.ServiceType]render.ParseMode{
 	service.ServiceGoods:  render.ParseMulti,
 	service.ServiceWiki:   render.ParseMulti,
 	service.ServiceTask:   render.ParseMulti,
-	service.ServiceGithub: render.ParseMulti,
+	service.ServiceGithub: render.ParseFlatten,
 	service.ServiceBooks:  render.ParseMulti,
 	service.ServiceVideo:  render.ParseMulti,
 }
