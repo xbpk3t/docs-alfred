@@ -71,6 +71,11 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if config.EnvConfig.Debug {
+		slog.Info("HTML写入成功")
+		return os.WriteFile("newsletter.html", []byte(content), os.ModePerm)
+	}
+
 	return service.SendNewsletter(content)
 }
 
@@ -174,7 +179,7 @@ func (s *NewsletterService) convertToRssFeed(typeName string, combinedFeed *feed
 
 // getItemTitle 生成文章标题
 func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
-	if !s.config.Newsletter.IsHideAuthorInTitle && item.Author.Name != "" {
+	if !s.config.NewsletterConfig.IsHideAuthorInTitle && item.Author.Name != "" {
 		return fmt.Sprintf("[%s] %s", item.Author.Name, item.Title)
 	}
 	return item.Title
@@ -200,7 +205,7 @@ func (s *NewsletterService) SendNewsletter(content string) error {
 	emailCfg := EmailConfig{
 		From:  "Acme <onboarding@resend.dev>",
 		To:    []string{"jeffcottlu@gmail.com"},
-		Token: s.config.Resend.Token,
+		Token: s.config.ResendConfig.Token,
 	}
 
 	ctx := context.Background()

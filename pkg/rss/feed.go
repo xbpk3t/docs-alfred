@@ -50,7 +50,7 @@ func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gof
 
 	fp := gofeed.NewParser()
 	fp.Client = &http.Client{
-		Timeout: time.Duration(f.Config.Feed.Timeout) * time.Second,
+		Timeout: time.Duration(f.Config.FeedConfig.Timeout) * time.Second,
 	}
 
 	var attempts uint = 0
@@ -63,7 +63,7 @@ func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gof
 			default:
 				feed, err := fp.ParseURL(url)
 				if err != nil {
-					slog.Error("Parse Feed Error",
+					slog.Error("Parse FeedConfig Error",
 						slog.String(LogKeyURL, url),
 						slog.Any(LogKeyError, err))
 					return err
@@ -73,20 +73,20 @@ func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gof
 			}
 		},
 		retry.Context(ctx),
-		retry.Attempts(uint(f.Config.Feed.MaxTries)),
+		retry.Attempts(uint(f.Config.FeedConfig.MaxTries)),
 		retry.Delay(DefaultRetryDelay),
 		retry.DelayType(retry.BackOffDelay),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
 			attempts = n
-			slog.Info("Retry Parse Feed",
+			slog.Info("Retry Parse FeedConfig",
 				slog.String(LogKeyURL, url),
 				slog.Int(LogKeyAttempts, int(attempts)),
 				slog.Any(LogKeyError, err))
 		}),
 	)
 	if err != nil {
-		slog.Error("Parse Feed Error after retries",
+		slog.Error("Parse FeedConfig Error after retries",
 			slog.String(LogKeyURL, url),
 			slog.Int(LogKeyAttempts, int(attempts)),
 			slog.Any(LogKeyError, err))
@@ -177,7 +177,7 @@ func (f *Feed) processSingleFeed(sourceFeed *gofeed.Feed, seen map[string]bool) 
 	var items []*feeds.Item
 
 	for i, item := range sourceFeed.Items {
-		if i >= f.Config.Feed.FeedLimit {
+		if i >= f.Config.FeedConfig.FeedLimit {
 			break
 		}
 
@@ -186,7 +186,7 @@ func (f *Feed) processSingleFeed(sourceFeed *gofeed.Feed, seen map[string]bool) 
 		}
 
 		created := f.getItemCreationTime(item)
-		if !FilterFeedsWithTimeRange(created, time.Now(), f.Config.Newsletter.Schedule) {
+		if !FilterFeedsWithTimeRange(created, time.Now(), f.Config.NewsletterConfig.Schedule) {
 			continue
 		}
 
