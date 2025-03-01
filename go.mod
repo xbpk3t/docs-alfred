@@ -16,9 +16,9 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/resend/resend-go/v2 v2.13.0
 	github.com/samber/lo v1.47.0
+	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/sync v0.10.0
 )
 
 require (
@@ -41,6 +41,8 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	go.deanishe.net/env v0.5.1 // indirect
 	go.deanishe.net/fuzzy v1.0.0 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
