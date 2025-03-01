@@ -12,10 +12,11 @@ import (
 
 // Config 主配置结构
 type Config struct {
-	Resend     ResendConfig     `yaml:"resend"`
-	Newsletter NewsletterConfig `yaml:"newsletter"`
-	Feeds      []FeedsDetail    `yaml:"feeds"`
-	Feed       FeedConfig       `yaml:"feed"`
+	ResendConfig     ResendConfig     `yaml:"resend"`
+	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
+	Feeds            []FeedsDetail    `yaml:"feeds"`
+	FeedConfig       FeedConfig       `yaml:"feed"`
+	EnvConfig        EnvConfig        `yaml:"env"`
 }
 
 // ResendConfig Resend相关配置
@@ -40,6 +41,10 @@ type FeedConfig struct {
 type FeedsDetail struct {
 	Type string  `yaml:"type"`
 	Urls []Feeds `yaml:"urls"`
+}
+
+type EnvConfig struct {
+	Debug bool `yaml:"debug" default:"true"`
 }
 
 // Feeds Feed URL
@@ -68,12 +73,12 @@ func NewConfig(configFile string) (*Config, error) {
 
 // Validate 验证配置
 func (c *Config) Validate() error {
-	if c.Resend.Token == "" {
+	if c.ResendConfig.Token == "" {
 		return errors.New("resend token is required")
 	}
 
-	if !isValidSchedule(c.Newsletter.Schedule) {
-		return fmt.Errorf("invalid schedule: %s", c.Newsletter.Schedule)
+	if !isValidSchedule(c.NewsletterConfig.Schedule) {
+		return fmt.Errorf("invalid schedule: %s", c.NewsletterConfig.Schedule)
 	}
 
 	return nil

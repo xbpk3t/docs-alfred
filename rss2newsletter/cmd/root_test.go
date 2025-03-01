@@ -43,7 +43,7 @@ func TestGetItemTitle(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := NewNewsletterService(&rss.Config{
-				Newsletter: rss.NewsletterConfig{
+				NewsletterConfig: rss.NewsletterConfig{
 					IsHideAuthorInTitle: tt.hideAuthor,
 				},
 			})
