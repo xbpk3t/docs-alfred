@@ -16,7 +16,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
 )
 
@@ -35,14 +34,27 @@ type EmailConfig struct {
 
 // NewsletterService 处理新闻通讯的服务
 type NewsletterService struct {
-	config *rss.Config
+	config      *rss.Config
+	failedFeeds []*rss.FeedError
 }
 
 // NewNewsletterService 创建新闻通讯服务
 func NewNewsletterService(cfg *rss.Config) *NewsletterService {
 	return &NewsletterService{
-		config: cfg,
+		config:      cfg,
+		failedFeeds: make([]*rss.FeedError, 0),
 	}
+}
+
+// GetFailedFeeds returns the list of failed feeds
+func (s *NewsletterService) GetFailedFeeds() []*rss.FeedError {
+	return s.failedFeeds
+}
+
+// TemplateData represents the data passed to the template
+type TemplateData struct {
+	DashboardHTML string
+	Feeds         []feeds.RssFeed
 }
 
 // rootCmd 根命令
@@ -58,37 +70,16 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	//// 如果启用了任何dashboard功能，显示dashboard
-	//if config.DashboardConfig.IsShowFetchFailedFeeds ||
-	//	config.DashboardConfig.IsShowTypeStats ||
-	//	config.DashboardConfig.IsShowFeedDetail {
-	//	dash := dashboard.NewDashboard(config)
-	//
-	//	// 显示失败的feeds
-	//	if output := dash.ShowFetchFailedFeeds(); output != "" {
-	//		fmt.Println(output)
-	//	}
-	//
-	//	// 显示类型统计
-	//	if output := dash.ShowTypeStats(); output != "" {
-	//		fmt.Println(output)
-	//	}
-	//
-	//	// 显示feed详情
-	//	if output := dash.ShowFeedDetail(); output != "" {
-	//		fmt.Println(output)
-	//	}
-	//
-	//	return nil
-	//}
-
 	service := NewNewsletterService(config)
 	f, err := service.ProcessAllFeeds()
 	if err != nil {
 		return err
 	}
 
-	content, err := service.RenderNewsletter(f)
+	// 使用handleDashboard生成dashboard HTML
+	dashboardHTML := rss.GenerateDashboardHTML(config, service.GetFailedFeeds())
+
+	content, err := service.RenderNewsletter(f, dashboardHTML)
 	if err != nil {
 		return err
 	}
@@ -130,6 +121,11 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 				slog.Error("Failed to process feed",
 					slog.String("type", feed.Type),
 					slog.Any("error", err))
+				// 记录失败的feed
+				s.failedFeeds = append(s.failedFeeds, &rss.FeedError{
+					URL:     feed.Urls[0].Feed,
+					Message: "Failed to fetch feed",
+				})
 				// 返回一个空的feed而不是错误，这样其他feed可以继续处理
 				return feeds.RssFeed{
 					Category: feed.Type,
@@ -155,7 +151,10 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.Feed
 		return item.Feed
 	}))
 
-	allFeeds := rss.FetchURLs(ctx, urls, s.config)
+	allFeeds, failedFeeds := rss.FetchURLs(ctx, urls, s.config)
+	// 记录所有失败的feed
+	s.failedFeeds = append(s.failedFeeds, failedFeeds...)
+
 	if len(allFeeds) == 0 {
 		slog.Info("No feeds fetched for category",
 			slog.String("category", feed.Type),
@@ -208,15 +207,31 @@ func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
 }
 
 // RenderNewsletter 渲染邮件模板
-func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed) (string, error) {
-	tmpl, err := template.ParseFS(newsletterTpl, "templates/newsletter.tpl")
+func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, dashboardHTML string) (string, error) {
+	// 创建自定义的模板函数映射
+	funcMap := template.FuncMap{
+		"safeHTML": func(s string) template.HTML {
+			return template.HTML(s)
+		},
+	}
+
+	// 使用 New 创建模板，并添加自定义函数
+	tmpl := template.New("newsletter.tpl").Funcs(funcMap)
+
+	// 解析模板文件
+	tmpl, err := tmpl.ParseFS(newsletterTpl, "templates/newsletter.tpl")
 	if err != nil {
-		return "", errcode.WithError(errcode.ErrR2NParseTemplateFailed, err)
+		return "", fmt.Errorf("failed to parse template: %w", err)
+	}
+
+	data := TemplateData{
+		Feeds:         feeds,
+		DashboardHTML: dashboardHTML,
 	}
 
 	var tplBytes bytes.Buffer
-	if err := tmpl.Execute(&tplBytes, feeds); err != nil {
-		return "", errcode.WithError(errcode.ErrR2NRenderTemplateFailed, err)
+	if err := tmpl.Execute(&tplBytes, data); err != nil {
+		return "", fmt.Errorf("failed to render template: %w", err)
 	}
 
 	return tplBytes.String(), nil
@@ -242,7 +257,7 @@ func (s *NewsletterService) SendNewsletter(content string) error {
 
 	sent, err := client.Emails.SendWithContext(ctx, params)
 	if err != nil {
-		return errcode.WithError(errcode.ErrR2NSendMailFailed, err)
+		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	slog.Info("邮件发送成功", "id", sent.Id)
@@ -264,5 +279,5 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "rss2newsletter.yml", "配置文件路径")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "rss2newsletter.yml", "config file (default is rss2newsletter.yml)")
 }
