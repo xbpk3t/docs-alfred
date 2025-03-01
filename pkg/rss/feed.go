@@ -2,7 +2,6 @@ package rss
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -142,7 +141,8 @@ func (f *Feed) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) (*feeds.
 
 func validateFeeds(feeds []*gofeed.Feed) error {
 	if len(feeds) == 0 {
-		return errors.New(ErrNoFeedsFound)
+		slog.Info("No feeds found, skipping")
+		return nil
 	}
 	return nil
 }

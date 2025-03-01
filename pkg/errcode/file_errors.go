@@ -10,4 +10,5 @@ var (
 	ErrCreateFile   = NewError(11005, "创建文件失败")
 	ErrFileNotFound = NewError(11006, "文件不存在")
 	ErrFileProcess  = NewError(11007, "文件处理失败")
+	ErrSaveLocal    = NewError(11008, "保存本地文件失败")
 )
