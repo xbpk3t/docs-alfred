@@ -27,8 +27,13 @@ type Book struct {
 	Tags    []string `yaml:"tags,omitempty"`
 	Pq4R    []Pq4R   `yaml:"pq4r,omitempty"`
 	Summary []string `yaml:"summary,omitempty"`
-	Item    []string `yaml:"item,omitempty"`
-	Score   int      `yaml:"score,omitempty"` // score: -1 就是之前的isOk: false
+	Sub     []struct {
+		Author  string `yaml:"author,omitempty"`
+		Content string `yaml:"content,omitempty"`
+		Name    string `yaml:"name,omitempty"`
+	} `yaml:"sub,omitempty"`
+	Item  []string `yaml:"item,omitempty"`
+	Score int      `yaml:"score,omitempty"` // score: -1 就是之前的isOk: false
 }
 
 // Pq4R 定义 PQ4R 结构体

@@ -134,15 +134,26 @@ func (s *NewsletterService) processSingleFeed(feed rss.FeedsDetail) (feeds.RssFe
 	}))
 
 	allFeeds := s.feed.FetchURLs(context.TODO(), urls)
-
-	// FIXME 这里只需要加个logging，即使整个type都报错也不应该直接return，否则会导致挂掉
-	// if len(allFeeds) == 0 {
-	// 	return feeds.RssFeed{}, errcode.WithError(errcode.ErrR2NRenderTemplateFailed, feed.Category)
-	// }
+	if len(allFeeds) == 0 {
+		slog.Info("No feeds fetched for category",
+			slog.String("category", feed.Type),
+			slog.Int("total_urls", len(urls)))
+		return feeds.RssFeed{
+			Category: feed.Type,
+			Items:    []*feeds.RssItem{},
+		}, nil
+	}
 
 	combinedFeed, err := s.feed.MergeAllFeeds(feed.Type, allFeeds)
 	if err != nil {
-		return feeds.RssFeed{}, errcode.WithError(errcode.ErrR2NMergeFeedsError, err)
+		slog.Error("Failed to merge feeds",
+			slog.String("category", feed.Type),
+			slog.Int("feeds_count", len(allFeeds)),
+			slog.Any("error", err))
+		return feeds.RssFeed{
+			Category: feed.Type,
+			Items:    []*feeds.RssItem{},
+		}, nil
 	}
 
 	return s.convertToRssFeed(feed.Type, combinedFeed), nil
