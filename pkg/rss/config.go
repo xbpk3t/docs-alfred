@@ -17,6 +17,7 @@ type Config struct {
 	Feeds            []FeedsDetail    `yaml:"feeds"`
 	FeedConfig       FeedConfig       `yaml:"feed"`
 	EnvConfig        EnvConfig        `yaml:"env"`
+	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
 }
 
 // ResendConfig Resend相关配置
@@ -35,6 +36,12 @@ type FeedConfig struct {
 	Timeout   int `yaml:"timeout" default:"30"`   // HTTP请求超时时间（秒）
 	MaxTries  int `yaml:"maxTries" default:"3"`   // 最大重试次数
 	FeedLimit int `yaml:"feedLimit" default:"30"` // Feed数量限制
+}
+
+type DashboardConfig struct {
+	IsShowFetchFailedFeeds bool `yaml:"isShowFetchFailedFeeds"`
+	IsShowTypeStats        bool `yaml:"isShowTypeStats"`
+	IsShowFeedDetail       bool `yaml:"isShowFeedDetail"`
 }
 
 // FeedsDetail Feed详情
