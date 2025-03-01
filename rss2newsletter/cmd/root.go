@@ -22,8 +22,8 @@ import (
 // 配置文件路径
 var cfgFile string
 
-//go:embed templates/newsletter.tpl
-var newsletterTpl embed.FS
+//go:embed templates/newsletter.tpl templates/dashboard.tpl
+var templates embed.FS
 
 // EmailConfig 邮件配置
 type EmailConfig struct {
@@ -57,6 +57,12 @@ type TemplateData struct {
 	Feeds         []feeds.RssFeed
 }
 
+// EmailContent represents a single email content
+type EmailContent struct {
+	Subject string
+	Content string
+}
+
 // rootCmd 根命令
 var rootCmd = &cobra.Command{
 	Use:   "rss2newsletter",
@@ -76,20 +82,32 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// 使用handleDashboard生成dashboard HTML
-	dashboardHTML := rss.GenerateDashboardHTML(config, service.GetFailedFeeds())
+	var contents []EmailContent
 
-	content, err := service.RenderNewsletter(f, dashboardHTML)
+	// 生成并添加主要的newsletter内容
+	dashboardHTML := rss.GenerateDashboardHTML(config, service.GetFailedFeeds())
+	newsletterContent, err := service.RenderNewsletter(f, "") // 不在主邮件中包含dashboard
 	if err != nil {
 		return err
 	}
+	contents = append(contents, EmailContent{
+		Subject: service.generateEmailSubject(),
+		Content: newsletterContent,
+	})
 
-	if config.EnvConfig.Debug {
-		slog.Info("HTML写入成功")
-		return os.WriteFile("newsletter.html", []byte(content), os.ModePerm)
+	// 如果启用了任何dashboard功能，生成并添加dashboard邮件
+	if config.DashboardConfig.IsShowFetchFailedFeeds || config.DashboardConfig.IsShowFeedDetail {
+		dashboardContent, err := service.RenderDashboard(dashboardHTML)
+		if err != nil {
+			return err
+		}
+		contents = append(contents, EmailContent{
+			Subject: "Dashboard For RSS Feeds",
+			Content: dashboardContent,
+		})
 	}
 
-	return service.SendNewsletter(content)
+	return service.handleOutput(contents)
 }
 
 func loadConfig() (*rss.Config, error) {
@@ -206,8 +224,8 @@ func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
 	return item.Title
 }
 
-// RenderNewsletter 渲染邮件模板
-func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, dashboardHTML string) (string, error) {
+// renderTemplate renders a specific template with data
+func (s *NewsletterService) renderTemplate(templateName string, data interface{}) (string, error) {
 	// 创建自定义的模板函数映射
 	funcMap := template.FuncMap{
 		"safeHTML": func(s string) template.HTML {
@@ -216,17 +234,12 @@ func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, dashboardHTM
 	}
 
 	// 使用 New 创建模板，并添加自定义函数
-	tmpl := template.New("newsletter.tpl").Funcs(funcMap)
+	tmpl := template.New(templateName).Funcs(funcMap)
 
 	// 解析模板文件
-	tmpl, err := tmpl.ParseFS(newsletterTpl, "templates/newsletter.tpl")
+	tmpl, err := tmpl.ParseFS(templates, "templates/"+templateName)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)
-	}
-
-	data := TemplateData{
-		Feeds:         feeds,
-		DashboardHTML: dashboardHTML,
 	}
 
 	var tplBytes bytes.Buffer
@@ -237,8 +250,50 @@ func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, dashboardHTM
 	return tplBytes.String(), nil
 }
 
+// RenderNewsletter 渲染邮件模板
+func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, dashboardHTML string) (string, error) {
+	data := TemplateData{
+		Feeds:         feeds,
+		DashboardHTML: dashboardHTML,
+	}
+	return s.renderTemplate("newsletter.tpl", data)
+}
+
+// RenderDashboard 渲染仪表盘模板
+func (s *NewsletterService) RenderDashboard(dashboardHTML string) (string, error) {
+	data := struct {
+		DashboardHTML string
+	}{
+		DashboardHTML: dashboardHTML,
+	}
+	return s.renderTemplate("dashboard.tpl", data)
+}
+
+// handleOutput 处理输出（写入文件或发送邮件）
+func (s *NewsletterService) handleOutput(contents []EmailContent) error {
+	if s.config.EnvConfig.Debug {
+		// 写入到本地文件
+		for i, content := range contents {
+			filename := fmt.Sprintf("newsletter_%d.html", i+1)
+			if err := os.WriteFile(filename, []byte(content.Content), os.ModePerm); err != nil {
+				return fmt.Errorf("failed to write file %s: %w", filename, err)
+			}
+			slog.Info("HTML写入成功", "filename", filename)
+		}
+		return nil
+	}
+
+	// 发送邮件
+	for _, content := range contents {
+		if err := s.SendNewsletter(content.Content, content.Subject); err != nil {
+			return fmt.Errorf("failed to send email: %w", err)
+		}
+	}
+	return nil
+}
+
 // SendNewsletter 发送邮件
-func (s *NewsletterService) SendNewsletter(content string) error {
+func (s *NewsletterService) SendNewsletter(content string, subject string) error {
 	emailCfg := EmailConfig{
 		From:  "Acme <onboarding@resend.dev>",
 		To:    []string{"jeffcottlu@gmail.com"},
@@ -251,7 +306,7 @@ func (s *NewsletterService) SendNewsletter(content string) error {
 	params := &resend.SendEmailRequest{
 		From:    emailCfg.From,
 		To:      emailCfg.To,
-		Subject: s.generateEmailSubject(),
+		Subject: subject,
 		Html:    content,
 	}
 
