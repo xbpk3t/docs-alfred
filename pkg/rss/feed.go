@@ -4,10 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -16,33 +13,9 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
-// Run 运行主程序
-func (f *Feed) Run(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		cancel()
-	}()
-
-	var urls []string
-	for _, feed := range f.Config.Feeds {
-		for _, url := range feed.Urls {
-			urls = append(urls, url.Feed)
-		}
-	}
-
-	_, err := f.MergeAllFeeds("FeedTitle", f.FetchURLs(ctx, urls))
-	return err
-}
-
 // FetchURLWithRetry 重试获取URL内容
-func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed) {
-	if err := f.validateURL(url); err != nil {
+func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, cfg *Config) {
+	if err := validateURL(url); err != nil {
 		slog.Error("Invalid URL", slog.String(LogKeyURL, url), slog.Any(LogKeyError, err))
 		ch <- nil
 		return
@@ -50,7 +23,7 @@ func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gof
 
 	fp := gofeed.NewParser()
 	fp.Client = &http.Client{
-		Timeout: time.Duration(f.Config.FeedConfig.Timeout) * time.Second,
+		Timeout: time.Duration(cfg.FeedConfig.Timeout) * time.Second,
 	}
 
 	var attempts uint = 0
@@ -73,7 +46,7 @@ func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gof
 			}
 		},
 		retry.Context(ctx),
-		retry.Attempts(uint(f.Config.FeedConfig.MaxTries)),
+		retry.Attempts(uint(cfg.FeedConfig.MaxTries)),
 		retry.Delay(DefaultRetryDelay),
 		retry.DelayType(retry.BackOffDelay),
 		retry.LastErrorOnly(true),
@@ -95,7 +68,7 @@ func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gof
 }
 
 // validateURL 验证URL
-func (f *Feed) validateURL(url string) error {
+func validateURL(url string) error {
 	if url == "" {
 		return &FeedError{
 			URL:     url,
@@ -106,7 +79,7 @@ func (f *Feed) validateURL(url string) error {
 }
 
 // FetchURLs 批量获取URLs
-func (f *Feed) FetchURLs(ctx context.Context, urls []string) []*gofeed.Feed {
+func FetchURLs(ctx context.Context, urls []string, cfg *Config) []*gofeed.Feed {
 	allFeeds := make([]*gofeed.Feed, 0)
 	ch := make(chan *gofeed.Feed, len(urls))
 	var wg sync.WaitGroup
@@ -115,7 +88,7 @@ func (f *Feed) FetchURLs(ctx context.Context, urls []string) []*gofeed.Feed {
 		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
-			f.FetchURLWithRetry(ctx, url, ch)
+			FetchURLWithRetry(ctx, url, ch, cfg)
 		}(url)
 	}
 
@@ -134,13 +107,13 @@ func (f *Feed) FetchURLs(ctx context.Context, urls []string) []*gofeed.Feed {
 }
 
 // MergeAllFeeds 合并所有feeds
-func (f *Feed) MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed) (*feeds.Feed, error) {
+func MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed, cfg *Config) (*feeds.Feed, error) {
 	if err := validateFeeds(allFeeds); err != nil {
 		return nil, err
 	}
 
 	feed := createBaseFeed(feedTitle)
-	items := f.processFeeds(allFeeds)
+	items := processFeeds(allFeeds, cfg)
 	feed.Items = items
 	return feed, nil
 }
@@ -161,23 +134,23 @@ func createBaseFeed(title string) *feeds.Feed {
 	}
 }
 
-func (f *Feed) processFeeds(allFeeds []*gofeed.Feed) []*feeds.Item {
+func processFeeds(allFeeds []*gofeed.Feed, cfg *Config) []*feeds.Item {
 	seen := make(map[string]bool)
 	var mergedItems []*feeds.Item
 
 	for _, sourceFeed := range allFeeds {
-		items := f.processSingleFeed(sourceFeed, seen)
+		items := processSingleFeed(sourceFeed, seen, cfg)
 		mergedItems = append(mergedItems, items...)
 	}
 
 	return mergedItems
 }
 
-func (f *Feed) processSingleFeed(sourceFeed *gofeed.Feed, seen map[string]bool) []*feeds.Item {
+func processSingleFeed(sourceFeed *gofeed.Feed, seen map[string]bool, cfg *Config) []*feeds.Item {
 	var items []*feeds.Item
 
 	for i, item := range sourceFeed.Items {
-		if i >= f.Config.FeedConfig.FeedLimit {
+		if i >= cfg.FeedConfig.FeedLimit {
 			break
 		}
 
@@ -185,15 +158,15 @@ func (f *Feed) processSingleFeed(sourceFeed *gofeed.Feed, seen map[string]bool) 
 			continue
 		}
 
-		created := f.getItemCreationTime(item)
-		if !FilterFeedsWithTimeRange(created, time.Now(), f.Config.NewsletterConfig.Schedule) {
+		created := getItemCreationTime(item)
+		if !FilterFeedsWithTimeRange(created, time.Now(), cfg.NewsletterConfig.Schedule) {
 			continue
 		}
 
 		feedItem := &feeds.Item{
 			Title:   item.Title,
 			Link:    &feeds.Link{Href: item.Link},
-			Author:  &feeds.Author{Name: f.getAuthor(sourceFeed)},
+			Author:  &feeds.Author{Name: getAuthor(sourceFeed)},
 			Created: created,
 		}
 
@@ -204,7 +177,7 @@ func (f *Feed) processSingleFeed(sourceFeed *gofeed.Feed, seen map[string]bool) 
 	return items
 }
 
-func (f *Feed) getItemCreationTime(item *gofeed.Item) time.Time {
+func getItemCreationTime(item *gofeed.Item) time.Time {
 	if item.PublishedParsed != nil {
 		return *item.PublishedParsed
 	}
@@ -214,7 +187,7 @@ func (f *Feed) getItemCreationTime(item *gofeed.Item) time.Time {
 	return time.Now()
 }
 
-func (f *Feed) getAuthor(feed *gofeed.Feed) string {
+func getAuthor(feed *gofeed.Feed) string {
 	if feed.Title != "" {
 		return feed.Title
 	}

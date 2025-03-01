@@ -16,15 +16,3 @@ type FeedFetcher interface {
 type FeedProcessor interface {
 	ProcessFeed(feed *gofeed.Feed) ([]*feeds.Item, error)
 }
-
-// Feed RSS订阅处理结构体
-type Feed struct {
-	Config *Config
-}
-
-// NewFeed 创建新的Feed处理器
-func NewFeed(cfg *Config) *Feed {
-	return &Feed{
-		Config: cfg,
-	}
-}

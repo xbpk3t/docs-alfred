@@ -36,14 +36,12 @@ type EmailConfig struct {
 // NewsletterService 处理新闻通讯的服务
 type NewsletterService struct {
 	config *rss.Config
-	feed   *rss.Feed
 }
 
 // NewNewsletterService 创建新闻通讯服务
 func NewNewsletterService(cfg *rss.Config) *NewsletterService {
 	return &NewsletterService{
 		config: cfg,
-		feed:   rss.NewFeed(cfg),
 	}
 }
 
@@ -59,6 +57,30 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	//// 如果启用了任何dashboard功能，显示dashboard
+	//if config.DashboardConfig.IsShowFetchFailedFeeds ||
+	//	config.DashboardConfig.IsShowTypeStats ||
+	//	config.DashboardConfig.IsShowFeedDetail {
+	//	dash := dashboard.NewDashboard(config)
+	//
+	//	// 显示失败的feeds
+	//	if output := dash.ShowFetchFailedFeeds(); output != "" {
+	//		fmt.Println(output)
+	//	}
+	//
+	//	// 显示类型统计
+	//	if output := dash.ShowTypeStats(); output != "" {
+	//		fmt.Println(output)
+	//	}
+	//
+	//	// 显示feed详情
+	//	if output := dash.ShowFeedDetail(); output != "" {
+	//		fmt.Println(output)
+	//	}
+	//
+	//	return nil
+	//}
 
 	service := NewNewsletterService(config)
 	f, err := service.ProcessAllFeeds()
@@ -133,7 +155,7 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.Feed
 		return item.Feed
 	}))
 
-	allFeeds := s.feed.FetchURLs(ctx, urls)
+	allFeeds := rss.FetchURLs(ctx, urls, s.config)
 	if len(allFeeds) == 0 {
 		slog.Info("No feeds fetched for category",
 			slog.String("category", feed.Type),
@@ -144,7 +166,7 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.Feed
 		}, nil
 	}
 
-	combinedFeed, err := s.feed.MergeAllFeeds(feed.Type, allFeeds)
+	combinedFeed, err := rss.MergeAllFeeds(feed.Type, allFeeds, s.config)
 	if err != nil {
 		slog.Error("Failed to merge feeds",
 			slog.String("category", feed.Type),
