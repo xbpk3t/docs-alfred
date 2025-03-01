@@ -8,15 +8,16 @@ import (
 	"html/template"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/dromara/carbon/v2"
 	"github.com/gorilla/feeds"
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
+	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
-	"golang.org/x/sync/errgroup"
 )
 
 // 配置文件路径
@@ -84,56 +85,50 @@ func loadConfig() (*rss.Config, error) {
 
 // ProcessAllFeeds 并发处理所有Feed源
 func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
-	g, ctx := errgroup.WithContext(context.Background())
-	resultChan := make(chan feeds.RssFeed, len(s.config.Feeds))
+	// 创建一个带超时的context
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
-	// 启动goroutine处理每个feed
+	// 创建一个结果池，用于收集处理结果
+	p := pool.NewWithResults[feeds.RssFeed]().
+		WithContext(ctx).
+		WithMaxGoroutines(10) // 限制最大并发数
+
+	// 提交所有任务到池中
 	for _, feed := range s.config.Feeds {
 		feed := feed // 避免闭包问题
-		g.Go(func() error {
-			rssFeed, err := s.processSingleFeed(feed)
+		p.Go(func(ctx context.Context) (feeds.RssFeed, error) {
+			rssFeed, err := s.processSingleFeed(ctx, feed)
 			if err != nil {
-				return err
+				slog.Error("Failed to process feed",
+					slog.String("type", feed.Type),
+					slog.Any("error", err))
+				// 返回一个空的feed而不是错误，这样其他feed可以继续处理
+				return feeds.RssFeed{
+					Category: feed.Type,
+					Items:    []*feeds.RssItem{},
+				}, nil
 			}
-			select {
-			case resultChan <- rssFeed:
-				return nil
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+			return rssFeed, nil
 		})
 	}
 
-	// 等待所有goroutine完成或出错
-	go func() {
-		if err := g.Wait(); err != nil {
-			close(resultChan)
-			return
-		}
-		close(resultChan)
-	}()
-
-	// 收集结果
-	var results []feeds.RssFeed
-	for result := range resultChan {
-		results = append(results, result)
-	}
-
-	// 检查是否有错误发生
-	if err := g.Wait(); err != nil {
-		return nil, err
+	// 等待所有任务完成并收集结果
+	results, err := p.Wait()
+	if err != nil {
+		slog.Error("Error processing feeds", slog.Any("error", err))
 	}
 
 	return results, nil
 }
 
 // processSingleFeed 处理单个Feed源
-func (s *NewsletterService) processSingleFeed(feed rss.FeedsDetail) (feeds.RssFeed, error) {
+func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.FeedsDetail) (feeds.RssFeed, error) {
 	urls := lo.Compact(lo.Map(feed.Urls, func(item rss.Feeds, _ int) string {
 		return item.Feed
 	}))
 
-	allFeeds := s.feed.FetchURLs(context.TODO(), urls)
+	allFeeds := s.feed.FetchURLs(ctx, urls)
 	if len(allFeeds) == 0 {
 		slog.Info("No feeds fetched for category",
 			slog.String("category", feed.Type),

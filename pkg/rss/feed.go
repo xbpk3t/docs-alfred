@@ -49,7 +49,9 @@ func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gof
 	}
 
 	fp := gofeed.NewParser()
-	fp.Client = &http.Client{}
+	fp.Client = &http.Client{
+		Timeout: time.Duration(f.Config.Feed.Timeout) * time.Second,
+	}
 
 	var attempts uint = 0
 
@@ -61,6 +63,9 @@ func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gof
 			default:
 				feed, err := fp.ParseURL(url)
 				if err != nil {
+					slog.Error("Parse Feed Error",
+						slog.String(LogKeyURL, url),
+						slog.Any(LogKeyError, err))
 					return err
 				}
 				ch <- feed
@@ -81,8 +86,9 @@ func (f *Feed) FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gof
 		}),
 	)
 	if err != nil {
-		slog.Error("Parse Feed Error",
+		slog.Error("Parse Feed Error after retries",
 			slog.String(LogKeyURL, url),
+			slog.Int(LogKeyAttempts, int(attempts)),
 			slog.Any(LogKeyError, err))
 		ch <- nil
 	}

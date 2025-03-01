@@ -31,8 +31,9 @@ type NewsletterConfig struct {
 
 // FeedConfig Feed相关配置
 type FeedConfig struct {
-	MaxTries  int `yaml:"maxTries"`
-	FeedLimit int `yaml:"feedLimit"`
+	Timeout   int `yaml:"timeout" default:"30"`   // HTTP请求超时时间（秒）
+	MaxTries  int `yaml:"maxTries" default:"3"`   // 最大重试次数
+	FeedLimit int `yaml:"feedLimit" default:"30"` // Feed数量限制
 }
 
 // FeedsDetail Feed详情
