@@ -63,6 +63,13 @@ type EmailContent struct {
 	Content string
 }
 
+type TemplateType string
+
+const (
+	DashboardTpl  TemplateType = "Dashboard For Newsletter"
+	NewsletterTpl TemplateType = "Newsletter"
+)
+
 // rootCmd 根命令
 var rootCmd = &cobra.Command{
 	Use:   "rss2newsletter",
@@ -91,7 +98,7 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	contents = append(contents, EmailContent{
-		Subject: service.generateEmailSubject(),
+		Subject: service.generateEmailSubject(NewsletterTpl),
 		Content: newsletterContent,
 	})
 
@@ -102,7 +109,7 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		contents = append(contents, EmailContent{
-			Subject: "Dashboard For RSS Feeds",
+			Subject: service.generateEmailSubject(DashboardTpl),
 			Content: dashboardContent,
 		})
 	}
@@ -296,7 +303,7 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 func (s *NewsletterService) SendNewsletter(content string, subject string) error {
 	emailCfg := EmailConfig{
 		From:  "Acme <onboarding@resend.dev>",
-		To:    []string{"jeffcottlu@gmail.com"},
+		To:    s.config.ResendConfig.MailTo,
 		Token: s.config.ResendConfig.Token,
 	}
 
@@ -320,9 +327,9 @@ func (s *NewsletterService) SendNewsletter(content string, subject string) error
 }
 
 // generateEmailSubject 生成邮件主题
-func (s *NewsletterService) generateEmailSubject() string {
+func (s *NewsletterService) generateEmailSubject(tplType TemplateType) string {
 	now := carbon.Now()
-	return fmt.Sprintf("新内容更新 %s (第%d周)", now.ToDateString(), now.WeekOfYear())
+	return fmt.Sprintf("%s %s (第%d周)", tplType, now.ToDateString(), now.WeekOfYear())
 }
 
 // Execute 执行根命令

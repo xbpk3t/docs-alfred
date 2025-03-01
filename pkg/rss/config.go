@@ -22,7 +22,8 @@ type Config struct {
 
 // ResendConfig Resend相关配置
 type ResendConfig struct {
-	Token string `yaml:"token"`
+	Token  string   `yaml:"token"`
+	MailTo []string `yaml:"mailTo"`
 }
 
 // NewsletterConfig 新闻通讯配置
