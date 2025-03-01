@@ -57,6 +57,9 @@ type EnvConfig struct {
 // Feeds Feed URL
 type Feeds struct {
 	Feed string `yaml:"feed"`
+	URL  string `yaml:"url"`
+	Name string `yaml:"name"`
+	Des  string `yaml:"des"`
 }
 
 // NewConfig 加载配置文件

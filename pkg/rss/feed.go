@@ -27,11 +27,13 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 	}
 
 	var attempts uint = 0
+	var lastError error
 
 	err := retry.Do(
 		func() error {
 			select {
 			case <-ctx.Done():
+				lastError = ctx.Err()
 				return ctx.Err()
 			default:
 				feed, err := fp.ParseURL(url)
@@ -39,6 +41,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 					slog.Error("Parse FeedConfig Error",
 						slog.String(LogKeyURL, url),
 						slog.Any(LogKeyError, err))
+					lastError = err
 					return err
 				}
 				ch <- feed
@@ -52,6 +55,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
 			attempts = n
+			lastError = err
 			slog.Info("Retry Parse FeedConfig",
 				slog.String(LogKeyURL, url),
 				slog.Int(LogKeyAttempts, int(attempts)),
@@ -63,7 +67,11 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 			slog.String(LogKeyURL, url),
 			slog.Int(LogKeyAttempts, int(attempts)),
 			slog.Any(LogKeyError, err))
-		ch <- nil
+		ch <- &gofeed.Feed{
+			FeedType: "error",
+			Title:    url,
+			Custom:   map[string]string{"error": lastError.Error()},
+		}
 	}
 }
 
@@ -73,14 +81,16 @@ func validateURL(url string) error {
 		return &FeedError{
 			URL:     url,
 			Message: "empty URL",
+			Err:     nil,
 		}
 	}
 	return nil
 }
 
 // FetchURLs 批量获取URLs
-func FetchURLs(ctx context.Context, urls []string, cfg *Config) []*gofeed.Feed {
+func FetchURLs(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed, []*FeedError) {
 	allFeeds := make([]*gofeed.Feed, 0)
+	failedFeeds := make([]*FeedError, 0)
 	ch := make(chan *gofeed.Feed, len(urls))
 	var wg sync.WaitGroup
 
@@ -99,11 +109,24 @@ func FetchURLs(ctx context.Context, urls []string, cfg *Config) []*gofeed.Feed {
 
 	for feed := range ch {
 		if feed != nil {
-			allFeeds = append(allFeeds, feed)
+			if feed.FeedType == "error" {
+				// 记录失败的feed并使用原始错误信息
+				slog.Error("Failed to fetch feed",
+					slog.String("url", feed.Title),
+					slog.String("error", feed.Custom["error"]))
+				// 添加到失败列表
+				failedFeeds = append(failedFeeds, &FeedError{
+					URL:     feed.Title,
+					Message: feed.Custom["error"],
+					Err:     nil,
+				})
+			} else {
+				allFeeds = append(allFeeds, feed)
+			}
 		}
 	}
 
-	return allFeeds
+	return allFeeds, failedFeeds
 }
 
 // MergeAllFeeds 合并所有feeds
