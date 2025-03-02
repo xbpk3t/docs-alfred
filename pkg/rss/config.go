@@ -59,7 +59,6 @@ type EnvConfig struct {
 type Feeds struct {
 	Feed string `yaml:"feed"`
 	URL  string `yaml:"url"`
-	Name string `yaml:"name"`
 	Des  string `yaml:"des"`
 }
 

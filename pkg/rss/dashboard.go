@@ -28,45 +28,6 @@ type FeedDetailInfo struct {
 	Count int    `json:"count"`
 }
 
-// CollectDashboardData collects all dashboard information based on config
-func CollectDashboardData(config *Config, failedFeeds []*FeedError) *DashboardData {
-	data := &DashboardData{}
-
-	if config.DashboardConfig.IsShowFetchFailedFeeds && len(failedFeeds) > 0 {
-		data.FailedFeeds = make([]FailedFeedInfo, 0, len(failedFeeds))
-		for _, feed := range failedFeeds {
-			errorMsg := feed.Message
-			if feed.Err != nil {
-				errorMsg = feed.Err.Error()
-			}
-			data.FailedFeeds = append(data.FailedFeeds, FailedFeedInfo{
-				URL:   feed.URL,
-				Error: errorMsg,
-			})
-		}
-	}
-
-	if config.DashboardConfig.IsShowFeedDetail {
-		data.FeedDetails = make([]FeedDetailInfo, 0)
-		for _, feed := range config.Feeds {
-			data.FeedDetails = append(data.FeedDetails, FeedDetailInfo{
-				Type:  feed.Type,
-				Count: len(feed.Urls),
-				Name:  fmt.Sprintf("Total %d feeds", len(feed.Urls)),
-			})
-			for _, url := range feed.Urls {
-				data.FeedDetails = append(data.FeedDetails, FeedDetailInfo{
-					Type: feed.Type,
-					URL:  url.Feed,
-					Name: url.Name,
-				})
-			}
-		}
-	}
-
-	return data
-}
-
 // renderTable 通用表格渲染函数
 func renderTable(t table.Writer) string {
 	// 设置HTML选项
@@ -185,7 +146,7 @@ func ShowFeedDetail(feeds []FeedsDetail) string {
 			t.AppendRow(table.Row{
 				feedInfo{
 					url:  url.URL,
-					name: url.Name,
+					name: url.Des,
 				},
 			})
 		}
