@@ -1,13 +1,10 @@
 version: "3"
 
 includes:
-  ak:
-    taskfile: ./alfred/Taskfile.yml
-    dir: alfred
-  gh-merge:
-    taskfile: ./gh-merge/Taskfile.yml
-    dir: gh-merge
-  rss2newsletter:
+  gh:
+    taskfile: ./alfred/gh/Taskfile.yml
+    dir: alfred/gh
+  r2n:
     taskfile: ./rss2newsletter/Taskfile.yml
     dir: rss2newsletter
 
@@ -23,7 +20,7 @@ tasks:
       - golangci-lint run --fix
       - gofumpt -l -w .
       - go mod tidy -v
-      - betteralign -apply ./...
+#      - betteralign -apply ./...
       #      - go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
       - task: pre-commit
       - nilaway ./...

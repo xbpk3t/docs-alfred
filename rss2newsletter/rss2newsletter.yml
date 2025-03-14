@@ -1,0 +1,41 @@
+feed:
+  timeout: 30 # 最多retry 6次，所以设置为30（第一次retry 5s，则第6次 = 5 * 2^5 = 160s，合计315s）
+  maxTries: 5 # 最大retry次数
+  feedLimit: 30 #
+
+resend:
+  token: sk
+  mailTo: [jeffcottlu@gmail.com]
+
+
+newsletter:
+  schedule: daily # eg. weekly(latest 7 days), daily(feeds of the day).
+  isHideAuthorInTitle: false # default: true
+
+dashboard:
+  isShowFetchFailedFeeds: true # 是否展示所有拉取失败的feed。用来分type获取所有 fetch failed 的数量。注意是4列：type、feed、feed url、error
+  isShowFeedDetail: true # 是否展示所有feed的更新频率、上次更新时间。展示 所有feed的更新频率、上次更新时间。一共是4列：type
+
+env:
+  debug: false # debug模式下，直接生成HTML，而非发送邮件
+
+
+
+feeds:
+  - type: coding
+    urls:
+      - feed: https://blog.lucc.dev/rss.xml
+        url: https://blog.lucc.dev/
+        des: 【Lucas Blog】
+      - feed: http://mysql.taobao.org//monthly/feed.xml
+        url: http://mysql.taobao.org//monthly/
+        des: 【数据库内核月报】
+
+  - type: videos
+    urls:
+      - feed: https://www.youtube.com/feeds/videos.xml?channel_id=UCxXlhuIa3ggzVzkN1hVq3ug
+        url: https://www.youtube.com/@BernieSanders/videos
+      - feed: https://www.youtube.com/feeds/videos.xml?channel_id=UCxXlhuIa3ggzVzkN1hVq3ug
+        url: https://www.youtube.com/@AOC/videos
+      - feed: https://www.youtube.com/feeds/videos.xml?channel_id=UCMxiv15iK_MFayY_3fU9loQ
+        url: https://www.youtube.com/@UnHerd/videos
