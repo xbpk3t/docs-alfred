@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Boostport/mjml-go"
 	"github.com/dromara/carbon/v2"
 	"github.com/gorilla/feeds"
 	"github.com/resend/resend-go/v2"
@@ -22,7 +23,7 @@ import (
 // 配置文件路径
 var cfgFile string
 
-//go:embed templates/newsletter.tpl templates/dashboard.tpl
+//go:embed templates/newsletter.mjml
 var templates embed.FS
 
 // EmailConfig 邮件配置
@@ -46,15 +47,15 @@ func NewNewsletterService(cfg *rss.Config) *NewsletterService {
 	}
 }
 
-// GetFailedFeeds returns the list of failed feeds
-func (s *NewsletterService) GetFailedFeeds() []*rss.FeedError {
-	return s.failedFeeds
-}
-
 // TemplateData represents the data passed to the template
 type TemplateData struct {
-	DashboardHTML string
-	Feeds         []feeds.RssFeed
+	DashboardData struct {
+		FailedFeeds []*rss.FeedError
+		FeedDetails []rss.FeedsDetail
+	}
+	Feeds           []feeds.RssFeed
+	WeekNumber      int
+	DashboardConfig rss.DashboardConfig
 }
 
 // EmailContent represents a single email content
@@ -92,8 +93,7 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 	var contents []EmailContent
 
 	// 生成并添加主要的newsletter内容
-	dashboardHTML := rss.GenerateDashboardHTML(config, service.GetFailedFeeds())
-	newsletterContent, err := service.RenderNewsletter(f, "") // 不在主邮件中包含dashboard
+	newsletterContent, err := service.RenderNewsletter(f, config.Feeds, service.failedFeeds)
 	if err != nil {
 		return err
 	}
@@ -101,18 +101,6 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 		Subject: service.generateEmailSubject(NewsletterTpl),
 		Content: newsletterContent,
 	})
-
-	// 如果启用了任何dashboard功能，生成并添加dashboard邮件
-	if config.DashboardConfig.IsShowFetchFailedFeeds || config.DashboardConfig.IsShowFeedDetail {
-		dashboardContent, err := service.RenderDashboard(dashboardHTML)
-		if err != nil {
-			return err
-		}
-		contents = append(contents, EmailContent{
-			Subject: service.generateEmailSubject(DashboardTpl),
-			Content: dashboardContent,
-		})
-	}
 
 	return service.handleOutput(contents)
 }
@@ -148,7 +136,7 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 					slog.Any("error", err))
 				// 记录失败的feed
 				s.failedFeeds = append(s.failedFeeds, &rss.FeedError{
-					URL:     feed.Urls[0].Feed,
+					URL:     feed.URLs[0].Feed,
 					Message: "Failed to fetch feed",
 				})
 				// 返回一个空的feed而不是错误，这样其他feed可以继续处理
@@ -172,7 +160,7 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 
 // processSingleFeed 处理单个Feed源
 func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.FeedsDetail) (feeds.RssFeed, error) {
-	urls := lo.Compact(lo.Map(feed.Urls, func(item rss.Feeds, _ int) string {
+	urls := lo.Compact(lo.Map(feed.URLs, func(item rss.Feeds, _ int) string {
 		return item.Feed
 	}))
 
@@ -233,17 +221,17 @@ func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
 
 // renderTemplate renders a specific template with data
 func (s *NewsletterService) renderTemplate(templateName string, data interface{}) (string, error) {
-	// 创建自定义的模板函数映射
+	// Create a custom template function map
 	funcMap := template.FuncMap{
 		"safeHTML": func(s string) template.HTML {
 			return template.HTML(s)
 		},
 	}
 
-	// 使用 New 创建模板，并添加自定义函数
+	// Use New to create a template and add custom functions
 	tmpl := template.New(templateName).Funcs(funcMap)
 
-	// 解析模板文件
+	// Parse the template file
 	tmpl, err := tmpl.ParseFS(templates, "templates/"+templateName)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)
@@ -254,26 +242,38 @@ func (s *NewsletterService) renderTemplate(templateName string, data interface{}
 		return "", fmt.Errorf("failed to render template: %w", err)
 	}
 
+	// If this is an MJML template, convert it to HTML
+	if templateName == "newsletter.mjml" {
+		htmlOutput, err := mjml.ToHTML(context.Background(), tplBytes.String(),
+			mjml.WithMinify(true),
+			mjml.WithBeautify(true),
+			mjml.WithValidationLevel("soft"),
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to convert MJML to HTML: %w", err)
+		}
+		return htmlOutput, nil
+	}
+
 	return tplBytes.String(), nil
 }
 
-// RenderNewsletter 渲染邮件模板
-func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, dashboardHTML string) (string, error) {
+// RenderNewsletter renders the newsletter template
+func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, feedList []rss.FeedsDetail, failedFeeds []*rss.FeedError) (string, error) {
+	now := carbon.Now()
 	data := TemplateData{
-		Feeds:         feeds,
-		DashboardHTML: dashboardHTML,
+		WeekNumber:      now.WeekOfYear(),
+		Feeds:           feeds,
+		DashboardConfig: s.config.DashboardConfig,
+		DashboardData: struct {
+			FailedFeeds []*rss.FeedError
+			FeedDetails []rss.FeedsDetail
+		}{
+			FailedFeeds: failedFeeds,
+			FeedDetails: feedList,
+		},
 	}
-	return s.renderTemplate("newsletter.tpl", data)
-}
-
-// RenderDashboard 渲染仪表盘模板
-func (s *NewsletterService) RenderDashboard(dashboardHTML string) (string, error) {
-	data := struct {
-		DashboardHTML string
-	}{
-		DashboardHTML: dashboardHTML,
-	}
-	return s.renderTemplate("dashboard.tpl", data)
+	return s.renderTemplate("newsletter.mjml", data)
 }
 
 // handleOutput 处理输出（写入文件或发送邮件）

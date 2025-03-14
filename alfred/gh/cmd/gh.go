@@ -92,17 +92,6 @@ func handleTagSearch(repos gh2.Repos, args []string, builder *alfred.ItemBuilder
 	wf.SendFeedback()
 }
 
-// 渲染标签项
-func renderTagItems(tags []string) {
-	for _, tag := range tags {
-		tag = fmt.Sprintf("#%s", tag)
-		wf.NewItem(tag).
-			Title(tag).
-			Valid(false).
-			Autocomplete(tag)
-	}
-}
-
 // 处理搜索过滤
 func handleSearchFilter(args []string) {
 	if len(args) > 0 {

@@ -41,14 +41,13 @@ type FeedConfig struct {
 
 type DashboardConfig struct {
 	IsShowFetchFailedFeeds bool `yaml:"isShowFetchFailedFeeds"`
-	IsShowTypeStats        bool `yaml:"isShowTypeStats"`
 	IsShowFeedDetail       bool `yaml:"isShowFeedDetail"`
 }
 
 // FeedsDetail Feed详情
 type FeedsDetail struct {
 	Type string  `yaml:"type"`
-	Urls []Feeds `yaml:"urls"`
+	URLs []Feeds `yaml:"urls"`
 }
 
 type EnvConfig struct {
