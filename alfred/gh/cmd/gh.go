@@ -7,8 +7,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/alfred/gh/internal/alfred"
 	"github.com/xbpk3t/docs-alfred/alfred/gh/internal/cons"
 
-	"github.com/xbpk3t/docs-alfred/pkg"
-
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 
 	gh2 "github.com/xbpk3t/docs-alfred/service/gh"
@@ -141,6 +139,7 @@ func buildRepoDescription(repo gh2.Repository) string {
 // 1、如果有qs就直接跳转到对应repo
 // 2、如果是sub, rep, rel repos 就跳转到对应的主repo
 // 3、如果没有qs，也没有上面这几种repos的repo（说明是某个type下面的repo），就直接跳转到type
+// [2025-03-16] 现在跳转到docs，所以只需要
 func buildDocsURL(repo gh2.Repository) string {
 	var docsURL strings.Builder
 	docsPath := wf.Config.Get("docs")
@@ -148,17 +147,12 @@ func buildDocsURL(repo gh2.Repository) string {
 	if docsPath == "" {
 		return ""
 	}
-	docsURL.WriteString(fmt.Sprintf("%s/%s#", docsPath, strings.ToLower(repo.Tag)))
+	docsURL.WriteString(fmt.Sprintf("%s%s", docsPath, strings.ToLower(repo.FullName())))
 
-	if repo.HasQs() {
-		docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.FullName())))
-		return docsURL.String()
-	}
-	if repo.IsSubOrDepOrRelRepo() {
-		docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.MainRepo)))
-		return docsURL.String()
-	}
-	docsURL.WriteString(strings.ToLower(repo.Type))
+	//if repo.IsSubOrDepOrRelRepo() {
+	//	docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.MainRepo)))
+	//	return docsURL.String()
+	//}
 	return docsURL.String()
 }
 
