@@ -473,7 +473,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://blog.lucc.dev/x</string>
+				<string>https://docs.lucc.dev/#/data/gh?repo=</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>
