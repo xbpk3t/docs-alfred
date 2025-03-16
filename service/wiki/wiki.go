@@ -7,9 +7,9 @@ import (
 
 // Doc 定义文档结构
 type Doc struct {
-	Type string  `yaml:"type"`
-	Tag  string  `yaml:"tag"`
-	Qs   []gh.QA `yaml:"qs"`
+	Type   string     `yaml:"type"`
+	Tag    string     `yaml:"tag"`
+	Topics []gh.Topic `yaml:"tpcs"`
 }
 
 // Docs 文档集合

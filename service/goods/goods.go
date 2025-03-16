@@ -9,12 +9,12 @@ import (
 type Goods struct {
 	Tag        string `yaml:"tag"`
 	GoodsItems []struct {
-		Type  string  `yaml:"type"`
-		Des   string  `yaml:"des,omitempty"`
-		QA    []gh.QA `yaml:"qs,omitempty"`
-		Using []Item  `yaml:"using"`
-		Item  []Item  `yaml:"item"`
-		Score int     `yaml:"score"`
+		Type   string     `yaml:"type"`
+		Des    string     `yaml:"des,omitempty"`
+		Topics []gh.Topic `yaml:"tpcs,omitempty"`
+		Using  []Item     `yaml:"using"`
+		Item   []Item     `yaml:"item"`
+		Score  int        `yaml:"score"`
 	} `yaml:"item"`
 }
 
