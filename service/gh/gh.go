@@ -8,17 +8,17 @@ const GhURL = "https://github.com/"
 
 // Repository 定义仓库结构
 type Repository struct {
-	Doc            string    `yaml:"doc,omitempty"`
-	Des            string    `yaml:"des,omitempty"`
-	URL            string    `yaml:"url"`
-	Tag            string    `yaml:"tag,omitempty"`
-	Type           string    `yaml:"type"`
-	MainRepo       string    // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
-	Qs             Questions `yaml:"qs,omitempty"`
-	SubRepos       Repos     `yaml:"sub,omitempty"`
-	ReplacedRepos  Repos     `yaml:"rep,omitempty"`
-	RelatedRepos   Repos     `yaml:"rel,omitempty"`
-	Cmd            []string  `yaml:"cmd,omitempty"`
+	Doc            string   `yaml:"doc,omitempty"`
+	Des            string   `yaml:"des,omitempty"`
+	URL            string   `yaml:"url"`
+	Tag            string   `yaml:"tag,omitempty"`
+	Type           string   `yaml:"type"`
+	MainRepo       string   // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
+	Topics         Topics   `yaml:"tpcs,omitempty"`
+	SubRepos       Repos    `yaml:"sub,omitempty"`
+	ReplacedRepos  Repos    `yaml:"rep,omitempty"`
+	RelatedRepos   Repos    `yaml:"rel,omitempty"`
+	Cmd            []string `yaml:"cmd,omitempty"`
 	IsSubRepo      bool
 	IsReplacedRepo bool
 	IsRelatedRepo  bool
@@ -36,16 +36,16 @@ type ConfigRepo struct {
 
 type ConfigRepos []ConfigRepo
 
-// QA 定义问题结构
-type QA struct {
-	Question     string   `yaml:"q"` // 问题
-	Answer       string   `yaml:"x"` // 简要回答
-	Pictures     []string `yaml:"p"` // 图片
-	URLs         string   `yaml:"u"` // url
-	SubQuestions []string `yaml:"s"` // 子问题
+// Topic 定义问题结构
+type Topic struct {
+	Topic    string   `yaml:"tpc"` // 问题
+	Des      string   `yaml:"des"` // 简要回答
+	Pictures []string `yaml:"pic"` // 图片
+	URLs     string   `yaml:"url"` // url
+	Qs       []string `yaml:"qs"`  // 子问题
 }
 
-type Questions []QA
+type Topics []Topic
 
 func (r *Repository) IsValid() bool {
 	return strings.Contains(r.URL, GhURL)
@@ -169,7 +169,7 @@ func (r *Repository) IsSubOrDepOrRelRepo() bool {
 }
 
 func (r *Repository) HasQs() bool {
-	return len(r.Qs) > 0
+	return len(r.Topics) > 0
 }
 
 func (r *Repository) HasSubRepos() bool {

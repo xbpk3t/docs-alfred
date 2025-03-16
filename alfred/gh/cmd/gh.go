@@ -165,9 +165,9 @@ func buildDocsURL(repo gh2.Repository) string {
 // 确定仓库图标
 func determineRepoIcon(repo gh2.Repository) string {
 	switch {
-	case repo.Qs != nil && repo.Doc != "":
+	case repo.Topics != nil && repo.Doc != "":
 		return cons.IconQsDoc
-	case repo.Qs != nil:
+	case repo.Topics != nil:
 		return cons.IconQs
 	case repo.Doc != "":
 		return cons.IconDoc

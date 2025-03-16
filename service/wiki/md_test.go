@@ -86,14 +86,14 @@ func TestDocs_SearchQuestions(t *testing.T) {
 			name: "搜索问题",
 			docs: Docs{
 				{
-					Qs: []gh.QA{
-						{Question: "如何使用Go"},
-						{Question: "Go的优势"},
+					Topics: []gh.Topic{
+						{Topic: "如何使用Go"},
+						{Topic: "Go的优势"},
 					},
 				},
 				{
-					Qs: []gh.QA{
-						{Question: "Python教程"},
+					Topics: []gh.Topic{
+						{Topic: "Python教程"},
 					},
 				},
 			},
@@ -104,8 +104,8 @@ func TestDocs_SearchQuestions(t *testing.T) {
 			name: "不存在的问题",
 			docs: Docs{
 				{
-					Qs: []gh.QA{
-						{Question: "如何使用Go"},
+					Topics: []gh.Topic{
+						{Topic: "如何使用Go"},
 					},
 				},
 			},
@@ -190,14 +190,14 @@ func TestWorkRenderer_Render(t *testing.T) {
 // 				// 验证第一个poetry部分
 // 				assert.Equal(t, "poetry", docs[0].Category)
 // 				assert.Equal(t, "verse", docs[0].Tags)
-// 				assert.Len(t, docs[0].Qs, 1)
-// 				assert.Equal(t, "What are common poetic devices in English poetry?", docs[0].Qs[0].Question)
+// 				assert.Len(t, docs[0].Topics, 1)
+// 				assert.Equal(t, "What are common poetic devices in English poetry?", docs[0].Topics[0].Topic)
 //
 // 				// 验证classic部分
 // 				classicDoc := docs[2]
 // 				assert.Equal(t, "classic", classicDoc.Category)
 // 				assert.Equal(t, "literature", classicDoc.Tags)
-// 				assert.Contains(t, classicDoc.Qs[0].Answer, "iambic pentameter")
+// 				assert.Contains(t, classicDoc.Topics[0].Des, "iambic pentameter")
 // 			},
 // 		},
 // 		{

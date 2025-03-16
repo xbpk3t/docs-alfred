@@ -79,10 +79,10 @@ func (g *GithubMarkdownRender) renderContent() (string, error) {
 
 func (g *GithubMarkdownRender) renderRepos(repos Repos) {
 	for _, repo := range repos {
-		if repo.Qs != nil {
+		if repo.Topics != nil {
 			g.RenderHeader(render.HeadingLevel3, g.RenderLink(repo.FullName(), repo.URL))
 			g.renderSubComponents(repo)
-			g.renderQuestions(repo.Qs)
+			g.renderQuestions(repo.Topics)
 		}
 	}
 }
@@ -108,7 +108,7 @@ func (g *GithubMarkdownRender) renderSubRepoComponent(config repoRenderConfig) {
 	g.RenderAdmonition(config.admonitionType, config.title, content)
 }
 
-func (g *GithubMarkdownRender) renderQuestions(qs Questions) {
+func (g *GithubMarkdownRender) renderQuestions(qs Topics) {
 	for _, q := range qs {
 		summary := formatQuestionSummary(q)
 		details := formatQuestionDetails(q)
@@ -141,15 +141,15 @@ func (g *GithubMarkdownRender) RepositoriesAsMarkdownTable(repos Repos) string {
 }
 
 // formatQuestionSummary 格式化问题摘要
-func formatQuestionSummary(q QA) string {
+func formatQuestionSummary(q Topic) string {
 	if q.URLs != "" {
-		return fmt.Sprintf("[%s](%s)", q.Question, q.URLs)
+		return fmt.Sprintf("[%s](%s)", q.Topic, q.URLs)
 	}
-	return q.Question
+	return q.Topic
 }
 
 // formatQuestionDetails 格式化问题详情
-func formatQuestionDetails(q QA) string {
+func formatQuestionDetails(q Topic) string {
 	var parts []string
 	renderer := render.NewMarkdownRenderer()
 
@@ -164,20 +164,20 @@ func formatQuestionDetails(q QA) string {
 	}
 
 	// 处理子问题
-	if len(q.SubQuestions) > 0 {
+	if len(q.Qs) > 0 {
 		var subQuestions strings.Builder
-		for _, sq := range q.SubQuestions {
+		for _, sq := range q.Qs {
 			subQuestions.WriteString(fmt.Sprintf("- %s\n", sq))
 		}
 		parts = append(parts, subQuestions.String())
 	}
 
 	// 处理答案
-	if q.Answer != "" {
+	if q.Des != "" {
 		if len(parts) > 0 {
 			parts = append(parts, "---")
 		}
-		parts = append(parts, q.Answer)
+		parts = append(parts, q.Des)
 	}
 
 	return strings.Join(parts, "\n\n")
