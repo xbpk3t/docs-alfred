@@ -7,15 +7,13 @@ import (
 
 // Goods 定义商品配置结构
 type Goods struct {
-	Tag        string `yaml:"tag"`
-	GoodsItems []struct {
-		Type   string     `yaml:"type"`
-		Des    string     `yaml:"des,omitempty"`
-		Topics []gh.Topic `yaml:"tpcs,omitempty"`
-		Using  []Item     `yaml:"using"`
-		Item   []Item     `yaml:"item"`
-		Score  int        `yaml:"score"`
-	} `yaml:"item"`
+	Tag    string     `yaml:"tag"`
+	Type   string     `yaml:"type"`
+	Des    string     `yaml:"des,omitempty"`
+	Topics []gh.Topic `yaml:"tpcs,omitempty"`
+	Using  []Item     `yaml:"using"`
+	Item   []Item     `yaml:"item"`
+	Score  int        `yaml:"score"`
 }
 
 // Item 定义单个商品项
