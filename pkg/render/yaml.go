@@ -1,18 +1,27 @@
 package render
 
 import (
-	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
+	"sigs.k8s.io/yaml"
 )
 
-// YAMLRenderer JSON渲染器
+// ParseMode 解析模式
+type ParseMode int
+
+const (
+	ParseSingle ParseMode = iota
+	ParseMulti
+	ParseFlatten
+)
+
+// YAMLRenderer YAML渲染器
 type YAMLRenderer struct {
 	Cmd         string
 	PrettyPrint bool
 	ParseMode   ParseMode
 }
 
-// NewJSONRenderer 创建新的JSON渲染器
+// NewYAMLRenderer 创建新的YAML渲染器
 func NewYAMLRenderer(cmd string, prettyPrint bool) *YAMLRenderer {
 	return &YAMLRenderer{
 		PrettyPrint: prettyPrint,
@@ -48,8 +57,7 @@ func (j *YAMLRenderer) Render(data []byte) (string, error) {
 	}
 
 	// 转换为YAML
-	var result []byte
-	result, err = yaml.Marshal(dataToEncode)
+	result, err := yaml.Marshal(dataToEncode)
 	if err != nil {
 		return "", err
 	}
