@@ -11,14 +11,15 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/pkg/utils"
 	"github.com/xbpk3t/docs-alfred/service"
+	"github.com/xbpk3t/docs-alfred/service/task"
+	"sigs.k8s.io/yaml"
 )
 
 type FileType string
 
 const (
-	FileTypeMarkdown FileType = "md"
-	FileTypeJSON     FileType = "json"
-	FileTypeYAML     FileType = "yml"
+	FileTypeJSON FileType = "json"
+	FileTypeYAML FileType = "yml"
 )
 
 // DocProcessor 统一的处理器结构
@@ -32,20 +33,17 @@ type DocProcessor struct {
 
 // DocsConfig 定义配置结构
 type DocsConfig struct {
-	Markdown *DocProcessor `yaml:"md"`
-	JSON     *DocProcessor `yaml:"json"`
-	YAML     *DocProcessor `yaml:"yaml"`
-	Src      string        `yaml:"src"` // 源路径
-	Cmd      string        `yaml:"cmd"` // 命令类型
-	IsDir    bool          `yaml:"-"`   // 是否为文件夹，根据src自动判断
+	JSON  *DocProcessor `yaml:"json"`
+	YAML  *DocProcessor `yaml:"yaml"`
+	Src   string        `yaml:"src"` // 源路径
+	Cmd   string        `yaml:"cmd"` // 命令类型
+	IsDir bool          `yaml:"-"`   // 是否为文件夹，根据src自动判断
 }
 
 var serviceParseModeMap = map[service.ServiceType]render.ParseMode{
 	service.ServiceGoods:  render.ParseMulti,
-	service.ServiceWiki:   render.ParseMulti,
 	service.ServiceTask:   render.ParseMulti,
 	service.ServiceGithub: render.ParseFlatten,
-	service.ServiceVideo:  render.ParseMulti,
 }
 
 // NewDocProcessor 创建新的处理器
@@ -58,11 +56,10 @@ func NewDocProcessor(fileType FileType) *DocProcessor {
 // NewDocsConfig 创建新的配置实例
 func NewDocsConfig(src, cmd string) *DocsConfig {
 	return &DocsConfig{
-		Markdown: NewDocProcessor(FileTypeMarkdown),
-		JSON:     NewDocProcessor(FileTypeJSON),
-		YAML:     NewDocProcessor(FileTypeYAML),
-		Src:      src,
-		Cmd:      cmd,
+		JSON: NewDocProcessor(FileTypeJSON),
+		YAML: NewDocProcessor(FileTypeYAML),
+		Src:  src,
+		Cmd:  cmd,
 	}
 }
 
@@ -73,6 +70,17 @@ func (p *DocProcessor) SetCurrentFile(filename string) {
 
 func (p *DocProcessor) GetCurrentFile() string {
 	return p.currentFile
+}
+
+func (p *DocProcessor) getOutputFilename(src string) string {
+	if p.MergeOutputFile != "" {
+		return p.MergeOutputFile
+	}
+
+	base := filepath.Base(src)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	return name + "." + string(p.fileType)
 }
 
 func (p *DocProcessor) ProcessFile(src string, renderer render.Renderer) error {
@@ -92,6 +100,19 @@ func (p *DocProcessor) ProcessFile(src string, renderer render.Renderer) error {
 			slog.String("error", err.Error()),
 		)
 		return fmt.Errorf("render error: %w", err)
+	}
+
+	// 如果需要 JSON 输出，将 YAML 转换为 JSON
+	if p.fileType == FileTypeJSON {
+		jsonData, err := yaml.YAMLToJSON([]byte(content))
+		if err != nil {
+			slog.Error("convert to json error",
+				slog.String("file", src),
+				slog.String("error", err.Error()),
+			)
+			return fmt.Errorf("convert to json error: %w", err)
+		}
+		content = string(jsonData)
 	}
 
 	outputFilename := p.getOutputFilename(src)
@@ -140,18 +161,7 @@ func (p *DocProcessor) WriteOutput(content string, filename string) error {
 	return nil
 }
 
-func (p *DocProcessor) getOutputFilename(src string) string {
-	if p.MergeOutputFile != "" {
-		return p.MergeOutputFile
-	}
-
-	base := filepath.Base(src)
-	ext := filepath.Ext(base)
-	name := strings.TrimSuffix(base, ext)
-	return name + "." + string(p.fileType)
-}
-
-// DocsConfig 的方法实现
+// Process 处理配置
 func (dc *DocsConfig) Process() error {
 	if err := dc.initializePath(); err != nil {
 		return err
@@ -182,9 +192,8 @@ func (dc *DocsConfig) initializePath() error {
 // getProcessors 获取所有处理器
 func (dc *DocsConfig) getProcessors() map[FileType]*DocProcessor {
 	return map[FileType]*DocProcessor{
-		FileTypeMarkdown: dc.Markdown,
-		FileTypeJSON:     dc.JSON,
-		FileTypeYAML:     dc.YAML,
+		FileTypeJSON: dc.JSON,
+		FileTypeYAML: dc.YAML,
 	}
 }
 
@@ -227,13 +236,16 @@ func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) 
 }
 
 func (dc *DocsConfig) createRenderer(fileType FileType) (render.Renderer, error) {
-	switch fileType {
-	case FileTypeJSON:
-		return dc.configureRenderer(render.NewJSONRenderer(dc.Cmd, true))
-	case FileTypeYAML:
-		return dc.configureRenderer(render.NewYAMLRenderer(dc.Cmd, true))
+	// 根据命令类型选择渲染器
+	var renderer render.Renderer
+	switch dc.Cmd {
+	case "task":
+		renderer = task.NewTaskYAMLRender()
+	default:
+		renderer = render.NewYAMLRenderer(dc.Cmd, true)
 	}
-	return nil, fmt.Errorf("unknown file type: %s", fileType)
+
+	return dc.configureRenderer(renderer)
 }
 
 func (dc *DocsConfig) configureRenderer(renderer render.Renderer) (render.Renderer, error) {

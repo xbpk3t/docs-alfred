@@ -26,13 +26,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		// 解析配置
-		var rawConfigs []struct {
-			Src      string            `yaml:"src"`
-			Cmd      string            `yaml:"cmd"`
-			Markdown *pkg.DocProcessor `yaml:"md"`
-			JSON     *pkg.DocProcessor `yaml:"json"`
-			YAML     *pkg.DocProcessor `yaml:"yaml"`
-		}
+		var rawConfigs []pkg.DocsConfig
 		if err := yaml.NewDecoder(bytes.NewReader(configData)).Decode(&rawConfigs); err != nil {
 			return err
 		}
@@ -42,12 +36,6 @@ var rootCmd = &cobra.Command{
 			config := &pkg.DocsConfig{
 				Src: raw.Src,
 				Cmd: raw.Cmd,
-			}
-			if raw.Markdown != nil {
-				config.Markdown = pkg.NewDocProcessor(pkg.FileTypeMarkdown)
-				config.Markdown.Dst = raw.Markdown.Dst
-				config.Markdown.MergeOutputFile = raw.Markdown.MergeOutputFile
-				config.Markdown.Exclude = raw.Markdown.Exclude
 			}
 			if raw.JSON != nil {
 				config.JSON = pkg.NewDocProcessor(pkg.FileTypeJSON)
