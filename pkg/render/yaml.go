@@ -37,21 +37,7 @@ func (j *YAMLRenderer) WithParseMode(mode ParseMode) {
 
 // Render 实现 Renderer 接口
 func (j *YAMLRenderer) Render(data []byte) (string, error) {
-	var dataToEncode interface{}
-
-	// 根据解析模式选择不同的解析方法
-	ps := parser.NewParser[interface{}](data)
-	var err error
-
-	switch j.ParseMode {
-	case ParseMulti:
-		dataToEncode, err = ps.ParseMulti()
-	case ParseFlatten:
-		dataToEncode, err = ps.ParseFlatten()
-	default: // ParseSingle
-		dataToEncode, err = ps.ParseSingle()
-	}
-
+	dataToEncode, err := j.ParseData(data)
 	if err != nil {
 		return "", err
 	}
@@ -63,4 +49,21 @@ func (j *YAMLRenderer) Render(data []byte) (string, error) {
 	}
 
 	return string(result), nil
+}
+
+// parseData 根据不同模式解析数据，并统一返回类型
+func (j *YAMLRenderer) ParseData(data []byte) (interface{}, error) {
+	ps := parser.NewParser[interface{}](data)
+
+	switch j.ParseMode {
+	case ParseMulti:
+		// ParseMulti 返回 [][]interface{}
+		return ps.ParseMulti()
+	case ParseFlatten:
+		// ParseFlatten 返回 []interface{}
+		return ps.ParseFlatten()
+	default:
+		// ParseSingle 返回 map[string]interface{}
+		return ps.ParseSingle()
+	}
 }

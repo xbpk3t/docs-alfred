@@ -2,6 +2,10 @@ package task
 
 import (
 	"fmt"
+	"sort"
+	"time"
+
+	"github.com/mitchellh/mapstructure"
 
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/service"
@@ -11,129 +15,101 @@ import (
 // TaskYAMLRender 任务 YAML 渲染器
 type TaskYAMLRender struct {
 	*render.YAMLRenderer
-	parentIDField string // 父任务 ID 字段名
-	taskIDField   string // 任务 ID 字段名
-}
-
-// Option 定义渲染器的配置选项
-type Option func(*TaskYAMLRender)
-
-// WithParentIDField 设置父任务 ID 字段名
-func WithParentIDField(field string) Option {
-	return func(r *TaskYAMLRender) {
-		r.parentIDField = field
-	}
-}
-
-// WithTaskIDField 设置任务 ID 字段名
-func WithTaskIDField(field string) Option {
-	return func(r *TaskYAMLRender) {
-		r.taskIDField = field
-	}
 }
 
 // NewTaskYAMLRender 创建新的任务 YAML 渲染器
-func NewTaskYAMLRender(opts ...Option) *TaskYAMLRender {
-	r := &TaskYAMLRender{
-		YAMLRenderer:  render.NewYAMLRenderer(string(service.ServiceTask), true),
-		parentIDField: "parent_id", // 默认父任务 ID 字段名
-		taskIDField:   "id",        // 默认任务 ID 字段名
+func NewTaskYAMLRender() *TaskYAMLRender {
+	return &TaskYAMLRender{
+		YAMLRenderer: render.NewYAMLRenderer(string(service.ServiceTask), true),
+	}
+}
+
+// Flatten 将数据打平成一层
+func (j *TaskYAMLRender) Flatten(data []byte) ([]interface{}, error) {
+	raw, err := j.ParseData(data)
+	if err != nil {
+		return nil, err
 	}
 
-	// 应用配置选项
-	for _, opt := range opts {
-		opt(r)
+	result := make([]interface{}, 0)
+
+	// 处理顶层数据
+	switch v := raw.(type) {
+	case []interface{}:
+		// 递归处理每个元素
+		for _, item := range v {
+			if nestedSlice, ok := item.([]interface{}); ok {
+				result = append(result, nestedSlice...)
+			} else {
+				result = append(result, item)
+			}
+		}
+	default:
+		return nil, fmt.Errorf("unsupported data type for flattening: %T", raw)
 	}
 
-	return r
+	return result, nil
+}
+
+// processTasksWithParentID recursively processes tasks and assigns parent IDs
+func processTasksWithParentID(task *Task) {
+	if len(task.Sub) > 0 {
+		// Sort sub tasks by date ascending
+		sort.Slice(task.Sub, func(i, j int) bool {
+			if task.Sub[i].Date == "" {
+				return false
+			}
+			if task.Sub[j].Date == "" {
+				return true
+			}
+			dateI, _ := time.Parse("2006-01-02", task.Sub[i].Date)
+			dateJ, _ := time.Parse("2006-01-02", task.Sub[j].Date)
+			return dateI.Before(dateJ)
+		})
+
+		// Assign parent ID to all sub tasks
+		for i := range task.Sub {
+			task.Sub[i].Pid = task.Pid
+			processTasksWithParentID(&task.Sub[i])
+		}
+	}
 }
 
 // Render 渲染任务数据
 func (r *TaskYAMLRender) Render(data []byte) (string, error) {
 	// 先使用基础的 YAML 渲染
-	content, err := r.YAMLRenderer.Render(data)
+	content, err := r.Flatten(data)
 	if err != nil {
 		return "", fmt.Errorf("base render error: %w", err)
 	}
 
-	// 扁平化任务结构
-	flattened, err := r.flattenTasks(content)
-	if err != nil {
-		return "", fmt.Errorf("flatten tasks error: %w", err)
-	}
-
-	return flattened, nil
-}
-
-// flattenTasks 扁平化任务结构
-func (r *TaskYAMLRender) flattenTasks(content string) (string, error) {
-	// 先尝试解析为嵌套数组
-	var nestedTasks [][]map[string]interface{}
-	if err := yaml.Unmarshal([]byte(content), &nestedTasks); err == nil {
-		// 如果成功解析为嵌套数组，展平它
-		flattened := make([]map[string]interface{}, 0)
-		for _, taskGroup := range nestedTasks {
-			for _, task := range taskGroup {
-				// 如果任务有 pid，将其用作子任务的父 ID
-				parentID := ""
-				if pid, ok := task["pid"].(string); ok {
-					parentID = pid
-				}
-				flattened = append(flattened, task)
-
-				// 处理子任务
-				if subtasks, ok := task["sub"].([]interface{}); ok {
-					for _, subtask := range subtasks {
-						if st, ok := subtask.(map[string]interface{}); ok {
-							if parentID != "" {
-								st["pid"] = parentID
-							}
-							flattened = append(flattened, st)
-						}
-					}
-				}
-			}
-		}
-		result, err := yaml.Marshal(flattened)
+	var tasks Tasks
+	for _, c := range content {
+		task := &Task{}
+		err = mapstructure.Decode(c, task)
 		if err != nil {
-			return "", fmt.Errorf("marshal flattened nested tasks error: %w", err)
+			return "", fmt.Errorf("mapstructure decode %s error: %w", task.Task, err)
 		}
-		return string(result), nil
+		tasks = append(tasks, *task)
 	}
 
-	// 如果不是嵌套数组，尝试解析为普通数组
-	var tasks []map[string]interface{}
-	if err := yaml.Unmarshal([]byte(content), &tasks); err != nil {
-		return "", fmt.Errorf("unmarshal tasks error: %w", err)
-	}
+	// Apply all options to the tasks
+	tasks.ApplyOptions(
+		WithParentID(),             // Set parent IDs
+		SortMainTasksByDate(false), // Sort main tasks by date descending
+		SortSubTasksByDate(false),  // Sort sub-tasks by date ascending
+	)
 
-	// 扁平化处理
-	flattened := make([]map[string]interface{}, 0)
-	for _, task := range tasks {
-		// 获取父任务 ID
-		parentID := ""
-		if pid, ok := task["pid"].(string); ok {
-			parentID = pid
-		}
-		flattened = append(flattened, task)
-
-		// 处理子任务
-		if subtasks, ok := task["sub"].([]interface{}); ok {
-			for _, subtask := range subtasks {
-				if st, ok := subtask.(map[string]interface{}); ok {
-					if parentID != "" {
-						st["pid"] = parentID
-					}
-					flattened = append(flattened, st)
-				}
-			}
-		}
-	}
-
-	// 重新序列化为 YAML
-	result, err := yaml.Marshal(flattened)
+	// Convert back to interface{} for YAML marshaling
+	var interfaceContent []interface{}
+	err = mapstructure.Decode(tasks, &interfaceContent)
 	if err != nil {
-		return "", fmt.Errorf("marshal flattened tasks error: %w", err)
+		return "", err
+	}
+
+	result, err := yaml.Marshal(interfaceContent)
+	if err != nil {
+		return "", err
 	}
 
 	return string(result), nil
