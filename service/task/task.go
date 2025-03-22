@@ -1,5 +1,10 @@
 package task
 
+import (
+	"sort"
+	"time"
+)
+
 type Task struct {
 	Task   string   `yaml:"task" json:"task"`
 	Date   string   `yaml:"date,omitempty" json:"date,omitempty"`
@@ -13,3 +18,65 @@ type Task struct {
 }
 
 type Tasks []Task
+
+// TaskOption defines a function type that modifies a Task
+type TaskOption func(*Task)
+
+// WithParentID sets the parent ID for a task and its sub-tasks
+func WithParentID() TaskOption {
+	return func(t *Task) {
+		if len(t.Sub) > 0 {
+			for i := range t.Sub {
+				t.Sub[i].Pid = t.Pid
+				t.Sub[i].ApplyOptions(WithParentID())
+			}
+		}
+	}
+}
+
+// SortMainTasksByDate sorts main tasks by date
+func SortMainTasksByDate(ascending bool) TaskOption {
+	return func(t *Task) {
+		if len(t.Sub) > 0 {
+			sort.Slice(t.Sub, func(i, j int) bool {
+				if t.Sub[i].Date == "" {
+					return false
+				}
+				if t.Sub[j].Date == "" {
+					return true
+				}
+				dateI, _ := time.Parse(time.DateOnly, t.Sub[i].Date)
+				dateJ, _ := time.Parse(time.DateOnly, t.Sub[j].Date)
+				if ascending {
+					return dateI.Before(dateJ)
+				}
+				return dateI.After(dateJ)
+			})
+		}
+	}
+}
+
+// SortSubTasksByDate sorts sub-tasks by date
+func SortSubTasksByDate(ascending bool) TaskOption {
+	return func(t *Task) {
+		if len(t.Sub) > 0 {
+			for i := range t.Sub {
+				t.Sub[i].ApplyOptions(SortSubTasksByDate(ascending))
+			}
+		}
+	}
+}
+
+// ApplyOptions applies the given options to the task
+func (t *Task) ApplyOptions(opts ...TaskOption) {
+	for _, opt := range opts {
+		opt(t)
+	}
+}
+
+// ApplyOptions applies the given options to all tasks in the slice
+func (ts Tasks) ApplyOptions(opts ...TaskOption) {
+	for i := range ts {
+		ts[i].ApplyOptions(opts...)
+	}
+}

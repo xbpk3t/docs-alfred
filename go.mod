@@ -1,6 +1,6 @@
 module github.com/xbpk3t/docs-alfred
 
-go 1.24.1
+go 1.24.0
 
 require (
 	github.com/Boostport/mjml-go v0.15.0
@@ -12,6 +12,7 @@ require (
 	github.com/gookit/goutil v0.6.18
 	github.com/gorilla/feeds v1.2.0
 	github.com/joho/godotenv v1.5.1
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/resend/resend-go/v2 v2.15.0
 	github.com/samber/lo v1.49.1
