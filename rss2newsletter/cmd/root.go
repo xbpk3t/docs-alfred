@@ -54,6 +54,7 @@ type TemplateData struct {
 		FeedDetails []rss.FeedsDetail
 	}
 	Feeds           []feeds.RssFeed
+	CronTaskResList []rss.CronTaskRes
 	WeekNumber      int
 	DashboardConfig rss.DashboardConfig
 }
@@ -93,7 +94,7 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 	var contents []EmailContent
 
 	// 生成并添加主要的newsletter内容
-	newsletterContent, err := service.RenderNewsletter(f, config.Feeds, service.failedFeeds)
+	newsletterContent, err := service.RenderNewsletter(f, config.Feeds, config.CronTasks, service.failedFeeds)
 	if err != nil {
 		return err
 	}
@@ -259,11 +260,12 @@ func (s *NewsletterService) renderTemplate(templateName string, data interface{}
 }
 
 // RenderNewsletter renders the newsletter template
-func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, feedList []rss.FeedsDetail, failedFeeds []*rss.FeedError) (string, error) {
+func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, feedList []rss.FeedsDetail, cronTasks []rss.CronTask, failedFeeds []*rss.FeedError) (string, error) {
 	now := carbon.Now()
 	data := TemplateData{
 		WeekNumber:      now.WeekOfYear(),
 		Feeds:           feeds,
+		CronTaskResList: rss.FilterCronTasks(cronTasks),
 		DashboardConfig: s.config.DashboardConfig,
 		DashboardData: struct {
 			FailedFeeds []*rss.FeedError
