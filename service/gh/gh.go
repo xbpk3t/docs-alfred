@@ -14,7 +14,7 @@ type Repository struct {
 	Tag            string   `yaml:"tag,omitempty"`
 	Type           string   `yaml:"type"`
 	MainRepo       string   // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
-	Topics         Topics   `yaml:"tpcs,omitempty"`
+	Topics         Topics   `yaml:"topics,omitempty" json:"topics,omitempty"`
 	SubRepos       Repos    `yaml:"sub,omitempty"`
 	ReplacedRepos  Repos    `yaml:"rep,omitempty"`
 	RelatedRepos   Repos    `yaml:"rel,omitempty"`
@@ -38,11 +38,11 @@ type ConfigRepos []ConfigRepo
 
 // Topic 定义问题结构
 type Topic struct {
-	Topic    string   `yaml:"tpc"` // 问题
-	Des      string   `yaml:"des"` // 简要回答
-	Pictures []string `yaml:"pic"` // 图片
-	URLs     string   `yaml:"url"` // url
-	Qs       []string `yaml:"qs"`  // 子问题
+	Topic    string   `yaml:"topic" json:"topic"`       // 问题
+	Des      string   `yaml:"des" json:"des,omitempty"` // 简要回答
+	Pictures []string `yaml:"pic" json:"pic,omitempty"` // 图片
+	URLs     string   `yaml:"url" json:"url,omitempty"` // url
+	Qs       []string `yaml:"qs" json:"qs,omitempty"`   // 子问题
 }
 
 type Topics []Topic
