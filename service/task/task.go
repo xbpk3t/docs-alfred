@@ -3,18 +3,22 @@ package task
 import (
 	"sort"
 	"time"
+
+	"github.com/xbpk3t/docs-alfred/service/gh"
 )
 
 type Task struct {
-	Task   string   `yaml:"task" json:"task"`
-	Date   string   `yaml:"date,omitempty" json:"date,omitempty"`
-	Pid    string   `yaml:"pid,omitempty" json:"pid,omitempty"` // 用来标明该task的所属pid
-	Des    string   `yaml:"des,omitempty" json:"des,omitempty"`
-	Review string   `yaml:"review,omitempty" json:"review,omitempty"` // 类似上面的Item，但是是用来记录和复盘的 // 附加内容，类似tracking。用来标识该task的一些metrics之类的。比如说milestone类型的task（比如本月开销，购买了哪些东西，就可以写到item里）
-	Sub    Tasks    `yaml:"sub,omitempty" json:"sub,omitempty"`
-	Item   []string `yaml:"item,omitempty" json:"item,omitempty"`
-	Qs     []string `yaml:"qs,omitempty" json:"qs,omitempty"`
-	IsX    bool     `yaml:"isX,omitempty" json:"isX,omitempty"` // 是否完成，默认true。如果false就是没完成
+	Task   string    `yaml:"task" json:"task"`
+	URL    string    `yaml:"url" json:"url,omitempty"`
+	Date   string    `yaml:"date,omitempty" json:"date,omitempty"`
+	Pid    string    `yaml:"pid,omitempty" json:"pid,omitempty"`       // 用来标明该task的所属pid
+	Des    string    `yaml:"des,omitempty" json:"des,omitempty"`       // 用来说明Task
+	Review string    `yaml:"review,omitempty" json:"review,omitempty"` // 类似上面的Item，但是是用来记录和复盘的 // 附加内容，类似tracking。用来标识该task的一些metrics之类的。比如说milestone类型的task（比如本月开销，购买了哪些东西，就可以写到item里）
+	Sub    Tasks     `yaml:"sub,omitempty" json:"sub,omitempty"`
+	Item   []string  `yaml:"item,omitempty" json:"item,omitempty"`
+	Qs     []string  `yaml:"qs,omitempty" json:"qs,omitempty"`
+	Topics gh.Topics `yaml:"topics,omitempty" json:"topics,omitempty"`
+	IsX    bool      `yaml:"isX,omitempty" json:"isX,omitempty"` // 是否完成，默认true。如果false就是没完成
 }
 
 type Tasks []Task
