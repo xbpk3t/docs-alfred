@@ -15,9 +15,10 @@ type Config struct {
 	ResendConfig     ResendConfig     `yaml:"resend"`
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
 	Feeds            []FeedsDetail    `yaml:"feeds"`
+	CronTasks        []CronTask       `yaml:"cronTasks"`
 	FeedConfig       FeedConfig       `yaml:"feed"`
-	EnvConfig        EnvConfig        `yaml:"env"`
 	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
+	EnvConfig        EnvConfig        `yaml:"env"`
 }
 
 // ResendConfig Resend相关配置
@@ -42,12 +43,25 @@ type FeedConfig struct {
 type DashboardConfig struct {
 	IsShowFetchFailedFeeds bool `yaml:"isShowFetchFailedFeeds"`
 	IsShowFeedDetail       bool `yaml:"isShowFeedDetail"`
+	IsShowCronTask         bool `yaml:"isShowCronTask"`
 }
 
 // FeedsDetail Feed详情
 type FeedsDetail struct {
 	Type string  `yaml:"type"`
 	URLs []Feeds `yaml:"urls"`
+}
+
+type CronTask struct {
+	Type string `yaml:"type"`
+	Item []struct {
+		Task string `yaml:"task"`
+	} `yaml:"item"`
+}
+
+type CronTaskRes struct {
+	Type string
+	Task string
 }
 
 type EnvConfig struct {
