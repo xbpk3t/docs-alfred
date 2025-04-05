@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 )
 
 // ReadSingleFileWithExt 读取指定扩展名的单个文件
@@ -31,7 +30,7 @@ func ReadSingleFileWithExt(src string, setCurrentFile func(string)) ([]byte, err
 }
 
 // ReadAndMergeFilesRecursively 递归读取并合并文件
-func ReadAndMergeFilesRecursively(src string, exclude []string, setCurrentFile func(string)) ([]byte, error) {
+func ReadAndMergeFilesRecursively(src string, setCurrentFile func(string)) ([]byte, error) {
 	files, err := os.ReadDir(src)
 	if err != nil {
 		return nil, fmt.Errorf("read dir error: %w", err)
@@ -43,7 +42,7 @@ func ReadAndMergeFilesRecursively(src string, exclude []string, setCurrentFile f
 
 		if file.IsDir() {
 			// 递归处理子目录
-			subData, err := ReadAndMergeFilesRecursively(fullPath, exclude, setCurrentFile)
+			subData, err := ReadAndMergeFilesRecursively(fullPath, setCurrentFile)
 			if err != nil {
 				return nil, err
 			}
@@ -55,7 +54,7 @@ func ReadAndMergeFilesRecursively(src string, exclude []string, setCurrentFile f
 		}
 
 		// 跳过非 yml 文件和被排除的文件
-		if filepath.Ext(file.Name()) != ".yml" || slices.Contains(exclude, file.Name()) {
+		if filepath.Ext(file.Name()) != ".yml" {
 			continue
 		}
 
@@ -71,7 +70,6 @@ func ReadAndMergeFilesRecursively(src string, exclude []string, setCurrentFile f
 		}
 
 		mergedData = append(mergedData, data...)
-		mergedData = append(mergedData, '\n')
 	}
 
 	return mergedData, nil

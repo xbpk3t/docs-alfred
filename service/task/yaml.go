@@ -2,8 +2,6 @@ package task
 
 import (
 	"fmt"
-	"sort"
-	"time"
 
 	"github.com/mitchellh/mapstructure"
 
@@ -51,30 +49,6 @@ func (j *TaskYAMLRender) Flatten(data []byte) ([]interface{}, error) {
 	return result, nil
 }
 
-// processTasksWithParentID recursively processes tasks and assigns parent IDs
-func processTasksWithParentID(task *Task) {
-	if len(task.Sub) > 0 {
-		// Sort sub tasks by date ascending
-		sort.Slice(task.Sub, func(i, j int) bool {
-			if task.Sub[i].Date == "" {
-				return false
-			}
-			if task.Sub[j].Date == "" {
-				return true
-			}
-			dateI, _ := time.Parse("2006-01-02", task.Sub[i].Date)
-			dateJ, _ := time.Parse("2006-01-02", task.Sub[j].Date)
-			return dateI.Before(dateJ)
-		})
-
-		// Assign parent ID to all sub tasks
-		for i := range task.Sub {
-			task.Sub[i].Pid = task.Pid
-			processTasksWithParentID(&task.Sub[i])
-		}
-	}
-}
-
 // Render 渲染任务数据
 func (r *TaskYAMLRender) Render(data []byte) (string, error) {
 	// 先使用基础的 YAML 渲染
@@ -86,8 +60,16 @@ func (r *TaskYAMLRender) Render(data []byte) (string, error) {
 	var tasks Tasks
 	for _, c := range content {
 		task := &Task{}
-		err = mapstructure.Decode(c, task)
+		config := &mapstructure.DecoderConfig{
+			Result:           task,
+			TagName:          "yaml",
+			WeaklyTypedInput: true,
+		}
+		decoder, err := mapstructure.NewDecoder(config)
 		if err != nil {
+			return "", fmt.Errorf("create decoder error: %w", err)
+		}
+		if err := decoder.Decode(c); err != nil {
 			return "", fmt.Errorf("mapstructure decode %s error: %w", task.Task, err)
 		}
 		tasks = append(tasks, *task)
