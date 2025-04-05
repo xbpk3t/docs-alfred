@@ -41,13 +41,11 @@ var rootCmd = &cobra.Command{
 				config.JSON = pkg.NewDocProcessor(pkg.FileTypeJSON)
 				config.JSON.Dst = raw.JSON.Dst
 				config.JSON.MergeOutputFile = raw.JSON.MergeOutputFile
-				config.JSON.Exclude = raw.JSON.Exclude
 			}
 			if raw.YAML != nil {
 				config.YAML = pkg.NewDocProcessor(pkg.FileTypeYAML)
 				config.YAML.Dst = raw.YAML.Dst
 				config.YAML.MergeOutputFile = raw.YAML.MergeOutputFile
-				config.YAML.Exclude = raw.YAML.Exclude
 			}
 			configs = append(configs, *config)
 		}

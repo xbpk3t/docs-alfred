@@ -28,7 +28,6 @@ type DocProcessor struct {
 	MergeOutputFile string   `yaml:"mergeOutputFile"` // 合并后的输出文件名
 	currentFile     string   // 当前处理的文件名
 	fileType        FileType // 内部字段，指定文件类型
-	Exclude         []string `yaml:"exclude"` // 排除的文件
 }
 
 // DocsConfig 定义配置结构
@@ -145,7 +144,7 @@ func (p *DocProcessor) readAndMergeFiles(src string) ([]byte, error) {
 	if !fsutil.IsDir(src) {
 		return []byte(""), fmt.Errorf("stat path error")
 	}
-	return utils.ReadAndMergeFilesRecursively(src, p.Exclude, p.SetCurrentFile)
+	return utils.ReadAndMergeFilesRecursively(src, p.SetCurrentFile)
 }
 
 func (p *DocProcessor) WriteOutput(content string, filename string) error {
