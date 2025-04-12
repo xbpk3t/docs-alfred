@@ -76,6 +76,8 @@ func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
 	for _, config := range cr {
 		for _, rp := range config.Repos {
+			// 设置 Tag 字段
+			rp.Tag = config.Tag
 			repos = append(repos, processRepo(rp, config.Type)...)
 		}
 	}
@@ -117,7 +119,6 @@ func processMainRepo(repo Repository, configType string) *Repository {
 		return nil
 	}
 	repo.Type = configType
-
 	return &repo
 }
 
@@ -129,6 +130,7 @@ func processAllSubRepos(repo Repository) Repos {
 	for i := range repo.SubRepos {
 		repo.SubRepos[i].IsSubRepo = true
 		repo.SubRepos[i].Type = repo.Type
+		repo.SubRepos[i].Tag = repo.Tag // 传递 Tag 到子仓库
 		repo.SubRepos[i].MainRepo = repo.FullName()
 		repos = append(repos, processRepo(repo.SubRepos[i], repo.Type)...)
 	}
@@ -137,6 +139,7 @@ func processAllSubRepos(repo Repository) Repos {
 	for i := range repo.ReplacedRepos {
 		repo.ReplacedRepos[i].IsReplacedRepo = true
 		repo.ReplacedRepos[i].Type = repo.Type
+		repo.ReplacedRepos[i].Tag = repo.Tag // 传递 Tag 到替换仓库
 		repo.ReplacedRepos[i].MainRepo = repo.FullName()
 		repos = append(repos, processRepo(repo.ReplacedRepos[i], repo.Type)...)
 	}
@@ -145,6 +148,7 @@ func processAllSubRepos(repo Repository) Repos {
 	for i := range repo.RelatedRepos {
 		repo.RelatedRepos[i].IsRelatedRepo = true
 		repo.RelatedRepos[i].Type = repo.Type
+		repo.RelatedRepos[i].Tag = repo.Tag // 传递 Tag 到相关仓库
 		repo.RelatedRepos[i].MainRepo = repo.FullName()
 		repos = append(repos, processRepo(repo.RelatedRepos[i], repo.Type)...)
 	}
@@ -184,8 +188,8 @@ func (r Repos) ExtractTags() []string {
 
 	// 遍历所有仓库收集标签
 	for _, rp := range r {
-		if rp.Type != "" {
-			tagMap[rp.Type] = struct{}{}
+		if rp.Tag != "" {
+			tagMap[rp.Tag] = struct{}{}
 		}
 	}
 

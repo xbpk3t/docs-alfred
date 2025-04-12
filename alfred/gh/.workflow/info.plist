@@ -302,7 +302,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://docs.lucc.dev/#/data/gh?repo=</string>
+				<string>https://docs.lucc.dev/#/data/gh</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/alfred/gh/internal/alfred"
@@ -14,6 +13,14 @@ import (
 
 	aw "github.com/deanishe/awgo"
 	"github.com/spf13/cobra"
+)
+
+type GithubParam string
+
+const (
+	ParamRepo GithubParam = "repo"
+	ParamTag  GithubParam = "tag"
+	ParamType GithubParam = "type"
 )
 
 var ghCmd = &cobra.Command{
@@ -76,22 +83,42 @@ func handleTagSearch(repos gh2.Repos, args []string, builder *alfred.ItemBuilder
 
 	// 参数验证
 	if len(args) == 0 || !strings.HasPrefix(args[0], "#") {
-		tags := repos.ExtractTags()
-		if len(tags) == 0 {
-			builder.BuildBasicItem(
-				"No tags found",
-				"No tags available in repositories",
-				"",
-				cons.IconWarning,
-			)
-		} else {
-			renderTagItems(tags)
-		}
-		wf.SendFeedback()
+		renderTags(repos, builder)
 		return
 	}
 
-	// 提取标签
+	// 提取标签和类型
+	parts := strings.Split(args[0], "#")
+	if len(parts) < 2 {
+		renderTags(repos, builder)
+		return
+	}
+
+	tag := parts[1]
+	if tag == "" {
+		renderTags(repos, builder)
+		return
+	}
+
+	// 如果只有一个#，显示该tag下的所有type
+	if len(parts) == 2 {
+		renderTypes(repos, tag, builder)
+		return
+	}
+
+	// 如果有两个#，显示该tag和type下的所有repo
+	typeName := parts[2]
+	if typeName == "" {
+		renderTypes(repos, tag, builder)
+		return
+	}
+
+	// 显示该tag和type下的所有repo
+	renderReposByTagAndType(repos, tag, typeName, builder)
+}
+
+// 渲染标签
+func renderTags(repos gh2.Repos, builder *alfred.ItemBuilder) {
 	tags := repos.ExtractTags()
 	if len(tags) == 0 {
 		builder.BuildBasicItem(
@@ -100,33 +127,52 @@ func handleTagSearch(repos gh2.Repos, args []string, builder *alfred.ItemBuilder
 			"",
 			cons.IconWarning,
 		)
-		wf.SendFeedback()
-		return
-	}
-
-	ptag := strings.TrimPrefix(args[0], "#")
-
-	// 如果输入的标签存在
-	if slices.Contains(tags, ptag) {
-		filteredRepos := repos.QueryReposByTag(ptag)
-		if len(filteredRepos) > 0 {
-			renderRepos(filteredRepos, builder)
-		} else {
-			builder.BuildBasicItem(
-				"No repositories found",
-				fmt.Sprintf("No repositories found with tag: %s", ptag),
-				"",
-				cons.IconWarning,
-			)
-		}
 	} else {
-		// 显示所有标签并根据输入进行过滤
 		renderTagItems(tags)
-		if len(ptag) > 0 {
-			wf.Filter(ptag) // 使用去掉#的标签进行过滤
+	}
+	wf.SendFeedback()
+}
+
+// 渲染类型
+func renderTypes(repos gh2.Repos, tag string, builder *alfred.ItemBuilder) {
+	types := repos.ExtractTypesByTag(tag)
+	if len(types) == 0 {
+		builder.BuildBasicItem(
+			"No types found",
+			fmt.Sprintf("No types found for tag: %s", tag),
+			"",
+			cons.IconWarning,
+		)
+	} else {
+		for _, t := range types {
+			item := builder.BuildBasicItem(
+				fmt.Sprintf("#%s#%s", tag, t),
+				fmt.Sprintf("Type: %s", t),
+				buildDocsURL(ParamType, t),
+				cons.IconTypes,
+			)
+			docsURL := buildDocsURL(ParamType, t)
+			if docsURL != "" {
+				item.Cmd().Subtitle(fmt.Sprintf("Open type: %s", t)).Arg(docsURL)
+			}
 		}
 	}
+	wf.SendFeedback()
+}
 
+// 渲染指定标签和类型的仓库
+func renderReposByTagAndType(repos gh2.Repos, tag, typeName string, builder *alfred.ItemBuilder) {
+	filteredRepos := repos.QueryReposByTagAndType(tag, typeName)
+	if len(filteredRepos) > 0 {
+		renderRepos(filteredRepos, builder)
+	} else {
+		builder.BuildBasicItem(
+			"No repositories found",
+			fmt.Sprintf("No repositories found with tag: %s and type: %s", tag, typeName),
+			"",
+			cons.IconWarning,
+		)
+	}
 	wf.SendFeedback()
 }
 
@@ -175,24 +221,24 @@ func buildRepoDescription(repo gh2.Repository) string {
 }
 
 // 构建文档 URL
-// 分为三种情况：
-// 1、如果有qs就直接跳转到对应repo
-// 2、如果是sub, rep, rel repos 就跳转到对应的主repo
-// 3、如果没有qs，也没有上面这几种repos的repo（说明是某个type下面的repo），就直接跳转到type
-// [2025-03-16] 现在跳转到docs，所以只需要
-func buildDocsURL(repo gh2.Repository) string {
+func buildDocsURL(paramType GithubParam, value string) string {
 	var docsURL strings.Builder
 	docsPath := wf.Config.Get("docs")
 
+	// 如果 docsPath 为空，使用默认值
 	if docsPath == "" {
-		return ""
+		docsPath = "https://docs.example.com" // 这里应该设置你的默认文档路径
 	}
-	docsURL.WriteString(fmt.Sprintf("%s%s", docsPath, strings.ToLower(repo.FullName())))
 
-	//if repo.IsSubOrDepOrRelRepo() {
-	//	docsURL.WriteString(strings.ToLower(pkg.JoinSlashParts(repo.MainRepo)))
-	//	return docsURL.String()
-	//}
+	switch paramType {
+	case ParamRepo:
+		docsURL.WriteString(fmt.Sprintf("%s?repo=%s", docsPath, strings.ToLower(value)))
+	case ParamTag:
+		docsURL.WriteString(fmt.Sprintf("%s?tag=%s", docsPath, value))
+	case ParamType:
+		docsURL.WriteString(fmt.Sprintf("%s?type=%s", docsPath, value))
+	}
+
 	return docsURL.String()
 }
 
@@ -219,7 +265,7 @@ func renderRepos(repos gh2.Repos, builder *alfred.ItemBuilder) {
 			repo.URL,
 			determineRepoIcon(repo),
 		)
-		docsURL := buildDocsURL(repo)
+		docsURL := buildDocsURL(ParamRepo, repo.FullName())
 		builder.AddRepoModifiers(item, repo, docsURL)
 	}
 }
@@ -227,10 +273,14 @@ func renderRepos(repos gh2.Repos, builder *alfred.ItemBuilder) {
 // 渲染标签项
 func renderTagItems(tags []string) {
 	for _, tag := range tags {
-		tag = fmt.Sprintf("#%s", tag)
-		wf.NewItem(tag).
-			Title(tag).
+		item := wf.NewItem(fmt.Sprintf("#%s", tag)).
+			Title(fmt.Sprintf("#%s", tag)).
 			Valid(false).
-			Autocomplete(tag)
+			Autocomplete(fmt.Sprintf("#%s", tag))
+
+		docsURL := buildDocsURL(ParamTag, tag)
+		if docsURL != "" {
+			item.Cmd().Subtitle(fmt.Sprintf("Open tag: %s", tag)).Arg(docsURL)
+		}
 	}
 }
