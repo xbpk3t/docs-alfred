@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/alfred/gh/internal/alfred"
@@ -73,18 +74,57 @@ func handleTagSearch(repos gh2.Repos, args []string, builder *alfred.ItemBuilder
 		return
 	}
 
-	ptag := strings.TrimPrefix(args[0], "#")
+	// 参数验证
+	if len(args) == 0 || !strings.HasPrefix(args[0], "#") {
+		tags := repos.ExtractTags()
+		if len(tags) == 0 {
+			builder.BuildBasicItem(
+				"No tags found",
+				"No tags available in repositories",
+				"",
+				cons.IconWarning,
+			)
+		} else {
+			renderTagItems(tags)
+		}
+		wf.SendFeedback()
+		return
+	}
 
-	filteredRepos := repos.QueryReposByTag(ptag)
-	if len(filteredRepos) > 0 {
-		renderRepos(filteredRepos, builder)
-	} else {
+	// 提取标签
+	tags := repos.ExtractTags()
+	if len(tags) == 0 {
 		builder.BuildBasicItem(
-			"No repositories found",
-			fmt.Sprintf("No repositories found with tag: %s", ptag),
+			"No tags found",
+			"No tags available in repositories",
 			"",
 			cons.IconWarning,
 		)
+		wf.SendFeedback()
+		return
+	}
+
+	ptag := strings.TrimPrefix(args[0], "#")
+
+	// 如果输入的标签存在
+	if slices.Contains(tags, ptag) {
+		filteredRepos := repos.QueryReposByTag(ptag)
+		if len(filteredRepos) > 0 {
+			renderRepos(filteredRepos, builder)
+		} else {
+			builder.BuildBasicItem(
+				"No repositories found",
+				fmt.Sprintf("No repositories found with tag: %s", ptag),
+				"",
+				cons.IconWarning,
+			)
+		}
+	} else {
+		// 显示所有标签并根据输入进行过滤
+		renderTagItems(tags)
+		if len(ptag) > 0 {
+			wf.Filter(ptag) // 使用去掉#的标签进行过滤
+		}
 	}
 
 	wf.SendFeedback()
@@ -181,5 +221,16 @@ func renderRepos(repos gh2.Repos, builder *alfred.ItemBuilder) {
 		)
 		docsURL := buildDocsURL(repo)
 		builder.AddRepoModifiers(item, repo, docsURL)
+	}
+}
+
+// 渲染标签项
+func renderTagItems(tags []string) {
+	for _, tag := range tags {
+		tag = fmt.Sprintf("#%s", tag)
+		wf.NewItem(tag).
+			Title(tag).
+			Valid(false).
+			Autocomplete(tag)
 	}
 }
