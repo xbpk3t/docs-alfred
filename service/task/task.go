@@ -18,7 +18,6 @@ type Task struct {
 	Item   []string  `yaml:"item,omitempty" json:"item,omitempty"`
 	Qs     []string  `yaml:"qs,omitempty" json:"qs,omitempty"`
 	Topics gh.Topics `yaml:"topics,omitempty" json:"topics,omitempty"`
-	IsX    bool      `yaml:"isX,omitempty" json:"isX,omitempty"` // 是否完成，默认true。如果false就是没完成
 }
 
 type Tasks []Task
