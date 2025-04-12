@@ -9,6 +9,8 @@ const (
 	IconQsDoc   = "icons/ab.svg"
 	IconError   = "icons/error.png"
 	IconWarning = "icons/warning.png"
+	IconTypes   = "icons/types.svg"
+	IconTags    = "icons/tags.svg"
 
 	// URLs
 	GithubSearchURL = "https://github.com/search?q=%s&type=repositories"
