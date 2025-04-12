@@ -259,13 +259,17 @@ func determineRepoIcon(repo gh2.Repository) string {
 // 主渲染函数
 func renderRepos(repos gh2.Repos, builder *alfred.ItemBuilder) {
 	for _, repo := range repos {
+		resURL := repo.FullName()
 		item := builder.BuildBasicItem(
 			repo.FullName(),
 			buildRepoDescription(repo),
 			repo.URL,
 			determineRepoIcon(repo),
 		)
-		docsURL := buildDocsURL(ParamRepo, repo.FullName())
+		if repo.IsSubOrDepOrRelRepo() {
+			resURL = repo.MainRepo
+		}
+		docsURL := buildDocsURL(ParamRepo, resURL)
 		builder.AddRepoModifiers(item, repo, docsURL)
 	}
 }
