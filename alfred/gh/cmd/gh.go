@@ -145,15 +145,16 @@ func renderTypes(repos gh2.Repos, tag string, builder *alfred.ItemBuilder) {
 		)
 	} else {
 		for _, t := range types {
+			docsURL := buildDocsURL(ParamType, t)
 			item := builder.BuildBasicItem(
 				fmt.Sprintf("#%s#%s", tag, t),
 				fmt.Sprintf("Type: %s", t),
-				buildDocsURL(ParamType, t),
+				docsURL,
 				cons.IconTypes,
 			)
-			docsURL := buildDocsURL(ParamType, t)
+
 			if docsURL != "" {
-				item.Cmd().Subtitle(fmt.Sprintf("Open type: %s", t)).Arg(docsURL)
+				item.Cmd().Subtitle(fmt.Sprintf("Open type: %s", docsURL)).Arg(docsURL)
 			}
 		}
 	}
@@ -284,7 +285,7 @@ func renderTagItems(tags []string) {
 
 		docsURL := buildDocsURL(ParamTag, tag)
 		if docsURL != "" {
-			item.Cmd().Subtitle(fmt.Sprintf("Open tag: %s", tag)).Arg(docsURL)
+			item.Cmd().Subtitle(fmt.Sprintf("Open tag: %s", docsURL)).Arg(docsURL)
 		}
 	}
 }
