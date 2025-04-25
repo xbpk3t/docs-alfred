@@ -41,13 +41,13 @@ type ConfigRepos []ConfigRepo
 
 // Topic 定义问题结构
 type Topic struct {
-	Topic    string   `yaml:"topic" json:"topic"`             // 问题
-	Des      string   `yaml:"des" json:"des,omitempty"`       // 简要回答
-	Pictures []string `yaml:"pic" json:"pic,omitempty"`       // 图片
-	URLs     string   `yaml:"url" json:"url,omitempty"`       // url
-	Qs       []string `yaml:"qs" json:"qs,omitempty"`         // 子问题
-	Table    []string `yaml:"table" json:"table,omitempty"`   // TODO
-	IsFold   bool     `yaml:"isFold" json:"isFold,omitempty"` // 用来控制是否折叠该topic
+	Topic    string                   `yaml:"topic" json:"topic"`             // 问题
+	Des      string                   `yaml:"des" json:"des,omitempty"`       // 简要回答
+	Pictures []string                 `yaml:"pic" json:"pic,omitempty"`       // 图片
+	URLs     string                   `yaml:"url" json:"url,omitempty"`       // url
+	Qs       []string                 `yaml:"qs" json:"qs,omitempty"`         // 子问题
+	Table    []map[string]interface{} `yaml:"table" json:"table,omitempty"`   // TODO
+	IsFold   bool                     `yaml:"isFold" json:"isFold,omitempty"` // 用来控制是否折叠该topic
 }
 
 type Topics []Topic
@@ -78,7 +78,12 @@ func (r *Repository) GetURL() string {
 
 func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
+
 	for _, config := range cr {
+		// FIXME 封装一下这个给Repo赋值tag和type的操作
+		config.Using.Tag = config.Tag
+		repos = append(repos, processRepo(config.Using, config.Type)...)
+
 		for _, rp := range config.Repos {
 			// 设置 Tag 字段
 			rp.Tag = config.Tag
