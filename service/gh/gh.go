@@ -23,27 +23,31 @@ type Repository struct {
 	IsSubRepo      bool
 	IsReplacedRepo bool
 	IsRelatedRepo  bool
-	Score          int `yaml:"score,omitempty"`
+	Score          int `yaml:"score,omitempty"` // 用来给repo内部排序
 }
 
 type Repos []Repository
 
 // ConfigRepo 定义配置仓库结构
 type ConfigRepo struct {
-	Type  string `yaml:"type"`
-	Tag   string `yaml:"tag"`
-	Repos Repos  `yaml:"repo"`
+	Type   string     `yaml:"type"`
+	Tag    string     `yaml:"tag"`
+	Repos  Repos      `yaml:"repo"`
+	Topics Topics     `yaml:"topics,omitempty" json:"topics,omitempty"` // type本身的topics
+	Using  Repository `yaml:"using,omitempty"`                          // 不一定所有type都有using
 }
 
 type ConfigRepos []ConfigRepo
 
 // Topic 定义问题结构
 type Topic struct {
-	Topic    string   `yaml:"topic" json:"topic"`       // 问题
-	Des      string   `yaml:"des" json:"des,omitempty"` // 简要回答
-	Pictures []string `yaml:"pic" json:"pic,omitempty"` // 图片
-	URLs     string   `yaml:"url" json:"url,omitempty"` // url
-	Qs       []string `yaml:"qs" json:"qs,omitempty"`   // 子问题
+	Topic    string   `yaml:"topic" json:"topic"`             // 问题
+	Des      string   `yaml:"des" json:"des,omitempty"`       // 简要回答
+	Pictures []string `yaml:"pic" json:"pic,omitempty"`       // 图片
+	URLs     string   `yaml:"url" json:"url,omitempty"`       // url
+	Qs       []string `yaml:"qs" json:"qs,omitempty"`         // 子问题
+	Table    []string `yaml:"table" json:"table,omitempty"`   // TODO
+	IsFold   bool     `yaml:"isFold" json:"isFold,omitempty"` // 用来控制是否折叠该topic
 }
 
 type Topics []Topic

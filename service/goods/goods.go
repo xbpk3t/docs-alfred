@@ -11,8 +11,8 @@ type Goods struct {
 	Type   string     `yaml:"type"`
 	Des    string     `yaml:"des,omitempty"`
 	Topics []gh.Topic `yaml:"tpcs,omitempty"`
-	Using  []Item     `yaml:"using"`
 	Item   []Item     `yaml:"item"`
+	Using  Item       `yaml:"using"`
 	Score  int        `yaml:"score"`
 }
 
