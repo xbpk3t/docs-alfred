@@ -258,19 +258,20 @@ func determineRepoIcon(repo gh2.Repository) string {
 }
 
 // 主渲染函数
+// [2025-04-25] gh table从repo维度改为type维度，所以直接跳转到该repo对应的type URL
 func renderRepos(repos gh2.Repos, builder *alfred.ItemBuilder) {
 	for _, repo := range repos {
-		resURL := repo.FullName()
+		tp := repo.Type
 		item := builder.BuildBasicItem(
 			repo.FullName(),
 			buildRepoDescription(repo),
 			repo.URL,
 			determineRepoIcon(repo),
 		)
-		if repo.IsSubOrDepOrRelRepo() {
-			resURL = repo.MainRepo
-		}
-		docsURL := buildDocsURL(ParamRepo, resURL)
+		//if repo.IsSubOrDepOrRelRepo() {
+		//	resURL = repo.MainRepo
+		//}
+		docsURL := buildDocsURL(ParamType, tp)
 		builder.AddRepoModifiers(item, repo, docsURL)
 	}
 }
@@ -278,10 +279,11 @@ func renderRepos(repos gh2.Repos, builder *alfred.ItemBuilder) {
 // 渲染标签项
 func renderTagItems(tags []string) {
 	for _, tag := range tags {
-		item := wf.NewItem(fmt.Sprintf("#%s", tag)).
-			Title(fmt.Sprintf("#%s", tag)).
+		ss := fmt.Sprintf("#%s", tag)
+		item := wf.NewItem(ss).
+			Title(ss).
 			Valid(false).
-			Autocomplete(fmt.Sprintf("#%s", tag))
+			Autocomplete(ss)
 
 		docsURL := buildDocsURL(ParamTag, tag)
 		if docsURL != "" {
