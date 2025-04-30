@@ -1,8 +1,8 @@
 package render
 
 import (
+	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
-	"sigs.k8s.io/yaml"
 )
 
 // ParseMode 解析模式

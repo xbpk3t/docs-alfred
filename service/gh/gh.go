@@ -1,8 +1,9 @@
 package gh
 
 import (
-	"slices"
 	"strings"
+
+	"github.com/goccy/go-yaml"
 )
 
 const GhURL = "https://github.com/"
@@ -41,16 +42,20 @@ type ConfigRepos []ConfigRepo
 
 // Topic 定义问题结构
 type Topic struct {
-	Topic    string                   `yaml:"topic" json:"topic"`             // 问题
-	Des      string                   `yaml:"des" json:"des,omitempty"`       // 简要回答
-	Pictures []string                 `yaml:"pic" json:"pic,omitempty"`       // 图片
-	URLs     string                   `yaml:"url" json:"url,omitempty"`       // url
-	Qs       []string                 `yaml:"qs" json:"qs,omitempty"`         // 子问题
-	Table    []map[string]interface{} `yaml:"table" json:"table,omitempty"`   // TODO
-	IsFold   bool                     `yaml:"isFold" json:"isFold,omitempty"` // 用来控制是否折叠该topic
+	Topic    string        `yaml:"topic" json:"topic"`       // 问题
+	Des      string        `yaml:"des" json:"des,omitempty"` // 简要回答
+	Pictures []string      `yaml:"pic" json:"pic,omitempty"` // 图片
+	URLs     string        `yaml:"url" json:"url,omitempty"` // url
+	Qs       []string      `yaml:"qs" json:"qs,omitempty"`   // 子问题
+	Table    yaml.MapSlice `yaml:"table" json:"table,omitempty"`
+	IsFold   bool          `yaml:"isFold" json:"isFold,omitempty"` // 用来控制是否折叠该topic
 }
 
 type Topics []Topic
+
+func (t *Topic) MarshalJSON() ([]byte, error) {
+	return yaml.Marshal(t)
+}
 
 func (r *Repository) IsValid() bool {
 	return strings.Contains(r.URL, GhURL)
@@ -188,27 +193,4 @@ func (r *Repository) HasQs() bool {
 
 func (r *Repository) HasSubRepos() bool {
 	return len(r.SubRepos) > 0 || len(r.ReplacedRepos) > 0 || len(r.RelatedRepos) > 0
-}
-
-// ExtractTags 从所有仓库中提取唯一的标签列表
-func (r Repos) ExtractTags() []string {
-	// 使用 map 来去重
-	tagMap := make(map[string]struct{})
-
-	// 遍历所有仓库收集标签
-	for _, rp := range r {
-		if rp.Tag != "" {
-			tagMap[rp.Tag] = struct{}{}
-		}
-	}
-
-	// 将 map 转换为切片
-	tags := make([]string, 0, len(tagMap))
-	for tag := range tagMap {
-		tags = append(tags, tag)
-	}
-
-	// 对标签进行排序，使结果稳定
-	slices.Sort(tags)
-	return tags
 }

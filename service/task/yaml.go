@@ -5,9 +5,9 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 
+	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/service"
-	"sigs.k8s.io/yaml"
 )
 
 // TaskYAMLRender 任务 YAML 渲染器
