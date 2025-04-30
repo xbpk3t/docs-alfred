@@ -13,6 +13,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/pkg/utils"
 	"github.com/xbpk3t/docs-alfred/service"
+	"github.com/xbpk3t/docs-alfred/service/gh"
 	"github.com/xbpk3t/docs-alfred/service/task"
 )
 
@@ -214,7 +215,7 @@ func (dc *DocsConfig) processAll(processors map[FileType]*DocProcessor) error {
 // processSingle 处理单个文件
 func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) error {
 	// 创建对应的渲染器
-	renderer, err := dc.createRenderer(fileType)
+	renderer, err := dc.createRenderer()
 	if err != nil {
 		slog.Error("create renderer error",
 			slog.String("type", string(fileType)),
@@ -235,12 +236,14 @@ func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) 
 	return nil
 }
 
-func (dc *DocsConfig) createRenderer(fileType FileType) (render.Renderer, error) {
+func (dc *DocsConfig) createRenderer() (render.Renderer, error) {
 	// 根据命令类型选择渲染器
 	var renderer render.Renderer
 	switch dc.Cmd {
 	case "task":
 		renderer = task.NewTaskYAMLRender()
+	case "gh":
+		renderer = gh.NewGithubYAMLRender()
 	default:
 		renderer = render.NewYAMLRenderer(dc.Cmd, true)
 	}

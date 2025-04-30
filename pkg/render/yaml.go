@@ -42,7 +42,7 @@ func (j *YAMLRenderer) Render(data []byte) (string, error) {
 		return "", err
 	}
 
-	// 转换为YAML
+	// 转换为string格式的YAML
 	result, err := yaml.Marshal(dataToEncode)
 	if err != nil {
 		return "", err
