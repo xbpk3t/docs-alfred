@@ -42,13 +42,13 @@ type ConfigRepos []ConfigRepo
 
 // Topic 定义问题结构
 type Topic struct {
-	Topic    string        `yaml:"topic" json:"topic"`       // 问题
-	Des      string        `yaml:"des" json:"des,omitempty"` // 简要回答
-	Pictures []string      `yaml:"pic" json:"pic,omitempty"` // 图片
-	URLs     string        `yaml:"url" json:"url,omitempty"` // url
-	Qs       []string      `yaml:"qs" json:"qs,omitempty"`   // 子问题
-	Table    yaml.MapSlice `yaml:"table" json:"table,omitempty"`
-	IsFold   bool          `yaml:"isFold" json:"isFold,omitempty"` // 用来控制是否折叠该topic
+	Topic    string          `yaml:"topic" json:"topic"`       // 问题
+	Des      string          `yaml:"des" json:"des,omitempty"` // 简要回答
+	Pictures []string        `yaml:"pic" json:"pic,omitempty"` // 图片
+	URLs     string          `yaml:"url" json:"url,omitempty"` // url
+	Qs       []string        `yaml:"qs" json:"qs,omitempty"`   // 子问题
+	Table    []yaml.MapSlice `yaml:"table" json:"table,omitempty"`
+	IsFold   bool            `yaml:"isFold" json:"isFold,omitempty"` // 用来控制是否折叠该topic
 }
 
 type Topics []Topic
