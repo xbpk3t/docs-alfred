@@ -7,12 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goccy/go-yaml"
+
 	"github.com/gookit/goutil/fsutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/pkg/utils"
 	"github.com/xbpk3t/docs-alfred/service"
 	"github.com/xbpk3t/docs-alfred/service/task"
-	"sigs.k8s.io/yaml"
 )
 
 type FileType string
