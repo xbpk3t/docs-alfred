@@ -36,6 +36,7 @@ type ConfigRepo struct {
 	Repos  Repos      `yaml:"repo"`
 	Topics Topics     `yaml:"topics,omitempty" json:"topics,omitempty"` // type本身的topics
 	Using  Repository `yaml:"using,omitempty"`                          // 不一定所有type都有using
+	Score  int        `yaml:"score,omitempty"`
 }
 
 type ConfigRepos []ConfigRepo
