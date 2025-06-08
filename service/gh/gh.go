@@ -43,13 +43,15 @@ type ConfigRepos []ConfigRepo
 
 // Topic 定义问题结构
 type Topic struct {
-	Topic    string          `yaml:"topic" json:"topic"`       // 问题
-	Des      string          `yaml:"des" json:"des,omitempty"` // 简要回答
-	Pictures []string        `yaml:"pic" json:"pic,omitempty"` // 图片
-	URLs     string          `yaml:"url" json:"url,omitempty"` // url
-	Qs       []string        `yaml:"qs" json:"qs,omitempty"`   // 子问题
+	Topic    string          `yaml:"topic" json:"topic"`             // 问题
+	Des      string          `yaml:"des" json:"des,omitempty"`       // 简要回答
+	PicDir   string          `yaml:"picDir" json:"picDir,omitempty"` // 图片文件夹，用来展示该文件夹下的所有图片
+	Pictures []string        `yaml:"pic" json:"pic,omitempty"`       // 图片
+	URLs     string          `yaml:"url" json:"url,omitempty"`       // url
+	Qs       []string        `yaml:"qs" json:"qs,omitempty"`         // 子问题
 	Table    []yaml.MapSlice `yaml:"table" json:"table,omitempty"`
 	IsFold   bool            `yaml:"isFold" json:"isFold,omitempty"` // 用来控制是否折叠该topic
+	IsX      bool            `yaml:"isX" json:"isX,omitempty"`       // 判断该topic是否重要
 }
 
 type Topics []Topic
