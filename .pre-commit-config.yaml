@@ -15,7 +15,6 @@ repos:
         args: ['--maxkb=4096']
       - id: check-merge-conflict
       - id: check-json
-        exclude: ^.devcontainer/devcontainer.json$
       - id: check-symlinks
       - id: mixed-line-ending
         exclude: .*\.svg$

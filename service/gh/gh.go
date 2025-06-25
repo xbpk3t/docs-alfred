@@ -43,18 +43,27 @@ type ConfigRepos []ConfigRepo
 
 // Topic 定义问题结构
 type Topic struct {
-	Topic    string          `yaml:"topic" json:"topic"`             // 问题
-	Des      string          `yaml:"des" json:"des,omitempty"`       // 简要回答
-	PicDir   string          `yaml:"picDir" json:"picDir,omitempty"` // 图片文件夹，用来展示该文件夹下的所有图片
-	Pictures []string        `yaml:"pic" json:"pic,omitempty"`       // 图片
-	URLs     string          `yaml:"url" json:"url,omitempty"`       // url
-	Qs       []string        `yaml:"qs" json:"qs,omitempty"`         // 子问题
-	Table    []yaml.MapSlice `yaml:"table" json:"table,omitempty"`
-	IsFold   bool            `yaml:"isFold" json:"isFold,omitempty"` // 用来控制是否折叠该topic
-	IsX      bool            `yaml:"isX" json:"isX,omitempty"`       // 判断该topic是否重要
+	Topic    string          `yaml:"topic" json:"topic"`                       // 问题
+	Des      string          `yaml:"des,omitempty" json:"des,omitempty"`       // 简要回答
+	PicDir   string          `yaml:"picDir,omitempty" json:"picDir,omitempty"` // 图片文件夹，用来展示该文件夹下的所有图片
+	Pictures []string        `yaml:"pic,omitempty" json:"pic,omitempty"`       // 图片
+	URLs     string          `yaml:"url,omitempty" json:"url,omitempty"`       // url
+	Qs       []string        `yaml:"qs,omitempty" json:"qs,omitempty"`         // 子问题
+	Table    []yaml.MapSlice `yaml:"table,omitempty" json:"table,omitempty"`
+	Tables   Tables          `yaml:"tables,omitempty" json:"tables,omitempty"`
+	IsFold   bool            `yaml:"isFold,omitempty" json:"isFold,omitempty"` // 用来控制是否折叠该topic
+	IsX      bool            `yaml:"isX,omitempty" json:"isX,omitempty"`       // 判断该topic是否重要
 }
 
 type Topics []Topic
+
+type Table struct {
+	Name  string          `yaml:"name,omitempty" json:"name,omitempty"`
+	URL   string          `yaml:"url,omitempty" json:"url,omitempty"`
+	Table []yaml.MapSlice `yaml:"table,omitempty" json:"table,omitempty"`
+}
+
+type Tables []Table
 
 func (t *Topic) MarshalJSON() ([]byte, error) {
 	return yaml.Marshal(t)
