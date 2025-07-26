@@ -7,12 +7,6 @@ const (
 	Daily  = "daily"
 	Weekly = "weekly"
 
-	// Cron types
-	CronTypeDaily   = "daily"
-	CronTypeWeekly  = "weekly"
-	CronTypeMonthly = "monthly"
-	CronTypeYearly  = "yearly"
-
 	// 重试相关常量
 	DefaultRetryDelay = 5 * time.Second
 	DefaultMaxRetries = 3

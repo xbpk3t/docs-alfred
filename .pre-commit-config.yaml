@@ -17,7 +17,7 @@ repos:
       - id: check-json
       - id: check-symlinks
       - id: mixed-line-ending
-        exclude: .*\.svg$
+        exclude: .*\.svg$p
       - id: check-case-conflict
 
   - repo: https://github.com/pre-commit-ci/pre-commit-ci-config

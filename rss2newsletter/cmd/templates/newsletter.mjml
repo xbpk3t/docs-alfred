@@ -137,8 +137,7 @@
 
 
         <!-- Dashboard Section -->
-        {{if or .DashboardConfig.IsShowFetchFailedFeeds .DashboardConfig.IsShowFeedDetail
-        .DashboardConfig.IsShowCronTask }}
+        {{if or .DashboardConfig.IsShowFetchFailedFeeds .DashboardConfig.IsShowFeedDetail}}
         <mj-wrapper padding="0 20px 20px 20px">
             <mj-section>
                 <mj-column>
@@ -147,32 +146,6 @@
                     </mj-text>
 
                     <mj-accordion>
-
-
-                        {{if .DashboardConfig.IsShowCronTask}}
-                        <mj-accordion-element>
-                            <mj-accordion-title>Daily Task</mj-accordion-title>
-                            <mj-accordion-text>
-                                <table class="custom-table">
-                                    <tr>
-                                        <th style="width: 20%">Cron</th>
-                                        <th style="width: 80%">Task</th>
-                                    </tr>
-                                    {{range .CronTaskResList}}
-                                    <tr>
-                                        <td>
-                                            {{.Type}}
-                                        </td>
-                                        <td>
-                                            {{.Task}}
-                                        </td>
-                                    </tr>
-                                    {{end}}
-                                </table>
-                            </mj-accordion-text>
-                        </mj-accordion-element>
-                        {{end}}
-
 
                         <!-- Failed Feeds -->
                         {{if .DashboardConfig.IsShowFetchFailedFeeds}}
