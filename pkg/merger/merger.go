@@ -94,10 +94,19 @@ func (m *Merger) writeResult(result interface{}) error {
 	if err != nil {
 		return errcode.WithError(errcode.ErrCreateFile, err)
 	}
-	defer file.Close()
+	defer func() {
+		// 优先捕获文件关闭错误（如磁盘写入失败）
+		if cerr := file.Close(); err == nil && cerr != nil {
+			err = errcode.WithError(errcode.ErrCloseFile, cerr)
+		}
+	}()
 
 	encoder := yaml.NewEncoder(file)
-	defer encoder.Close()
+	// 显式关闭编码器，确保缓冲区刷新
+	if err = encoder.Encode(result); err != nil {
+		_ = file.Close() // 立即关闭文件（避免defer覆盖错误）
+		return errcode.WithError(errcode.ErrEncodeYAML, err)
+	}
 
 	if err := encoder.Encode(result); err != nil {
 		return errcode.WithError(errcode.ErrEncodeYAML, err)

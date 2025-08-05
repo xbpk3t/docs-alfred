@@ -127,7 +127,7 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 
 	// 提交所有任务到池中
 	for _, feed := range s.config.Feeds {
-		feed := feed // 避免闭包问题
+		// 避免闭包问题
 		p.Go(func(ctx context.Context) (feeds.RssFeed, error) {
 			rssFeed, err := s.processSingleFeed(ctx, feed)
 			if err != nil {

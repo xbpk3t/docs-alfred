@@ -1,3 +1,5 @@
+---
+
 # markdownlint -f -c .github/linters/markdownlint.yml .
 
 # 代码块是否执行markdownlint检查
@@ -19,7 +21,7 @@ MD004:
 #  indent: 4
 # 硬标签，使用空格，而非tab进行缩进
 MD010:
-  ignore_code_languages: ['plantuml', 'puml']
+  ignore_code_languages: ["plantuml", "puml"]
 # 多个连续的空白行，不应出现一行以上的空行（规则没毛病，但是不适用）
 # 太多no-multiple-blanks Multiple consecutive blank lines [Expected: 5; Actual: 6]报错
 MD012:
@@ -53,7 +55,6 @@ MD041: false
 MD044: false
 # 文件结尾应该有一行空行
 MD047: false
-
 
 # 文档内跳转，找不到对应的toc会触发该规则（但是偶尔会抽风，所以加上该规则）
 # [markdownlint/md051.md · DavidAnson/markdownlint](https://github.com/DavidAnson/markdownlint/blob/main/doc/md051.md)

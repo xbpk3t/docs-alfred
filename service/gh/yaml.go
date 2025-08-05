@@ -24,7 +24,7 @@ func (g *GithubYAMLRender) GetCurrentFileName() string {
 }
 
 //// SetCurrentFile 设置当前处理的文件名
-//func (g *GithubYAMLRender) SetCurrentFile(filename string) {
+// func (g *GithubYAMLRender) SetCurrentFile(filename string) {
 //	g.currentFile = filename
 //}
 

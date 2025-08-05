@@ -268,7 +268,7 @@ func renderRepos(repos gh2.Repos, builder *alfred.ItemBuilder) {
 			repo.URL,
 			determineRepoIcon(repo),
 		)
-		//if repo.IsSubOrDepOrRelRepo() {
+		// if repo.IsSubOrDepOrRelRepo() {
 		//	resURL = repo.MainRepo
 		//}
 		docsURL := buildDocsURL(ParamType, tp)
