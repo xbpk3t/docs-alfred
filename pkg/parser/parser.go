@@ -50,7 +50,7 @@ func (p *Parser[T]) ParseMulti() ([]T, error) {
 	for {
 		var item T
 		err := decoder.Decode(&item)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

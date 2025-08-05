@@ -48,7 +48,13 @@ type Topic struct {
 	PicDir   string          `yaml:"picDir,omitempty" json:"picDir,omitempty"` // 图片文件夹，用来展示该文件夹下的所有图片
 	Pictures []string        `yaml:"pic,omitempty" json:"pic,omitempty"`       // 图片
 	URLs     string          `yaml:"url,omitempty" json:"url,omitempty"`       // url
-	Qs       []string        `yaml:"qs,omitempty" json:"qs,omitempty"`         // 子问题
+	Qs       []string        `yaml:"qs,omitempty" json:"qs,omitempty"`
+	Why      []string        `yaml:"why,omitempty" json:"why,omitempty"`
+	What     []string        `yaml:"what,omitempty" json:"what,omitempty"`
+	WW       []string        `yaml:"ww,omitempty" json:"ww,omitempty"`
+	HTU      []string        `yaml:"htu,omitempty" json:"htu,omitempty"`
+	HTI      []string        `yaml:"hti,omitempty" json:"hti,omitempty"`
+	HTO      []string        `yaml:"hto,omitempty" json:"hto,omitempty"`
 	Table    []yaml.MapSlice `yaml:"table,omitempty" json:"table,omitempty"`
 	Tables   Tables          `yaml:"tables,omitempty" json:"tables,omitempty"`
 	IsFold   bool            `yaml:"isFold,omitempty" json:"isFold,omitempty"` // 用来控制是否折叠该topic
