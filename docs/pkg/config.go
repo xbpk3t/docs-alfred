@@ -14,6 +14,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/utils"
 	"github.com/xbpk3t/docs-alfred/service"
 	"github.com/xbpk3t/docs-alfred/service/gh"
+	"github.com/xbpk3t/docs-alfred/service/goods"
 	"github.com/xbpk3t/docs-alfred/service/task"
 )
 
@@ -42,7 +43,7 @@ type DocsConfig struct {
 }
 
 var serviceParseModeMap = map[service.ServiceType]render.ParseMode{
-	service.ServiceGoods:  render.ParseMulti,
+	service.ServiceGoods:  render.ParseFlatten,
 	service.ServiceTask:   render.ParseMulti,
 	service.ServiceGithub: render.ParseFlatten,
 }
@@ -244,6 +245,8 @@ func (dc *DocsConfig) createRenderer() (render.Renderer, error) {
 		renderer = task.NewTaskYAMLRender()
 	case "gh":
 		renderer = gh.NewGithubYAMLRender()
+	case "goods":
+		renderer = goods.NewGoodsYAMLRender()
 	default:
 		renderer = render.NewYAMLRenderer(dc.Cmd, true)
 	}
