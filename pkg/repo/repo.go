@@ -12,7 +12,7 @@ type RepoInfo interface {
 }
 
 // GetRepoList 使用反射获取仓库列表
-func GetRepoList(repos interface{}) []RepoInfo {
+func GetRepoList(repos any) []RepoInfo {
 	var repoList []RepoInfo
 
 	// 获取repos的反射值

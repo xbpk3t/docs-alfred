@@ -220,7 +220,7 @@ func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
 }
 
 // renderTemplate renders a specific template with data
-func (s *NewsletterService) renderTemplate(templateName string, data interface{}) (string, error) {
+func (s *NewsletterService) renderTemplate(templateName string, data any) (string, error) {
 	// Create a custom template function map
 	funcMap := template.FuncMap{
 		"safeHTML": func(s string) template.HTML {

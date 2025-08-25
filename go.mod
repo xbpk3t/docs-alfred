@@ -3,27 +3,27 @@ module github.com/xbpk3t/docs-alfred
 go 1.24.0
 
 require (
-	github.com/Boostport/mjml-go v0.15.0
-	github.com/avast/retry-go v3.0.0+incompatible
+	github.com/Boostport/mjml-go v0.16.0
+	github.com/avast/retry-go/v4 v4.6.1
 	github.com/deanishe/awgo v0.29.1
-	github.com/dromara/carbon/v2 v2.5.4
+	github.com/dromara/carbon/v2 v2.6.11
 	github.com/go-resty/resty/v2 v2.16.5
-	github.com/goccy/go-yaml v1.15.23
-	github.com/gookit/goutil v0.6.18
+	github.com/goccy/go-yaml v1.18.0
+	github.com/gookit/goutil v0.7.1
 	github.com/gorilla/feeds v1.2.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/mmcdole/gofeed v1.3.0
-	github.com/resend/resend-go/v2 v2.15.0
-	github.com/samber/lo v1.49.1
+	github.com/resend/resend-go/v2 v2.23.0
+	github.com/samber/lo v1.51.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.9.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 )
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.2 // indirect
-	github.com/andybalholm/brotli v1.1.1 // indirect
+	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

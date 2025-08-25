@@ -262,7 +262,7 @@ func (dc *DocsConfig) configureRenderer(renderer render.Renderer) (render.Render
 }
 
 // configureParseMode 配置渲染器的解析模式
-func (dc *DocsConfig) configureParseMode(renderer interface{}) error {
+func (dc *DocsConfig) configureParseMode(renderer any) error {
 	type parseModeRenderer interface {
 		WithParseMode(mode render.ParseMode)
 	}
