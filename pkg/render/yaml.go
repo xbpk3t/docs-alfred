@@ -52,8 +52,8 @@ func (j *YAMLRenderer) Render(data []byte) (string, error) {
 }
 
 // parseData 根据不同模式解析数据，并统一返回类型
-func (j *YAMLRenderer) ParseData(data []byte) (interface{}, error) {
-	ps := parser.NewParser[interface{}](data)
+func (j *YAMLRenderer) ParseData(data []byte) (any, error) {
+	ps := parser.NewParser[any](data)
 
 	switch j.ParseMode {
 	case ParseMulti:

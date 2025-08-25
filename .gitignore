@@ -191,5 +191,8 @@ test
 /alfred/.workflow/exe
 
 
+*.alfredworkflow
+exe
+
 
 docs.yml

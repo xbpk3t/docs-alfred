@@ -49,8 +49,8 @@ func (m *Merger) validateInput() error {
 }
 
 // mergeConfigs 合并配置
-func (m *Merger) mergeConfigs() (interface{}, error) {
-	var result interface{}
+func (m *Merger) mergeConfigs() (any, error) {
+	var result any
 	for _, file := range m.inputFiles {
 		config, err := m.processFile(file)
 		if err != nil {
@@ -62,13 +62,13 @@ func (m *Merger) mergeConfigs() (interface{}, error) {
 }
 
 // processFile 处理单个文件
-func (m *Merger) processFile(fileName string) (interface{}, error) {
+func (m *Merger) processFile(fileName string) (any, error) {
 	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return nil, errcode.WithError(errcode.ErrReadFile, err)
 	}
 
-	var config interface{}
+	var config any
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, errcode.WithError(errcode.ErrParseYAML, err)
 	}
@@ -83,7 +83,7 @@ func (m *Merger) processFile(fileName string) (interface{}, error) {
 }
 
 // writeResult 写入结果
-func (m *Merger) writeResult(result interface{}) error {
+func (m *Merger) writeResult(result any) error {
 	if m.outputDir != "" {
 		if err := os.MkdirAll(m.outputDir, 0o755); err != nil {
 			return errcode.WithError(errcode.ErrCreateDir, err)
@@ -116,7 +116,7 @@ func (m *Merger) writeResult(result interface{}) error {
 }
 
 // merge 合并两个配置
-func (m *Merger) merge(a, b interface{}) interface{} {
+func (m *Merger) merge(a, b any) any {
 	if a == nil {
 		return b
 	}
@@ -125,7 +125,7 @@ func (m *Merger) merge(a, b interface{}) interface{} {
 }
 
 // setTag 设置标签
-func (m *Merger) setTag(config interface{}, tag string) error {
+func (m *Merger) setTag(config any, tag string) error {
 	// 实现设置标签逻辑
 	return nil
 }

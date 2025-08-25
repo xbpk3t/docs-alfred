@@ -23,20 +23,20 @@ func NewTaskYAMLRender() *TaskYAMLRender {
 }
 
 // Flatten 将数据打平成一层
-func (j *TaskYAMLRender) Flatten(data []byte) ([]interface{}, error) {
+func (j *TaskYAMLRender) Flatten(data []byte) ([]any, error) {
 	raw, err := j.ParseData(data)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]interface{}, 0)
+	result := make([]any, 0)
 
 	// 处理顶层数据
 	switch v := raw.(type) {
-	case []interface{}:
+	case []any:
 		// 递归处理每个元素
 		for _, item := range v {
-			if nestedSlice, ok := item.([]interface{}); ok {
+			if nestedSlice, ok := item.([]any); ok {
 				result = append(result, nestedSlice...)
 			} else {
 				result = append(result, item)
@@ -83,7 +83,7 @@ func (r *TaskYAMLRender) Render(data []byte) (string, error) {
 	)
 
 	// Convert back to interface{} for YAML marshaling
-	var interfaceContent []interface{}
+	var interfaceContent []any
 	err = mapstructure.Decode(tasks, &interfaceContent)
 	if err != nil {
 		return "", err
