@@ -5,7 +5,7 @@ feed:
 
 resend:
   token: sk
-  mailTo: [jeffcottlu@gmail.com]
+  mailTo: [me@lucc.dev]
 
 
 newsletter:
