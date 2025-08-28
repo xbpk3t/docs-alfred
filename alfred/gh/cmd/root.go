@@ -12,7 +12,7 @@ import (
 	pkgErr "github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/deanishe/awgo/update"
-	"github.com/goccy/go-yaml"
+	yaml "github.com/goccy/go-yaml"
 
 	aw "github.com/deanishe/awgo"
 	"github.com/spf13/cobra"
@@ -82,7 +82,7 @@ func createRootCmd(ctx *AppContext, cfgFile *string) *cobra.Command {
 	}
 }
 
-func (ctx *AppContext) handlePreRun(args []string, cfgFile string) error {
+func (ctx *AppContext) handlePreRun(_ []string, cfgFile string) error {
 	if !ctx.wf.Cache.Exists(cfgFile) {
 		return &pkgErr.DocsAlfredError{Err: pkgErr.ErrConfigNotFound}
 	}

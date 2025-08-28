@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goccy/go-yaml"
+	yaml "github.com/goccy/go-yaml"
 
 	"github.com/gookit/goutil/fsutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"

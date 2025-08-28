@@ -1,4 +1,4 @@
-# billMerge
+# xzb
 
 合并微信和支付宝账单的命令行工具。
 
@@ -15,5 +15,5 @@
 ## 安装
 
 ```bash
-go install github.com/xbpk3t/docs-alfred/billMerge@latest
+go install github.com/xbpk3t/docs-alfred/xzb@latest
 ```

@@ -3,7 +3,7 @@ default_stages: [pre-commit, pre-push]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: check-yaml
         args: [--allow-multiple-documents]
@@ -36,7 +36,7 @@ repos:
       - id: gitlint-ci
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.41.0
+    rev: v0.45.0
     hooks:
       - id: markdownlint
         alias: md
@@ -46,7 +46,7 @@ repos:
         language: node
 
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: v1.37.1
     hooks:
       - id: yamllint
         name: Lint YAML files
@@ -55,25 +55,25 @@ repos:
         language: python
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.0
+    rev: v0.12.11
     hooks:
       - id: ruff
       - id: ruff-format
 
-#  - repo: https://github.com/codespell-project/codespell
-#    rev: v2.3.0
-#    hooks:
-#      - id: codespell
-#        exclude: "haystack/data/abbreviations"
-#        args: ["--toml", "pyproject.toml"]
-#        additional_dependencies:
-#          - tomli
+  #  - repo: https://github.com/codespell-project/codespell
+  #    rev: v2.3.0
+  #    hooks:
+  #      - id: codespell
+  #        exclude: "haystack/data/abbreviations"
+  #        args: ["--toml", "pyproject.toml"]
+  #        additional_dependencies:
+  #          - tomli
 
-#  - repo: https://github.com/rhysd/actionlint
-#    rev: v1.7.5
-#    hooks:
-#      - id: actionlint-docker
-#        args: ["-ignore", "SC2102"]
+  #  - repo: https://github.com/rhysd/actionlint
+  #    rev: v1.7.5
+  #    hooks:
+  #      - id: actionlint-docker
+  #        args: ["-ignore", "SC2102"]
 
 
   #  - repo: https://github.com/gitleaks/gitleaks
@@ -84,7 +84,7 @@ repos:
   #        entry: gitleaks detect --source . -v
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.96.1
+    rev: v1.100.0
     hooks:
       - id: terraform_fmt
         args:
@@ -93,7 +93,7 @@ repos:
       - id: terraform_tflint
 
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
+    rev: v2.13.1-beta
     hooks:
       - id: hadolint
         args:
@@ -109,44 +109,44 @@ repos:
         pass_filenames: false
         files: ^components/dashboard/
 
-#  - repo: https://github.com/golangci/golangci-lint
-#    rev: v1.61.0
-#    hooks:
-#      - id: golangci-lint
-#        entry: golangci-lint run --fix --config .github/linters/golangci-lint.yml
-#        types: [go]
-#        language: golang
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.2.1
+    hooks:
+      - id: golangci-lint
+        entry: golangci-lint run --fix --config .github/linters/golangci-lint.yml
+        types: [go]
+        language: golang
 
 
-#  - repo: local
-#    hooks:
-#      - id: gofumpt
-#        name: gofumpt
-#        entry: gofumpt -l -w .
-#        language: golang
-#        types: [go]
-#        pass_filenames: false
-#
-#      - id: go-mod-tidy
-#        name: go-mod-tidy
-#        entry: go mod tidy -v
-#        language: golang
-#        pass_filenames: false
-#
-#      - id: betteralign
-#        name: betteralign
-#        entry: betteralign -apply ./...
-#        language: system
-#        types: [go]
-#        pass_filenames: false
-#        additional_dependencies: []
+  - repo: local
+    hooks:
+      - id: gofumpt
+        name: gofumpt
+        entry: gofumpt -l -w .
+        language: golang
+        types: [go]
+        pass_filenames: false
+
+      - id: go-mod-tidy
+        name: go-mod-tidy
+        entry: go mod tidy -v
+        language: golang
+        pass_filenames: false
+
+      - id: betteralign
+        name: betteralign
+        entry: betteralign -apply ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+        additional_dependencies: []
 
 
-#      - id: nilaway
-#        name: nilaway
-#        entry: nilaway ./...
-#        language: golang
-#        pass_filenames: false
+      - id: nilaway
+        name: nilaway
+        entry: nilaway ./...
+        language: golang
+        pass_filenames: false
 
       - id: race-test
         name: race-test

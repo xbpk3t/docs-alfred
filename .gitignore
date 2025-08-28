@@ -196,4 +196,6 @@ exe
 
 
 docs.yml
-/billMerge/result/
+/xzb/result/
+/xzb/alipay_*.csv
+/xzb/wechat.csv

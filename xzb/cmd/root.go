@@ -14,7 +14,7 @@ func createRootCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "bm",
 		Short: "合并微信和支付宝账单的工具",
-		Long: `billMerge 是一个用来合并微信和支付宝账单的命令行工具。
+		Long: `xzb 是一个用来合并微信和支付宝账单的命令行工具。
 它可以自动处理账单格式，清理元数据，并按月份拆分输出为CSV和Excel文件。`,
 	}
 }

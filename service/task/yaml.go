@@ -5,7 +5,7 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 
-	"github.com/goccy/go-yaml"
+	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/service"
 )
@@ -57,7 +57,7 @@ func (r *TaskYAMLRender) Render(data []byte) (string, error) {
 		return "", fmt.Errorf("base render error: %w", err)
 	}
 
-	var tasks Tasks
+	tasks := make(Tasks, 0)
 	for _, c := range content {
 		task := &Task{}
 		config := &mapstructure.DecoderConfig{

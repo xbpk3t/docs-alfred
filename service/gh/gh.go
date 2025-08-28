@@ -3,7 +3,7 @@ package gh
 import (
 	"strings"
 
-	"github.com/goccy/go-yaml"
+	yaml "github.com/goccy/go-yaml"
 )
 
 const GhURL = "https://github.com/"

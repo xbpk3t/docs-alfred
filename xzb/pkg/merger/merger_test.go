@@ -2,6 +2,7 @@ package merger
 
 import (
 	"encoding/csv"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +26,7 @@ func TestProcessWechatBill(t *testing.T) {
 	for _, record := range modelRecords {
 		if record.Date == "2024-12-01 10:30:00" &&
 			record.Counterparty == "张三" &&
-			record.InOut == "收入" &&
+			record.InOut == incomeType &&
 			record.Amount == 100.0 {
 			found = true
 			break
@@ -50,7 +51,7 @@ func TestProcessAlipayBill(t *testing.T) {
 	for _, record := range modelRecords {
 		if record.Date == "2024-12-01 10:00:00" &&
 			record.Counterparty == "工资" &&
-			record.InOut == "收入" &&
+			record.InOut == incomeType &&
 			record.Amount == 1000.0 {
 			found = true
 			break
@@ -58,6 +59,8 @@ func TestProcessAlipayBill(t *testing.T) {
 	}
 	assert.True(t, found, "未找到预期的支付宝账单记录")
 }
+
+const incomeType = "收入"
 
 func TestDeduplicateRecords(t *testing.T) {
 	// 测试去重功能
@@ -159,7 +162,11 @@ func TestSaveAsCSV(t *testing.T) {
 	// 验证文件内容
 	file, err := os.Open(tmpFile)
 	assert.NoError(t, err)
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Printf("Error closing file: %v", closeErr)
+		}
+	}()
 
 	reader := csv.NewReader(file)
 	lines, err := reader.ReadAll()
