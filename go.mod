@@ -13,6 +13,7 @@ require (
 	github.com/gookit/goutil v0.7.1
 	github.com/gorilla/feeds v1.2.0
 	github.com/joho/godotenv v1.5.1
+	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/resend/resend-go/v2 v2.23.0

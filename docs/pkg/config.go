@@ -42,10 +42,13 @@ type DocsConfig struct {
 	IsDir bool          `yaml:"-"`   // 是否为文件夹，根据src自动判断
 }
 
-var serviceParseModeMap = map[service.ServiceType]render.ParseMode{
-	service.ServiceGoods:  render.ParseFlatten,
-	service.ServiceTask:   render.ParseMulti,
-	service.ServiceGithub: render.ParseFlatten,
+// getServiceParseModeMap returns the parse mode mapping for different service types
+func getServiceParseModeMap() map[service.ServiceType]render.ParseMode {
+	return map[service.ServiceType]render.ParseMode{
+		service.ServiceGoods:  render.ParseFlatten,
+		service.ServiceTask:   render.ParseMulti,
+		service.ServiceGithub: render.ParseFlatten,
+	}
 }
 
 // NewDocProcessor 创建新的处理器
@@ -151,12 +154,12 @@ func (p *DocProcessor) readAndMergeFiles(src string) ([]byte, error) {
 }
 
 func (p *DocProcessor) WriteOutput(content string, filename string) error {
-	if err := os.MkdirAll(p.Dst, os.ModePerm); err != nil {
+	if err := os.MkdirAll(p.Dst, 0o750); err != nil {
 		return fmt.Errorf("create dir error: %w", err)
 	}
 
 	outputPath := filepath.Join(p.Dst, filename)
-	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("write file error: %w", err)
 	}
 
@@ -268,6 +271,7 @@ func (dc *DocsConfig) configureParseMode(renderer any) error {
 	}
 
 	if r, ok := renderer.(parseModeRenderer); ok {
+		serviceParseModeMap := getServiceParseModeMap()
 		parseMode, exists := serviceParseModeMap[service.ServiceType(dc.Cmd)]
 		if !exists {
 			parseMode = render.ParseSingle
