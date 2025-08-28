@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/goccy/go-yaml"
+	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 )
 
@@ -125,7 +125,7 @@ func (m *Merger) merge(a, b any) any {
 }
 
 // setTag 设置标签
-func (m *Merger) setTag(config any, tag string) error {
+func (m *Merger) setTag(_ any, _ string) error {
 	// 实现设置标签逻辑
 	return nil
 }

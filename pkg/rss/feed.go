@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/avast/retry-go/v4"
-	"github.com/dromara/carbon/v2"
+	retry "github.com/avast/retry-go/v4"
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/gorilla/feeds"
 	"github.com/mmcdole/gofeed"
 )
@@ -70,12 +70,18 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 	if err != nil {
 		slog.Error("Parse FeedConfig Error after retries",
 			slog.String(LogKeyURL, url),
-			slog.Int(LogKeyAttempts, int(attempts)),
+			slog.Uint64(LogKeyAttempts, uint64(attempts)),
 			slog.Any(LogKeyError, err))
+		errorMsg := "unknown error"
+		if lastError != nil {
+			errorMsg = lastError.Error()
+		} else if err != nil {
+			errorMsg = err.Error()
+		}
 		ch <- &gofeed.Feed{
 			FeedType: "error",
 			Title:    url,
-			Custom:   map[string]string{"error": lastError.Error()},
+			Custom:   map[string]string{"error": errorMsg},
 		}
 	}
 }

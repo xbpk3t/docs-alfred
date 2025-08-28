@@ -1,8 +1,9 @@
 package cons
 
 const (
-	// Icons
-	IconCheck   = "icons/check.svg"
+	// IconCheck is the path to the check icon.
+	IconCheck = "icons/check.svg"
+	// IconSearch is the path to the search icon.
 	IconSearch  = "icons/search.svg"
 	IconQs      = "icons/a.svg"
 	IconDoc     = "icons/b.svg"
@@ -12,6 +13,6 @@ const (
 	IconTypes   = "icons/types.svg"
 	IconTags    = "icons/tags.svg"
 
-	// URLs
+	// GithubSearchURL is the base URL for GitHub search.
 	GithubSearchURL = "https://github.com/search?q=%s&type=repositories"
 )

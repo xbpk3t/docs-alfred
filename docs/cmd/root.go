@@ -5,12 +5,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/goccy/go-yaml"
+	yaml "github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/docs/pkg"
 )
-
-var wg sync.WaitGroup
 
 // createRootCmd creates the root command with the given config file parameter
 func createRootCmd(cfgFile *string) *cobra.Command {
@@ -49,6 +47,7 @@ func createRootCmd(cfgFile *string) *cobra.Command {
 				configs = append(configs, *config)
 			}
 
+			var wg sync.WaitGroup
 			wg.Add(len(configs))
 
 			// 处理每个配置

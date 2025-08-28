@@ -1,17 +1,18 @@
-// Package db provides SQLite database operations for bill records
 package db
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/xbpk3t/docs-alfred/billMerge/pkg/model"
+	"github.com/xbpk3t/docs-alfred/xzb/pkg/model"
 )
 
 // DBBillRecord represents a bill record in the database
@@ -70,14 +71,15 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		created_at TEXT NOT NULL
 	);`
 
-	_, err = db.Exec(createTableSQL)
+	ctx := context.Background()
+	_, err = db.ExecContext(ctx, createTableSQL)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create index to improve query performance
 	createIndexSQL := `CREATE INDEX IF NOT EXISTS idx_bills_date ON bills (date);`
-	_, err = db.Exec(createIndexSQL)
+	_, err = db.ExecContext(ctx, createIndexSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -108,10 +110,15 @@ func InsertRecords(dbPath string, records []model.BillRecord) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("Error closing database: %v", closeErr)
+		}
+	}()
 
 	// Begin transaction to improve performance
-	tx, err := db.Begin()
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -126,7 +133,7 @@ func InsertRecords(dbPath string, records []model.BillRecord) error {
 
 		// Check if record already exists
 		var count int
-		err := tx.QueryRow("SELECT COUNT(*) FROM bills WHERE id = ?", recordID).Scan(&count)
+		err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM bills WHERE id = ?", recordID).Scan(&count)
 		if err != nil {
 			return err
 		}
@@ -142,7 +149,7 @@ func InsertRecords(dbPath string, records []model.BillRecord) error {
 			payment_method, status, trade_no, merchant_no, remark, category, amount, created_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
-		_, err = tx.Exec(insertSQL,
+		_, err = tx.ExecContext(ctx, insertSQL,
 			recordID,
 			record.Date,
 			record.AccountType,
@@ -174,67 +181,36 @@ func QueryRecords(dbPath string, conditions map[string]interface{}) ([]DBBillRec
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("Error closing database: %v", closeErr)
+		}
+	}()
 
 	// Build query SQL
-	query := "SELECT id, date, account_type, type, counterparty, item_name, in_out, payment_method, status, trade_no, merchant_no, remark, category, amount, created_at FROM bills"
+	query := `SELECT id, date, account_type, type, counterparty, item_name, in_out,
+		payment_method, status, trade_no, merchant_no, remark, category, amount, created_at
+		FROM bills`
 	var args []interface{}
 
 	// Add query conditions
-	if len(conditions) > 0 {
-		var whereConditions []string
-
-		// Query by date range
-		if startDate, ok := conditions["start_date"]; ok {
-			whereConditions = append(whereConditions, "date >= ?")
-			args = append(args, startDate)
-		}
-
-		if endDate, ok := conditions["end_date"]; ok {
-			whereConditions = append(whereConditions, "date <= ?")
-			args = append(args, endDate)
-		}
-
-		// Query by category
-		if category, ok := conditions["category"]; ok {
-			whereConditions = append(whereConditions, "category = ?")
-			args = append(args, category)
-		}
-
-		// Query by income/expense type
-		if inOut, ok := conditions["in_out"]; ok {
-			whereConditions = append(whereConditions, "in_out = ?")
-			args = append(args, inOut)
-		}
-
-		// Query by account type
-		if accountType, ok := conditions["account_type"]; ok {
-			whereConditions = append(whereConditions, "account_type = ?")
-			args = append(args, accountType)
-		}
-
-		// Query by counterparty
-		if counterparty, ok := conditions["counterparty"]; ok {
-			whereConditions = append(whereConditions, "counterparty LIKE ?")
-			args = append(args, "%"+counterparty.(string)+"%")
-		}
-
-		if len(whereConditions) > 0 {
-			query += " WHERE " + strings.Join(whereConditions, " AND ")
-		}
+	whereConditions, args := buildWhereConditions(conditions)
+	if len(whereConditions) > 0 {
+		query += " WHERE " + strings.Join(whereConditions, " AND ")
 	}
 
 	// Add sorting
 	query += " ORDER BY date DESC;"
 
 	// Execute query
-	rows, err := db.Query(query, args...)
+	ctx := context.Background()
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
-			fmt.Printf("Error closing rows: %v\n", closeErr)
+			log.Printf("Error closing rows: %v", closeErr)
 		}
 	}()
 
@@ -306,4 +282,51 @@ func CalculateSummary(records []DBBillRecord) Summary {
 // EncodeJSON encodes data as JSON and writes to io.Writer
 func EncodeJSON(w io.Writer, data interface{}) error {
 	return json.NewEncoder(w).Encode(data)
+}
+
+// buildWhereConditions builds WHERE conditions from the given conditions map
+func buildWhereConditions(conditions map[string]interface{}) ([]string, []interface{}) {
+	if len(conditions) == 0 {
+		return nil, nil
+	}
+
+	var whereConditions []string
+	var args []interface{}
+
+	// Query by date range
+	if startDate, ok := conditions["start_date"]; ok {
+		whereConditions = append(whereConditions, "date >= ?")
+		args = append(args, startDate)
+	}
+
+	if endDate, ok := conditions["end_date"]; ok {
+		whereConditions = append(whereConditions, "date <= ?")
+		args = append(args, endDate)
+	}
+
+	// Query by category
+	if category, ok := conditions["category"]; ok {
+		whereConditions = append(whereConditions, "category = ?")
+		args = append(args, category)
+	}
+
+	// Query by income/expense type
+	if inOut, ok := conditions["in_out"]; ok {
+		whereConditions = append(whereConditions, "in_out = ?")
+		args = append(args, inOut)
+	}
+
+	// Query by account type
+	if accountType, ok := conditions["account_type"]; ok {
+		whereConditions = append(whereConditions, "account_type = ?")
+		args = append(args, accountType)
+	}
+
+	// Query by counterparty
+	if counterparty, ok := conditions["counterparty"]; ok {
+		whereConditions = append(whereConditions, "counterparty LIKE ?")
+		args = append(args, "%"+counterparty.(string)+"%")
+	}
+
+	return whereConditions, args
 }

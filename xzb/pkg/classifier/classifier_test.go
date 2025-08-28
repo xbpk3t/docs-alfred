@@ -9,7 +9,7 @@ import (
 
 func TestNewClassifier(t *testing.T) {
 	// 测试分类器创建
-	configPath := filepath.Join("..", "..", "..", "billMerge", "config", "category.yaml")
+	configPath := filepath.Join("..", "..", "..", "xzb", "config", "category.yaml")
 
 	classifier, err := NewClassifier(configPath)
 	// 如果配置文件不存在，则跳过测试
@@ -27,7 +27,7 @@ func TestNewClassifier(t *testing.T) {
 
 func TestClassify(t *testing.T) {
 	// 测试分类功能
-	configPath := filepath.Join("..", "..", "..", "billMerge", "config", "category.yaml")
+	configPath := filepath.Join("..", "..", "..", "xzb", "config", "category.yaml")
 
 	classifier, err := NewClassifier(configPath)
 	// 如果配置文件不存在，则跳过测试

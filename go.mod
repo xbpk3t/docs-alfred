@@ -8,7 +8,6 @@ require (
 	github.com/charmbracelet/huh v0.7.0
 	github.com/deanishe/awgo v0.29.1
 	github.com/dromara/carbon/v2 v2.6.11
-	github.com/go-resty/resty/v2 v2.16.5
 	github.com/goccy/go-yaml v1.18.0
 	github.com/gookit/goutil v0.7.1
 	github.com/gorilla/feeds v1.2.0
@@ -76,6 +75,5 @@ require (
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/time v0.7.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -10,10 +10,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/Boostport/mjml-go"
-	"github.com/dromara/carbon/v2"
+	mjml "github.com/Boostport/mjml-go"
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/gorilla/feeds"
-	"github.com/resend/resend-go/v2"
+	resend "github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
@@ -267,7 +267,11 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 }
 
 // RenderNewsletter renders the newsletter template
-func (s *NewsletterService) RenderNewsletter(feeds []feeds.RssFeed, feedList []rss.FeedsDetail, failedFeeds []*rss.FeedError) (string, error) {
+func (s *NewsletterService) RenderNewsletter(
+	feeds []feeds.RssFeed,
+	feedList []rss.FeedsDetail,
+	failedFeeds []*rss.FeedError,
+) (string, error) {
 	now := carbon.Now()
 	data := TemplateData{
 		WeekNumber:      now.WeekOfYear(),
@@ -345,7 +349,10 @@ func Execute() {
 	cfg := &Config{}
 	rootCmd := newRootCmd(cfg)
 
-	rootCmd.PersistentFlags().StringVar(&cfg.CfgFile, "config", "rss2newsletter.yml", "config file (default is rss2newsletter.yml)")
+	rootCmd.PersistentFlags().StringVar(
+		&cfg.CfgFile, "config", "rss2newsletter.yml",
+		"config file (default is rss2newsletter.yml)",
+	)
 
 	if err := rootCmd.Execute(); err != nil {
 		slog.Error("执行命令失败", "error", err)

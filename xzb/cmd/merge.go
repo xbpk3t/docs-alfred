@@ -5,8 +5,8 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/billMerge/pkg/merger"
-	"github.com/xbpk3t/docs-alfred/billMerge/pkg/utils"
+	"github.com/xbpk3t/docs-alfred/xzb/pkg/merger"
+	"github.com/xbpk3t/docs-alfred/xzb/pkg/utils"
 )
 
 // mergeCmd represents the merge command
@@ -15,11 +15,12 @@ func createMergeCmd() *cobra.Command {
 		Use:   "merge",
 		Short: "合并微信和支付宝账单",
 		Long:  `合并微信和支付宝账单，自动处理格式并按月份拆分输出`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			// 获取当前目录下的所有CSV文件
 			csvFiles := utils.GetCSVFiles(".")
 			xlsxFiles := utils.GetXLSXFiles(".")
-			allFiles := append(csvFiles, xlsxFiles...)
+			csvFiles = append(csvFiles, xlsxFiles...)
+			allFiles := csvFiles
 
 			if len(allFiles) == 0 {
 				return nil

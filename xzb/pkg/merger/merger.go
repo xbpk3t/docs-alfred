@@ -1,17 +1,19 @@
+// Package merger provides functionality to merge WeChat and Alipay bill records.
 package merger
 
 import (
 	"encoding/csv"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/xbpk3t/docs-alfred/billMerge/pkg/classifier"
-	"github.com/xbpk3t/docs-alfred/billMerge/pkg/db"
-	"github.com/xbpk3t/docs-alfred/billMerge/pkg/model"
-	"github.com/xuri/excelize/v2"
+	"github.com/xbpk3t/docs-alfred/xzb/pkg/classifier"
+	"github.com/xbpk3t/docs-alfred/xzb/pkg/db"
+	"github.com/xbpk3t/docs-alfred/xzb/pkg/model"
+	excelize "github.com/xuri/excelize/v2"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -52,7 +54,7 @@ func MergeBills(wechatFile, alipayFile string) error {
 			return fmt.Errorf("处理微信账单失败: %w", err)
 		}
 		records = append(records, convertToModelRecords(wechatRecords)...)
-		fmt.Printf("成功读取微信账单 %d 条\n", len(wechatRecords))
+		log.Printf("成功读取微信账单 %d 条", len(wechatRecords))
 	}
 
 	// 处理支付宝账单
@@ -62,13 +64,13 @@ func MergeBills(wechatFile, alipayFile string) error {
 			return fmt.Errorf("处理支付宝账单失败: %w", err)
 		}
 		records = append(records, convertToModelRecords(alipayRecords)...)
-		fmt.Printf("成功读取支付宝账单 %d 条\n", len(alipayRecords))
+		log.Printf("成功读取支付宝账单 %d 条", len(alipayRecords))
 	}
 
 	// 应用分类
 	classifier, err := classifier.NewClassifier("config/category.yaml")
 	if err != nil {
-		fmt.Printf("警告: 无法加载分类配置: %v，默认分类为'其它'\n", err)
+		log.Printf("警告: 无法加载分类配置: %v，默认分类为'其它'", err)
 	} else {
 		for i := range records {
 			records[i].Category = classifier.Classify(
@@ -82,7 +84,7 @@ func MergeBills(wechatFile, alipayFile string) error {
 
 	// 去重
 	records = deduplicateRecords(records)
-	fmt.Printf("去重后总条数: %d\n", len(records))
+	log.Printf("去重后总条数: %d", len(records))
 
 	// 确保目录存在
 	dbPath := getDBPath()
@@ -96,7 +98,7 @@ func MergeBills(wechatFile, alipayFile string) error {
 	if err != nil {
 		return fmt.Errorf("保存到数据库失败: %w", err)
 	}
-	fmt.Printf("保存 %d 条记录到数据库\n", len(records))
+	log.Printf("保存 %d 条记录到数据库", len(records))
 
 	// 按月份分组并保存
 	err = saveMonthlyBills(records)
@@ -134,7 +136,11 @@ func processWechatBill(filename string) ([]BillRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Printf("Error closing file: %v", closeErr)
+		}
+	}()
 
 	reader := csv.NewReader(file)
 	// 设置更宽松的读取选项
@@ -179,14 +185,17 @@ func processWechatBill(filename string) ([]BillRecord, error) {
 		row := lines[i]
 
 		// 确保行包含最小必需字段
-		maxIdx := max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx, amountIdx, paymentMethodIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx)
+		maxIdx := max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx,
+			amountIdx, paymentMethodIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx)
 		if maxIdx >= 0 && len(row) <= maxIdx {
 			// 跳过字段不足的行
 			continue
 		}
 
 		// 跳过空的收支记录
-		if inOutIdx >= 0 && inOutIdx < len(row) && row[inOutIdx] == "/" && remarkIdx >= 0 && remarkIdx < len(row) && (row[remarkIdx] == "/" || strings.Contains(getStringValue(row, remarkIdx), "服务费")) {
+		if inOutIdx >= 0 && inOutIdx < len(row) && row[inOutIdx] == "/" &&
+			remarkIdx >= 0 && remarkIdx < len(row) &&
+			(row[remarkIdx] == "/" || strings.Contains(getStringValue(row, remarkIdx), "服务费")) {
 			continue
 		}
 
@@ -216,7 +225,10 @@ func processWechatBill(filename string) ([]BillRecord, error) {
 		// 解析金额
 		if amountIdx >= 0 && amountIdx < len(row) {
 			amountStr := strings.TrimPrefix(getStringValue(row, amountIdx), "¥")
-			fmt.Sscanf(amountStr, "%f", &record.Amount)
+			if _, err := fmt.Sscanf(amountStr, "%f", &record.Amount); err != nil {
+				// 解析失败时设置默认值
+				record.Amount = 0.0
+			}
 		}
 
 		// 跳过已全额退款的记录
@@ -240,7 +252,7 @@ func processWechatXLSX(filename string) ([]BillRecord, error) {
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			fmt.Println(err)
+			log.Printf("Error: %v", err)
 		}
 	}()
 
@@ -272,7 +284,10 @@ func processWechatXLSX(filename string) ([]BillRecord, error) {
 	remarkIdx := getIndex(header, "备注")
 
 	// 验证是否找到了所有必需列索引
-	requiredIndices := []int{dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx, amountIdx, paymentMethodIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx}
+	requiredIndices := []int{
+		dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx,
+		amountIdx, paymentMethodIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx,
+	}
 	for _, idx := range requiredIndices {
 		if idx == -1 {
 			return nil, fmt.Errorf("未能找到必需的列，请检查文件格式")
@@ -284,13 +299,15 @@ func processWechatXLSX(filename string) ([]BillRecord, error) {
 		row := rows[i]
 
 		// 确保行包含最小必需字段
-		if len(row) <= max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx, amountIdx, paymentMethodIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx) {
+		if len(row) <= max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx,
+			amountIdx, paymentMethodIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx) {
 			// 跳过字段不足的行
 			continue
 		}
 
 		// 跳过空的收支记录
-		if inOutIdx < len(row) && row[inOutIdx] == "/" && remarkIdx < len(row) && (row[remarkIdx] == "/" || strings.Contains(getStringValue(row, remarkIdx), "服务费")) {
+		if inOutIdx < len(row) && row[inOutIdx] == "/" && remarkIdx < len(row) &&
+			(row[remarkIdx] == "/" || strings.Contains(getStringValue(row, remarkIdx), "服务费")) {
 			continue
 		}
 
@@ -320,7 +337,10 @@ func processWechatXLSX(filename string) ([]BillRecord, error) {
 		// 解析金额
 		if amountIdx < len(row) {
 			amountStr := strings.TrimPrefix(getStringValue(row, amountIdx), "¥")
-			fmt.Sscanf(amountStr, "%f", &record.Amount)
+			if _, err := fmt.Sscanf(amountStr, "%f", &record.Amount); err != nil {
+				// 解析失败时设置默认值
+				record.Amount = 0.0
+			}
 		}
 
 		// 跳过已全额退款的记录
@@ -343,7 +363,11 @@ func processAlipayBill(filename string) ([]BillRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Printf("Error closing file: %v", closeErr)
+		}
+	}()
 
 	// 支付宝账单是GBK编码
 	gbkReader := transform.NewReader(file, simplifiedchinese.GBK.NewDecoder())
@@ -409,7 +433,8 @@ func processAlipayBill(filename string) ([]BillRecord, error) {
 		row := lines[i]
 
 		// 确保行包含最小必需字段
-		maxIdx := max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx, amountIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx, refundIdx)
+		maxIdx := max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx,
+			amountIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx, refundIdx)
 		if maxIdx >= 0 && len(row) <= maxIdx {
 			// 跳过字段不足的行
 			continue
@@ -438,41 +463,17 @@ func processAlipayBill(filename string) ([]BillRecord, error) {
 			Category:     "其它",
 		}
 
-		// 解析金额并根据ccc实现处理退款
-		if amountIdx >= 0 && amountIdx < len(row) {
-			var amount float64
-			fmt.Sscanf(row[amountIdx], "%f", &amount)
-
-			// 处理退款金额
-			if refundIdx >= 0 && refundIdx < len(row) {
-				var refund float64
-				fmt.Sscanf(row[refundIdx], "%f", &refund)
-				amount -= refund
-			}
-
-			// 跳过金额为0的记录
-			if amount == 0 {
-				continue
-			}
-
-			record.Amount = amount
+		// 解析金额并处理退款
+		amount := parseAmountWithRefund(row, amountIdx, refundIdx)
+		if amount == 0 {
+			continue // 跳过金额为0的记录
 		}
+		record.Amount = amount
 
 		records = append(records, record)
 	}
 
 	return records, nil
-}
-
-// fuzzyIndex 通过模糊匹配找到列索引
-func fuzzyIndex(header []string, columnName string) int {
-	for i, col := range header {
-		// 移除空格并检查是否包含目标列名
-		if strings.Contains(strings.ReplaceAll(col, " ", ""), columnName) {
-			return i
-		}
-	}
-	return -1
 }
 
 // getIndex 找到列索引
@@ -487,14 +488,6 @@ func getIndex(header []string, columnName string) int {
 
 // getStringValue 安全地获取字符串值
 func getStringValue(row []string, index int) string {
-	if index >= 0 && index < len(row) {
-		return row[index]
-	}
-	return ""
-}
-
-// getDateValue 安全地获取日期值
-func getDateValue(row []string, index int) string {
 	if index >= 0 && index < len(row) {
 		return row[index]
 	}
@@ -523,6 +516,28 @@ func max(values ...int) int {
 		}
 	}
 	return maxValue
+}
+
+// parseAmountWithRefund 解析金额并处理退款
+func parseAmountWithRefund(row []string, amountIdx, refundIdx int) float64 {
+	if amountIdx < 0 || amountIdx >= len(row) {
+		return 0.0
+	}
+
+	var amount float64
+	if _, err := fmt.Sscanf(row[amountIdx], "%f", &amount); err != nil {
+		return 0.0
+	}
+
+	// 处理退款金额
+	if refundIdx >= 0 && refundIdx < len(row) {
+		var refund float64
+		if _, err := fmt.Sscanf(row[refundIdx], "%f", &refund); err == nil {
+			amount -= refund
+		}
+	}
+
+	return amount
 }
 
 // deduplicateRecords 去重
@@ -598,17 +613,17 @@ func saveMonthlyBills(records []model.BillRecord) error {
 		// 保存为CSV
 		err = saveAsCSV(fmt.Sprintf("%s.csv", filename), monthRecords)
 		if err != nil {
-			fmt.Printf("保存 %s.csv 失败: %v\n", filename, err)
+			log.Printf("保存 %s.csv 失败: %v", filename, err)
 		} else {
-			fmt.Printf("已保存 %s.csv (%d 条记录)\n", filename, len(monthRecords))
+			log.Printf("已保存 %s.csv (%d 条记录)", filename, len(monthRecords))
 		}
 
 		// 保存为XLSX
 		err = saveAsXLSX(fmt.Sprintf("%s.xlsx", filename), monthRecords)
 		if err != nil {
-			fmt.Printf("保存 %s.xlsx 失败: %v\n", filename, err)
+			log.Printf("保存 %s.xlsx 失败: %v", filename, err)
 		} else {
-			fmt.Printf("已保存 %s.xlsx (%d 条记录)\n", filename, len(monthRecords))
+			log.Printf("已保存 %s.xlsx (%d 条记录)", filename, len(monthRecords))
 		}
 	}
 
@@ -629,7 +644,7 @@ func saveAllBills(records []model.BillRecord) error {
 		return err
 	}
 
-	fmt.Printf("已保存总表 all.xlsx (%d 条记录)\n", len(records))
+	log.Printf("已保存总表 all.xlsx (%d 条记录)", len(records))
 	return nil
 }
 
@@ -666,17 +681,19 @@ func generateMonthlySummary(records []model.BillRecord) []MonthlySummary {
 	}
 
 	// 转换为切片
-	var summary []MonthlySummary
+	summary := make([]MonthlySummary, 0, len(monthlyData))
 	for _, s := range monthlyData {
 		summary = append(summary, *s)
 	}
 
 	// 按月份排序
 	// 简单的冒泡排序
-	for i := 0; i < len(summary)-1; i++ {
-		for j := 0; j < len(summary)-i-1; j++ {
-			if summary[j].Month > summary[j+1].Month {
-				summary[j], summary[j+1] = summary[j+1], summary[j]
+	if len(summary) > 1 {
+		for i := 0; i < len(summary)-1; i++ {
+			for j := 0; j < len(summary)-i-1; j++ {
+				if summary[j].Month > summary[j+1].Month {
+					summary[j], summary[j+1] = summary[j+1], summary[j]
+				}
 			}
 		}
 	}
@@ -697,7 +714,11 @@ func saveMonthlySummary(summary []MonthlySummary) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Printf("Error closing file: %v", closeErr)
+		}
+	}()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
@@ -724,7 +745,7 @@ func saveMonthlySummary(summary []MonthlySummary) error {
 		}
 	}
 
-	fmt.Printf("已保存月度汇总 monthly_summary.csv (%d 条记录)\n", len(summary))
+	log.Printf("已保存月度汇总 monthly_summary.csv (%d 条记录)", len(summary))
 	return nil
 }
 
@@ -757,7 +778,11 @@ func saveAsCSV(filename string, records []model.BillRecord) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Printf("Error closing file: %v", closeErr)
+		}
+	}()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
@@ -796,7 +821,7 @@ func saveAsXLSX(filename string, records []model.BillRecord) error {
 	f := excelize.NewFile()
 	defer func() {
 		if err := f.Close(); err != nil {
-			fmt.Println(err)
+			log.Printf("Error: %v", err)
 		}
 	}()
 
@@ -810,7 +835,9 @@ func saveAsXLSX(filename string, records []model.BillRecord) error {
 	titles := []string{"时间", "账户1", "类型", "支付状态", "交易类型", "交易对方", "备注", "金额", "分类"}
 	for i, title := range titles {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
-		f.SetCellValue("账单", cell, title)
+		if err := f.SetCellValue("账单", cell, title); err != nil {
+			log.Printf("Error setting cell value: %v", err)
+		}
 	}
 
 	// 写入数据行
@@ -830,7 +857,9 @@ func saveAsXLSX(filename string, records []model.BillRecord) error {
 
 		for j, value := range data {
 			cell, _ := excelize.CoordinatesToCellName(j+1, rowNum)
-			f.SetCellValue("账单", cell, value)
+			if err := f.SetCellValue("账单", cell, value); err != nil {
+				log.Printf("Error setting cell value: %v", err)
+			}
 		}
 	}
 

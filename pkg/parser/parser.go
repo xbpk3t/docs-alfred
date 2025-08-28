@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/goccy/go-yaml"
+	yaml "github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/parser"
 )
 

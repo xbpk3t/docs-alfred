@@ -3,20 +3,29 @@ package cmd
 import (
 	_ "embed"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/billMerge/pkg/db"
+	"github.com/xbpk3t/docs-alfred/xzb/pkg/db"
 )
 
 //go:embed index.html
 var indexHTML []byte
 
-// 数据库文件路径
-var dbPath string
+// getDatabasePath returns the database path
+func getDatabasePath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// 如果无法获取用户主目录，则使用当前目录
+		return "xzb.db"
+	}
+	// 默认数据库路径为 $HOME/.cache/xzb/xzb.db
+	return filepath.Join(homeDir, ".cache", "xzb", "xzb.db")
+}
 
 // createWebCmd creates the web command
 func createWebCmd() *cobra.Command {
@@ -24,8 +33,9 @@ func createWebCmd() *cobra.Command {
 		Use:   "web",
 		Short: "启动Web服务查询账单数据",
 		Long:  `启动一个Web服务，可以通过API查询账单数据或在浏览器中查看账单`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			// 检查数据库文件是否存在
+			dbPath := getDatabasePath()
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 				return fmt.Errorf("数据库文件不存在，请先运行 merge 命令导入数据")
 			}
@@ -38,7 +48,7 @@ func createWebCmd() *cobra.Command {
 			http.HandleFunc("/api/summary", summaryHandler)
 			http.HandleFunc("/", indexHandler)
 
-			fmt.Println("Web界面: http://localhost:" + port)
+			log.Printf("Web界面: http://localhost:%s", port)
 
 			server := &http.Server{
 				Addr:         ":" + port,
@@ -58,6 +68,7 @@ func billsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// 检查数据库文件
+	dbPath := getDatabasePath()
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		http.Error(w, "数据库文件不存在", http.StatusNotFound)
 		return
@@ -104,16 +115,19 @@ func billsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 返回JSON数据
-	db.EncodeJSON(w, records)
+	if err := db.EncodeJSON(w, records); err != nil {
+		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
+	}
 }
 
 // summaryHandler 处理汇总信息请求
-func summaryHandler(w http.ResponseWriter, r *http.Request) {
+func summaryHandler(w http.ResponseWriter, _ *http.Request) {
 	// 设置CORS头
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 
 	// 检查数据库文件
+	dbPath := getDatabasePath()
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		http.Error(w, "数据库文件不存在", http.StatusNotFound)
 		return
@@ -130,7 +144,9 @@ func summaryHandler(w http.ResponseWriter, r *http.Request) {
 	summary := db.CalculateSummary(records)
 
 	// 返回JSON数据
-	db.EncodeJSON(w, summary)
+	if err := db.EncodeJSON(w, summary); err != nil {
+		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
+	}
 }
 
 // indexHandler 处理主页请求
@@ -142,6 +158,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 检查数据库文件
+	dbPath := getDatabasePath()
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		http.Error(w, "数据库文件不存在，请先运行 merge 命令导入数据", http.StatusNotFound)
 		return
@@ -158,16 +175,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 // getWebCmd returns the web command for external registration
 func getWebCmd() *cobra.Command {
-	// 设置默认数据库路径
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		// 如果无法获取用户主目录，则使用当前目录
-		dbPath = "xzb.db"
-	} else {
-		// 默认数据库路径为 $HOME/.cache/xzb/xzb.db
-		dbPath = filepath.Join(homeDir, ".cache", "xzb", "xzb.db")
-	}
-
 	webCmd := createWebCmd()
 	webCmd.Flags().StringP("port", "p", "8080", "Web服务端口")
 	return webCmd
