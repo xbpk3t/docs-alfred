@@ -17,9 +17,12 @@ func TestProcessWechatBill(t *testing.T) {
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, len(records), 4)
 
+	// 转换为 model.BillRecord 用于测试
+	modelRecords := convertToModelRecords(records)
+
 	// 验证至少有一条记录符合预期
 	found := false
-	for _, record := range records {
+	for _, record := range modelRecords {
 		if record.Date == "2024-12-01 10:30:00" &&
 			record.Counterparty == "张三" &&
 			record.InOut == "收入" &&
@@ -39,9 +42,12 @@ func TestProcessAlipayBill(t *testing.T) {
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, len(records), 3)
 
+	// 转换为 model.BillRecord 用于测试
+	modelRecords := convertToModelRecords(records)
+
 	// 验证至少有一条记录符合预期
 	found := false
-	for _, record := range records {
+	for _, record := range modelRecords {
 		if record.Date == "2024-12-01 10:00:00" &&
 			record.Counterparty == "工资" &&
 			record.InOut == "收入" &&
@@ -79,7 +85,10 @@ func TestDeduplicateRecords(t *testing.T) {
 		},
 	}
 
-	deduped := deduplicateRecords(records)
+	// 转换为 model.BillRecord
+	modelRecords := convertToModelRecords(records)
+
+	deduped := deduplicateRecords(modelRecords)
 	assert.Len(t, deduped, 2)
 }
 
@@ -108,7 +117,10 @@ func TestGenerateMonthlySummary(t *testing.T) {
 		},
 	}
 
-	summary := generateMonthlySummary(records)
+	// 转换为 model.BillRecord
+	modelRecords := convertToModelRecords(records)
+
+	summary := generateMonthlySummary(modelRecords)
 	assert.Len(t, summary, 2)
 
 	// 验证2024-12的数据
@@ -136,9 +148,12 @@ func TestSaveAsCSV(t *testing.T) {
 		},
 	}
 
+	// 转换为 model.BillRecord
+	modelRecords := convertToModelRecords(records)
+
 	// 创建临时测试文件
 	tmpFile := filepath.Join(t.TempDir(), "test.csv")
-	err := saveAsCSV(tmpFile, records)
+	err := saveAsCSV(tmpFile, modelRecords)
 	assert.NoError(t, err)
 
 	// 验证文件内容

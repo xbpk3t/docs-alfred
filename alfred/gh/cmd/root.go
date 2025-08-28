@@ -1,84 +1,126 @@
 package cmd
 
 import (
-	"fmt"
+	"bytes"
 	"log"
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 
-	"github.com/xbpk3t/docs-alfred/pkg"
+	"github.com/xbpk3t/docs-alfred/docs/pkg"
+	pkgErr "github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/deanishe/awgo/update"
+	"github.com/goccy/go-yaml"
 
 	aw "github.com/deanishe/awgo"
 	"github.com/spf13/cobra"
 )
 
-var (
-	repo = "xbpk3t/docs-alfred"
-	wf   *aw.Workflow
-	av   = aw.NewArgVars()
-)
+const repo = "xbpk3t/docs-alfred"
+
+// AppContext holds application-wide dependencies
+type AppContext struct {
+	wf *aw.Workflow
+	av *aw.ArgVars
+}
+
+// newAppContext creates a new application context
+func newAppContext() *AppContext {
+	return &AppContext{
+		av: aw.NewArgVars(),
+	}
+}
 
 // ErrorHandle handle error
-func ErrorHandle(err error) {
-	av.Var("error", err.Error())
-	if err := av.Send(); err != nil {
-		wf.Fatalf("failed to send args to Alfred: %v", err)
+func (ctx *AppContext) ErrorHandle(err error) {
+	ctx.av.Var("error", err.Error())
+	if err := ctx.av.Send(); err != nil {
+		ctx.wf.Fatalf("failed to send args to Alfred: %v", err)
 	}
 }
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use: "docs-alfred",
-	Run: func(cmd *cobra.Command, args []string) {
-		wf.SendFeedback()
-	},
+// createRootCmd creates the root command with the given context
+func createRootCmd(ctx *AppContext, cfgFile *string) *cobra.Command {
+	return &cobra.Command{
+		Use: "docs-alfred",
+		Run: func(_ *cobra.Command, args []string) {
+			// read configs from file
+			configData, err := os.ReadFile(*cfgFile)
+			if err != nil {
+				ctx.ErrorHandle(err)
+				return
+			}
+
+			if err := ctx.handlePreRun(args, *cfgFile); err != nil {
+				ctx.ErrorHandle(err)
+				return
+			}
+
+			cmd := exec.Command("./exe", SyncJob, "--config="+filepath.Clean(*cfgFile))
+			if err := cmd.Run(); err != nil {
+				log.Printf("Error: %v", err)
+			}
+
+			config := &pkg.DocsConfig{}
+			decoder := yaml.NewDecoder(bytes.NewReader(configData), yaml.UseJSONUnmarshaler())
+			if err := decoder.Decode(config); err != nil {
+				ctx.ErrorHandle(err)
+				return
+			}
+
+			if err := config.Process(); err != nil {
+				ctx.ErrorHandle(err)
+				return
+			}
+
+			if err := ctx.av.Send(); err != nil {
+				ctx.ErrorHandle(err)
+			}
+		},
+	}
 }
 
-var data []byte
-
-func handlePreRun(cmd *cobra.Command, args []string) {
-	if !wf.Cache.Exists(cfgFile) {
-		ErrorHandle(&pkg.DocsAlfredError{Err: pkg.ErrConfigNotFound})
+func (ctx *AppContext) handlePreRun(args []string, cfgFile string) error {
+	if !ctx.wf.Cache.Exists(cfgFile) {
+		return &pkgErr.DocsAlfredError{Err: pkgErr.ErrConfigNotFound}
 	}
 
-	data, _ = wf.Cache.Load(cfgFile)
+	_, _ = ctx.wf.Cache.Load(cfgFile)
 
-	if !wf.IsRunning(SyncJob) {
-		cmd := exec.Command("./exe", SyncJob, fmt.Sprintf("--config=%s", cfgFile))
+	if !ctx.wf.IsRunning(SyncJob) {
+		cmd := exec.Command("./exe", SyncJob, "--config="+filepath.Clean(cfgFile))
 		slog.Info("sync cmd: ", slog.Any("cmd", cmd.String()))
-		if err := wf.RunInBackground(SyncJob, cmd); err != nil {
-			ErrorHandle(err)
+		if err := ctx.wf.RunInBackground(SyncJob, cmd); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+// InitWorkflow initializes the workflow in the context
+func (ctx *AppContext) InitWorkflow() {
+	if ctx.wf == nil {
+		ctx.wf = aw.New(update.GitHub(repo), aw.HelpURL(repo+"/issues"))
+		ctx.wf.Args() // magic for "workflow:update"
 	}
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
+// Execute runs the root command
 func Execute() {
-	wf.Run(func() {
-		if err := rootCmd.Execute(); err != nil {
-			log.Println(err)
-			os.Exit(1)
-		}
-	})
-}
+	ctx := newAppContext()
+	ctx.InitWorkflow()
 
-var cfgFile string
-
-func InitWorkflow() {
-	if wf == nil {
-		wf = aw.New(update.GitHub(repo), aw.HelpURL(repo+"/issues"))
-		wf.Args() // magic for "workflow:update"
-	}
-}
-
-func init() {
-	InitWorkflow()
-	rootCmd.AddCommand(ghCmd)
+	var cfgFile string
+	rootCmd := createRootCmd(ctx, &cfgFile)
+	rootCmd.AddCommand(createGhCmd())
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "qs.yml", "Config File To Parse")
-	// rootCmd.MarkPersistentFlagRequired("config")
+
+	ctx.wf.Run(func() {
+		if err := rootCmd.Execute(); err != nil {
+			ctx.ErrorHandle(err)
+		}
+	})
 }

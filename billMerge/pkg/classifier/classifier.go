@@ -1,7 +1,7 @@
 package classifier
 
 import (
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -27,7 +27,7 @@ type Classifier struct {
 
 // NewClassifier 创建新的分类器
 func NewClassifier(configPath string) (*Classifier, error) {
-	data, err := ioutil.ReadFile(configPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -47,11 +47,12 @@ func NewClassifier(configPath string) (*Classifier, error) {
 func (c *Classifier) Classify(ioType, payType2, payUser, shop string) string {
 	// 根据收支类型选择对应的分类规则
 	var categories map[string]CategoryRule
-	if ioType == "支出" {
+	switch ioType {
+	case "支出":
 		categories = c.config.支出
-	} else if ioType == "收入" {
+	case "收入":
 		categories = c.config.收入
-	} else {
+	default:
 		return "其它"
 	}
 

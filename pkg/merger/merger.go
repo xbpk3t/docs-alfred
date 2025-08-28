@@ -85,7 +85,7 @@ func (m *Merger) processFile(fileName string) (any, error) {
 // writeResult 写入结果
 func (m *Merger) writeResult(result any) error {
 	if m.outputDir != "" {
-		if err := os.MkdirAll(m.outputDir, 0o755); err != nil {
+		if err := os.MkdirAll(m.outputDir, 0o750); err != nil {
 			return errcode.WithError(errcode.ErrCreateDir, err)
 		}
 	}

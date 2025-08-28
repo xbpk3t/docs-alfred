@@ -94,6 +94,7 @@ func (c *Config) Validate() error {
 }
 
 func isValidSchedule(schedule string) bool {
+	scheduleTimeRanges := GetScheduleTimeRanges()
 	_, exists := scheduleTimeRanges[schedule]
 	return exists
 }

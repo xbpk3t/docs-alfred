@@ -4,10 +4,13 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/xbpk3t/docs-alfred/billMerge/pkg/classifier"
+	"github.com/xbpk3t/docs-alfred/billMerge/pkg/db"
+	"github.com/xbpk3t/docs-alfred/billMerge/pkg/model"
 	"github.com/xuri/excelize/v2"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
@@ -40,7 +43,7 @@ type MonthlySummary struct {
 
 // MergeBills 合并微信和支付宝账单
 func MergeBills(wechatFile, alipayFile string) error {
-	var records []BillRecord
+	var records []model.BillRecord
 
 	// 处理微信账单
 	if wechatFile != "" {
@@ -48,7 +51,7 @@ func MergeBills(wechatFile, alipayFile string) error {
 		if err != nil {
 			return fmt.Errorf("处理微信账单失败: %w", err)
 		}
-		records = append(records, wechatRecords...)
+		records = append(records, convertToModelRecords(wechatRecords)...)
 		fmt.Printf("成功读取微信账单 %d 条\n", len(wechatRecords))
 	}
 
@@ -58,7 +61,7 @@ func MergeBills(wechatFile, alipayFile string) error {
 		if err != nil {
 			return fmt.Errorf("处理支付宝账单失败: %w", err)
 		}
-		records = append(records, alipayRecords...)
+		records = append(records, convertToModelRecords(alipayRecords)...)
 		fmt.Printf("成功读取支付宝账单 %d 条\n", len(alipayRecords))
 	}
 
@@ -80,6 +83,20 @@ func MergeBills(wechatFile, alipayFile string) error {
 	// 去重
 	records = deduplicateRecords(records)
 	fmt.Printf("去重后总条数: %d\n", len(records))
+
+	// 确保目录存在
+	dbPath := getDBPath()
+	dbDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dbDir, 0o750); err != nil {
+		return fmt.Errorf("创建数据库目录失败: %w", err)
+	}
+
+	// 保存到SQLite数据库
+	err = db.InsertRecords(dbPath, records)
+	if err != nil {
+		return fmt.Errorf("保存到数据库失败: %w", err)
+	}
+	fmt.Printf("保存 %d 条记录到数据库\n", len(records))
 
 	// 按月份分组并保存
 	err = saveMonthlyBills(records)
@@ -160,25 +177,29 @@ func processWechatBill(filename string) ([]BillRecord, error) {
 	// 处理数据行
 	for i := 1; i < len(lines); i++ {
 		row := lines[i]
-		if len(row) <= remarkIdx || len(row) <= dateIdx || dateIdx < 0 {
+
+		// 确保行包含最小必需字段
+		maxIdx := max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx, amountIdx, paymentMethodIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx)
+		if maxIdx >= 0 && len(row) <= maxIdx {
+			// 跳过字段不足的行
 			continue
 		}
 
 		// 跳过空的收支记录
-		if inOutIdx >= 0 && row[inOutIdx] == "/" && (remarkIdx >= 0 && (row[remarkIdx] == "/" || strings.Contains(row[remarkIdx], "服务费"))) {
+		if inOutIdx >= 0 && inOutIdx < len(row) && row[inOutIdx] == "/" && remarkIdx >= 0 && remarkIdx < len(row) && (row[remarkIdx] == "/" || strings.Contains(getStringValue(row, remarkIdx), "服务费")) {
 			continue
 		}
 
 		// 跳过金额为0的记录
-		if amountIdx >= 0 {
-			amountStr := strings.TrimPrefix(row[amountIdx], "¥")
+		if amountIdx >= 0 && amountIdx < len(row) {
+			amountStr := strings.TrimPrefix(getStringValue(row, amountIdx), "¥")
 			if amountStr == "0.00" || amountStr == "0" {
 				continue
 			}
 		}
 
 		record := BillRecord{
-			Date:          getDateValue(row, dateIdx),
+			Date:          getStringValue(row, dateIdx),
 			AccountType:   "微信",
 			Type:          getStringValue(row, typeIdx),
 			Counterparty:  strings.Trim(getStringValue(row, counterpartyIdx), "/ "),
@@ -193,8 +214,8 @@ func processWechatBill(filename string) ([]BillRecord, error) {
 		}
 
 		// 解析金额
-		if amountIdx >= 0 {
-			amountStr := strings.TrimPrefix(row[amountIdx], "¥")
+		if amountIdx >= 0 && amountIdx < len(row) {
+			amountStr := strings.TrimPrefix(getStringValue(row, amountIdx), "¥")
 			fmt.Sscanf(amountStr, "%f", &record.Amount)
 		}
 
@@ -250,28 +271,39 @@ func processWechatXLSX(filename string) ([]BillRecord, error) {
 	merchantNoIdx := getIndex(header, "商户单号")
 	remarkIdx := getIndex(header, "备注")
 
+	// 验证是否找到了所有必需列索引
+	requiredIndices := []int{dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx, amountIdx, paymentMethodIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx}
+	for _, idx := range requiredIndices {
+		if idx == -1 {
+			return nil, fmt.Errorf("未能找到必需的列，请检查文件格式")
+		}
+	}
+
 	// 处理数据行
 	for i := 17; i < len(rows); i++ {
 		row := rows[i]
-		if len(row) <= remarkIdx || len(row) <= dateIdx || dateIdx < 0 {
+
+		// 确保行包含最小必需字段
+		if len(row) <= max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx, amountIdx, paymentMethodIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx) {
+			// 跳过字段不足的行
 			continue
 		}
 
 		// 跳过空的收支记录
-		if inOutIdx >= 0 && row[inOutIdx] == "/" && (remarkIdx >= 0 && (row[remarkIdx] == "/" || strings.Contains(row[remarkIdx], "服务费"))) {
+		if inOutIdx < len(row) && row[inOutIdx] == "/" && remarkIdx < len(row) && (row[remarkIdx] == "/" || strings.Contains(getStringValue(row, remarkIdx), "服务费")) {
 			continue
 		}
 
 		// 跳过金额为0的记录
-		if amountIdx >= 0 {
-			amountStr := strings.TrimPrefix(row[amountIdx], "¥")
+		if amountIdx < len(row) {
+			amountStr := strings.TrimPrefix(getStringValue(row, amountIdx), "¥")
 			if amountStr == "0.00" || amountStr == "0" {
 				continue
 			}
 		}
 
 		record := BillRecord{
-			Date:          getDateValue(row, dateIdx),
+			Date:          getStringValue(row, dateIdx),
 			AccountType:   "微信",
 			Type:          getStringValue(row, typeIdx),
 			Counterparty:  strings.Trim(getStringValue(row, counterpartyIdx), "/ "),
@@ -286,8 +318,8 @@ func processWechatXLSX(filename string) ([]BillRecord, error) {
 		}
 
 		// 解析金额
-		if amountIdx >= 0 {
-			amountStr := strings.TrimPrefix(row[amountIdx], "¥")
+		if amountIdx < len(row) {
+			amountStr := strings.TrimPrefix(getStringValue(row, amountIdx), "¥")
 			fmt.Sscanf(amountStr, "%f", &record.Amount)
 		}
 
@@ -317,7 +349,7 @@ func processAlipayBill(filename string) ([]BillRecord, error) {
 	gbkReader := transform.NewReader(file, simplifiedchinese.GBK.NewDecoder())
 	reader := csv.NewReader(gbkReader)
 
-	// 设置更宽松的读取选项
+	// 为支付宝文件设置更宽松的读取选项
 	reader.FieldsPerRecord = -1 // 允许不同数量的字段
 	reader.LazyQuotes = true    // 宽松引号处理
 
@@ -341,7 +373,25 @@ func processAlipayBill(filename string) ([]BillRecord, error) {
 	// 获取标题行
 	header := lines[0]
 
-	// 找到各列索引
+	// 基于实际的支付宝CSV格式找到列索引
+	// 根据原始数据我们看到列如下:
+	// 0: 交易号 (交易号)
+	// 1: 商家订单号 (商家订单号)
+	// 2: 交易创建时间 (交易创建时间)
+	// 3: 交易付款时间 (交易付款时间)
+	// 4: 最近修改时间 (最近修改时间)
+	// 5: 交易来源地 (交易来源地)
+	// 6: 类型 (类型)
+	// 7: 交易对方 (交易对方)
+	// 8: 商品名称 (商品名称)
+	// 9: 金额（元）(金额（元）)
+	// 10: 收/支 (收/支)
+	// 11: 交易状态 (交易状态)
+	// 12: 服务费（元）(服务费（元）)
+	// 13: 成功退款（元）(成功退款（元）)
+	// 14: 备注 (备注)
+	// 15: 资金状态 (资金状态)
+
 	dateIdx := getIndex(header, "交易创建时间")
 	typeIdx := getIndex(header, "类型")
 	counterpartyIdx := getIndex(header, "交易对方")
@@ -353,62 +403,59 @@ func processAlipayBill(filename string) ([]BillRecord, error) {
 	merchantNoIdx := getIndex(header, "商家订单号")
 	remarkIdx := getIndex(header, "备注")
 	refundIdx := getIndex(header, "成功退款（元）")
-	fundStatusIdx := getIndex(header, "资金状态")
 
 	// 处理数据行
 	for i := 1; i < len(lines); i++ {
 		row := lines[i]
-		// 检查行是否包含足够的字段
-		if len(row) < max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx, amountIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx, refundIdx, fundStatusIdx)+1 {
+
+		// 确保行包含最小必需字段
+		maxIdx := max(dateIdx, typeIdx, counterpartyIdx, itemIdx, inOutIdx, amountIdx, statusIdx, tradeNoIdx, merchantNoIdx, remarkIdx, refundIdx)
+		if maxIdx >= 0 && len(row) <= maxIdx {
+			// 跳过字段不足的行
 			continue
 		}
 
-		// 对于资金状态为空的情况，交易关闭，不计入结算
-		if fundStatusIdx >= 0 && row[fundStatusIdx] == "" {
-			continue
+		// 基于ccc实现跳过空的收支记录
+		if inOutIdx >= 0 && inOutIdx < len(row) {
+			inOutValue := row[inOutIdx]
+			if inOutValue == "" || inOutValue == "其他" || inOutValue == "不计收支" || inOutValue == "/" {
+				continue
+			}
 		}
 
-		// 对于资金状态为"资金转移"的，如果服务费为零，不计入结算
-		// TODO: 处理服务费逻辑
-
-		// 跳过空的收支记录
-		if inOutIdx >= 0 && (row[inOutIdx] == "" || row[inOutIdx] == "其他" || row[inOutIdx] == "不计收支") {
-			continue
-		}
-
-		// 计算实际金额（金额 - 退款）
-		var amount, refund float64
-
-		if amountIdx >= 0 {
-			amountStr := row[amountIdx]
-			fmt.Sscanf(amountStr, "%f", &amount)
-		}
-
-		if refundIdx >= 0 {
-			refundStr := row[refundIdx]
-			fmt.Sscanf(refundStr, "%f", &refund)
-		}
-
-		actualAmount := amount - refund
-
-		// 跳过金额为0的记录
-		if actualAmount == 0 {
-			continue
-		}
-
+		// 创建记录
 		record := BillRecord{
 			Date:         getStringValue(row, dateIdx),
 			AccountType:  "支付宝",
 			Type:         getStringValue(row, typeIdx),
-			Counterparty: strings.Trim(getStringValue(row, counterpartyIdx), " "),
-			ItemName:     strings.Trim(getStringValue(row, itemIdx), " "),
+			Counterparty: strings.Trim(getStringValue(row, counterpartyIdx), "/ "),
+			ItemName:     strings.Trim(getStringValue(row, itemIdx), "/ "),
 			InOut:        getStringValue(row, inOutIdx),
-			Amount:       actualAmount,
-			Status:       strings.Trim(getStringValue(row, statusIdx), " "),
-			TradeNo:      strings.Trim(getStringValue(row, tradeNoIdx), " "),
-			MerchantNo:   strings.Trim(getStringValue(row, merchantNoIdx), " "),
-			Remark:       strings.Trim(getStringValue(row, remarkIdx), " "),
+			Status:       strings.Trim(getStringValue(row, statusIdx), "/ "),
+			TradeNo:      strings.Trim(getStringValue(row, tradeNoIdx), "/ "),
+			MerchantNo:   strings.Trim(getStringValue(row, merchantNoIdx), "/ "),
+			Remark:       strings.Trim(getStringValue(row, remarkIdx), "/ "),
 			Category:     "其它",
+		}
+
+		// 解析金额并根据ccc实现处理退款
+		if amountIdx >= 0 && amountIdx < len(row) {
+			var amount float64
+			fmt.Sscanf(row[amountIdx], "%f", &amount)
+
+			// 处理退款金额
+			if refundIdx >= 0 && refundIdx < len(row) {
+				var refund float64
+				fmt.Sscanf(row[refundIdx], "%f", &refund)
+				amount -= refund
+			}
+
+			// 跳过金额为0的记录
+			if amount == 0 {
+				continue
+			}
+
+			record.Amount = amount
 		}
 
 		records = append(records, record)
@@ -417,7 +464,18 @@ func processAlipayBill(filename string) ([]BillRecord, error) {
 	return records, nil
 }
 
-// getIndex 获取指定列名在标题中的索引
+// fuzzyIndex 通过模糊匹配找到列索引
+func fuzzyIndex(header []string, columnName string) int {
+	for i, col := range header {
+		// 移除空格并检查是否包含目标列名
+		if strings.Contains(strings.ReplaceAll(col, " ", ""), columnName) {
+			return i
+		}
+	}
+	return -1
+}
+
+// getIndex 找到列索引
 func getIndex(header []string, columnName string) int {
 	for i, col := range header {
 		if strings.TrimSpace(col) == columnName {
@@ -445,8 +503,21 @@ func getDateValue(row []string, index int) string {
 
 // max 返回整数中的最大值
 func max(values ...int) int {
-	maxValue := values[0]
+	// 过滤掉负值（未找到的索引）
+	var validValues []int
 	for _, v := range values {
+		if v >= 0 {
+			validValues = append(validValues, v)
+		}
+	}
+
+	// 处理没有有效值的情况
+	if len(validValues) == 0 {
+		return -1
+	}
+
+	maxValue := validValues[0]
+	for _, v := range validValues {
 		if v > maxValue {
 			maxValue = v
 		}
@@ -454,10 +525,10 @@ func max(values ...int) int {
 	return maxValue
 }
 
-// deduplicateRecords 去除重复记录
-func deduplicateRecords(records []BillRecord) []BillRecord {
+// deduplicateRecords 去重
+func deduplicateRecords(records []model.BillRecord) []model.BillRecord {
 	seen := make(map[string]bool)
-	result := make([]BillRecord, 0, len(records))
+	result := make([]model.BillRecord, 0, len(records))
 
 	for _, record := range records {
 		// 创建唯一标识符
@@ -477,18 +548,29 @@ func deduplicateRecords(records []BillRecord) []BillRecord {
 	return result
 }
 
+// getDBPath 获取数据库文件路径
+func getDBPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// 如果无法获取用户主目录，则使用当前目录
+		return "xzb.db"
+	}
+	// 默认数据库路径为 $HOME/.cache/xzb/xzb.db
+	return filepath.Join(homeDir, ".cache", "xzb", "xzb.db")
+}
+
 // saveMonthlyBills 按月份保存账单
-func saveMonthlyBills(records []BillRecord) error {
-	// 创建结果目录
-	err := os.MkdirAll("result", 0o755)
+func saveMonthlyBills(records []model.BillRecord) error {
+	// 创建result目录
+	err := os.MkdirAll("result", 0o750)
 	if err != nil {
 		return err
 	}
 
 	// 按月份分组
-	monthlyRecords := make(map[string][]BillRecord)
+	monthlyRecords := make(map[string][]model.BillRecord)
 	for _, record := range records {
-		// 解析日期以获取年月
+		// 解析日期以获取年-月
 		if len(record.Date) >= 7 {
 			month := record.Date[:7] // YYYY-MM
 			monthlyRecords[month] = append(monthlyRecords[month], record)
@@ -534,9 +616,9 @@ func saveMonthlyBills(records []BillRecord) error {
 }
 
 // saveAllBills 保存总表
-func saveAllBills(records []BillRecord) error {
+func saveAllBills(records []model.BillRecord) error {
 	// 创建结果目录
-	err := os.MkdirAll("result", 0o755)
+	err := os.MkdirAll("result", 0o750)
 	if err != nil {
 		return err
 	}
@@ -552,7 +634,7 @@ func saveAllBills(records []BillRecord) error {
 }
 
 // generateMonthlySummary 生成月度汇总
-func generateMonthlySummary(records []BillRecord) []MonthlySummary {
+func generateMonthlySummary(records []model.BillRecord) []MonthlySummary {
 	// 按月份分组
 	monthlyData := make(map[string]*MonthlySummary)
 	for _, record := range records {
@@ -571,9 +653,10 @@ func generateMonthlySummary(records []BillRecord) []MonthlySummary {
 			}
 
 			// 累计金额
-			if record.InOut == "收入" {
+			switch record.InOut {
+			case "收入":
 				monthlyData[month].Income += record.Amount
-			} else if record.InOut == "支出" {
+			case "支出":
 				monthlyData[month].Expense += record.Amount
 			}
 
@@ -604,7 +687,7 @@ func generateMonthlySummary(records []BillRecord) []MonthlySummary {
 // saveMonthlySummary 保存月度汇总
 func saveMonthlySummary(summary []MonthlySummary) error {
 	// 创建结果目录
-	err := os.MkdirAll("result", 0o755)
+	err := os.MkdirAll("result", 0o750)
 	if err != nil {
 		return err
 	}
@@ -645,8 +728,31 @@ func saveMonthlySummary(summary []MonthlySummary) error {
 	return nil
 }
 
+// convertToModelRecords 将 []BillRecord 转换为 []model.BillRecord
+func convertToModelRecords(records []BillRecord) []model.BillRecord {
+	result := make([]model.BillRecord, len(records))
+	for i, r := range records {
+		result[i] = model.BillRecord{
+			Date:          r.Date,
+			AccountType:   r.AccountType,
+			Type:          r.Type,
+			Counterparty:  r.Counterparty,
+			ItemName:      r.ItemName,
+			InOut:         r.InOut,
+			PaymentMethod: r.PaymentMethod,
+			Status:        r.Status,
+			TradeNo:       r.TradeNo,
+			MerchantNo:    r.MerchantNo,
+			Remark:        r.Remark,
+			Category:      r.Category,
+			Amount:        r.Amount,
+		}
+	}
+	return result
+}
+
 // saveAsCSV 保存为CSV格式
-func saveAsCSV(filename string, records []BillRecord) error {
+func saveAsCSV(filename string, records []model.BillRecord) error {
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -686,7 +792,7 @@ func saveAsCSV(filename string, records []BillRecord) error {
 }
 
 // saveAsXLSX 保存为XLSX格式
-func saveAsXLSX(filename string, records []BillRecord) error {
+func saveAsXLSX(filename string, records []model.BillRecord) error {
 	f := excelize.NewFile()
 	defer func() {
 		if err := f.Close(); err != nil {

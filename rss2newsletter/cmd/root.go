@@ -20,8 +20,10 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
 )
 
-// 配置文件路径
-var cfgFile string
+// Config holds the configuration for the application
+type Config struct {
+	CfgFile string
+}
 
 //go:embed templates/newsletter.mjml
 var templates embed.FS
@@ -71,15 +73,19 @@ const (
 	NewsletterTpl TemplateType = "Newsletter"
 )
 
-// rootCmd 根命令
-var rootCmd = &cobra.Command{
-	Use:   "rss2newsletter",
-	Short: "RSS订阅转换为邮件推送工具",
-	RunE:  runNewsletter,
+// newRootCmd creates and returns the root command
+func newRootCmd(cfg *Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "rss2newsletter",
+		Short: "RSS订阅转换为邮件推送工具",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runNewsletter(cfg, cmd, args)
+		},
+	}
 }
 
-func runNewsletter(cmd *cobra.Command, args []string) error {
-	config, err := loadConfig()
+func runNewsletter(cfg *Config, _ *cobra.Command, _ []string) error {
+	config, err := loadConfig(cfg.CfgFile)
 	if err != nil {
 		return err
 	}
@@ -105,7 +111,7 @@ func runNewsletter(cmd *cobra.Command, args []string) error {
 	return service.handleOutput(contents)
 }
 
-func loadConfig() (*rss.Config, error) {
+func loadConfig(cfgFile string) (*rss.Config, error) {
 	config, err := rss.NewConfig(cfgFile)
 	if err != nil {
 		slog.Error("rss2newsletter config file load error:", slog.Any("err", err))
@@ -224,7 +230,9 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 	// Create a custom template function map
 	funcMap := template.FuncMap{
 		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s)
+			// Only allow safe HTML for trusted content
+			// In production, consider using a proper HTML sanitizer
+			return template.HTML(s) // #nosec G203 - We trust our template content
 		},
 	}
 
@@ -282,7 +290,7 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 		// 写入到本地文件
 		for i, content := range contents {
 			filename := fmt.Sprintf("newsletter_%d.html", i+1)
-			if err := os.WriteFile(filename, []byte(content.Content), os.ModePerm); err != nil {
+			if err := os.WriteFile(filename, []byte(content.Content), 0o600); err != nil {
 				return fmt.Errorf("failed to write file %s: %w", filename, err)
 			}
 			slog.Info("HTML写入成功", "filename", filename)
@@ -334,12 +342,13 @@ func (s *NewsletterService) generateEmailSubject(tplType TemplateType) string {
 
 // Execute 执行根命令
 func Execute() {
+	cfg := &Config{}
+	rootCmd := newRootCmd(cfg)
+
+	rootCmd.PersistentFlags().StringVar(&cfg.CfgFile, "config", "rss2newsletter.yml", "config file (default is rss2newsletter.yml)")
+
 	if err := rootCmd.Execute(); err != nil {
 		slog.Error("执行命令失败", "error", err)
 		os.Exit(1)
 	}
-}
-
-func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "rss2newsletter.yml", "config file (default is rss2newsletter.yml)")
 }

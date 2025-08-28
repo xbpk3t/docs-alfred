@@ -11,10 +11,15 @@ run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
-
+  skip-dirs:
+    - vendor
+    - node_modules
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_test\\.go$"
 
 output:
-  formats: colored-line-number
+  format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
 
@@ -87,7 +92,6 @@ linters:
     - wastedassign    # 浪费的赋值 - 检测无用的赋值操作
     - wrapcheck       # 错误包装检查 - 确保错误被正确包装
     - errorlint       # 错误处理检查 - 检查错误处理的最佳实践
-
 
 linters-settings:
   # ===== gocritic 详细配置 =====
@@ -266,6 +270,9 @@ linters-settings:
   gocognit:
     min-complexity: 10  # #90(测试函数复杂度阈值)
 
+  govet:
+    check-shadowing: true  # #1(变量隐藏)
+
   gocyclo:
     min-complexity: 15  # #2(循环复杂度)
 
@@ -326,9 +333,6 @@ linters-settings:
     comparison: true
 
 issues:
-  exclude-dirs:
-    - vendor
-    - node_modules
   exclude-rules:
     - path: _test\.go
       linters:

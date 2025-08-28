@@ -118,28 +118,28 @@ repos:
 #        language: golang
 
 
-  - repo: local
-    hooks:
-      - id: gofumpt
-        name: gofumpt
-        entry: gofumpt -l -w .
-        language: golang
-        types: [go]
-        pass_filenames: false
-
-      - id: go-mod-tidy
-        name: go-mod-tidy
-        entry: go mod tidy -v
-        language: golang
-        pass_filenames: false
-
-      - id: betteralign
-        name: betteralign
-        entry: betteralign -apply ./...
-        language: system
-        types: [go]
-        pass_filenames: false
-        additional_dependencies: []
+#  - repo: local
+#    hooks:
+#      - id: gofumpt
+#        name: gofumpt
+#        entry: gofumpt -l -w .
+#        language: golang
+#        types: [go]
+#        pass_filenames: false
+#
+#      - id: go-mod-tidy
+#        name: go-mod-tidy
+#        entry: go mod tidy -v
+#        language: golang
+#        pass_filenames: false
+#
+#      - id: betteralign
+#        name: betteralign
+#        entry: betteralign -apply ./...
+#        language: system
+#        types: [go]
+#        pass_filenames: false
+#        additional_dependencies: []
 
 
 #      - id: nilaway

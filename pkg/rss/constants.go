@@ -21,8 +21,10 @@ const (
 	LogKeyFeedTitle = "feed_title"
 )
 
-// 时间范围映射
-var scheduleTimeRanges = map[string]int{
-	Daily:  24,
-	Weekly: 7 * 24,
+// GetScheduleTimeRanges returns the time range mapping
+func GetScheduleTimeRanges() map[string]int {
+	return map[string]int{
+		Daily:  24,
+		Weekly: 7 * 24,
+	}
 }

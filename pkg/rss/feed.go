@@ -49,7 +49,12 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 			}
 		},
 		retry.Context(ctx),
-		retry.Attempts(uint(cfg.FeedConfig.MaxTries)),
+		retry.Attempts(func() uint {
+			if cfg.FeedConfig.MaxTries < 0 {
+				return 0
+			}
+			return uint(cfg.FeedConfig.MaxTries)
+		}()),
 		retry.Delay(DefaultRetryDelay),
 		retry.DelayType(retry.BackOffDelay),
 		retry.LastErrorOnly(true),
@@ -58,7 +63,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 			lastError = err
 			slog.Info("Retry Parse FeedConfig",
 				slog.String(LogKeyURL, url),
-				slog.Int(LogKeyAttempts, int(attempts)),
+				slog.Uint64(LogKeyAttempts, uint64(attempts)),
 				slog.Any(LogKeyError, err))
 		}),
 	)
@@ -219,6 +224,7 @@ func getAuthor(feed *gofeed.Feed) string {
 
 // FilterFeedsWithTimeRange 根据时间范围过滤feeds
 func FilterFeedsWithTimeRange(created, endDate time.Time, schedule string) bool {
+	scheduleTimeRanges := GetScheduleTimeRanges()
 	timeRange, exists := scheduleTimeRanges[schedule]
 	if !exists {
 		slog.Error("Invalid schedule type",
