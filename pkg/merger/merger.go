@@ -45,6 +45,7 @@ func (m *Merger) validateInput() error {
 	if len(m.inputFiles) == 0 {
 		return errcode.ErrInvalidInput
 	}
+
 	return nil
 }
 
@@ -58,6 +59,7 @@ func (m *Merger) mergeConfigs() (any, error) {
 		}
 		result = m.merge(result, config)
 	}
+
 	return result, nil
 }
 
@@ -105,6 +107,7 @@ func (m *Merger) writeResult(result any) error {
 	// 显式关闭编码器，确保缓冲区刷新
 	if err = encoder.Encode(result); err != nil {
 		_ = file.Close() // 立即关闭文件（避免defer覆盖错误）
+
 		return errcode.WithError(errcode.ErrEncodeYAML, err)
 	}
 

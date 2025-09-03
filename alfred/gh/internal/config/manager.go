@@ -25,5 +25,6 @@ func (m *Manager) Load() ([]byte, error) {
 	if !m.wf.Cache.Exists(m.cfgFile) {
 		return nil, fmt.Errorf("config file not found: %s", m.cfgFile)
 	}
+
 	return m.wf.Cache.Load(m.cfgFile)
 }

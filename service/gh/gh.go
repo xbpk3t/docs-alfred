@@ -16,7 +16,7 @@ type Repository struct {
 	Tag            string   `yaml:"tag,omitempty"`
 	Type           string   `yaml:"type"`
 	MainRepo       string   // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
-	Topics         Topics   `yaml:"topics,omitempty" json:"topics,omitempty"`
+	Topics         Topics   `json:"topics,omitempty" yaml:"topics,omitempty"`
 	SubRepos       Repos    `yaml:"sub,omitempty"`
 	ReplacedRepos  Repos    `yaml:"rep,omitempty"`
 	RelatedRepos   Repos    `yaml:"rel,omitempty"`
@@ -34,7 +34,7 @@ type ConfigRepo struct {
 	Type   string     `yaml:"type"`
 	Tag    string     `yaml:"tag"`
 	Repos  Repos      `yaml:"repo"`
-	Topics Topics     `yaml:"topics,omitempty" json:"topics,omitempty"` // type本身的topics
+	Topics Topics     `json:"topics,omitempty" yaml:"topics,omitempty"` // type本身的topics
 	Using  Repository `yaml:"using,omitempty"`                          // 不一定所有type都有using
 	Score  int        `yaml:"score,omitempty"`
 }
@@ -43,29 +43,29 @@ type ConfigRepos []*ConfigRepo
 
 // Topic 定义问题结构
 type Topic struct {
-	Topic    string          `yaml:"topic" json:"topic"`                       // 问题
-	Des      string          `yaml:"des,omitempty" json:"des,omitempty"`       // 简要回答
-	PicDir   string          `yaml:"picDir,omitempty" json:"picDir,omitempty"` // 图片文件夹，用来展示该文件夹下的所有图片
-	Pictures []string        `yaml:"pic,omitempty" json:"pic,omitempty"`       // 图片
-	URLs     string          `yaml:"url,omitempty" json:"url,omitempty"`       // url
-	Qs       []string        `yaml:"qs,omitempty" json:"qs,omitempty"`
-	Why      []string        `yaml:"why,omitempty" json:"why,omitempty"`
-	What     []string        `yaml:"what,omitempty" json:"what,omitempty"`
-	WW       []string        `yaml:"ww,omitempty" json:"ww,omitempty"`
-	HTU      []string        `yaml:"htu,omitempty" json:"htu,omitempty"`
-	HTI      []string        `yaml:"hti,omitempty" json:"hti,omitempty"`
-	HTO      []string        `yaml:"hto,omitempty" json:"hto,omitempty"`
-	Table    []yaml.MapSlice `yaml:"table,omitempty" json:"table,omitempty"`
-	Tables   Tables          `yaml:"tables,omitempty" json:"tables,omitempty"`
-	IsX      bool            `yaml:"isX,omitempty" json:"isX,omitempty"` // 判断该topic是否重要
+	Topic    string          `json:"topic"            yaml:"topic"`            // 问题
+	Des      string          `json:"des,omitempty"    yaml:"des,omitempty"`    // 简要回答
+	PicDir   string          `json:"picDir,omitempty" yaml:"picDir,omitempty"` // 图片文件夹，用来展示该文件夹下的所有图片
+	Pictures []string        `json:"pic,omitempty"    yaml:"pic,omitempty"`    // 图片
+	URLs     string          `json:"url,omitempty"    yaml:"url,omitempty"`    // url
+	Qs       []string        `json:"qs,omitempty"     yaml:"qs,omitempty"`
+	Why      []string        `json:"why,omitempty"    yaml:"why,omitempty"`
+	What     []string        `json:"what,omitempty"   yaml:"what,omitempty"`
+	WW       []string        `json:"ww,omitempty"     yaml:"ww,omitempty"`
+	HTU      []string        `json:"htu,omitempty"    yaml:"htu,omitempty"`
+	HTI      []string        `json:"hti,omitempty"    yaml:"hti,omitempty"`
+	HTO      []string        `json:"hto,omitempty"    yaml:"hto,omitempty"`
+	Table    []yaml.MapSlice `json:"table,omitempty"  yaml:"table,omitempty"`
+	Tables   Tables          `json:"tables,omitempty" yaml:"tables,omitempty"`
+	IsX      bool            `json:"isX,omitempty"    yaml:"isX,omitempty"` // 判断该topic是否重要
 }
 
 type Topics []Topic
 
 type Table struct {
-	Name  string          `yaml:"name,omitempty" json:"name,omitempty"`
-	URL   string          `yaml:"url,omitempty" json:"url,omitempty"`
-	Table []yaml.MapSlice `yaml:"table,omitempty" json:"table,omitempty"`
+	Name  string          `json:"name,omitempty"  yaml:"name,omitempty"`
+	URL   string          `json:"url,omitempty"   yaml:"url,omitempty"`
+	Table []yaml.MapSlice `json:"table,omitempty" yaml:"table,omitempty"`
 }
 
 type Tables []Table
@@ -85,6 +85,7 @@ func (r *Repository) FullName() string {
 	if sx, found := strings.CutPrefix(r.URL, GhURL); found {
 		return sx
 	}
+
 	return ""
 }
 
@@ -113,6 +114,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 			repos = append(repos, processRepo(config.Repos[i], config.Type)...)
 		}
 	}
+
 	return repos
 }
 
@@ -151,6 +153,7 @@ func processMainRepo(repo *Repository, configType string) *Repository {
 		return nil
 	}
 	repo.Type = configType
+
 	return repo
 }
 

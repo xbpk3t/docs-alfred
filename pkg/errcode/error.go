@@ -19,6 +19,7 @@ func WithError(err *Error, originalErr error) error {
 	if originalErr == nil {
 		return err
 	}
+
 	return NewError(err.Code(), err.Message()+": "+originalErr.Error())
 }
 

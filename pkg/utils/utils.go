@@ -50,6 +50,7 @@ func ReadAndMergeFilesRecursively(src string, setCurrentFile func(string)) ([]by
 				mergedData = append(mergedData, subData...)
 				mergedData = append(mergedData, '\n')
 			}
+
 			continue
 		}
 

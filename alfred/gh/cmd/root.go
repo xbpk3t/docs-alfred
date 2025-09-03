@@ -50,11 +50,13 @@ func createRootCmd(ctx *AppContext, cfgFile *string) *cobra.Command {
 			configData, err := os.ReadFile(*cfgFile)
 			if err != nil {
 				ctx.ErrorHandle(err)
+
 				return
 			}
 
 			if err := ctx.handlePreRun(args, *cfgFile); err != nil {
 				ctx.ErrorHandle(err)
+
 				return
 			}
 
@@ -67,11 +69,13 @@ func createRootCmd(ctx *AppContext, cfgFile *string) *cobra.Command {
 			decoder := yaml.NewDecoder(bytes.NewReader(configData), yaml.UseJSONUnmarshaler())
 			if err := decoder.Decode(config); err != nil {
 				ctx.ErrorHandle(err)
+
 				return
 			}
 
 			if err := config.Process(); err != nil {
 				ctx.ErrorHandle(err)
+
 				return
 			}
 
@@ -96,6 +100,7 @@ func (ctx *AppContext) handlePreRun(_ []string, cfgFile string) error {
 			return err
 		}
 	}
+
 	return nil
 }
 

@@ -8,25 +8,25 @@ import (
 
 // Goods 定义商品配置结构
 type Goods struct {
-	Tag    string          `yaml:"tag" json:"tag"`
-	Type   string          `yaml:"type" json:"type"`
-	Des    string          `yaml:"des,omitempty" json:"des"`
-	Using  Item            `yaml:"using" json:"using"`
-	Topics []gh.Topic      `yaml:"topics,omitempty" json:"topics"`
-	Item   []yaml.MapSlice `yaml:"item" json:"item"`
-	Record []string        `yaml:"record,omitempty" json:"record"`
-	Score  int             `yaml:"score" json:"score"`
+	Tag    string          `json:"tag"    yaml:"tag"`
+	Type   string          `json:"type"   yaml:"type"`
+	Des    string          `json:"des"    yaml:"des,omitempty"`
+	Using  Item            `json:"using"  yaml:"using"`
+	Topics []gh.Topic      `json:"topics" yaml:"topics,omitempty"`
+	Item   []yaml.MapSlice `json:"item"   yaml:"item"`
+	Record []string        `json:"record" yaml:"record,omitempty"`
+	Score  int             `json:"score"  yaml:"score"`
 }
 
 // Item 定义单个商品项
 type Item struct {
-	Name  string `yaml:"name" json:"name"`
-	Param string `yaml:"param,omitempty" json:"param"`
-	Price string `yaml:"price,omitempty" json:"price"`
-	Date  string `yaml:"date,omitempty" json:"date"`
-	Des   string `yaml:"des,omitempty" json:"des"`
-	URL   string `yaml:"url,omitempty" json:"url"`
-	Use   bool   `yaml:"use,omitempty" json:"use"`
+	Name  string `json:"name"  yaml:"name"`
+	Param string `json:"param" yaml:"param,omitempty"`
+	Price string `json:"price" yaml:"price,omitempty"`
+	Date  string `json:"date"  yaml:"date,omitempty"`
+	Des   string `json:"des"   yaml:"des,omitempty"`
+	URL   string `json:"url"   yaml:"url,omitempty"`
+	Use   bool   `json:"use"   yaml:"use,omitempty"`
 }
 
 // ParseConfig 解析配置文件
