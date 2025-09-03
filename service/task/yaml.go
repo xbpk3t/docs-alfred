@@ -65,12 +65,12 @@ func (r *TaskYAMLRender) Render(data []byte) (string, error) {
 			TagName:          "yaml",
 			WeaklyTypedInput: true,
 		}
-		decoder, err := mapstructure.NewDecoder(config)
-		if err != nil {
-			return "", fmt.Errorf("create decoder error: %w", err)
+		decoder, decErr := mapstructure.NewDecoder(config)
+		if decErr != nil {
+			return "", fmt.Errorf("create decoder error: %w", decErr)
 		}
-		if err := decoder.Decode(c); err != nil {
-			return "", fmt.Errorf("mapstructure decode %s error: %w", task.Task, err)
+		if decodeErr := decoder.Decode(c); decodeErr != nil {
+			return "", fmt.Errorf("mapstructure decode %s error: %w", task.Task, decodeErr)
 		}
 		tasks = append(tasks, *task)
 	}

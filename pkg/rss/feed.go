@@ -152,8 +152,8 @@ func MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed, cfg *Config) (*fee
 	return feed, nil
 }
 
-func validateFeeds(feeds []*gofeed.Feed) error {
-	if len(feeds) == 0 {
+func validateFeeds(feedItems []*gofeed.Feed) error {
+	if len(feedItems) == 0 {
 		slog.Info("No feeds found, skipping")
 		return nil
 	}

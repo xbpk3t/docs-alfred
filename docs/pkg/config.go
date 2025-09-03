@@ -153,7 +153,7 @@ func (p *DocProcessor) readAndMergeFiles(src string) ([]byte, error) {
 	return utils.ReadAndMergeFilesRecursively(src, p.SetCurrentFile)
 }
 
-func (p *DocProcessor) WriteOutput(content string, filename string) error {
+func (p *DocProcessor) WriteOutput(content, filename string) error {
 	if err := os.MkdirAll(p.Dst, 0o750); err != nil {
 		return fmt.Errorf("create dir error: %w", err)
 	}
