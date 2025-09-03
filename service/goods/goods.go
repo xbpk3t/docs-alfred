@@ -23,6 +23,7 @@ type Item struct {
 	Name  string `yaml:"name" json:"name"`
 	Param string `yaml:"param,omitempty" json:"param"`
 	Price string `yaml:"price,omitempty" json:"price"`
+	Date  string `yaml:"date,omitempty" json:"date"`
 	Des   string `yaml:"des,omitempty" json:"des"`
 	URL   string `yaml:"url,omitempty" json:"url"`
 	Use   bool   `yaml:"use,omitempty" json:"use"`

@@ -57,8 +57,7 @@ type Topic struct {
 	HTO      []string        `yaml:"hto,omitempty" json:"hto,omitempty"`
 	Table    []yaml.MapSlice `yaml:"table,omitempty" json:"table,omitempty"`
 	Tables   Tables          `yaml:"tables,omitempty" json:"tables,omitempty"`
-	IsFold   bool            `yaml:"isFold,omitempty" json:"isFold,omitempty"` // 用来控制是否折叠该topic
-	IsX      bool            `yaml:"isX,omitempty" json:"isX,omitempty"`       // 判断该topic是否重要
+	IsX      bool            `yaml:"isX,omitempty" json:"isX,omitempty"` // 判断该topic是否重要
 }
 
 type Topics []Topic

@@ -1,10 +1,18 @@
 package errcode
 
+const (
+	ErrCodeRender = 13000 + iota
+	ErrCodeRenderTemplate
+	ErrCodeEncodeYAML
+	ErrCodeEncodeJSON
+	ErrCodeRenderMarkdown
+)
+
 var (
 	// 渲染错误码 (13000-13999)
-	ErrRender         = NewError(13000, "渲染失败")
-	ErrRenderTemplate = NewError(13001, "渲染模板失败")
-	ErrEncodeYAML     = NewError(13002, "编码YAML失败")
-	ErrEncodeJSON     = NewError(13003, "编码JSON失败")
-	ErrRenderMarkdown = NewError(13004, "渲染Markdown失败")
+	ErrRender         = NewError(ErrCodeRender, "渲染失败")
+	ErrRenderTemplate = NewError(ErrCodeRenderTemplate, "渲染模板失败")
+	ErrEncodeYAML     = NewError(ErrCodeEncodeYAML, "编码YAML失败")
+	ErrEncodeJSON     = NewError(ErrCodeEncodeJSON, "编码JSON失败")
+	ErrRenderMarkdown = NewError(ErrCodeRenderMarkdown, "渲染Markdown失败")
 )

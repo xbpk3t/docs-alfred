@@ -18,6 +18,12 @@ import (
 	"golang.org/x/text/transform"
 )
 
+// 定义文件权限常量
+const (
+	DirPerm  os.FileMode = 0o750 // 目录权限: rwxr-x---
+	FilePerm os.FileMode = 0o600 // 文件权限: rw-------
+)
+
 // BillRecord 表示一条账单记录
 type BillRecord struct {
 	Date          string  // 交易时间
@@ -89,7 +95,7 @@ func MergeBills(wechatFile, alipayFile string) error {
 	// 确保目录存在
 	dbPath := getDBPath()
 	dbDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dbDir, 0o750); err != nil {
+	if err := os.MkdirAll(dbDir, DirPerm); err != nil {
 		return fmt.Errorf("创建数据库目录失败: %w", err)
 	}
 
@@ -577,7 +583,7 @@ func getDBPath() string {
 // saveMonthlyBills 按月份保存账单
 func saveMonthlyBills(records []model.BillRecord) error {
 	// 创建result目录
-	err := os.MkdirAll("result", 0o750)
+	err := os.MkdirAll("result", DirPerm)
 	if err != nil {
 		return err
 	}
@@ -633,7 +639,7 @@ func saveMonthlyBills(records []model.BillRecord) error {
 // saveAllBills 保存总表
 func saveAllBills(records []model.BillRecord) error {
 	// 创建结果目录
-	err := os.MkdirAll("result", 0o750)
+	err := os.MkdirAll("result", DirPerm)
 	if err != nil {
 		return err
 	}
@@ -704,7 +710,7 @@ func generateMonthlySummary(records []model.BillRecord) []MonthlySummary {
 // saveMonthlySummary 保存月度汇总
 func saveMonthlySummary(summary []MonthlySummary) error {
 	// 创建结果目录
-	err := os.MkdirAll("result", 0o750)
+	err := os.MkdirAll("result", DirPerm)
 	if err != nil {
 		return err
 	}
