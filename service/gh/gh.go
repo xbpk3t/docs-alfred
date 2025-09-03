@@ -27,7 +27,7 @@ type Repository struct {
 	Score          int `yaml:"score,omitempty"` // 用来给repo内部排序
 }
 
-type Repos []Repository
+type Repos []*Repository
 
 // ConfigRepo 定义配置仓库结构
 type ConfigRepo struct {
@@ -39,7 +39,7 @@ type ConfigRepo struct {
 	Score  int        `yaml:"score,omitempty"`
 }
 
-type ConfigRepos []ConfigRepo
+type ConfigRepos []*ConfigRepo
 
 // Topic 定义问题结构
 type Topic struct {
@@ -98,29 +98,30 @@ func (r *Repository) GetURL() string {
 	return r.URL
 }
 
+// ToRepos 将配置仓库转换为仓库列表
 func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
 
 	for _, config := range cr {
 		// FIXME 封装一下这个给Repo赋值tag和type的操作
 		config.Using.Tag = config.Tag
-		repos = append(repos, processRepo(config.Using, config.Type)...)
+		repos = append(repos, processRepo(&config.Using, config.Type)...)
 
-		for _, rp := range config.Repos {
+		for i := range config.Repos {
 			// 设置 Tag 字段
-			rp.Tag = config.Tag
-			repos = append(repos, processRepo(rp, config.Type)...)
+			config.Repos[i].Tag = config.Tag
+			repos = append(repos, processRepo(config.Repos[i], config.Type)...)
 		}
 	}
 	return repos
 }
 
 // QueryReposByTag 根据标签筛选仓库
-func (r Repos) QueryReposByTag(tag string) Repos {
+func (r *Repos) QueryReposByTag(tag string) Repos {
 	var filtered Repos
 
 	// 遍历所有仓库，找出匹配标签的仓库
-	for _, rp := range r {
+	for _, rp := range *r {
 		if rp.Type == tag {
 			filtered = append(filtered, rp)
 		}
@@ -130,12 +131,12 @@ func (r Repos) QueryReposByTag(tag string) Repos {
 }
 
 // processRepo 处理仓库及其子仓库
-func processRepo(repo Repository, configType string) Repos {
+func processRepo(repo *Repository, configType string) Repos {
 	var repos Repos
 
 	// 处理主仓库
 	if mainRepo := processMainRepo(repo, configType); mainRepo != nil {
-		repos = append(repos, *mainRepo)
+		repos = append(repos, mainRepo)
 	}
 
 	// 处理所有类型的子仓库
@@ -145,16 +146,16 @@ func processRepo(repo Repository, configType string) Repos {
 }
 
 // processMainRepo 处理主仓库信息
-func processMainRepo(repo Repository, configType string) *Repository {
+func processMainRepo(repo *Repository, configType string) *Repository {
 	if !isValidGithubURL(repo.URL) {
 		return nil
 	}
 	repo.Type = configType
-	return &repo
+	return repo
 }
 
 // processAllSubRepos 处理所有类型的子仓库
-func processAllSubRepos(repo Repository) Repos {
+func processAllSubRepos(repo *Repository) Repos {
 	var repos Repos
 
 	// 处理子仓库

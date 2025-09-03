@@ -268,14 +268,14 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 
 // RenderNewsletter renders the newsletter template
 func (s *NewsletterService) RenderNewsletter(
-	feeds []feeds.RssFeed,
+	rssFeeds []feeds.RssFeed,
 	feedList []rss.FeedsDetail,
 	failedFeeds []*rss.FeedError,
 ) (string, error) {
 	now := carbon.Now()
 	data := TemplateData{
 		WeekNumber:      now.WeekOfYear(),
-		Feeds:           feeds,
+		Feeds:           rssFeeds,
 		DashboardConfig: s.config.DashboardConfig,
 		DashboardData: struct {
 			FailedFeeds []*rss.FeedError
@@ -312,7 +312,7 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 }
 
 // SendNewsletter 发送邮件
-func (s *NewsletterService) SendNewsletter(content string, subject string) error {
+func (s *NewsletterService) SendNewsletter(content, subject string) error {
 	emailCfg := EmailConfig{
 		From:  "Acme <onboarding@resend.dev>",
 		To:    s.config.ResendConfig.MailTo,

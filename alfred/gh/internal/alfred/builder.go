@@ -1,4 +1,3 @@
-// Package alfred provides Alfred workflow item building utilities
 package alfred
 
 import (
@@ -37,7 +36,7 @@ func (b *ItemBuilder) AddCommonModifiers(item *aw.Item, url, des string) {
 }
 
 // AddRepoModifiers adds repository-specific modifier keys to an item
-func (b *ItemBuilder) AddRepoModifiers(item *aw.Item, repo gh.Repository, docsURL string) {
+func (b *ItemBuilder) AddRepoModifiers(item *aw.Item, repo *gh.Repository, docsURL string) {
 	item.Cmd().Subtitle(fmt.Sprintf("打开该Repo在Docs的URL: %s", docsURL)).Arg(docsURL)
 	item.Opt().Subtitle(fmt.Sprintf("复制URL: %s", repo.URL)).Arg(repo.URL)
 	item.Shift().Subtitle(fmt.Sprintf("打开文档: %s", repo.Doc)).Arg(repo.Doc)
