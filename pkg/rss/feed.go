@@ -18,6 +18,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 	if err := validateURL(url); err != nil {
 		slog.Error("Invalid URL", slog.String(LogKeyURL, url), slog.Any(LogKeyError, err))
 		ch <- nil
+
 		return
 	}
 
@@ -34,6 +35,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 			select {
 			case <-ctx.Done():
 				lastError = ctx.Err()
+
 				return ctx.Err()
 			default:
 				feed, err := fp.ParseURL(url)
@@ -42,9 +44,11 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 						slog.String(LogKeyURL, url),
 						slog.Any(LogKeyError, err))
 					lastError = err
+
 					return err
 				}
 				ch <- feed
+
 				return nil
 			}
 		},
@@ -53,6 +57,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 			if cfg.FeedConfig.MaxTries < 0 {
 				return 0
 			}
+
 			return uint(cfg.FeedConfig.MaxTries)
 		}()),
 		retry.Delay(DefaultRetryDelay),
@@ -95,6 +100,7 @@ func validateURL(url string) error {
 			Err:     nil,
 		}
 	}
+
 	return nil
 }
 
@@ -149,14 +155,17 @@ func MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed, cfg *Config) (*fee
 	feed := createBaseFeed(feedTitle)
 	items := processFeeds(allFeeds, cfg)
 	feed.Items = items
+
 	return feed, nil
 }
 
 func validateFeeds(feedItems []*gofeed.Feed) error {
 	if len(feedItems) == 0 {
 		slog.Info("No feeds found, skipping")
+
 		return nil
 	}
+
 	return nil
 }
 
@@ -218,6 +227,7 @@ func getItemCreationTime(item *gofeed.Item) time.Time {
 	if item.UpdatedParsed != nil {
 		return *item.UpdatedParsed
 	}
+
 	return time.Now()
 }
 
@@ -225,6 +235,7 @@ func getAuthor(feed *gofeed.Feed) string {
 	if feed.Title != "" {
 		return feed.Title
 	}
+
 	return ""
 }
 
@@ -235,9 +246,11 @@ func FilterFeedsWithTimeRange(created, endDate time.Time, schedule string) bool 
 	if !exists {
 		slog.Error("Invalid schedule type",
 			slog.String("schedule", schedule))
+
 		return false
 	}
 
 	createdTime := carbon.CreateFromStdTime(created)
+
 	return createdTime.Gte(carbon.CreateFromStdTime(endDate).SubHours(timeRange).StartOfDay())
 }

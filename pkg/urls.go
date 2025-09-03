@@ -15,6 +15,7 @@ func (u *URLInfo) GetDisplayName() string {
 	if u.Name != "" {
 		return u.Name
 	}
+
 	return u.URL
 }
 
@@ -23,6 +24,7 @@ func (u *URLInfo) GetLink() string {
 	if u.URL != "" {
 		return u.URL
 	}
+
 	return u.Feed
 }
 
@@ -32,5 +34,6 @@ func JoinSlashParts(s string) string {
 		// 拼接 `/` 前后的字符串，并保留 `/` 字符
 		return s[:index] + s[index+1:]
 	}
+
 	return s
 }

@@ -19,6 +19,7 @@ func readTestFile(t *testing.T, filename string) []byte {
 	if err != nil {
 		t.Fatalf("failed to read test file %s: %v", filename, err)
 	}
+
 	return data
 }
 
@@ -31,6 +32,7 @@ func TestParser(t *testing.T) {
 		got, err := parser.ParseSingle()
 		if err != nil {
 			t.Errorf("ParseSingle() error = %v", err)
+
 			return
 		}
 		if !reflect.DeepEqual(got, want) {
@@ -50,6 +52,7 @@ func TestParser(t *testing.T) {
 			got, err := parser.ParseMulti()
 			if err != nil {
 				t.Errorf("ParseMulti() error = %v", err)
+
 				return
 			}
 			if !reflect.DeepEqual(got, want) {
@@ -67,6 +70,7 @@ func TestParser(t *testing.T) {
 			got, err := parser.ParseMulti()
 			if err != nil {
 				t.Errorf("ParseMulti() error = %v", err)
+
 				return
 			}
 			if !reflect.DeepEqual(got, want) {

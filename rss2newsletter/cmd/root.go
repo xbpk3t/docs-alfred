@@ -115,8 +115,10 @@ func loadConfig(cfgFile string) (*rss.Config, error) {
 	config, err := rss.NewConfig(cfgFile)
 	if err != nil {
 		slog.Error("rss2newsletter config file load error:", slog.Any("err", err))
+
 		return nil, err
 	}
+
 	return config, nil
 }
 
@@ -151,6 +153,7 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 					Items:    []*feeds.RssItem{},
 				}, nil
 			}
+
 			return rssFeed, nil
 		})
 	}
@@ -178,6 +181,7 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.Feed
 		slog.Info("No feeds fetched for category",
 			slog.String("category", feed.Type),
 			slog.Int("total_urls", len(urls)))
+
 		return feeds.RssFeed{
 			Category: feed.Type,
 			Items:    []*feeds.RssItem{},
@@ -190,6 +194,7 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.Feed
 			slog.String("category", feed.Type),
 			slog.Int("feeds_count", len(allFeeds)),
 			slog.Any("error", err))
+
 		return feeds.RssFeed{
 			Category: feed.Type,
 			Items:    []*feeds.RssItem{},
@@ -211,6 +216,7 @@ func (s *NewsletterService) convertToRssFeed(typeName string, combinedFeed *feed
 			PubDate:  carbon.CreateFromStdTime(item.Created).ToDateTimeString(),
 		}
 	}
+
 	return feeds.RssFeed{
 		Category: typeName,
 		Items:    newFeeds,
@@ -222,6 +228,7 @@ func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
 	if !s.config.NewsletterConfig.IsHideAuthorInTitle && item.Author.Name != "" {
 		return fmt.Sprintf("[%s] %s", item.Author.Name, item.Title)
 	}
+
 	return item.Title
 }
 
@@ -260,6 +267,7 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 		if err != nil {
 			return "", fmt.Errorf("failed to convert MJML to HTML: %w", err)
 		}
+
 		return htmlOutput, nil
 	}
 
@@ -285,6 +293,7 @@ func (s *NewsletterService) RenderNewsletter(
 			FeedDetails: feedList,
 		},
 	}
+
 	return s.renderTemplate("newsletter.mjml", data)
 }
 
@@ -299,6 +308,7 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 			}
 			slog.Info("HTML写入成功", "filename", filename)
 		}
+
 		return nil
 	}
 
@@ -308,6 +318,7 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 			return fmt.Errorf("failed to send email: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -335,12 +346,14 @@ func (s *NewsletterService) SendNewsletter(content, subject string) error {
 	}
 
 	slog.Info("邮件发送成功", "id", sent.Id)
+
 	return nil
 }
 
 // generateEmailSubject 生成邮件主题
 func (s *NewsletterService) generateEmailSubject(tplType TemplateType) string {
 	now := carbon.Now()
+
 	return fmt.Sprintf("%s %s (第%d周)", tplType, now.ToDateString(), now.WeekOfYear())
 }
 

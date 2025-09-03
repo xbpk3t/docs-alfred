@@ -85,6 +85,7 @@ func (p *DocProcessor) getOutputFilename(src string) string {
 	base := filepath.Base(src)
 	ext := filepath.Ext(base)
 	name := strings.TrimSuffix(base, ext)
+
 	return name + "." + string(p.fileType)
 }
 
@@ -95,6 +96,7 @@ func (p *DocProcessor) ProcessFile(src string, renderer render.Renderer) error {
 			slog.String("file", src),
 			slog.String("error", err.Error()),
 		)
+
 		return fmt.Errorf("read file error: %w", err)
 	}
 
@@ -104,6 +106,7 @@ func (p *DocProcessor) ProcessFile(src string, renderer render.Renderer) error {
 			slog.String("file", src),
 			slog.String("error", err.Error()),
 		)
+
 		return fmt.Errorf("render error: %w", err)
 	}
 
@@ -115,6 +118,7 @@ func (p *DocProcessor) ProcessFile(src string, renderer render.Renderer) error {
 				slog.String("file", src),
 				slog.String("error", err.Error()),
 			)
+
 			return fmt.Errorf("convert to json error: %w", err)
 		}
 		content = string(jsonData)
@@ -126,6 +130,7 @@ func (p *DocProcessor) ProcessFile(src string, renderer render.Renderer) error {
 			slog.String("file", outputFilename),
 			slog.String("error", err.Error()),
 		)
+
 		return fmt.Errorf("write file error: %w", err)
 	}
 
@@ -136,6 +141,7 @@ func (p *DocProcessor) ReadInput(src string, isDir bool) ([]byte, error) {
 	if isDir {
 		return p.readAndMergeFiles(src)
 	}
+
 	return p.readSingleFile(src)
 }
 
@@ -143,6 +149,7 @@ func (p *DocProcessor) readSingleFile(src string) ([]byte, error) {
 	if fsutil.IsDir(src) {
 		return []byte(""), fmt.Errorf("stat path error")
 	}
+
 	return utils.ReadSingleFileWithExt(src, p.SetCurrentFile)
 }
 
@@ -150,6 +157,7 @@ func (p *DocProcessor) readAndMergeFiles(src string) ([]byte, error) {
 	if !fsutil.IsDir(src) {
 		return []byte(""), fmt.Errorf("stat path error")
 	}
+
 	return utils.ReadAndMergeFilesRecursively(src, p.SetCurrentFile)
 }
 
@@ -173,6 +181,7 @@ func (dc *DocsConfig) Process() error {
 	}
 
 	processors := dc.getProcessors()
+
 	return dc.processAll(processors)
 }
 
@@ -191,6 +200,7 @@ func (dc *DocsConfig) initializePath() error {
 		return fmt.Errorf("stat path error: %w", err)
 	}
 	dc.IsDir = fileInfo.IsDir()
+
 	return nil
 }
 
@@ -213,6 +223,7 @@ func (dc *DocsConfig) processAll(processors map[FileType]*DocProcessor) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -225,6 +236,7 @@ func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) 
 			slog.String("type", string(fileType)),
 			slog.String("file", dc.Src),
 		)
+
 		return fmt.Errorf("create renderer error for %s: %w", fileType, err)
 	}
 
@@ -234,6 +246,7 @@ func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) 
 			slog.String("type", string(fileType)),
 			slog.String("file", dc.Src),
 		)
+
 		return fmt.Errorf("process %s error: %w", fileType, err)
 	}
 
@@ -261,6 +274,7 @@ func (dc *DocsConfig) configureRenderer(renderer render.Renderer) (render.Render
 	if err := dc.configureParseMode(renderer); err != nil {
 		return nil, err
 	}
+
 	return renderer, nil
 }
 
@@ -277,7 +291,9 @@ func (dc *DocsConfig) configureParseMode(renderer any) error {
 			parseMode = render.ParseSingle
 		}
 		r.WithParseMode(parseMode)
+
 		return nil
 	}
+
 	return fmt.Errorf("renderer does not support parse mode configuration")
 }

@@ -26,6 +26,7 @@ func NewParser[T any](data []byte) *Parser[T] {
 // WithFileName 设置文件名
 func (p *Parser[T]) WithFileName(fileName string) *Parser[T] {
 	p.fileName = fileName
+
 	return p
 }
 
@@ -37,8 +38,10 @@ func (p *Parser[T]) ParseSingle() (T, error) {
 		if p.fileName != "" {
 			return result, fmt.Errorf("%s 解析配置失败: %w", p.fileName, err)
 		}
+
 		return result, fmt.Errorf("解析配置失败: %w", err)
 	}
+
 	return result, nil
 }
 
@@ -58,6 +61,7 @@ func (p *Parser[T]) ParseMulti() ([]T, error) {
 		}
 		results = append(results, item)
 	}
+
 	return results, nil
 }
 
@@ -88,5 +92,6 @@ func (p *Parser[T]) IsMultiDocument() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("解析YAML失败: %w", err)
 	}
+
 	return len(file.Docs) > 1, nil
 }

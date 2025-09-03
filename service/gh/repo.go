@@ -17,6 +17,7 @@ func (r Repos) ExtractTypesByTag(tag string) []string {
 			result = append(result, t)
 		}
 	}
+
 	return result
 }
 
@@ -28,6 +29,7 @@ func (r Repos) QueryReposByTagAndType(tag, typeName string) Repos {
 			result = append(result, repo)
 		}
 	}
+
 	return result
 }
 
@@ -51,5 +53,6 @@ func (r Repos) ExtractTags() []string {
 
 	// 对标签进行排序，使结果稳定
 	slices.Sort(tags)
+
 	return tags
 }

@@ -34,9 +34,9 @@ type NewsletterConfig struct {
 
 // FeedConfig Feed相关配置
 type FeedConfig struct {
-	Timeout   int `yaml:"timeout" default:"30"`   // HTTP请求超时时间（秒）
-	MaxTries  int `yaml:"maxTries" default:"3"`   // 最大重试次数
-	FeedLimit int `yaml:"feedLimit" default:"30"` // Feed数量限制
+	Timeout   int `default:"30" yaml:"timeout"`   // HTTP请求超时时间（秒）
+	MaxTries  int `default:"3"  yaml:"maxTries"`  // 最大重试次数
+	FeedLimit int `default:"30" yaml:"feedLimit"` // Feed数量限制
 }
 
 type DashboardConfig struct {
@@ -51,7 +51,7 @@ type FeedsDetail struct {
 }
 
 type EnvConfig struct {
-	Debug bool `yaml:"debug" default:"true"`
+	Debug bool `default:"true" yaml:"debug"`
 }
 
 // Feeds Feed URL
@@ -96,5 +96,6 @@ func (c *Config) Validate() error {
 func isValidSchedule(schedule string) bool {
 	scheduleTimeRanges := GetScheduleTimeRanges()
 	_, exists := scheduleTimeRanges[schedule]
+
 	return exists
 }
