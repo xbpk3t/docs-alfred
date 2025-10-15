@@ -2,7 +2,7 @@ package pkg
 
 import "strings"
 
-// URLInfo URL信息结构
+// URLInfo URL信息结构.
 type URLInfo struct {
 	Name string
 	URL  string
@@ -10,7 +10,7 @@ type URLInfo struct {
 	Des  string
 }
 
-// GetDisplayName 获取显示名称
+// GetDisplayName 获取显示名称.
 func (u *URLInfo) GetDisplayName() string {
 	if u.Name != "" {
 		return u.Name
@@ -19,7 +19,7 @@ func (u *URLInfo) GetDisplayName() string {
 	return u.URL
 }
 
-// GetLink 获取链接地址
+// GetLink 获取链接地址.
 func (u *URLInfo) GetLink() string {
 	if u.URL != "" {
 		return u.URL

@@ -9,6 +9,7 @@ import (
 
 type GithubYAMLRender struct {
 	*render.YAMLRenderer
+
 	currentFile string
 }
 
@@ -18,7 +19,7 @@ func NewGithubYAMLRender() *GithubYAMLRender {
 	}
 }
 
-// GetCurrentFileName 获取当前处理的文件名
+// GetCurrentFileName 获取当前处理的文件名.
 func (g *GithubYAMLRender) GetCurrentFileName() string {
 	return g.currentFile
 }
@@ -28,9 +29,9 @@ func (g *GithubYAMLRender) GetCurrentFileName() string {
 //	g.currentFile = filename
 //}
 
-func (gfr *GithubYAMLRender) Render(data []byte) (string, error) {
+func (g *GithubYAMLRender) Render(data []byte) (string, error) {
 	// 解析YAML数据为ConfigRepos类型
-	rc, err := parser.NewParser[ConfigRepo](data).WithFileName(gfr.GetCurrentFileName()).ParseFlatten()
+	rc, err := parser.NewParser[ConfigRepo](data).WithFileName(g.GetCurrentFileName()).ParseFlatten()
 	if err != nil {
 		return "", err
 	}

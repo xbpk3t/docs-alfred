@@ -24,10 +24,10 @@ type Task struct {
 
 type Tasks []Task
 
-// TaskOption defines a function type that modifies a Task
+// TaskOption defines a function type that modifies a Task.
 type TaskOption func(*Task)
 
-// WithParentID sets the parent ID for a task and its sub-tasks
+// WithParentID sets the parent ID for a task and its sub-tasks.
 func WithParentID() TaskOption {
 	return func(t *Task) {
 		if len(t.Sub) > 0 {
@@ -39,30 +39,35 @@ func WithParentID() TaskOption {
 	}
 }
 
-// SortMainTasksByDate sorts main tasks by date
+// compareTasks 比较两个任务的日期.
+func compareTasks(task1, task2 *Task, ascending bool) bool {
+	if task1.Date == "" {
+		return false
+	}
+	if task2.Date == "" {
+		return true
+	}
+	dateI, _ := time.Parse(time.DateOnly, task1.Date)
+	dateJ, _ := time.Parse(time.DateOnly, task2.Date)
+	if ascending {
+		return dateI.Before(dateJ)
+	}
+
+	return dateI.After(dateJ)
+}
+
+// SortMainTasksByDate sorts main tasks by date.
 func SortMainTasksByDate(ascending bool) TaskOption {
 	return func(t *Task) {
 		if len(t.Sub) > 0 {
 			sort.Slice(t.Sub, func(i, j int) bool {
-				if t.Sub[i].Date == "" {
-					return false
-				}
-				if t.Sub[j].Date == "" {
-					return true
-				}
-				dateI, _ := time.Parse(time.DateOnly, t.Sub[i].Date)
-				dateJ, _ := time.Parse(time.DateOnly, t.Sub[j].Date)
-				if ascending {
-					return dateI.Before(dateJ)
-				}
-
-				return dateI.After(dateJ)
+				return compareTasks(&t.Sub[i], &t.Sub[j], ascending)
 			})
 		}
 	}
 }
 
-// SortSubTasksByDate sorts sub-tasks by date
+// SortSubTasksByDate sorts sub-tasks by date.
 func SortSubTasksByDate(ascending bool) TaskOption {
 	return func(t *Task) {
 		if len(t.Sub) > 0 {
@@ -73,14 +78,14 @@ func SortSubTasksByDate(ascending bool) TaskOption {
 	}
 }
 
-// ApplyOptions applies the given options to the task
+// ApplyOptions applies the given options to the task.
 func (t *Task) ApplyOptions(opts ...TaskOption) {
 	for _, opt := range opts {
 		opt(t)
 	}
 }
 
-// ApplyOptions applies the given options to all tasks in the slice
+// ApplyOptions applies the given options to all tasks in the slice.
 func (ts Tasks) ApplyOptions(opts ...TaskOption) {
 	for i := range ts {
 		ts[i].ApplyOptions(opts...)

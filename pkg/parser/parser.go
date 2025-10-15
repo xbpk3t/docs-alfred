@@ -10,27 +10,27 @@ import (
 	"github.com/goccy/go-yaml/parser"
 )
 
-// Parser YAML配置解析器
+// Parser YAML配置解析器.
 type Parser[T any] struct {
 	fileName string
 	data     []byte
 }
 
-// NewParser 创建解析器
+// NewParser 创建解析器.
 func NewParser[T any](data []byte) *Parser[T] {
 	return &Parser[T]{
 		data: data,
 	}
 }
 
-// WithFileName 设置文件名
+// WithFileName 设置文件名.
 func (p *Parser[T]) WithFileName(fileName string) *Parser[T] {
 	p.fileName = fileName
 
 	return p
 }
 
-// ParseSingle 解析单个YAML文档
+// ParseSingle 解析单个YAML文档.
 func (p *Parser[T]) ParseSingle() (T, error) {
 	var result T
 	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
@@ -45,7 +45,7 @@ func (p *Parser[T]) ParseSingle() (T, error) {
 	return result, nil
 }
 
-// ParseMulti 解析多文档 Markdown
+// ParseMulti 解析多文档 Markdown.
 func (p *Parser[T]) ParseMulti() ([]T, error) {
 	var results []T
 	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
@@ -66,7 +66,7 @@ func (p *Parser[T]) ParseMulti() ([]T, error) {
 }
 
 // ParseFlatten 解析多文档 Markdown 并展开结果
-// 适用于每个文档都是 slice 且需要合并的情况
+// 适用于每个文档都是 slice 且需要合并的情况.
 func (p *Parser[T]) ParseFlatten() ([]T, error) {
 	var results []T
 	decoder := yaml.NewDecoder(bytes.NewReader(p.data))
@@ -86,7 +86,7 @@ func (p *Parser[T]) ParseFlatten() ([]T, error) {
 	return results, nil
 }
 
-// IsMultiDocument checks if the YAML content contains multiple documents
+// IsMultiDocument checks if the YAML content contains multiple documents.
 func (p *Parser[T]) IsMultiDocument() (bool, error) {
 	file, err := parser.ParseBytes(p.data, parser.ParseComments)
 	if err != nil {

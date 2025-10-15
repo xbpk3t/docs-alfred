@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -8,10 +9,10 @@ import (
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/pkg"
 
 	"github.com/gookit/goutil/fsutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
-	"github.com/xbpk3t/docs-alfred/pkg/utils"
 	"github.com/xbpk3t/docs-alfred/service"
 	"github.com/xbpk3t/docs-alfred/service/gh"
 	"github.com/xbpk3t/docs-alfred/service/goods"
@@ -25,7 +26,7 @@ const (
 	FileTypeYAML FileType = "yml"
 )
 
-// DocProcessor 统一的处理器结构
+// DocProcessor 统一的处理器结构.
 type DocProcessor struct {
 	Dst             string   `yaml:"dst"`             // 输出目录
 	MergeOutputFile string   `yaml:"mergeOutputFile"` // 合并后的输出文件名
@@ -33,7 +34,7 @@ type DocProcessor struct {
 	fileType        FileType // 内部字段，指定文件类型
 }
 
-// DocsConfig 定义配置结构
+// DocsConfig 定义配置结构.
 type DocsConfig struct {
 	JSON  *DocProcessor `yaml:"json"`
 	YAML  *DocProcessor `yaml:"yaml"`
@@ -42,7 +43,7 @@ type DocsConfig struct {
 	IsDir bool          `yaml:"-"`   // 是否为文件夹，根据src自动判断
 }
 
-// getServiceParseModeMap returns the parse mode mapping for different service types
+// getServiceParseModeMap returns the parse mode mapping for different service types.
 func getServiceParseModeMap() map[service.ServiceType]render.ParseMode {
 	return map[service.ServiceType]render.ParseMode{
 		service.ServiceGoods:  render.ParseFlatten,
@@ -51,14 +52,14 @@ func getServiceParseModeMap() map[service.ServiceType]render.ParseMode {
 	}
 }
 
-// NewDocProcessor 创建新的处理器
+// NewDocProcessor 创建新的处理器.
 func NewDocProcessor(fileType FileType) *DocProcessor {
 	return &DocProcessor{
 		fileType: fileType,
 	}
 }
 
-// NewDocsConfig 创建新的配置实例
+// NewDocsConfig 创建新的配置实例.
 func NewDocsConfig(src, cmd string) *DocsConfig {
 	return &DocsConfig{
 		JSON: NewDocProcessor(FileTypeJSON),
@@ -68,7 +69,7 @@ func NewDocsConfig(src, cmd string) *DocsConfig {
 	}
 }
 
-// DocProcessor 的方法实现
+// SetCurrentFile 设置当前处理的文件名.
 func (p *DocProcessor) SetCurrentFile(filename string) {
 	p.currentFile = filename
 }
@@ -147,18 +148,18 @@ func (p *DocProcessor) ReadInput(src string, isDir bool) ([]byte, error) {
 
 func (p *DocProcessor) readSingleFile(src string) ([]byte, error) {
 	if fsutil.IsDir(src) {
-		return []byte(""), fmt.Errorf("stat path error")
+		return []byte(""), errors.New("stat path error")
 	}
 
-	return utils.ReadSingleFileWithExt(src, p.SetCurrentFile)
+	return pkg.ReadSingleFileWithExt(src, p.SetCurrentFile)
 }
 
 func (p *DocProcessor) readAndMergeFiles(src string) ([]byte, error) {
 	if !fsutil.IsDir(src) {
-		return []byte(""), fmt.Errorf("stat path error")
+		return []byte(""), errors.New("stat path error")
 	}
 
-	return utils.ReadAndMergeFilesRecursively(src, p.SetCurrentFile)
+	return pkg.ReadAndMergeFilesRecursively(src, p.SetCurrentFile)
 }
 
 func (p *DocProcessor) WriteOutput(content, filename string) error {
@@ -174,7 +175,7 @@ func (p *DocProcessor) WriteOutput(content, filename string) error {
 	return nil
 }
 
-// Process 处理配置
+// Process 处理配置.
 func (dc *DocsConfig) Process() error {
 	if err := dc.initializePath(); err != nil {
 		return err
@@ -185,7 +186,7 @@ func (dc *DocsConfig) Process() error {
 	return dc.processAll(processors)
 }
 
-// initializePath 初始化路径相关的设置
+// initializePath 初始化路径相关的设置.
 func (dc *DocsConfig) initializePath() error {
 	// 获取绝对路径
 	absPath, err := filepath.Abs(dc.Src)
@@ -204,7 +205,7 @@ func (dc *DocsConfig) initializePath() error {
 	return nil
 }
 
-// getProcessors 获取所有处理器
+// getProcessors 获取所有处理器.
 func (dc *DocsConfig) getProcessors() map[FileType]*DocProcessor {
 	return map[FileType]*DocProcessor{
 		FileTypeJSON: dc.JSON,
@@ -212,7 +213,7 @@ func (dc *DocsConfig) getProcessors() map[FileType]*DocProcessor {
 	}
 }
 
-// processAll 处理所有文件
+// processAll 处理所有文件.
 func (dc *DocsConfig) processAll(processors map[FileType]*DocProcessor) error {
 	for fileType, processor := range processors {
 		if processor == nil {
@@ -227,7 +228,7 @@ func (dc *DocsConfig) processAll(processors map[FileType]*DocProcessor) error {
 	return nil
 }
 
-// processSingle 处理单个文件
+// processSingle 处理单个文件.
 func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) error {
 	// 创建对应的渲染器
 	renderer, err := dc.createRenderer()
@@ -278,7 +279,7 @@ func (dc *DocsConfig) configureRenderer(renderer render.Renderer) (render.Render
 	return renderer, nil
 }
 
-// configureParseMode 配置渲染器的解析模式
+// configureParseMode 配置渲染器的解析模式.
 func (dc *DocsConfig) configureParseMode(renderer any) error {
 	type parseModeRenderer interface {
 		WithParseMode(mode render.ParseMode)
@@ -295,5 +296,5 @@ func (dc *DocsConfig) configureParseMode(renderer any) error {
 		return nil
 	}
 
-	return fmt.Errorf("renderer does not support parse mode configuration")
+	return errors.New("renderer does not support parse mode configuration")
 }

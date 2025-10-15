@@ -5,8 +5,10 @@ const (
 	ErrCodeInvalidInput
 )
 
+// 验证错误码 (16000-16999).
 var (
-	// 验证错误码 (16000-16999)
+	// ErrValidateInput 验证输入失败.
 	ErrValidateInput = NewError(ErrCodeValidateInput, "验证输入失败")
-	ErrInvalidInput  = NewError(ErrCodeInvalidInput, "无效的输入")
+	// ErrInvalidInput 无效的输入.
+	ErrInvalidInput = NewError(ErrCodeInvalidInput, "无效的输入")
 )

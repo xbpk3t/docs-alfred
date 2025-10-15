@@ -2,23 +2,29 @@ fail_fast: false
 default_stages: [pre-commit, pre-push]
 
 repos:
+  # Disabled meta hooks due to nix environment compatibility issues
+  #  - repo: meta
+  #    hooks:
+  #      - id: identity
+  #        exclude: ^/nix/store/
+  #      - id: check-useless-excludes
+  #        exclude: ^/nix/store/
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
-      - id: check-yaml
-        args: [--allow-multiple-documents]
       - id: check-toml
       - id: end-of-file-fixer
-      - id: trailing-whitespace
-        args: [--markdown-linebreak-ext=md]
-      - id: check-added-large-files
-        args: ['--maxkb=4096']
-      - id: check-merge-conflict
+      - id: check-added-large-files # 定义的hook脚本，在repo的.pre-commit-hooks.yaml中定义
+        args: ["--maxkb=5120"]
+      - id: trailing-whitespace # 移除尾部空格符
+      - id: check-merge-conflict # 检查是否含有合并冲突符号
       - id: check-json
       - id: check-symlinks
       - id: mixed-line-ending
-        exclude: .*\.svg$p
       - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
 
   - repo: https://github.com/pre-commit-ci/pre-commit-ci-config
     rev: v1.6.1
@@ -35,15 +41,42 @@ repos:
         language: python
       - id: gitlint-ci
 
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.9.1
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+      - id: commitizen-branch
+        stages: [pre-push]
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.8
+    hooks:
+      - id: actionlint
+
+  #  - repo: https://github.com/shellcheck-py/shellcheck-py
+  #    rev: v0.10.0.1
+  #    hooks:
+  #      - id: shellcheck
+  #        types: [shell]
+  #
+  #  - repo: https://github.com/pre-commit/mirrors-eslint
+  #    rev: v9.29.0
+  #    hooks:
+  #      - id: eslint
+  #        files: \.[jt]sx?$  # *.js, *.jsx, *.ts and *.tsx
+  #        types: [file]
+
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.45.0
     hooks:
       - id: markdownlint
         alias: md
         name: Lint Markdown files
-        entry: markdownlint -f -c .github/linters/markdownlint.yml -i node_modules .
+        entry: markdownlint -f -c .github/linters/markdownlint.yml -i node_modules
         types: [markdown]
         language: node
+        files: ^blog/
 
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.37.1
@@ -54,115 +87,137 @@ repos:
         types: [yaml]
         language: python
 
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.11
+    rev: v0.14.0
     hooks:
       - id: ruff
+        types: [python]
       - id: ruff-format
+        types: [python]
 
-  #  - repo: https://github.com/codespell-project/codespell
-  #    rev: v2.3.0
-  #    hooks:
-  #      - id: codespell
-  #        exclude: "haystack/data/abbreviations"
-  #        args: ["--toml", "pyproject.toml"]
-  #        additional_dependencies:
-  #          - tomli
+#  - repo: https://github.com/gitleaks/gitleaks
+#    rev: v8.28.0
+#    hooks:
+#      - id: gitleaks
+#        name: Scan Secrets
+#        entry: gitleaks detect --source . -v && gitleaks dir . -v
 
-  #  - repo: https://github.com/rhysd/actionlint
-  #    rev: v1.7.5
-  #    hooks:
-  #      - id: actionlint-docker
-  #        args: ["-ignore", "SC2102"]
-
-
-  #  - repo: https://github.com/gitleaks/gitleaks
-  #    rev: v8.19.2
-  #    hooks:
-  #      - id: gitleaks
-  #        name: Scan Secrets
-  #        entry: gitleaks detect --source . -v
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.100.0
+    rev: v1.102.0
     hooks:
       - id: terraform_fmt
         args:
           - --args=-diff
-      - id: terraform_docs
-      - id: terraform_tflint
+
+  #  - repo: local
+  #    hooks:
+  #      - id: dashboard-linter
+  #        name: dashboard-linter
+  #        entry: leeway run components/dashboard:lint
+  #        language: system
+  #        pass_filenames: false
+  #        files: ^components/dashboard/
 
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.13.1-beta
+    rev: v2.14.0
     hooks:
       - id: hadolint
-        args:
-          - --config=.hadolint.yaml
-        files: 'Dockerfile|Dockerfile.release'
 
-  - repo: local
-    hooks:
-      - id: dashboard-linter
-        name: dashboard-linter
-        entry: leeway run components/dashboard:lint
-        language: system
-        pass_filenames: false
-        files: ^components/dashboard/
 
   - repo: https://github.com/golangci/golangci-lint
-    rev: v2.2.1
+    rev: v2.5.0
     hooks:
-      - id: golangci-lint
-        entry: golangci-lint run --fix --config .github/linters/golangci-lint.yml
-        types: [go]
-        language: golang
+      - id: golangci-lint-config-verify
+        args: ["-c", ".github/linters/golangci-lint.yml"]
+#      - id: golangci-lint
+#        entry: golangci-lint run --fix -c .github/linters/golangci-lint.yml
+#        types: [go]
+#        language: golang
+#      - id: golangci-lint-full
+#        args: ["-c", ".github/linters/golangci-lint.yml"]
 
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        files: ^docs/
+
+
+
+  #- url: https://github.com/uber-go/goleak
+  #  des: Used to detect goroutine leaks
+  #- url: https://github.com/uber-go/nilaway
+  #  des: 用来在编译时捕获nil，来规避生产环境出现nil panic问题。确实非常实用，帮我避免了很多坑。
+  #- url: https://github.com/dkorunic/betteralign
+  #  des: 相比于fieldalignment，不会去修改各种 xxx_gen.go 以及 xxx_test.go 代码
+  #- url: https://github.com/mvdan/gofumpt
+  #- url: https://github.com/daixiang0/gci
+  #  des: GCI, a tool that control golang package import order and make it always deterministic.
+  #- url: https://github.com/mgechev/revive
+  #  des: golangci-lint已经内置了
+  #  - repo: https://github.com/lietu/go-pre-commit
+  #    rev: v0.1.0
+  #    hooks:
+  #      - id: errcheck
+  #      - id: go-fmt-goimports
+  #      - id: go-test
+  #      - id: go-vet
+  #        entry: go vet -vettool=$(which shadow) -strict
+  #      - id: gofumpt
+  #        entry: gofumpt -l -w .
+  #      - id: golangci-lint
+  #      - id: golint
+  #      - id: staticcheck
+  #      - id: go-mod-tidy
 
   - repo: local
     hooks:
-      - id: gofumpt
-        name: gofumpt
-        entry: gofumpt -l -w .
-        language: golang
-        types: [go]
-        pass_filenames: false
-
-      - id: go-mod-tidy
-        name: go-mod-tidy
-        entry: go mod tidy -v
-        language: golang
-        pass_filenames: false
-
-      - id: betteralign
-        name: betteralign
-        entry: betteralign -apply ./...
-        language: system
-        types: [go]
-        pass_filenames: false
-        additional_dependencies: []
-
-
-      - id: nilaway
-        name: nilaway
-        entry: nilaway ./...
-        language: golang
-        pass_filenames: false
-
-      - id: race-test
-        name: race-test
-        entry: go build -race cmd
-        language: golang
-        pass_filenames: false
-
+#      - id: betteralign
+#        name: betteralign
+#        types: [go]
+#        language: golang
+#        entry: betteralign -apply ./...
 
 #      - id: go-test
 #        name: go-test
+#        types: [go]
+#        language: golang
 #        entry: go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
-#        language: golang
-#        pass_filenames: false
 
-#      - id: go-vet
-#        name: go-vet
-#        entry: go vet -vettool=$(which shadow) -strict
+#      - id: nilaway
+#        name: nilaway
+#        types: [go]
 #        language: golang
-#        pass_filenames: false
+#        entry: nilaway ./...
+
+      - id: statix-fix
+        name: Statix Fix
+        description: Fix files with statix
+        entry: statix fix ./nix
+        types: [nix]
+        pass_filenames: false
+        language: system
+
+      - id: statix-check
+        name: Statix Check
+        description: Check files for improvements with statix
+        entry: statix check ./nix
+        types: [nix]
+        pass_filenames: false
+        language: system
+
+  - repo: https://github.com/astro/deadnix
+    rev: v1.3.1
+    hooks:
+      - id: deadnix
+        args: [--edit]
+
+  - repo: https://github.com/kamadorueda/alejandra
+    rev: 4.0.0
+    hooks:
+      # Requires Nix to be previously installed in the system
+      # - id: alejandra-nix
+      # Requires Alejandra to be previously installed in the system
+      - id: alejandra-system

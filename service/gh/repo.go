@@ -2,7 +2,7 @@ package gh
 
 import "slices"
 
-// ExtractTypesByTag returns all types for a given tag
+// ExtractTypesByTag returns all types for a given tag.
 func (r Repos) ExtractTypesByTag(tag string) []string {
 	types := make(map[string]bool)
 	for _, repo := range r {
@@ -21,7 +21,7 @@ func (r Repos) ExtractTypesByTag(tag string) []string {
 	return result
 }
 
-// QueryReposByTagAndType returns all repositories matching the given tag and type
+// QueryReposByTagAndType returns all repositories matching the given tag and type.
 func (r Repos) QueryReposByTagAndType(tag, typeName string) Repos {
 	var result Repos
 	for _, repo := range r {
@@ -33,7 +33,7 @@ func (r Repos) QueryReposByTagAndType(tag, typeName string) Repos {
 	return result
 }
 
-// ExtractTags 从所有仓库中提取唯一的标签列表
+// ExtractTags 从所有仓库中提取唯一的标签列表.
 func (r Repos) ExtractTags() []string {
 	// 使用 map 来去重
 	tagMap := make(map[string]struct{})
