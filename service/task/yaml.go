@@ -10,21 +10,21 @@ import (
 	"github.com/xbpk3t/docs-alfred/service"
 )
 
-// TaskYAMLRender 任务 YAML 渲染器
+// TaskYAMLRender 任务 YAML 渲染器.
 type TaskYAMLRender struct {
 	*render.YAMLRenderer
 }
 
-// NewTaskYAMLRender 创建新的任务 YAML 渲染器
+// NewTaskYAMLRender 创建新的任务 YAML 渲染器.
 func NewTaskYAMLRender() *TaskYAMLRender {
 	return &TaskYAMLRender{
 		YAMLRenderer: render.NewYAMLRenderer(string(service.ServiceTask), true),
 	}
 }
 
-// Flatten 将数据打平成一层
-func (j *TaskYAMLRender) Flatten(data []byte) ([]any, error) {
-	raw, err := j.ParseData(data)
+// Flatten 将数据打平成一层.
+func (t *TaskYAMLRender) Flatten(data []byte) ([]any, error) {
+	raw, err := t.ParseData(data)
 	if err != nil {
 		return nil, err
 	}
@@ -49,10 +49,10 @@ func (j *TaskYAMLRender) Flatten(data []byte) ([]any, error) {
 	return result, nil
 }
 
-// Render 渲染任务数据
-func (r *TaskYAMLRender) Render(data []byte) (string, error) {
+// Render 渲染任务数据.
+func (t *TaskYAMLRender) Render(data []byte) (string, error) {
 	// 先使用基础的 YAML 渲染
-	content, err := r.Flatten(data)
+	content, err := t.Flatten(data)
 	if err != nil {
 		return "", fmt.Errorf("base render error: %w", err)
 	}

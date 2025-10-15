@@ -6,7 +6,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/service/gh"
 )
 
-// Goods 定义商品配置结构
+// Goods 定义商品配置结构.
 type Goods struct {
 	Tag    string          `json:"tag"    yaml:"tag"`
 	Type   string          `json:"type"   yaml:"type"`
@@ -18,7 +18,7 @@ type Goods struct {
 	Score  int             `json:"score"  yaml:"score"`
 }
 
-// Item 定义单个商品项
+// Item 定义单个商品项.
 type Item struct {
 	Name  string `json:"name"  yaml:"name"`
 	Param string `json:"param" yaml:"param,omitempty"`
@@ -29,7 +29,7 @@ type Item struct {
 	Use   bool   `json:"use"   yaml:"use,omitempty"`
 }
 
-// ParseConfig 解析配置文件
+// ParseConfig 解析配置文件.
 func ParseConfig(data []byte) ([]Goods, error) {
 	return parser.NewParser[Goods](data).ParseFlatten()
 }

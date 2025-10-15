@@ -10,7 +10,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 )
 
-// Config 主配置结构
+// Config 主配置结构.
 type Config struct {
 	ResendConfig     ResendConfig     `yaml:"resend"`
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
@@ -20,19 +20,19 @@ type Config struct {
 	EnvConfig        EnvConfig        `yaml:"env"`
 }
 
-// ResendConfig Resend相关配置
+// ResendConfig Resend相关配置.
 type ResendConfig struct {
 	Token  string   `yaml:"token"`
 	MailTo []string `yaml:"mailTo"`
 }
 
-// NewsletterConfig 新闻通讯配置
+// NewsletterConfig 新闻通讯配置.
 type NewsletterConfig struct {
 	Schedule            string `yaml:"schedule"`
 	IsHideAuthorInTitle bool   `yaml:"isHideAuthorInTitle"`
 }
 
-// FeedConfig Feed相关配置
+// FeedConfig Feed相关配置.
 type FeedConfig struct {
 	Timeout   int `default:"30" yaml:"timeout"`   // HTTP请求超时时间（秒）
 	MaxTries  int `default:"3"  yaml:"maxTries"`  // 最大重试次数
@@ -44,7 +44,7 @@ type DashboardConfig struct {
 	IsShowFeedDetail       bool `yaml:"isShowFeedDetail"`
 }
 
-// FeedsDetail Feed详情
+// FeedsDetail Feed详情.
 type FeedsDetail struct {
 	Type string  `yaml:"type"`
 	URLs []Feeds `yaml:"urls"`
@@ -54,14 +54,14 @@ type EnvConfig struct {
 	Debug bool `default:"true" yaml:"debug"`
 }
 
-// Feeds Feed URL
+// Feeds Feed URL.
 type Feeds struct {
 	Feed string `yaml:"feed"`
 	URL  string `yaml:"url"`
 	Des  string `yaml:"des"`
 }
 
-// NewConfig 加载配置文件
+// NewConfig 加载配置文件.
 func NewConfig(configFile string) (*Config, error) {
 	data, err := os.ReadFile(configFile)
 	if err != nil {
@@ -80,7 +80,7 @@ func NewConfig(configFile string) (*Config, error) {
 	return &config, nil
 }
 
-// Validate 验证配置
+// Validate 验证配置.
 func (c *Config) Validate() error {
 	if c.ResendConfig.Token == "" {
 		return errors.New("resend token is required")

@@ -8,7 +8,7 @@ import (
 
 const GhURL = "https://github.com/"
 
-// Repository 定义仓库结构
+// Repository 定义仓库结构.
 type Repository struct {
 	Doc            string   `yaml:"doc,omitempty"`
 	Des            string   `yaml:"des,omitempty"`
@@ -29,7 +29,7 @@ type Repository struct {
 
 type Repos []*Repository
 
-// ConfigRepo 定义配置仓库结构
+// ConfigRepo 定义配置仓库结构.
 type ConfigRepo struct {
 	Type   string     `yaml:"type"`
 	Tag    string     `yaml:"tag"`
@@ -41,7 +41,7 @@ type ConfigRepo struct {
 
 type ConfigRepos []*ConfigRepo
 
-// Topic 定义问题结构
+// Topic 定义问题结构.
 type Topic struct {
 	Topic    string          `json:"topic"            yaml:"topic"`            // 问题
 	Des      string          `json:"des,omitempty"    yaml:"des,omitempty"`    // 简要回答
@@ -89,17 +89,17 @@ func (r *Repository) FullName() string {
 	return ""
 }
 
-// GetDes 获取仓库描述
+// GetDes 获取仓库描述.
 func (r *Repository) GetDes() string {
 	return r.Des
 }
 
-// GetURL 获取仓库URL
+// GetURL 获取仓库URL.
 func (r *Repository) GetURL() string {
 	return r.URL
 }
 
-// ToRepos 将配置仓库转换为仓库列表
+// ToRepos 将配置仓库转换为仓库列表.
 func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
 
@@ -118,7 +118,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 	return repos
 }
 
-// QueryReposByTag 根据标签筛选仓库
+// QueryReposByTag 根据标签筛选仓库.
 func (r *Repos) QueryReposByTag(tag string) Repos {
 	var filtered Repos
 
@@ -132,7 +132,7 @@ func (r *Repos) QueryReposByTag(tag string) Repos {
 	return filtered
 }
 
-// processRepo 处理仓库及其子仓库
+// processRepo 处理仓库及其子仓库.
 func processRepo(repo *Repository, configType string) Repos {
 	var repos Repos
 
@@ -147,7 +147,7 @@ func processRepo(repo *Repository, configType string) Repos {
 	return repos
 }
 
-// processMainRepo 处理主仓库信息
+// processMainRepo 处理主仓库信息.
 func processMainRepo(repo *Repository, configType string) *Repository {
 	if !isValidGithubURL(repo.URL) {
 		return nil
@@ -157,7 +157,7 @@ func processMainRepo(repo *Repository, configType string) *Repository {
 	return repo
 }
 
-// processAllSubRepos 处理所有类型的子仓库
+// processAllSubRepos 处理所有类型的子仓库.
 func processAllSubRepos(repo *Repository) Repos {
 	var repos Repos
 
@@ -191,19 +191,19 @@ func processAllSubRepos(repo *Repository) Repos {
 	return repos
 }
 
-// 工具函数
+// 工具函数.
 func isValidGithubURL(url string) bool {
 	return strings.Contains(url, GhURL)
 }
 
-// MergeOptions 相关结构和方法
+// MergeOptions 相关结构和方法.
 type MergeOptions struct {
 	FolderPath string
 	OutputPath string
 	FileNames  []string
 }
 
-// IsSubOrDepOrRelRepo 判断是否为
+// IsSubOrDepOrRelRepo 判断是否为.
 func (r *Repository) IsSubOrDepOrRelRepo() bool {
 	return r.IsSubRepo || r.IsReplacedRepo || r.IsRelatedRepo
 }

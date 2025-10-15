@@ -13,7 +13,39 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
-// FetchURLWithRetry 重试获取URL内容
+// createFeedParser 创建Feed解析器.
+func createFeedParser(cfg *Config) *gofeed.Parser {
+	fp := gofeed.NewParser()
+	fp.Client = &http.Client{
+		Timeout: time.Duration(cfg.FeedConfig.Timeout) * time.Second,
+	}
+
+	return fp
+}
+
+// getMaxAttempts 获取最大重试次数.
+func getMaxAttempts(cfg *Config) uint {
+	if cfg.FeedConfig.MaxTries < 0 {
+		return 0
+	}
+
+	return uint(cfg.FeedConfig.MaxTries)
+}
+
+// sendErrorFeed 发送错误Feed.
+func sendErrorFeed(ch chan<- *gofeed.Feed, url string, lastError error) {
+	errorMsg := "unknown error"
+	if lastError != nil {
+		errorMsg = lastError.Error()
+	}
+	ch <- &gofeed.Feed{
+		FeedType: "error",
+		Title:    url,
+		Custom:   map[string]string{"error": errorMsg},
+	}
+}
+
+// FetchURLWithRetry 重试获取URL内容.
 func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, cfg *Config) {
 	if err := validateURL(url); err != nil {
 		slog.Error("Invalid URL", slog.String(LogKeyURL, url), slog.Any(LogKeyError, err))
@@ -22,10 +54,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 		return
 	}
 
-	fp := gofeed.NewParser()
-	fp.Client = &http.Client{
-		Timeout: time.Duration(cfg.FeedConfig.Timeout) * time.Second,
-	}
+	fp := createFeedParser(cfg)
 
 	var attempts uint = 0
 	var lastError error
@@ -53,13 +82,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 			}
 		},
 		retry.Context(ctx),
-		retry.Attempts(func() uint {
-			if cfg.FeedConfig.MaxTries < 0 {
-				return 0
-			}
-
-			return uint(cfg.FeedConfig.MaxTries)
-		}()),
+		retry.Attempts(getMaxAttempts(cfg)),
 		retry.Delay(DefaultRetryDelay),
 		retry.DelayType(retry.BackOffDelay),
 		retry.LastErrorOnly(true),
@@ -77,21 +100,11 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 			slog.String(LogKeyURL, url),
 			slog.Uint64(LogKeyAttempts, uint64(attempts)),
 			slog.Any(LogKeyError, err))
-		errorMsg := "unknown error"
-		if lastError != nil {
-			errorMsg = lastError.Error()
-		} else if err != nil {
-			errorMsg = err.Error()
-		}
-		ch <- &gofeed.Feed{
-			FeedType: "error",
-			Title:    url,
-			Custom:   map[string]string{"error": errorMsg},
-		}
+		sendErrorFeed(ch, url, lastError)
 	}
 }
 
-// validateURL 验证URL
+// validateURL 验证URL.
 func validateURL(url string) error {
 	if url == "" {
 		return &FeedError{
@@ -104,7 +117,7 @@ func validateURL(url string) error {
 	return nil
 }
 
-// FetchURLs 批量获取URLs
+// FetchURLs 批量获取URLs.
 func FetchURLs(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed, []*FeedError) {
 	allFeeds := make([]*gofeed.Feed, 0)
 	failedFeeds := make([]*FeedError, 0)
@@ -146,7 +159,7 @@ func FetchURLs(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed,
 	return allFeeds, failedFeeds
 }
 
-// MergeAllFeeds 合并所有feeds
+// MergeAllFeeds 合并所有feeds.
 func MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed, cfg *Config) (*feeds.Feed, error) {
 	if err := validateFeeds(allFeeds); err != nil {
 		return nil, err
@@ -239,7 +252,7 @@ func getAuthor(feed *gofeed.Feed) string {
 	return ""
 }
 
-// FilterFeedsWithTimeRange 根据时间范围过滤feeds
+// FilterFeedsWithTimeRange 根据时间范围过滤feeds.
 func FilterFeedsWithTimeRange(created, endDate time.Time, schedule string) bool {
 	scheduleTimeRanges := GetScheduleTimeRanges()
 	timeRange, exists := scheduleTimeRanges[schedule]

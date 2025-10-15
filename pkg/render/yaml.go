@@ -5,7 +5,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
 
-// ParseMode 解析模式
+// ParseMode 解析模式.
 type ParseMode int
 
 const (
@@ -14,14 +14,14 @@ const (
 	ParseFlatten
 )
 
-// YAMLRenderer YAML渲染器
+// YAMLRenderer YAML渲染器.
 type YAMLRenderer struct {
 	Cmd         string
 	PrettyPrint bool
 	ParseMode   ParseMode
 }
 
-// NewYAMLRenderer 创建新的YAML渲染器
+// NewYAMLRenderer 创建新的YAML渲染器.
 func NewYAMLRenderer(cmd string, prettyPrint bool) *YAMLRenderer {
 	return &YAMLRenderer{
 		PrettyPrint: prettyPrint,
@@ -30,12 +30,12 @@ func NewYAMLRenderer(cmd string, prettyPrint bool) *YAMLRenderer {
 	}
 }
 
-// WithParseMode 设置解析模式
+// WithParseMode 设置解析模式.
 func (j *YAMLRenderer) WithParseMode(mode ParseMode) {
 	j.ParseMode = mode
 }
 
-// Render 实现 Renderer 接口
+// Render 实现 Renderer 接口.
 func (j *YAMLRenderer) Render(data []byte) (string, error) {
 	dataToEncode, err := j.ParseData(data)
 	if err != nil {
@@ -51,7 +51,7 @@ func (j *YAMLRenderer) Render(data []byte) (string, error) {
 	return string(result), nil
 }
 
-// parseData 根据不同模式解析数据，并统一返回类型
+// ParseData 根据不同模式解析数据，并统一返回类型.
 func (j *YAMLRenderer) ParseData(data []byte) (any, error) {
 	ps := parser.NewParser[any](data)
 

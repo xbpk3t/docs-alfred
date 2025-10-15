@@ -20,7 +20,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
 )
 
-// Config holds the configuration for the application
+// Config holds the configuration for the application.
 type Config struct {
 	CfgFile string
 }
@@ -28,20 +28,20 @@ type Config struct {
 //go:embed templates/newsletter.mjml
 var templates embed.FS
 
-// EmailConfig 邮件配置
+// EmailConfig 邮件配置.
 type EmailConfig struct {
 	From  string
 	Token string
 	To    []string
 }
 
-// NewsletterService 处理新闻通讯的服务
+// NewsletterService 处理新闻通讯的服务.
 type NewsletterService struct {
 	config      *rss.Config
 	failedFeeds []*rss.FeedError
 }
 
-// NewNewsletterService 创建新闻通讯服务
+// NewNewsletterService 创建新闻通讯服务.
 func NewNewsletterService(cfg *rss.Config) *NewsletterService {
 	return &NewsletterService{
 		config:      cfg,
@@ -49,7 +49,7 @@ func NewNewsletterService(cfg *rss.Config) *NewsletterService {
 	}
 }
 
-// TemplateData represents the data passed to the template
+// TemplateData represents the data passed to the template.
 type TemplateData struct {
 	DashboardData struct {
 		FailedFeeds []*rss.FeedError
@@ -60,7 +60,7 @@ type TemplateData struct {
 	DashboardConfig rss.DashboardConfig
 }
 
-// EmailContent represents a single email content
+// EmailContent represents a single email content.
 type EmailContent struct {
 	Subject string
 	Content string
@@ -73,7 +73,7 @@ const (
 	NewsletterTpl TemplateType = "Newsletter"
 )
 
-// newRootCmd creates and returns the root command
+// newRootCmd creates and returns the root command.
 func newRootCmd(cfg *Config) *cobra.Command {
 	return &cobra.Command{
 		Use:   "rss2newsletter",
@@ -122,7 +122,7 @@ func loadConfig(cfgFile string) (*rss.Config, error) {
 	return config, nil
 }
 
-// ProcessAllFeeds 并发处理所有Feed源
+// ProcessAllFeeds 并发处理所有Feed源.
 func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 	// 创建一个带超时的context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -167,7 +167,7 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 	return results, nil
 }
 
-// processSingleFeed 处理单个Feed源
+// processSingleFeed 处理单个Feed源.
 func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.FeedsDetail) (feeds.RssFeed, error) {
 	urls := lo.Compact(lo.Map(feed.URLs, func(item rss.Feeds, _ int) string {
 		return item.Feed
@@ -204,7 +204,7 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.Feed
 	return s.convertToRssFeed(feed.Type, combinedFeed), nil
 }
 
-// convertToRssFeed 将Feed转换为RssFeed格式
+// convertToRssFeed 将Feed转换为RssFeed格式.
 func (s *NewsletterService) convertToRssFeed(typeName string, combinedFeed *feeds.Feed) feeds.RssFeed {
 	newFeeds := make([]*feeds.RssItem, len(combinedFeed.Items))
 	for i, item := range combinedFeed.Items {
@@ -223,7 +223,7 @@ func (s *NewsletterService) convertToRssFeed(typeName string, combinedFeed *feed
 	}
 }
 
-// getItemTitle 生成文章标题
+// getItemTitle 生成文章标题.
 func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
 	if !s.config.NewsletterConfig.IsHideAuthorInTitle && item.Author.Name != "" {
 		return fmt.Sprintf("[%s] %s", item.Author.Name, item.Title)
@@ -232,7 +232,7 @@ func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
 	return item.Title
 }
 
-// renderTemplate renders a specific template with data
+// renderTemplate renders a specific template with data.
 func (s *NewsletterService) renderTemplate(templateName string, data any) (string, error) {
 	// Create a custom template function map
 	funcMap := template.FuncMap{
@@ -274,7 +274,7 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 	return tplBytes.String(), nil
 }
 
-// RenderNewsletter renders the newsletter template
+// RenderNewsletter renders the newsletter template.
 func (s *NewsletterService) RenderNewsletter(
 	rssFeeds []feeds.RssFeed,
 	feedList []rss.FeedsDetail,
@@ -297,7 +297,7 @@ func (s *NewsletterService) RenderNewsletter(
 	return s.renderTemplate("newsletter.mjml", data)
 }
 
-// handleOutput 处理输出（写入文件或发送邮件）
+// handleOutput 处理输出（写入文件或发送邮件）.
 func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 	if s.config.EnvConfig.Debug {
 		// 写入到本地文件
@@ -322,7 +322,7 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 	return nil
 }
 
-// SendNewsletter 发送邮件
+// SendNewsletter 发送邮件.
 func (s *NewsletterService) SendNewsletter(content, subject string) error {
 	emailCfg := EmailConfig{
 		From:  "Acme <onboarding@resend.dev>",
@@ -350,14 +350,14 @@ func (s *NewsletterService) SendNewsletter(content, subject string) error {
 	return nil
 }
 
-// generateEmailSubject 生成邮件主题
+// generateEmailSubject 生成邮件主题.
 func (s *NewsletterService) generateEmailSubject(tplType TemplateType) string {
 	now := carbon.Now()
 
 	return fmt.Sprintf("%s %s (第%d周)", tplType, now.ToDateString(), now.WeekOfYear())
 }
 
-// Execute 执行根命令
+// Execute 执行根命令.
 func Execute() {
 	cfg := &Config{}
 	rootCmd := newRootCmd(cfg)

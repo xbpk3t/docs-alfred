@@ -8,7 +8,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 )
 
-// Merger 配置合并器
+// Merger 配置合并器.
 type Merger struct {
 	tagProvider func(string) string
 	outputFile  string
@@ -16,7 +16,7 @@ type Merger struct {
 	inputFiles  []string
 }
 
-// NewMerger 创建新的合并器
+// NewMerger 创建新的合并器.
 func NewMerger(inputFiles []string, outputFile, outputDir string, tagProvider func(string) string) *Merger {
 	return &Merger{
 		inputFiles:  inputFiles,
@@ -26,7 +26,7 @@ func NewMerger(inputFiles []string, outputFile, outputDir string, tagProvider fu
 	}
 }
 
-// Merge 执行合并
+// Merge 执行合并.
 func (m *Merger) Merge() error {
 	if err := m.validateInput(); err != nil {
 		return errcode.WithError(errcode.ErrValidateInput, err)
@@ -40,7 +40,7 @@ func (m *Merger) Merge() error {
 	return m.writeResult(result)
 }
 
-// validateInput 验证输入
+// validateInput 验证输入.
 func (m *Merger) validateInput() error {
 	if len(m.inputFiles) == 0 {
 		return errcode.ErrInvalidInput
@@ -49,7 +49,7 @@ func (m *Merger) validateInput() error {
 	return nil
 }
 
-// mergeConfigs 合并配置
+// mergeConfigs 合并配置.
 func (m *Merger) mergeConfigs() (any, error) {
 	var result any
 	for _, file := range m.inputFiles {
@@ -63,7 +63,7 @@ func (m *Merger) mergeConfigs() (any, error) {
 	return result, nil
 }
 
-// processFile 处理单个文件
+// processFile 处理单个文件.
 func (m *Merger) processFile(fileName string) (any, error) {
 	data, err := os.ReadFile(fileName)
 	if err != nil {
@@ -84,7 +84,7 @@ func (m *Merger) processFile(fileName string) (any, error) {
 	return config, nil
 }
 
-// writeResult 写入结果
+// writeResult 写入结果.
 func (m *Merger) writeResult(result any) error {
 	if m.outputDir != "" {
 		if err := os.MkdirAll(m.outputDir, 0o750); err != nil {
@@ -118,7 +118,7 @@ func (m *Merger) writeResult(result any) error {
 	return nil
 }
 
-// merge 合并两个配置
+// merge 合并两个配置.
 func (m *Merger) merge(a, b any) any {
 	if a == nil {
 		return b
@@ -127,7 +127,7 @@ func (m *Merger) merge(a, b any) any {
 	return b
 }
 
-// setTag 设置标签
+// setTag 设置标签.
 func (m *Merger) setTag(_ any, _ string) error {
 	// 实现设置标签逻辑
 	return nil

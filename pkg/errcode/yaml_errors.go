@@ -5,8 +5,10 @@ const (
 	ErrCodeYAMLUnmarshal
 )
 
+// YAML操作错误码 (12000-12999).
 var (
-	// YAML操作错误码 (12000-12999)
-	ErrYAMLMarshal   = NewError(ErrCodeYAMLMarshal, "YAML序列化失败")
+	// ErrYAMLMarshal YAML序列化失败.
+	ErrYAMLMarshal = NewError(ErrCodeYAMLMarshal, "YAML序列化失败")
+	// ErrYAMLUnmarshal YAML反序列化失败.
 	ErrYAMLUnmarshal = NewError(ErrCodeYAMLUnmarshal, "YAML反序列化失败")
 )

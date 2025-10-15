@@ -7,19 +7,19 @@ import (
 	"github.com/xbpk3t/docs-alfred/service"
 )
 
-// GoodsYAMLRender 商品 YAML 渲染器
+// GoodsYAMLRender 商品 YAML 渲染器.
 type GoodsYAMLRender struct {
 	*render.YAMLRenderer
 }
 
-// NewGoodsYAMLRender 创建新的商品 YAML 渲染器
+// NewGoodsYAMLRender 创建新的商品 YAML 渲染器.
 func NewGoodsYAMLRender() *GoodsYAMLRender {
 	return &GoodsYAMLRender{
 		YAMLRenderer: render.NewYAMLRenderer(string(service.ServiceGoods), true),
 	}
 }
 
-// Render 渲染商品数据
+// Render 渲染商品数据.
 func (g *GoodsYAMLRender) Render(data []byte) (string, error) {
 	// 解析YAML数据为Goods类型
 	goods, err := parser.NewParser[Goods](data).ParseFlatten()
