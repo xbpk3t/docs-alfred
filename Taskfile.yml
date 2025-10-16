@@ -2,8 +2,8 @@ version: "3"
 
 includes:
   gh:
-    taskfile: ./alfred/gh/Taskfile.yml
-    dir: alfred/gh
+    taskfile: ./alfred/dgh/Taskfile.yml
+    dir: alfred/dgh
   r2n:
     taskfile: ./rss2newsletter/Taskfile.yml
     dir: rss2newsletter

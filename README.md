@@ -16,3 +16,21 @@ go install github.com/xbpk3t/docs-alfred/yaml2md@main
 go install github.com/xbpk3t/docs-alfred/rss2newsletter@main
 
 ```
+
+
+### pwgen
+
+```shell
+
+go install github.com/xbpk3t/docs-alfred/pwgen@main
+
+```
+
+
+### dgh
+
+```shell
+
+go install github.com/xbpk3t/docs-alfred/dgh@main
+
+```

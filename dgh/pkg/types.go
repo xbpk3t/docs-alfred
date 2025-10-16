@@ -70,7 +70,7 @@ type Table struct {
 
 type Tables []Table
 
-// Config represents the complete gh configuration.
+// Config represents the complete dgh configuration.
 type Config struct {
 	ConfigRepos ConfigRepos `yaml:"config"`
 }

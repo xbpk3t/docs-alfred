@@ -260,7 +260,7 @@ func (dc *DocsConfig) createRenderer() (render.Renderer, error) {
 	switch dc.Cmd {
 	case "task":
 		renderer = task.NewTaskYAMLRender()
-	case "gh":
+	case "dgh":
 		renderer = gh.NewGithubYAMLRender()
 	case "goods":
 		renderer = goods.NewGoodsYAMLRender()
