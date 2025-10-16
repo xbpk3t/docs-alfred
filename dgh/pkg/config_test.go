@@ -13,7 +13,7 @@ package gh
 //`
 //
 //	// Write test config to temp file
-//	tmpFile, err := os.CreateTemp(t.TempDir(), "gh-test-*.yml")
+//	tmpFile, err := os.CreateTemp(t.TempDir(), "dgh-test-*.yml")
 //	if err != nil {
 //		t.Fatalf("Failed to create temp file: %v", err)
 //	}
@@ -63,7 +63,7 @@ package gh
 //      des: The Python programming language
 //`
 //
-//	tmpFile, err := os.CreateTemp(t.TempDir(), "gh-test-*.yml")
+//	tmpFile, err := os.CreateTemp(t.TempDir(), "dgh-test-*.yml")
 //	if err != nil {
 //		t.Fatalf("Failed to create temp file: %v", err)
 //	}

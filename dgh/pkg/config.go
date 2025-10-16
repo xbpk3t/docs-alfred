@@ -12,7 +12,7 @@ import (
 
 const (
 	DefaultConfigURL  = "https://docs.lucc.dev/gh.yml"
-	DefaultConfigPath = "/tmp/gh.yml"
+	DefaultConfigPath = "/tmp/dgh.yml"
 )
 
 // Manager handles repository configuration.

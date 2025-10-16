@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/xbpk3t/docs-alfred/gh/pkg"
+	"github.com/xbpk3t/docs-alfred/dgh/pkg"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
 )
 
@@ -17,9 +17,9 @@ var cfgFile string //nolint:gochecknoglobals // Required for cobra CLI
 //
 //nolint:gochecknoglobals // Required for cobra CLI
 var rootCmd = &cobra.Command{
-	Use:   "gh [query]",
+	Use:   "dgh [query]",
 	Short: "Search GitHub repositories from your configuration",
-	Long: `gh searches through your configured GitHub repositories.
+	Long: `dgh searches through your configured GitHub repositories.
 It automatically syncs the configuration from remote if not found locally.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -127,11 +127,11 @@ func initConfig() {
 			os.Exit(1)
 		}
 
-		// Search config in home directory with name ".gh" (without extension).
+		// Search config in home directory with name ".dgh" (without extension).
 		viper.AddConfigPath(home)
 		viper.AddConfigPath(".")
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".gh")
+		viper.SetConfigName(".dgh")
 	}
 
 	// Environment variables

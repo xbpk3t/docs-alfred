@@ -15,7 +15,7 @@ type Repository struct {
 	URL            string   `yaml:"url"`
 	Tag            string   `yaml:"tag,omitempty"`
 	Type           string   `yaml:"type"`
-	MainRepo       string   // 如果是sub, replaced, related repos 就需要设置这个参数（gh-merge中会自动设置）
+	MainRepo       string   // 如果是sub, replaced, related repos 就需要设置这个参数（dgh-merge中会自动设置）
 	Topics         Topics   `json:"topics,omitempty" yaml:"topics,omitempty"`
 	SubRepos       Repos    `yaml:"sub,omitempty"`
 	ReplacedRepos  Repos    `yaml:"rep,omitempty"`

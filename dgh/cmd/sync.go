@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/xbpk3t/docs-alfred/gh/pkg"
+	"github.com/xbpk3t/docs-alfred/dgh/pkg"
 )
 
 // syncCmd represents the sync command
