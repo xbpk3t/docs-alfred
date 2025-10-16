@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/xbpk3t/docs-alfred/gh/pkg"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
-	"github.com/xbpk3t/docs-alfred/workflow/gh/pkg"
 )
 
 var cfgFile string //nolint:gochecknoglobals // Required for cobra CLI
