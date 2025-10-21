@@ -31,15 +31,15 @@ jobs:
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Parse Event
-        run: task ak:tag
-      - name: Build and pack
-        run: task ak:build-and-pack
+#      - name: Parse Event
+#        run: task ak:tag
+#      - name: Build and pack
+#        run: task ak:build-and-pack
 
-      - uses: shogo82148/actions-upload-release-asset@v1
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.artifact }}"
+#      - uses: shogo82148/actions-upload-release-asset@v1
+#        with:
+#          upload_url: ${{ github.event.release.upload_url }}
+#          asset_path: "${{ env.artifact }}"
 
 
   release:
