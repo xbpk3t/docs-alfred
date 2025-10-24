@@ -78,8 +78,8 @@ func processDirectoryEntry(src string, file os.DirEntry, setCurrentFile func(str
 		return subData, nil
 	}
 
-	// 跳过非 yml 文件和被排除的文件
-	if filepath.Ext(file.Name()) != ".yml" {
+	// 跳过非 yml/yaml 文件和被排除的文件
+	if ext := filepath.Ext(file.Name()); ext != ".yml" && ext != ".yaml" {
 		return nil, nil // 返回nil表示跳过该文件
 	}
 
