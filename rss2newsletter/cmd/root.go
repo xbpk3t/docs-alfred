@@ -6,14 +6,16 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"io"
 	"log/slog"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	mjml "github.com/Boostport/mjml-go"
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/gorilla/feeds"
-	resend "github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
@@ -25,15 +27,8 @@ type Config struct {
 	CfgFile string
 }
 
-//go:embed templates/newsletter.mjml
+//go:embed templates/newsletter.mjml templates/newsletter.md.tmpl
 var templates embed.FS
-
-// EmailConfig 邮件配置.
-type EmailConfig struct {
-	From  string
-	Token string
-	To    []string
-}
 
 // NewsletterService 处理新闻通讯的服务.
 type NewsletterService struct {
@@ -294,7 +289,7 @@ func (s *NewsletterService) RenderNewsletter(
 		},
 	}
 
-	return s.renderTemplate("newsletter.mjml", data)
+	return s.renderTemplate("newsletter.md.tmpl", data)
 }
 
 // handleOutput 处理输出（写入文件或发送邮件）.
@@ -302,11 +297,11 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 	if s.config.EnvConfig.Debug {
 		// 写入到本地文件
 		for i, content := range contents {
-			filename := fmt.Sprintf("newsletter_%d.html", i+1)
+			filename := fmt.Sprintf("newsletter_%d.md", i+1)
 			if err := os.WriteFile(filename, []byte(content.Content), 0o600); err != nil {
 				return fmt.Errorf("failed to write file %s: %w", filename, err)
 			}
-			slog.Info("HTML写入成功", "filename", filename)
+			slog.Info("Markdown 写入成功", "filename", filename)
 		}
 
 		return nil
@@ -322,30 +317,39 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 	return nil
 }
 
-// SendNewsletter 发送邮件.
+// SendNewsletter 发送 Markdown 到 ntfy.
 func (s *NewsletterService) SendNewsletter(content, subject string) error {
-	emailCfg := EmailConfig{
-		From:  "Acme <onboarding@resend.dev>",
-		To:    s.config.ResendConfig.MailTo,
-		Token: s.config.ResendConfig.Token,
+	ntfyCfg := s.config.NtfyConfig
+	endpoint := strings.TrimRight(ntfyCfg.URL, "/")
+	if endpoint == "" {
+		return fmt.Errorf("invalid ntfy url")
 	}
+	endpoint = fmt.Sprintf("%s/%s", endpoint, strings.TrimLeft(ntfyCfg.Topic, "/"))
 
-	ctx := context.Background()
-	client := resend.NewClient(emailCfg.Token)
-
-	params := &resend.SendEmailRequest{
-		From:    emailCfg.From,
-		To:      emailCfg.To,
-		Subject: subject,
-		Html:    content,
-	}
-
-	sent, err := client.Emails.SendWithContext(ctx, params)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint, strings.NewReader(content))
 	if err != nil {
-		return fmt.Errorf("failed to send email: %w", err)
+		return fmt.Errorf("failed to create ntfy request: %w", err)
 	}
 
-	slog.Info("邮件发送成功", "id", sent.Id)
+	req.Header.Set("Content-Type", "text/markdown")
+	req.Header.Set("Markdown", "yes")
+	req.Header.Set("Title", subject)
+	if ntfyCfg.Token != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ntfyCfg.Token))
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send ntfy request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("ntfy request failed: status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	slog.Info("ntfy 推送成功", slog.String("topic", ntfyCfg.Topic))
 
 	return nil
 }
