@@ -3,9 +3,10 @@ feed:
   maxTries: 5 # 最大retry次数
   feedLimit: 30 #
 
-resend:
-  token: sk
-  mailTo: [me@lucc.dev]
+ntfy:
+  url: https://ntfy.lucc.dev
+  topic: test
+  token: token
 
 
 newsletter:
