@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	mjml "github.com/Boostport/mjml-go"
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/gorilla/feeds"
 	"github.com/samber/lo"
@@ -27,7 +26,7 @@ type Config struct {
 	CfgFile string
 }
 
-//go:embed templates/newsletter.mjml templates/newsletter.md.tmpl
+//go:embed templates/newsletter.md.tmpl
 var templates embed.FS
 
 // NewsletterService 处理新闻通讯的服务.
@@ -250,20 +249,6 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 	var tplBytes bytes.Buffer
 	if err := tmpl.Execute(&tplBytes, data); err != nil {
 		return "", fmt.Errorf("failed to render template: %w", err)
-	}
-
-	// If this is an MJML template, convert it to HTML
-	if templateName == "newsletter.mjml" {
-		htmlOutput, err := mjml.ToHTML(context.Background(), tplBytes.String(),
-			mjml.WithMinify(true),
-			mjml.WithBeautify(true),
-			mjml.WithValidationLevel("soft"),
-		)
-		if err != nil {
-			return "", fmt.Errorf("failed to convert MJML to HTML: %w", err)
-		}
-
-		return htmlOutput, nil
 	}
 
 	return tplBytes.String(), nil
