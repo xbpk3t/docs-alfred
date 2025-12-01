@@ -12,7 +12,7 @@ import (
 
 // Config 主配置结构.
 type Config struct {
-	NtfyConfig       NtfyConfig       `yaml:"ntfy"`
+	ResendConfig     ResendConfig     `yaml:"resend"`
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
 	Feeds            []FeedsDetail    `yaml:"feeds"`
 	FeedConfig       FeedConfig       `yaml:"feed"`
@@ -20,11 +20,10 @@ type Config struct {
 	EnvConfig        EnvConfig        `yaml:"env"`
 }
 
-// NtfyConfig ntfy 相关配置.
-type NtfyConfig struct {
-	URL   string `yaml:"url"`
-	Topic string `yaml:"topic"`
-	Token string `yaml:"token"`
+// ResendConfig Resend相关配置.
+type ResendConfig struct {
+	Token  string   `yaml:"token"`
+	MailTo []string `yaml:"mailTo"`
 }
 
 // NewsletterConfig 新闻通讯配置.
@@ -83,16 +82,8 @@ func NewConfig(configFile string) (*Config, error) {
 
 // Validate 验证配置.
 func (c *Config) Validate() error {
-	if c.NtfyConfig.URL == "" {
-		return errors.New("ntfy url is required")
-	}
-
-	if c.NtfyConfig.Topic == "" {
-		return errors.New("ntfy topic is required")
-	}
-
-	if c.NtfyConfig.Token == "" {
-		return errors.New("ntfy token is required")
+	if c.ResendConfig.Token == "" {
+		return errors.New("resend token is required")
 	}
 
 	if !isValidSchedule(c.NewsletterConfig.Schedule) {
