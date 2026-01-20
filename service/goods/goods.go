@@ -14,7 +14,7 @@ type Goods struct {
 	Using  Item            `json:"using"  yaml:"using"`
 	Topics []gh.Topic      `json:"topics" yaml:"topics,omitempty"`
 	Item   []yaml.MapSlice `json:"item"   yaml:"item"`
-	Record []string        `json:"record" yaml:"record,omitempty"`
+	// Record []string        `json:"record" yaml:"record,omitempty"`
 	Score  int             `json:"score"  yaml:"score"`
 }
 
