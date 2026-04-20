@@ -1,25 +1,26 @@
-version: "3"
+---
+version: '3'
+
 
 vars:
-  FLAGS: -X github.com/xbpk3t/docs-alfred/cmd.EnabledAutoUpdate={{.ENABLED_AUTO_UPDATE}}
+  REPO: github.com/xbpk3t/docs-alfred
+  OUTPUT: docs-alfred.alfredworkflow
+  FLAGS: -X {{.REPO}}/cmd.EnabledAutoUpdate={{.ENABLED_AUTO_UPDATE}}
   ENABLED_AUTO_UPDATE: "false"
 
+
+#  url: https://github.com/cage1016/ak
+#  doc: https://kaichu.io/zh-tw/posts/golang-alfred-workflow-generator-ak/
+#  des: cli工具，基于awgo+cobra实现，用来初始化workflow，提高开发效率。使用ak开发alfred workflow，开发阶段就不需要手动替换bin了，直接make build即可。发布阶段，不需要在本地打包、导出再上传，直接在cicd打包，非常简单。
+#  qs:
+#    - 为啥应该用ak来开发alfred workflow? (没使用 ak 脚手架之前，开发alfred workflow的开发流程和release流程? 使用 ak脚手架之后呢?)
+#    - 执行 `make link` 可以操作对应 alfred 的具体原理 # 执行后，给对应 workflow 创建软链接
+#    - ak bugs (go-bindata, unlink symbolic link error, release tag) # [found the following issues that I'd like to discuss with you · Issue #4 · cage1016/ak](https://github.com/cage1016/ak/issues/4)
+# Commented out to prevent auto-execution when included
 tasks:
-  generate:
-    desc: "go generate"
-    cmds:
-      - |
-        if ! command -v go-bindata > /dev/null 2>&1; then
-          echo "requires 'go-bindata' (go get -u github.com/kevinburke/go-bindata/go-bindata)"
-          exit 1
-        fi
-        go generate ./...
-
-  release:
-    cmds:
-      - GOOS=darwin GOARCH={{.ARCH}} CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/xbpk3t/docs-alfred/cmd.EnabledAutoUpdate={{.ENABLED_AUTO_UPDATE}}" -o exe_{{.ARCH}}
-
-  build-and-pack:
+  default:
+    desc: Build And Pack.
+    summary: "task -g default"
     cmds:
       - task: release
         vars:
@@ -27,57 +28,47 @@ tasks:
       - task: release
         vars:
           ARCH: arm64
-      - lipo -create -output .wf/exe exe_amd64 exe_arm64
+
+      - lipo -create -output .workflow/exe exe_amd64 exe_arm64
       - rm  exe_amd64
       - rm  exe_arm64
 
       # pack
-      - cd .wf
-      #      - plutil -replace version -string "${{ env.tag }}" info.plist
-      #      - zip -r ../"docs-alfred_auto_update-${{ env.tag }}.alfredworkflow" .
-      #      - cd ..
-      #      - echo "artifact=$(echo "docs-alfred_auto_update-${{ env.tag }}.alfredworkflow")" >> $GITHUB_ENV
-      #      - plutil -replace version -string 111 info.plist
-      - zip -r ../"docs-alfred.alfredworkflow" .
+      - cd .workflow
+      - zip -r ../"{{.OUTPUT}}" .
       - cd ..
-      - echo "artifact=$(echo "docs-alfred.alfredworkflow")" >> $GITHUB_ENV
+      - echo "artifact=$(echo "{{.OUTPUT}}")" >> $GITHUB_ENV
+    preconditions:
+      - sh: command -v ak
+        msg: 需要安装ak (go install github.com/cage1016/ak@latest)
 
 
-  test:
-    desc: "run tests"
+  release:
+    desc: "release 任务"
+    summary: "task -g release"
     cmds:
-      - go test -v -race -cover -coverprofile coverage.txt -covermode=atomic ./...
+      - GOOS=darwin GOARCH={{.ARCH}} CGO_ENABLED=1 go build -ldflags "-s -w {{.FLAGS}}" -o exe_{{.ARCH}}
 
   build:
     desc: "build the binary"
+    summary: "task -g build"
     cmds:
       - ak alfred build -l "{{.FLAGS}}"
 
-  info:
-    desc: "show alfred wf info"
+  run:*:
+    desc: "run 通配任务"
+    summary: "task -g run:<SERVICE>"
+    vars:
+      SERVICE: '{{index .MATCH 0}}'
+    requires:
+      vars:
+        - name: SERVICE
+          enum: [info, link, unlink, pack]
     cmds:
-      - ak alfred info
-
-  link:
-    desc: "link alfred wf"
-    cmds:
-      - ak alfred link
-
-  unlink:
-    desc: "unlink alfred wf"
-    cmds:
-      - ak alfred unlink
-
-  pack:
-    desc: "pack alfred wf"
-    cmds:
-      - ak alfred pack
-
-  help:
-    desc: "this help"
-    cmds:
-      - |
-        awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_0-9-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
+      - echo "Starting {{.SERVICE}}"
+      - ak alfred {{.SERVICE}}
 
   tag:
+    desc: "tag 任务"
+    summary: "task -g tag"
     cmd: echo "tag=$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)" >> $GITHUB_ENV
