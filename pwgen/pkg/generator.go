@@ -112,7 +112,7 @@ func (g *Generator) sha512(sk, website string) string {
 		return ""
 	}
 
-	for i := 0; i < len(source); i++ {
+	for i := range source {
 		if i >= len(rule) {
 			log.Printf("Error converting hex string to array")
 

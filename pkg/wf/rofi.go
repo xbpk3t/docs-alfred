@@ -9,7 +9,7 @@ import (
 type RofiFormatter struct{}
 
 // Format formats the data for Rofi.
-func (f *RofiFormatter) Format(data interface{}) (string, error) {
+func (f *RofiFormatter) Format(data any) (string, error) {
 	switch v := data.(type) {
 	case string:
 		return v, nil

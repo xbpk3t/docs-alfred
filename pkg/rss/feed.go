@@ -39,9 +39,9 @@ func sendErrorFeed(ch chan<- *gofeed.Feed, url string, lastError error) {
 		errorMsg = lastError.Error()
 	}
 	ch <- &gofeed.Feed{
-		FeedType: "error",
+		FeedType: LogKeyError,
 		Title:    url,
-		Custom:   map[string]string{"error": errorMsg},
+		Custom:   map[string]string{LogKeyError: errorMsg},
 	}
 }
 

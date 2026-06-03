@@ -41,7 +41,7 @@ type ConfigRepo struct {
 
 type ConfigRepos []*ConfigRepo
 
-// Config represents the complete dgh configuration (for remote gh.yml).
+// Config represents the complete gh configuration (for remote gh.yml).
 type Config struct {
 	ConfigRepos ConfigRepos `yaml:"config"`
 }

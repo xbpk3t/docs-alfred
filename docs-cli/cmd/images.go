@@ -5,7 +5,10 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/images"
 )
+
+const cmdImages = "images"
 
 type imagesCheckFlags struct {
 	dataDir     string
@@ -17,22 +20,31 @@ type imagesCheckFlags struct {
 	skipMissing bool
 }
 
-// newImagesCmd creates `images check`.
 func newImagesCmd() *cobra.Command {
-	var flags imagesCheckFlags
-
 	cmd := &cobra.Command{
-		Use:   "images",
+		Use:   cmdImages,
 		Short: "Docs-images management commands",
 	}
 
+	var flags imagesCheckFlags
 	checkCmd := &cobra.Command{
-		Use:   "check",
+		Use:   cmdCheck,
 		Short: "Check docs-images against data/gh expectations",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runImagesCheck(flags)
+			cfg := images.CheckConfig{
+				DataDir:     flags.dataDir,
+				ImagesDir:   flags.imagesDir,
+				Scope:       flags.scope,
+				Apply:       flags.apply,
+				List:        flags.list,
+				SkipExtra:   flags.skipExtra,
+				SkipMissing: flags.skipMissing,
+			}
+
+			return runImagesCheck(cfg)
 		},
 	}
+
 	checkCmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
 	checkCmd.Flags().StringVar(&flags.imagesDir, "images-dir", "docs-images", "docs-images path")
 	checkCmd.Flags().StringVar(&flags.scope, "scope", "", "Only check a path prefix")
@@ -46,8 +58,22 @@ func newImagesCmd() *cobra.Command {
 	return cmd
 }
 
-func runImagesCheck(flags imagesCheckFlags) error {
-	fmt.Fprintf(os.Stderr, "Checking docs-images from data-dir=%q images-dir=%q...\n", flags.dataDir, flags.imagesDir)
-	// TODO: full port from TS modules/images/check.ts
+func runImagesCheck(cfg images.CheckConfig) error {
+	fmt.Fprintf(os.Stderr, "Checking docs-images from data-dir=%q images-dir=%q...\n", cfg.DataDir, cfg.ImagesDir)
+
+	result, err := images.RunImagesCheck(cfg)
+	if err != nil {
+		return err
+	}
+
+	result.Report(cfg)
+
+	if len(result.Errors) > 0 {
+		return fmt.Errorf("images check found %d errors", len(result.Errors))
+	}
+	if len(result.MissingDirs) > 0 && !cfg.SkipMissing {
+		return fmt.Errorf("images check: %d missing expected dirs", len(result.MissingDirs))
+	}
+
 	return nil
 }
