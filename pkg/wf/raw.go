@@ -8,7 +8,7 @@ import (
 type RawFormatter struct{}
 
 // Format formats the data as raw JSON.
-func (f *RawFormatter) Format(data interface{}) (string, error) {
+func (f *RawFormatter) Format(data any) (string, error) {
 	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return "", err

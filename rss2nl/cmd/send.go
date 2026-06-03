@@ -17,6 +17,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
 )
 
@@ -301,7 +302,7 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 	if s.config.EnvConfig.Debug {
 		for i, content := range contents {
 			filename := fmt.Sprintf("newsletter_%d.html", i+1)
-			if err := os.WriteFile(filename, []byte(content.Content), 0o600); err != nil {
+			if err := os.WriteFile(filename, []byte(content.Content), fileutil.FilePermPrivate); err != nil {
 				return fmt.Errorf("failed to write file %s: %w", filename, err)
 			}
 			slog.Info("HTML写入成功", "filename", filename)

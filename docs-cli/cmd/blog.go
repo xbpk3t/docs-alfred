@@ -1,13 +1,12 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
+	"errors"
 
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/blog"
 )
 
-// newBlogCmd creates `blog check`.
 func newBlogCmd() *cobra.Command {
 	var dataDir, blogDir string
 
@@ -17,7 +16,7 @@ func newBlogCmd() *cobra.Command {
 	}
 
 	checkCmd := &cobra.Command{
-		Use:   "check",
+		Use:   cmdCheck,
 		Short: "Check blog/data consistency",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runBlogCheck(dataDir, blogDir)
@@ -32,7 +31,14 @@ func newBlogCmd() *cobra.Command {
 }
 
 func runBlogCheck(dataDir, blogDir string) error {
-	fmt.Fprintf(os.Stderr, "Checking blog consistency: data-dir=%q blog-dir=%q...\n", dataDir, blogDir)
-	// TODO: full port from TS modules/blog/check.ts
+	result, err := blog.RunCheck(dataDir, blogDir)
+	if err != nil {
+		return err
+	}
+	result.Report("blog check")
+	if result.HasErrors() {
+		return errors.New("blog check failed")
+	}
+
 	return nil
 }

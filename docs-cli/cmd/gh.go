@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -11,9 +11,11 @@ import (
 	gh "github.com/xbpk3t/docs-alfred/service/gh"
 )
 
+const cmdGH = "gh"
+
 func newGhCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "gh",
+		Use:   cmdGH,
 		Short: "Remote GitHub repo search and cache sync",
 	}
 
@@ -38,24 +40,21 @@ func newGhSearchCmd() *cobra.Command {
 			}
 
 			manager := gh.NewManager(cachePath, configURL)
-			if err := manager.Load(); err != nil {
+
+			if maxAge != "" {
+				d, err := time.ParseDuration(maxAge)
+				if err == nil {
+					manager.SetTTL(d)
+				}
+			}
+
+			if err := manager.LoadWithCacheTTL(); err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
 			repos := manager.Filter(query)
 
-			switch outputFormat {
-			case "alfred":
-				return writeAlfredOutput(repos, docsURL)
-			case "plain":
-				return writeOutput(formatPlainOutput(repos, docsURL))
-			case "raw":
-				return writeRawJSON(repos)
-			case "rofi":
-				return writeRofiOutput(repos)
-			default:
-				return writeOutput(formatPlainOutput(repos, docsURL))
-			}
+			return runGhSearchOutput(repos, outputFormat, docsURL)
 		},
 	}
 
@@ -92,102 +91,33 @@ func newGhSyncCmd() *cobra.Command {
 	return syncCmd
 }
 
-// ---- format helpers ----
+// ---- output ----
 
-func writeAlfredOutput(repos gh.Repos, docsURL string) error {
-	var items []wf.AlfredItem
+func runGhSearchOutput(repos gh.Repos, outputFormat, docsURL string) error {
+	switch outputFormat {
+	case "alfred":
+		items := gh.FormatAlfredItems(repos, docsURL)
 
-	for _, repo := range repos {
-		item := wf.AlfredItem{
-			Title:    repo.FullName(),
-			Subtitle: repo.GetDes(),
-			Arg:      repo.GetURL(),
-			Valid:    true,
-		}
-
-		switch {
-		case repo.HasQs() && repo.Doc != "":
-			item.Icon = &wf.AlfredIcon{Path: gh.IconQsDoc}
-		case repo.HasQs():
-			item.Icon = &wf.AlfredIcon{Path: gh.IconQs}
-		case repo.Doc != "":
-			item.Icon = &wf.AlfredIcon{Path: gh.IconDoc}
-		default:
-			item.Icon = &wf.AlfredIcon{Path: gh.IconSearch}
-		}
-
-		item.Mods = make(map[string]*wf.AlfredMod)
-		if repo.Doc != "" {
-			docURL := fmt.Sprintf("%s/#/%s", docsURL, repo.Doc)
-			item.Mods["cmd"] = &wf.AlfredMod{
-				Valid:    true,
-				Arg:      docURL,
-				Subtitle: "Open documentation",
-			}
-		}
-
-		items = append(items, item)
+		return writeFormatterOutput("alfred", items)
+	case "plain":
+		return writeOutput(gh.FormatPlain(repos, docsURL))
+	case "raw":
+		return writeFormatterOutput("raw", repos)
+	case "rofi":
+		return writeOutput(gh.FormatRofi(repos))
+	default:
+		return writeOutput(gh.FormatPlain(repos, docsURL))
 	}
+}
 
-	output := wf.AlfredOutput{Items: items}
-	formatter := wf.GetFormatter("alfred")
-	result, err := formatter.Format(output)
+func writeFormatterOutput(format string, data any) error {
+	formatter := wf.GetFormatter(format)
+	result, err := formatter.Format(data)
 	if err != nil {
 		return err
 	}
 
 	return writeOutput(result)
-}
-
-func formatPlainOutput(repos gh.Repos, docsURL string) string {
-	var sb strings.Builder
-
-	for i, repo := range repos {
-		if i > 0 {
-			sb.WriteString("\n\n")
-		}
-		sb.WriteString(fmt.Sprintf("repo: %s\n", repo.GetURL()))
-		if repo.GetDes() != "" {
-			sb.WriteString(fmt.Sprintf("desc: %s\n", repo.GetDes()))
-		}
-		if repo.Doc != "" {
-			docURL := fmt.Sprintf("%s/#/%s", docsURL, repo.Doc)
-			sb.WriteString(fmt.Sprintf("doc: %s\n", repo.Doc))
-			sb.WriteString(fmt.Sprintf("docs: %s\n", docURL))
-		}
-		if repo.Type != "" {
-			typeInfo := repo.Type
-			if repo.Tag != "" {
-				typeInfo = fmt.Sprintf("%s#%s", repo.Tag, repo.Type)
-			}
-			sb.WriteString(fmt.Sprintf("type: %s\n", typeInfo))
-		}
-	}
-
-	return sb.String()
-}
-
-func writeRawJSON(repos gh.Repos) error {
-	formatter := wf.GetFormatter("raw")
-	result, err := formatter.Format(repos)
-	if err != nil {
-		return err
-	}
-
-	return writeOutput(result)
-}
-
-func writeRofiOutput(repos gh.Repos) error {
-	var lines []string
-	for _, repo := range repos {
-		line := repo.FullName()
-		if repo.GetDes() != "" {
-			line = fmt.Sprintf("%s - %s", line, repo.GetDes())
-		}
-		lines = append(lines, line)
-	}
-
-	return writeOutput(strings.Join(lines, "\n"))
 }
 
 func writeOutput(s string) error {

@@ -1,39 +1,57 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/dotfiles"
 )
 
-// newDotfilesCmd creates `dotfiles check` and `dotfiles sync-plan`.
+const cmdCheck = "check"
+
 func newDotfilesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dotfiles",
 		Short: "Dotfiles consistency commands",
 	}
 
-	// dotfiles check
 	var checkPath string
 	checkCmd := &cobra.Command{
-		Use:   "check",
+		Use:   cmdCheck,
 		Short: "Check dotfiles/data consistency",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDotfilesCheck(checkPath)
+			result, err := dotfiles.RunCheck(checkPath, "data/gh")
+			if err != nil {
+				return err
+			}
+			result.Report("dotfiles check")
+			if result.HasErrors() {
+				return errors.New("dotfiles check failed")
+			}
+
+			return nil
 		},
 	}
 	checkCmd.Flags().StringVar(&checkPath, "dotfiles", "dotfiles", "dotfiles path")
 	cmd.AddCommand(checkCmd)
 
-	// dotfiles sync-plan
 	var syncPlanPath string
 	var syncPlanJSON bool
 	syncPlanCmd := &cobra.Command{
 		Use:   "sync-plan",
 		Short: "Plan dotfiles synchronization",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDotfilesSyncPlan(syncPlanPath, syncPlanJSON)
+			result := dotfiles.RunSyncPlan(dotfiles.SyncPlanOptions{
+				DotfilesPath: syncPlanPath,
+				JSON:         syncPlanJSON,
+			})
+			result.PrintResult(syncPlanJSON)
+			if !result.OK {
+				return fmt.Errorf("sync-plan failed: %s", result.Error)
+			}
+
+			return nil
 		},
 	}
 	syncPlanCmd.Flags().StringVar(&syncPlanPath, "dotfiles", "dotfiles", "dotfiles path")
@@ -41,16 +59,4 @@ func newDotfilesCmd() *cobra.Command {
 	cmd.AddCommand(syncPlanCmd)
 
 	return cmd
-}
-
-func runDotfilesCheck(path string) error {
-	fmt.Fprintf(os.Stderr, "Checking dotfiles consistency at %q...\n", path)
-	// TODO: full port from TS modules/dotfiles/check.ts
-	return nil
-}
-
-func runDotfilesSyncPlan(path string, asJSON bool) error {
-	fmt.Fprintf(os.Stderr, "Planning dotfiles sync at %q (json=%v)...\n", path, asJSON)
-	// TODO: full port from TS modules/dotfiles/sync-plan.ts
-	return nil
 }

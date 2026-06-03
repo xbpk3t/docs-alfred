@@ -29,10 +29,10 @@ func (u *URLInfo) GetLink() string {
 }
 
 func JoinSlashParts(s string) string {
-	index := strings.Index(s, "/")
-	if index != -1 {
+	before, after, ok := strings.Cut(s, "/")
+	if ok {
 		// 拼接 `/` 前后的字符串，并保留 `/` 字符
-		return s[:index] + s[index+1:]
+		return before + after
 	}
 
 	return s

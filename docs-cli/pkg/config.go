@@ -10,6 +10,7 @@ import (
 
 	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 
 	"github.com/gookit/goutil/fsutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
@@ -163,12 +164,12 @@ func (p *DocProcessor) readAndMergeFiles(src string) ([]byte, error) {
 }
 
 func (p *DocProcessor) WriteOutput(content, filename string) error {
-	if err := os.MkdirAll(p.Dst, 0o750); err != nil {
+	if err := os.MkdirAll(p.Dst, fileutil.DirPerm); err != nil {
 		return fmt.Errorf("create dir error: %w", err)
 	}
 
 	outputPath := filepath.Join(p.Dst, filename)
-	if err := os.WriteFile(outputPath, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(outputPath, []byte(content), fileutil.FilePermPrivate); err != nil {
 		return fmt.Errorf("write file error: %w", err)
 	}
 
@@ -260,7 +261,7 @@ func (dc *DocsConfig) createRenderer() (render.Renderer, error) {
 	switch dc.Cmd {
 	case "task":
 		renderer = task.NewTaskYAMLRender()
-	case "dgh":
+	case "gh":
 		renderer = gh.NewGithubYAMLRender()
 	case "goods":
 		renderer = goods.NewGoodsYAMLRender()

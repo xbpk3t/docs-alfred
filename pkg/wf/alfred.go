@@ -46,7 +46,7 @@ type AlfredOutput struct {
 type AlfredFormatter struct{}
 
 // Format formats the data as Alfred JSON.
-func (f *AlfredFormatter) Format(data interface{}) (string, error) {
+func (f *AlfredFormatter) Format(data any) (string, error) {
 	var output AlfredOutput
 
 	switch v := data.(type) {

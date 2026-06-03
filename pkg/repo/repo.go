@@ -22,7 +22,7 @@ func GetRepoList(repos any) []RepoInfo {
 	value := reflect.ValueOf(repos)
 
 	// 如果是指针，获取其指向的元素
-	if value.Kind() == reflect.Ptr {
+	if value.Kind() == reflect.Pointer {
 		value = value.Elem()
 	}
 
