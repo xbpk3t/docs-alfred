@@ -15,7 +15,7 @@ type Goods struct {
 	Topics []gh.Topic      `json:"topics" yaml:"topics,omitempty"`
 	Item   []yaml.MapSlice `json:"item"   yaml:"item"`
 	// Record []string        `json:"record" yaml:"record,omitempty"`
-	Score  int             `json:"score"  yaml:"score"`
+	Score int `json:"score" yaml:"score"`
 }
 
 // Item 定义单个商品项.

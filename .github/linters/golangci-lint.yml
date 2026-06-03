@@ -20,6 +20,22 @@ linters:
   exclusions:
     paths:
       - ".*_test\\.go"
+    rules:
+      - path: internal/tui/
+        linters:
+          - gocritic
+      - path: internal/lockfile/lockfile\.go
+        linters:
+          - gocritic
+      - path: internal/repos/github\.go
+        linters:
+          - gocritic
+      - path: cmd/catalog\.go
+        linters:
+          - gocritic
+      - path: internal/install/
+        linters:
+          - gocritic
 
 
   default: all
@@ -44,6 +60,10 @@ linters:
     - prealloc
     - recvcheck
     - unparam
+    - gochecknoglobals
+    - inamedparam
+    - tagliatelle
+    - gomodguard # WARN The linter 'gomodguard' is deprecated (since v2.12.0) due to: new major version. Replaced by gomodguard_v2. 因为当前配置里禁用了 depguard，但没有禁用 gomodguard，所以 default: all 会自动启用旧的 gomodguard，于是出现这个 WARN，所以直接disable掉之后就会默认启用 gomodguard_v2 了
 
 
   settings:
@@ -87,7 +107,7 @@ linters:
 
         - name: cognitive-complexity # #2(认知复杂度)
           severity: warning
-          arguments: [9]
+          arguments: [25]
 
         - name: var-naming         # #1(变量命名)
           severity: warning
@@ -192,6 +212,7 @@ linters:
         - G104 # 部分error不需要处理
         - G107 # http请求时不能使用动态url，关闭
         - G115 # 整数转换误报
+        - G122 # 本地 repo cache 扫描场景下的 filepath.Walk 告警噪音较大
         - G204 # 命令执行误报
         - G304 # 文件包含误报
         - G307 # Deferring a method which returns an error

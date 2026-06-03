@@ -1,12 +1,9 @@
 version: "3"
 
 includes:
-  gh:
-    taskfile: ./alfred/dgh/Taskfile.yml
-    dir: alfred/dgh
   r2n:
-    taskfile: ./rss2newsletter/Taskfile.yml
-    dir: rss2newsletter
+    taskfile: ./rss2nl/Taskfile.yml
+    dir: rss2nl
 
 tasks:
   pre-commit:
