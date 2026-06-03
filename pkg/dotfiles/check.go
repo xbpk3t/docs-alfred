@@ -225,7 +225,7 @@ func isYAMLFileNoDotfiles(dir, name string) bool {
 		}
 		for _, section := range doc {
 			isDotfiles, ok := section["isDotfiles"].(bool)
-			if !ok || !isDotfiles {
+			if !ok || isDotfiles {
 				return false
 			}
 		}

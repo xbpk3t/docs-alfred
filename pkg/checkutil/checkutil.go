@@ -17,9 +17,9 @@ const (
 // Issue represents a single validation issue.
 type Issue struct {
 	File     string
-	Line     int
 	Severity string
 	Message  string
+	Line     int
 }
 
 // Result is the common check result type.

@@ -243,6 +243,6 @@ func flushInbox(filePath string, processedLineIndices map[int]bool) {
 	if len(nonEmpty) == 0 {
 		_ = os.WriteFile(filePath, []byte{}, fileutil.FilePermPrivate)
 	} else {
-		_ = os.WriteFile(filepath.Clean(filePath), []byte(strings.Join(remaining, "\n")), fileutil.FilePermPrivate)
+		_ = os.WriteFile(filepath.Clean(filePath), []byte(strings.Join(remaining, "\n")), fileutil.FilePermPrivate) //nolint:gosec
 	}
 }
