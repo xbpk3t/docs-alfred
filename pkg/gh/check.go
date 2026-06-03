@@ -120,7 +120,6 @@ func checkRepoTopicRecords(result *CheckResult, file string, repoIndex int, repo
 		if !ok {
 			continue
 		}
-		checkTopicMetadata(result, file, repoIndex, topicIdx, topic)
 		records, _ := topic["record"].([]any)
 		result.TotalRecords += len(records)
 		for recIdx, r := range records {
@@ -182,84 +181,6 @@ func (r *CheckResult) Report(command string) {
 // HasErrors returns true if the check result has any error-severity issues.
 func HasErrors(r *CheckResult) bool {
 	return checkutil.HasErrors(r.Issues)
-}
-
-// checkTopicMetadata validates topic metadata fields (meta.slug, meta.hasPic).
-func checkTopicMetadata(result *CheckResult, file string, repoIndex, topicIdx int, topic map[string]any) {
-	meta, _ := topic["meta"].(map[string]any)
-
-	topicName, _ := topic["topic"].(string)
-	hasPic, _ := topic["hasPic"].(bool)
-	metaHasPic := false
-	metaSlug, _ := topic["slug"].(string)
-	if meta != nil {
-		if s, ok := meta["slug"].(string); ok {
-			metaSlug = s
-		}
-		if hp, ok := meta["hasPic"].(bool); ok {
-			metaHasPic = hp
-		}
-	}
-
-	validateChineseTopicSlug(result, file, repoIndex, topicIdx, topicName, metaSlug)
-	validateHasPicField(result, file, topicIdx, topic, hasPic, metaHasPic, metaSlug, topicName)
-
-	// Check nested sub topics recursively
-	if subs, ok := topic["sub"].([]any); ok {
-		for subIdx, s := range subs {
-			if sub, ok := s.(map[string]any); ok {
-				checkTopicMetadata(result, file, repoIndex, subIdx, sub)
-			}
-		}
-	}
-}
-
-// validateChineseTopicSlug warns when a Chinese topic name has no meta.slug.
-func validateChineseTopicSlug(result *CheckResult, file string, repoIndex, topicIdx int, topicName, metaSlug string) {
-	if isChinese(topicName) && metaSlug == "" {
-		result.addIssue(file, "warn",
-			fmt.Sprintf("topic[%d] (Chinese name %q) has no meta.slug for directory mapping", topicIdx, topicName))
-	}
-}
-
-// validateHasPicField validates the hasPic field and ensures a slug or topic name exists.
-func validateHasPicField(result *CheckResult, file string, topicIdx int,
-	topic map[string]any, hasPic, metaHasPic bool, metaSlug, topicName string) {
-	// hasPic should be boolean, not string or number
-	if _, isBool := topic["hasPic"].(bool); !hasPic && !isBool && topic["hasPic"] != nil {
-		result.addIssue(file, "warn",
-			fmt.Sprintf("topic[%d]: hasPic should be true or omitted, got %T", topicIdx, topic["hasPic"]))
-	}
-
-	// If hasPic is true at either level, ensure a slug or topic name exists for image-dir
-	if hasPic || metaHasPic {
-		dirName := metaSlug
-		if dirName == "" {
-			dirName = topicName
-		}
-		if dirName == "" {
-			result.addIssue(file, "error",
-				fmt.Sprintf("topic[%d]: hasPic=true but no slug or topic name for image directory", topicIdx))
-		}
-	}
-}
-
-var chineseRunes = []rune{
-	0x4E00, 0x9FFF, // CJK Unified Ideographs
-	0x3400, 0x4DBF, // CJK Unified Ideographs Extension A
-}
-
-func isChinese(s string) bool {
-	for _, r := range s {
-		if r >= chineseRunes[0] && r <= chineseRunes[1] {
-			return true
-		}
-		if r >= chineseRunes[2] && r <= chineseRunes[3] {
-			return true
-		}
-	}
-
-	return false
 }
 
 func isValidURL(str string) bool {

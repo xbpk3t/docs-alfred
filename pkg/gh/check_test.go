@@ -18,14 +18,6 @@ func TestIsValidURL(t *testing.T) {
 	assert.False(t, isValidURL("://bad"))
 }
 
-func TestIsChinese(t *testing.T) {
-	assert.True(t, isChinese("中文"))
-	assert.True(t, isChinese("混合English中文"))
-	assert.False(t, isChinese("english"))
-	assert.False(t, isChinese(""))
-	assert.False(t, isChinese("12345"))
-}
-
 func TestCheckResult_HasErrors(t *testing.T) {
 	r := &CheckResult{}
 	assert.False(t, HasErrors(r))
@@ -60,35 +52,6 @@ func TestGhCheck_InvalidYAML(t *testing.T) {
 	require.Error(t, err, "YAML parse error should be propagated")
 	assert.Contains(t, err.Error(), "yaml")
 	require.NotNil(t, result)
-}
-
-func TestCheckTopicMetadata_MissingSlug(t *testing.T) {
-	r := &CheckResult{}
-	topic := map[string]any{
-		"topic": "中文话题",
-	}
-	checkTopicMetadata(r, "test.yml", 0, 0, topic)
-	assert.Greater(t, len(r.Issues), 0)
-}
-
-func TestCheckTopicMetadata_WithSlug(t *testing.T) {
-	r := &CheckResult{}
-	topic := map[string]any{
-		"topic": "中文话题",
-		"meta":  map[string]any{"slug": "chinese-topic"},
-	}
-	checkTopicMetadata(r, "test.yml", 0, 0, topic)
-	assert.Equal(t, 0, len(r.Issues))
-}
-
-func TestCheckTopicMetadata_HasPic(t *testing.T) {
-	r := &CheckResult{}
-	topic := map[string]any{
-		"topic":  "topic-name",
-		"hasPic": true,
-	}
-	checkTopicMetadata(r, "test.yml", 0, 0, topic)
-	assert.Equal(t, 0, len(r.Issues))
 }
 
 func TestDatePattern(t *testing.T) {
