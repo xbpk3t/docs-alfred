@@ -92,7 +92,7 @@ func (g *Generator) Generate(website string) (string, error) {
 // sk 私钥，记忆密码
 // website 网站，区分密码.
 //
-//nolint:revive // Complexity is inherent to the password generation algorithm
+
 func (g *Generator) sha512(sk, website string) string {
 	hexOne := computeHmacSha512(sk, website)
 	hexTwo := computeHmacSha512("hello", hexOne)
