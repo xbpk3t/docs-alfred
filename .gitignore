@@ -198,3 +198,6 @@ docs.yml
 /xzb/result/
 /xzb/alipay_*.csv
 /xzb/wechat.csv
+/.cache/
+/.claude/
+/.codegraph/

@@ -1,25 +1,71 @@
 feed:
-  timeout: 30 # 最多retry 6次，所以设置为30（第一次retry 5s，则第6次 = 5 * 2^5 = 160s，合计315s）
-  maxTries: 5 # 最大retry次数
-  feedLimit: 30 #
+  timeout: 30 # HTTP timeout per request (seconds). With 5 retries: 5+10+20+40+80+160 ≈ 315s total
+  maxTries: 5  # Max retry attempts per feed
+  feedLimit: 30 # Max items per feed
 
 resend:
-  token: sk
+  token: sk   # Resend API key
   mailTo: [me@lucc.dev]
 
-
 newsletter:
-  schedule: daily # eg. weekly(latest 7 days), daily(feeds of the day).
-  isHideAuthorInTitle: false # default: true
+  schedule: daily        # daily (24h) or weekly (7 days)
+  isHideAuthorInTitle: false
 
 dashboard:
-  isShowFetchFailedFeeds: true # 是否展示所有拉取失败的feed。用来分type获取所有 fetch failed 的数量。注意是4列：type、feed、feed url、error
-  isShowFeedDetail: true # 是否展示所有feed的更新频率、上次更新时间。展示 所有feed的更新频率、上次更新时间。一共是4列：type
+  isShowFetchFailedFeeds: true
+  isShowFeedDetail: true
 
 env:
-  debug: false # debug模式下，直接生成HTML，而非发送邮件
+  debug: false  # Write HTML to disk instead of sending email
 
+# -- Transcript (trns) configuration --
+trns:
+  sources:
+    - feedUrl: https://example.com/podcast/feed.xml
+      asr: true
+      language: en
+      maxEpisodes: 10
+      maxAgeDays: 90
+  asr:
+    enabled: false         # Enable ASR fallback via pt CLI
+    language: en
+    # cliPath: /usr/local/bin/pt
+  summary:
+    enabled: true          # AI summary generation
+    model: gpt-4o
+    language: en
+  temporaryUpload:
+    enabled: false         # Upload transcripts to Litterbox
+    expiration: 24h        # 1h, 12h, 24h, 72h
 
+# -- Source discovery (hunt) configuration --
+hunt:
+  # Categories to exclude from scanning (optional)
+  # categories:
+  #   except: [news, social]
+  # Provider weights for scoring
+  providerWeights:
+    exa: 1.0
+    tavily: 0.9
+  # Candidate type weights
+  typeWeights:
+    source: 1.0
+    author: 0.9
+    newsletter: 0.8
+    repo: 0.7
+    unknown: 0.5
+  # Additional blocked domains beyond defaults
+  blockedDomains:
+    - example.com
+
+# -- Wiki configuration --
+wiki:
+  wikiRootDir: wiki
+  ghTopicsDir: wiki/ghTopicsPath
+  ai:
+    model: gpt-4o
+    # baseUrl: https://api.openai.com/v1
+    # apiKey: (uses OPENAI_API_KEY env var by default)
 
 feeds:
   - type: coding

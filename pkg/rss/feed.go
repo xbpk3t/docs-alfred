@@ -13,6 +13,13 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
+// NewHTTPClient creates an HTTP client with timeout from config.
+func NewHTTPClient(cfg *Config) *http.Client {
+	return &http.Client{
+		Timeout: time.Duration(cfg.FeedConfig.Timeout) * time.Second,
+	}
+}
+
 // createFeedParser 创建Feed解析器.
 func createFeedParser(cfg *Config) *gofeed.Parser {
 	fp := gofeed.NewParser()
