@@ -11,11 +11,13 @@ type GithubYAMLRender struct {
 	*render.YAMLRenderer
 
 	currentFile string
+	tag         string
 }
 
-func NewGithubYAMLRender() *GithubYAMLRender {
+func NewGithubYAMLRender(tag string) *GithubYAMLRender {
 	return &GithubYAMLRender{
 		YAMLRenderer: render.NewYAMLRenderer(string(service.ServiceGithub), true),
+		tag:         tag,
 	}
 }
 
@@ -34,6 +36,13 @@ func (g *GithubYAMLRender) Render(data []byte) (string, error) {
 	rc, err := parser.NewParser[ConfigRepo](data).WithFileName(g.GetCurrentFileName()).ParseFlatten()
 	if err != nil {
 		return "", err
+	}
+
+	// 从目录名注入 tag（仅在数据源未显式设置时注入）
+	for i := range rc {
+		if rc[i].Tag == "" {
+			rc[i].Tag = g.tag
+		}
 	}
 
 	// 将数据编码为YAML格式

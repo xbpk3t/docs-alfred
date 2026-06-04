@@ -231,6 +231,11 @@ func (dc *DocsConfig) processAll(processors map[FileType]*DocProcessor) error {
 
 // processSingle 处理单个文件.
 func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) error {
+	// gh + 目录场景：以子目录名称作为 tag 逐子目录处理
+	if dc.Cmd == "gh" && dc.IsDir {
+		return dc.processGithubDir(fileType, processor)
+	}
+
 	// 创建对应的渲染器
 	renderer, err := dc.createRenderer()
 	if err != nil {
@@ -255,6 +260,96 @@ func (dc *DocsConfig) processSingle(fileType FileType, processor *DocProcessor) 
 	return nil
 }
 
+// processGithubDir 处理 gh 目录：以每个子目录名称作为 tag 独立渲染后合并输出.
+func (dc *DocsConfig) processGithubDir(fileType FileType, processor *DocProcessor) error {
+	entries, err := os.ReadDir(dc.Src)
+	if err != nil {
+		return fmt.Errorf("read gh dir error: %w", err)
+	}
+
+	var allRepos gh.ConfigRepos
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		tag := entry.Name()
+		repos, subErr := dc.processGithubSubDir(tag, processor)
+		if subErr != nil {
+			return subErr
+		}
+		if repos != nil {
+			allRepos = append(allRepos, repos...)
+		}
+	}
+
+	if len(allRepos) == 0 {
+		return errors.New("no gh data found in any subdirectory")
+	}
+
+	return dc.marshalAndWriteGithubOutput(allRepos, fileType, processor)
+}
+
+// marshalAndWriteGithubOutput marshals the collected repos and writes the output.
+func (dc *DocsConfig) marshalAndWriteGithubOutput(allRepos gh.ConfigRepos, fileType FileType, processor *DocProcessor) error {
+	result, err := yaml.Marshal(allRepos)
+	if err != nil {
+		return fmt.Errorf("marshal gh repos error: %w", err)
+	}
+
+	content := string(result)
+
+	if fileType == FileTypeJSON {
+		jsonData, err := yaml.YAMLToJSON([]byte(content))
+		if err != nil {
+			return fmt.Errorf("convert gh to json error: %w", err)
+		}
+		content = string(jsonData)
+	}
+
+	outputFilename := processor.getOutputFilename(dc.Src)
+	if err := processor.WriteOutput(content, outputFilename); err != nil {
+		return fmt.Errorf("write gh output error: %w", err)
+	}
+
+	return nil
+}
+
+// processGithubSubDir processes a single gh subdirectory identified by tag.
+func (dc *DocsConfig) processGithubSubDir(tag string, processor *DocProcessor) (gh.ConfigRepos, error) {
+	subDir := filepath.Join(dc.Src, tag)
+
+	data, readErr := pkg.ReadAndMergeFilesRecursively(subDir, processor.SetCurrentFile)
+	if readErr != nil {
+		slog.Error("read gh subdir error",
+			slog.String("dir", subDir),
+			slog.String("error", readErr.Error()),
+		)
+
+		return nil, nil
+	}
+
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	renderer := gh.NewGithubYAMLRender(tag)
+	if modeErr := dc.configureParseMode(renderer); modeErr != nil {
+		return nil, fmt.Errorf("configure parse mode for gh subdir %s error: %w", tag, modeErr)
+	}
+
+	content, renderErr := renderer.Render(data)
+	if renderErr != nil {
+		return nil, fmt.Errorf("render gh subdir %s error: %w", tag, renderErr)
+	}
+
+	var repos gh.ConfigRepos
+	if unmarshalErr := yaml.Unmarshal([]byte(content), &repos); unmarshalErr != nil {
+		return nil, fmt.Errorf("unmarshal gh subdir %s error: %w", tag, unmarshalErr)
+	}
+
+	return repos, nil
+}
+
 func (dc *DocsConfig) createRenderer() (render.Renderer, error) {
 	// 根据命令类型选择渲染器
 	var renderer render.Renderer
@@ -262,7 +357,7 @@ func (dc *DocsConfig) createRenderer() (render.Renderer, error) {
 	case "task":
 		renderer = task.NewTaskYAMLRender()
 	case "gh":
-		renderer = gh.NewGithubYAMLRender()
+		renderer = gh.NewGithubYAMLRender("")
 	case "goods":
 		renderer = goods.NewGoodsYAMLRender()
 	default:
