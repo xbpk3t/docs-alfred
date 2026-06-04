@@ -48,17 +48,41 @@ type ChatResponse struct {
 }
 
 // DefaultConfig creates a client config from environment variables.
+// LLM_AxonHub is a fallback API key (same as TS behavior), NOT a model name.
+// Model and BaseURL can be overridden via ConfigOpts or YAML config.
 func DefaultConfig() *ClientConfig {
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		apiKey = os.Getenv("LLM_AxonHub")
+	}
+
 	cfg := &ClientConfig{
-		APIKey:  os.Getenv("OPENAI_API_KEY"),
+		APIKey:  apiKey,
 		BaseURL: os.Getenv("OPENAI_BASE_URL"),
-		Model:   os.Getenv("LLM_AxonHub"),
+		Model:   os.Getenv("LLM_MODEL"),
 	}
 	if cfg.BaseURL == "" {
-		cfg.BaseURL = "https://api.openai.com/v1"
+		cfg.BaseURL = "https://api.lucc.dev/v1"
 	}
 	if cfg.Model == "" {
-		cfg.Model = "gpt-4o"
+		cfg.Model = "deepseek-v4-flash"
+	}
+
+	return cfg
+}
+
+// ConfigWithOverrides creates a client config with explicit overrides.
+// Env vars still take precedence over provided values.
+func ConfigWithOverrides(apiKey, baseURL, model string) *ClientConfig {
+	cfg := DefaultConfig()
+	if apiKey != "" {
+		cfg.APIKey = apiKey
+	}
+	if baseURL != "" {
+		cfg.BaseURL = baseURL
+	}
+	if model != "" {
+		cfg.Model = model
 	}
 
 	return cfg

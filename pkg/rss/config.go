@@ -1,4 +1,4 @@
-package rss
+package rss //nolint:revive
 
 import (
 	"errors"
@@ -12,9 +12,12 @@ import (
 
 // Config 主配置结构.
 type Config struct {
+	WikiConfig       WikiConfig       `yaml:"wiki,omitempty"`
+	TrnsConfig       TrnsConfig       `yaml:"trns,omitempty"`
 	ResendConfig     ResendConfig     `yaml:"resend"`
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
 	Feeds            []FeedsDetail    `yaml:"feeds"`
+	HuntConfig       HuntConfig       `yaml:"hunt,omitempty"`
 	FeedConfig       FeedConfig       `yaml:"feed"`
 	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
 	EnvConfig        EnvConfig        `yaml:"env"`
@@ -56,9 +59,107 @@ type EnvConfig struct {
 
 // Feeds Feed URL.
 type Feeds struct {
-	Feed string `yaml:"feed"`
-	URL  string `yaml:"url"`
-	Des  string `yaml:"des"`
+	Feed  string  `yaml:"feed"`
+	URL   string  `yaml:"url"`
+	Des   string  `yaml:"des"`
+	Score float64 `yaml:"score,omitempty"` // quality score for hunt seed selection
+}
+
+// -- Trns Config --
+
+// TrnsConfig 转写（transcript）主配置.
+type TrnsConfig struct {
+	DefaultOutDir   string                    `yaml:"defaultOutDir,omitempty"`
+	Summary         TrnsSummaryConfig         `yaml:"summary,omitempty"`
+	Asr             TrnsAsrConfig             `yaml:"asr,omitempty"`
+	TemporaryUpload TrnsTemporaryUploadConfig `yaml:"temporaryUpload,omitempty"`
+	DefaultLimit    int                       `yaml:"defaultLimit,omitempty"`
+	Enabled         bool                      `yaml:"enabled,omitempty"`
+}
+
+// PodcastTrnsSourceConfig 播客转写源配置.
+type PodcastTrnsSourceConfig struct {
+	FeedURL     string `yaml:"feedUrl"`
+	ASROverride *bool  `yaml:"asr,omitempty"`
+	Language    string `yaml:"language,omitempty"`
+	MaxEpisodes int    `yaml:"maxEpisodes,omitempty"`
+	MaxAgeDays  int    `yaml:"maxAgeDays,omitempty"`
+}
+
+// TrnsAsrConfig ASR（自动语音识别）配置.
+type TrnsAsrConfig struct {
+	Language string `yaml:"language,omitempty"`
+	CLIPath  string `yaml:"cliPath,omitempty"`
+	Enabled  bool   `yaml:"enabled,omitempty"`
+}
+
+// TrnsSummaryConfig AI 摘要配置.
+type TrnsSummaryConfig struct {
+	Model    string `yaml:"model,omitempty"`
+	BaseURL  string `yaml:"baseUrl,omitempty"`
+	Provider string `yaml:"provider,omitempty"`
+	Language string `yaml:"language,omitempty"`
+	Enabled  bool   `yaml:"enabled,omitempty"`
+}
+
+// TrnsTemporaryUploadConfig 临时上传配置（Litterbox）.
+type TrnsTemporaryUploadConfig struct {
+	ExpirationDuration string `yaml:"expiration,omitempty"`
+	Enabled            bool   `yaml:"enabled,omitempty"`
+}
+
+// -- Hunt Config --
+
+// HuntConfig 源发现配置.
+type HuntConfig struct {
+	Categories      *HuntCategoriesConfig `yaml:"categories,omitempty"`
+	ProviderWeights map[string]float64    `yaml:"providerWeights,omitempty"`
+	TypeWeights     map[string]float64    `yaml:"typeWeights,omitempty"`
+	BlockedDomains  []string              `yaml:"blockedDomains,omitempty"`
+	DefaultMax      int                   `yaml:"defaultMax,omitempty"`
+	DefaultPerCat   int                   `yaml:"defaultPerCat,omitempty"`
+	DefaultSeed     int                   `yaml:"defaultSeed,omitempty"`
+}
+
+// HuntCategoriesConfig 分类级别覆盖配置.
+type HuntCategoriesConfig struct {
+	Except []string `yaml:"except,omitempty"`
+}
+
+// -- Wiki Config --
+
+// WikiConfig Wiki 知识库配置.
+type WikiConfig struct {
+	WikiRootDir  string       `yaml:"wikiRootDir,omitempty"`
+	GhTopicsPath string       `yaml:"ghTopicsPath,omitempty"`
+	PendingPath  string       `yaml:"pendingPath,omitempty"`
+	Ai           WikiAiConfig `yaml:"ai,omitempty"`
+}
+
+// WikiAiConfig Wiki AI 配置（fallback 到 trns.summary 的 model/baseUrl）.
+type WikiAiConfig struct {
+	Model   string `yaml:"model,omitempty"`
+	BaseURL string `yaml:"baseUrl,omitempty"`
+}
+
+// AiModelForWiki returns the effective model for wiki AI.
+// Falls back to trns.summary.model if wiki.ai.model is empty.
+func (c *Config) AiModelForWiki() string {
+	if c.WikiConfig.Ai.Model != "" {
+		return c.WikiConfig.Ai.Model
+	}
+
+	return c.TrnsConfig.Summary.Model
+}
+
+// AiBaseURLForWiki returns the effective base URL for wiki AI.
+// Falls back to trns.summary.baseUrl if wiki.ai.baseUrl is empty.
+func (c *Config) AiBaseURLForWiki() string {
+	if c.WikiConfig.Ai.BaseURL != "" {
+		return c.WikiConfig.Ai.BaseURL
+	}
+
+	return c.TrnsConfig.Summary.BaseURL
 }
 
 // NewConfig 加载配置文件.
@@ -73,6 +174,9 @@ func NewConfig(configFile string) (*Config, error) {
 		return nil, errcode.WithError(errcode.ErrUnmarshalConfig, err)
 	}
 
+	// Apply defaults
+	config.applyDefaults()
+
 	if err := config.Validate(); err != nil {
 		return nil, errcode.WithError(errcode.ErrValidateConfig, err)
 	}
@@ -80,14 +184,35 @@ func NewConfig(configFile string) (*Config, error) {
 	return &config, nil
 }
 
-// Validate 验证配置.
-func (c *Config) Validate() error {
-	if c.ResendConfig.Token == "" {
-		return errors.New("resend token is required")
+func (c *Config) applyDefaults() {
+	// Trns summary defaults
+	if c.TrnsConfig.Summary.Model == "" {
+		c.TrnsConfig.Summary.Model = "deepseek-v4-flash"
 	}
+	if c.TrnsConfig.Summary.BaseURL == "" {
+		c.TrnsConfig.Summary.BaseURL = "https://api.lucc.dev/v1"
+	}
+	if c.TrnsConfig.Summary.Provider == "" {
+		c.TrnsConfig.Summary.Provider = "openai"
+	}
+}
 
+// Validate 验证通用配置（各命令共享的校验）.
+func (c *Config) Validate() error {
 	if !isValidSchedule(c.NewsletterConfig.Schedule) {
 		return fmt.Errorf("invalid schedule: %s", c.NewsletterConfig.Schedule)
+	}
+
+	return nil
+}
+
+// ValidateForSend 额外校验 send 命令所需的 Resend token.
+func (c *Config) ValidateForSend() error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	if c.ResendConfig.Token == "" {
+		return errors.New("resend token is required")
 	}
 
 	return nil

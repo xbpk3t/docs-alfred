@@ -1,0 +1,139 @@
+package cmd
+
+import (
+	"fmt"
+	"log/slog"
+	"os"
+
+	"github.com/goccy/go-yaml"
+	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/ai"
+)
+
+// Config holds wiki CLI configuration.
+type Config struct {
+	Wiki WikiConfig `yaml:"wiki"`
+	Ai   AiConfig   `yaml:"ai"`
+}
+
+// WikiConfig wiki-specific config.
+type WikiConfig struct {
+	WikiRoot     string `yaml:"wikiRoot"`
+	GhTopicsPath string `yaml:"ghTopicsPath"`
+	PendingPath  string `yaml:"pendingPath"`
+}
+
+// AiConfig AI model configuration.
+type AiConfig struct {
+	Model   string `yaml:"model"`
+	BaseURL string `yaml:"baseUrl"`
+}
+
+func defaultConfig() Config {
+	return Config{
+		Wiki: WikiConfig{
+			WikiRoot:    "wiki",
+			PendingPath: "inbox/pending.md",
+		},
+		Ai: AiConfig{
+			Model:   "deepseek-v4-flash",
+			BaseURL: "https://api.lucc.dev/v1",
+		},
+	}
+}
+
+var (
+	configFile  string
+	wikiRootOpt string
+)
+
+func newRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "wiki [flags] [urls...]",
+		Short: "Classify and summarize URLs into wiki knowledge base",
+		Long: `Classify and summarize URLs into wiki knowledge base.
+
+Uses AI to classify URLs by content type (video/audio/text), topic path,
+and entry type (repo_eval/deep_dive/inbox). Writes structured entries.
+
+Use --inbox to process wiki/inbox.md. Pass URLs as positional args.`,
+		Args: cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+
+			inbox, _ := cmd.Flags().GetBool("inbox")
+			if inbox {
+				return runInbox(cfg)
+			}
+			if len(args) == 0 {
+				slog.Info("No URLs provided and --inbox not set, doing nothing")
+
+				return nil
+			}
+
+			return runURLs(cfg, args)
+		},
+	}
+
+	cmd.Flags().Bool("inbox", false, "Read URLs from wiki/inbox.md, process, and flush")
+	cmd.Flags().StringVarP(&configFile, "config", "c", "", "Config file path")
+	cmd.Flags().StringVar(&wikiRootOpt, "wiki-root", "", "Wiki root directory (overrides config)")
+
+	return cmd
+}
+
+func loadConfig() (*Config, error) {
+	cfg := defaultConfig()
+
+	if configFile != "" {
+		data, err := os.ReadFile(configFile)
+		if err != nil {
+			return nil, fmt.Errorf("read config: %w", err)
+		}
+		if err := yaml.Unmarshal(data, &cfg); err != nil {
+			return nil, fmt.Errorf("parse config: %w", err)
+		}
+	}
+
+	if wikiRootOpt != "" {
+		cfg.Wiki.WikiRoot = wikiRootOpt
+	}
+
+	return &cfg, nil
+}
+
+func newAIConfig(cfg *Config) *ai.ClientConfig {
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		apiKey = os.Getenv("LLM_AxonHub")
+	}
+
+	return &ai.ClientConfig{
+		APIKey:  apiKey,
+		BaseURL: cfg.Ai.BaseURL,
+		Model:   cfg.Ai.Model,
+	}
+}
+
+func resolveWikiRoot(cfg *Config) string {
+	if cfg.Wiki.WikiRoot != "" {
+		return cfg.Wiki.WikiRoot
+	}
+
+	return "wiki"
+}
+
+// Execute is the entry point for the wiki CLI.
+// It exits with code 1 on error.
+func Execute() {
+	rootCmd := newRootCmd()
+	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
+
+	if err := rootCmd.Execute(); err != nil {
+		slog.Error("wiki failed", "error", err)
+		os.Exit(1)
+	}
+}

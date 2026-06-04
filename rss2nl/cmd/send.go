@@ -3,16 +3,19 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	mjml "github.com/Boostport/mjml-go"
 	carbon "github.com/dromara/carbon/v2"
-	"github.com/gorilla/feeds"
+	"github.com/mmcdole/gofeed"
 	resend "github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/sourcegraph/conc/pool"
@@ -24,11 +27,6 @@ import (
 //go:embed templates/newsletter.mjml
 var templates embed.FS
 
-// Config holds the application configuration.
-type Config struct {
-	CfgFile string
-}
-
 // EmailConfig 邮件配置.
 type EmailConfig struct {
 	From  string
@@ -36,27 +34,40 @@ type EmailConfig struct {
 	To    []string
 }
 
-// NewsletterService 处理新闻通讯的服务.
-type NewsletterService struct {
-	config      *rss.Config
-	failedFeeds []*rss.FeedError
+// NewsletterItem represents a rich feed item with additional fields.
+type NewsletterItem struct {
+	Title              string
+	Link               string
+	PubDate            string
+	Description        string
+	Content            string
+	EnclosureURL       string
+	EnclosureType      string
+	SourceLink         string
+	ItemHash           string
+	PodcastTranscripts []PodcastTranscriptRef
 }
 
-// NewNewsletterService 创建新闻通讯服务.
-func NewNewsletterService(cfg *rss.Config) *NewsletterService {
-	return &NewsletterService{
-		config:      cfg,
-		failedFeeds: make([]*rss.FeedError, 0),
-	}
+// PodcastTranscriptRef represents a reference to a podcast transcript.
+type PodcastTranscriptRef struct {
+	URL  string
+	Type string // plaintext, vtt, srt, json
+}
+
+// NewsletterCategory holds items grouped by category with extra metadata.
+type NewsletterCategory struct {
+	Category string
+	Items    []NewsletterItem
 }
 
 // TemplateData represents the data passed to the template.
 type TemplateData struct {
+	SourceHuntURL string
 	DashboardData struct {
 		FailedFeeds []*rss.FeedError
 		FeedDetails []rss.FeedsDetail
 	}
-	Feeds           []feeds.RssFeed
+	Feeds           []NewsletterCategory
 	WeekNumber      int
 	DashboardConfig rss.DashboardConfig
 }
@@ -74,7 +85,24 @@ const (
 	NewsletterTpl TemplateType = "Newsletter"
 )
 
-// newSendCmd creates `rss2nl send`.
+// NewsletterService 处理新闻通讯的服务.
+type NewsletterService struct {
+	config      *rss.Config
+	trnsOut     string
+	failedFeeds []*rss.FeedError
+}
+
+// NewNewsletterService 创建新闻通讯服务.
+func NewNewsletterService(cfg *rss.Config, trnsOut string) *NewsletterService {
+	return &NewsletterService{
+		config:      cfg,
+		trnsOut:     trnsOut,
+		failedFeeds: make([]*rss.FeedError, 0),
+	}
+}
+
+// -- Sub-command setup --
+
 func newSendCmd() *cobra.Command {
 	var cfgFile, trnsOut string
 	var checkOnly bool
@@ -102,30 +130,60 @@ func newSendCmd() *cobra.Command {
 	return cmd
 }
 
+// -- Run --
+
 func runSend(config *rss.Config, trnsOut string) error {
-	service := NewNewsletterService(config)
-	f, err := service.ProcessAllFeeds()
+	service := NewNewsletterService(config, trnsOut)
+	categories, err := service.ProcessAllFeeds()
 	if err != nil {
 		return err
 	}
 
-	var contents []EmailContent
+	// Inject hunt source discovery link
+	sourceHuntURL := os.Getenv("SOURCE_DISCOVERY_URL")
 
-	newsletterContent, err := service.RenderNewsletter(f, config.Feeds, service.failedFeeds)
+	contents, err := service.RenderNewsletter(categories, config.Feeds, service.failedFeeds, sourceHuntURL)
 	if err != nil {
 		return err
 	}
-	contents = append(contents, EmailContent{
-		Subject: service.generateEmailSubject(NewsletterTpl),
-		Content: newsletterContent,
-	})
 
 	return service.handleOutput(contents)
 }
 
 func runFeedHealthCheck(config *rss.Config) error {
-	// TODO: implement feed health check
-	slog.Info("Feed health check passed")
+	slog.Info("=== Feed Health Check ===")
+
+	healthyCount := 0
+	staleCount := 0
+	failedCount := 0
+	staleThreshold := 90 * 24 * time.Hour // 3 months
+
+	for _, feedGroup := range config.Feeds {
+		for _, u := range feedGroup.URLs {
+			if u.Feed == "" {
+				continue
+			}
+
+			switch checkFeed(u, config, staleThreshold) {
+			case healthOK:
+				healthyCount++
+			case healthStale:
+				staleCount++
+			case healthFailed:
+				failedCount++
+			}
+		}
+	}
+
+	slog.Info("Health check complete",
+		"healthy", healthyCount,
+		"stale", staleCount,
+		"failed", failedCount,
+	)
+
+	if failedCount > 0 {
+		return fmt.Errorf("%d feed(s) failed to fetch", failedCount)
+	}
 
 	return nil
 }
@@ -138,21 +196,33 @@ func loadConfig(cfgFile string) (*rss.Config, error) {
 		return nil, err
 	}
 
+	// Fall back to RESEND_TOKEN env var if token not set in config file.
+	// CI sets RESEND_TOKEN as a secret; local dev can set it in .env or shell.
+	if config.ResendConfig.Token == "" {
+		config.ResendConfig.Token = os.Getenv("RESEND_TOKEN")
+	}
+
+	if err := config.ValidateForSend(); err != nil {
+		return nil, err
+	}
+
 	return config, nil
 }
 
+// -- Feed processing --
+
 // ProcessAllFeeds 并发处理所有Feed源.
-func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
+func (s *NewsletterService) ProcessAllFeeds() ([]NewsletterCategory, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	p := pool.NewWithResults[feeds.RssFeed]().
+	p := pool.NewWithResults[NewsletterCategory]().
 		WithContext(ctx).
 		WithMaxGoroutines(10)
 
 	for _, feed := range s.config.Feeds {
-		p.Go(func(ctx context.Context) (feeds.RssFeed, error) {
-			rssFeed, err := s.processSingleFeed(ctx, feed)
+		p.Go(func(ctx context.Context) (NewsletterCategory, error) {
+			category, err := s.processSingleFeed(ctx, feed)
 			if err != nil {
 				slog.Error("Failed to process feed",
 					slog.String("type", feed.Type),
@@ -162,13 +232,10 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 					Message: "Failed to fetch feed",
 				})
 
-				return feeds.RssFeed{
-					Category: feed.Type,
-					Items:    []*feeds.RssItem{},
-				}, nil
+				return NewsletterCategory{Category: feed.Type}, nil
 			}
 
-			return rssFeed, nil
+			return category, nil
 		})
 	}
 
@@ -180,8 +247,8 @@ func (s *NewsletterService) ProcessAllFeeds() ([]feeds.RssFeed, error) {
 	return results, nil
 }
 
-func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.FeedsDetail) (feeds.RssFeed, error) {
-	urls := lo.Compact(lo.Map(feed.URLs, func(item rss.Feeds, _ int) string {
+func (s *NewsletterService) processSingleFeed(ctx context.Context, feedGroup rss.FeedsDetail) (NewsletterCategory, error) {
+	urls := lo.Compact(lo.Map(feedGroup.URLs, func(item rss.Feeds, _ int) string {
 		return item.Feed
 	}))
 
@@ -190,56 +257,169 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feed rss.Feed
 
 	if len(allFeeds) == 0 {
 		slog.Info("No feeds fetched for category",
-			slog.String("category", feed.Type),
+			slog.String("category", feedGroup.Type),
 			slog.Int("total_urls", len(urls)))
 
-		return feeds.RssFeed{
-			Category: feed.Type,
-			Items:    []*feeds.RssItem{},
-		}, nil
+		return NewsletterCategory{Category: feedGroup.Type}, nil
 	}
 
-	combinedFeed, err := rss.MergeAllFeeds(feed.Type, allFeeds, s.config)
+	items, err := s.mergeFeedItems(feedGroup.Type, allFeeds)
 	if err != nil {
 		slog.Error("Failed to merge feeds",
-			slog.String("category", feed.Type),
+			slog.String("category", feedGroup.Type),
 			slog.Int("feeds_count", len(allFeeds)),
 			slog.Any("error", err))
 
-		return feeds.RssFeed{
-			Category: feed.Type,
-			Items:    []*feeds.RssItem{},
-		}, nil
+		return NewsletterCategory{Category: feedGroup.Type}, nil
 	}
 
-	return s.convertToRssFeed(feed.Type, combinedFeed), nil
+	return NewsletterCategory{Category: feedGroup.Type, Items: items}, nil
 }
 
-func (s *NewsletterService) convertToRssFeed(typeName string, combinedFeed *feeds.Feed) feeds.RssFeed {
-	newFeeds := make([]*feeds.RssItem, len(combinedFeed.Items))
-	for i, item := range combinedFeed.Items {
-		title := s.getItemTitle(item)
-		newFeeds[i] = &feeds.RssItem{
-			Title:    title,
-			Link:     item.Link.Href,
-			Category: typeName,
-			PubDate:  carbon.CreateFromStdTime(item.Created).ToDateTimeString(),
+// mergeFeedItems merges all feed results into a deduplicated list of NewsletterItems.
+func (s *NewsletterService) mergeFeedItems(typeName string, allFeeds []*gofeed.Feed) ([]NewsletterItem, error) {
+	seenLinks := make(map[string]bool)
+	seenHashes := make(map[string]bool)
+	var items []NewsletterItem
+
+	for _, sourceFeed := range allFeeds {
+		for i, item := range sourceFeed.Items {
+			if i >= s.config.FeedConfig.FeedLimit {
+				break
+			}
+
+			// Dedup by link
+			if seenLinks[item.Link] {
+				continue
+			}
+
+			created := getItemCreationTime(item)
+			if !rss.FilterFeedsWithTimeRange(created, time.Now(), s.config.NewsletterConfig.Schedule) {
+				continue
+			}
+
+			// Generate sha256 identity
+			feedURL := ""
+			if sourceFeed.Link != "" {
+				feedURL = sourceFeed.Link
+			}
+			itemHash := itemIdentity(feedURL, item)
+
+			// Dedup by hash
+			if seenHashes[itemHash] {
+				continue
+			}
+
+			seenLinks[item.Link] = true
+			seenHashes[itemHash] = true
+
+			ni := s.makeNewsletterItem(item, sourceFeed, typeName, itemHash)
+			items = append(items, ni)
 		}
 	}
 
-	return feeds.RssFeed{
-		Category: typeName,
-		Items:    newFeeds,
-	}
+	return items, nil
 }
 
-func (s *NewsletterService) getItemTitle(item *feeds.Item) string {
-	if !s.config.NewsletterConfig.IsHideAuthorInTitle && item.Author.Name != "" {
+// makeNewsletterItem converts a gofeed.Item to a NewsletterItem.
+func (s *NewsletterService) makeNewsletterItem(item *gofeed.Item, sourceFeed *gofeed.Feed, typeName, itemHash string) NewsletterItem {
+	ni := NewsletterItem{
+		Title:    s.getItemTitle(item),
+		Link:     item.Link,
+		PubDate:  carbon.CreateFromStdTime(getItemCreationTime(item)).ToDateTimeString(),
+		ItemHash: itemHash,
+	}
+
+	// Description / content
+	if item.Description != "" {
+		ni.Description = item.Description
+	}
+	if item.Content != "" {
+		ni.Content = item.Content
+	} else {
+		ni.Content = item.Description
+	}
+
+	// Enclosure
+	if len(item.Enclosures) > 0 {
+		ni.EnclosureURL = item.Enclosures[0].URL
+		ni.EnclosureType = item.Enclosures[0].Type
+	}
+
+	// Podcast transcripts from RSS extensions
+	ni.PodcastTranscripts = extractTranscriptRefs(item)
+
+	return ni
+}
+
+// extractTranscriptRefs extracts podcast:transcript references from item extensions.
+func extractTranscriptRefs(item *gofeed.Item) []PodcastTranscriptRef {
+	var refs []PodcastTranscriptRef
+	for ns, exts := range item.Extensions {
+		nsLower := strings.ToLower(ns)
+		if !strings.Contains(nsLower, "podcast") && !strings.Contains(nsLower, "transcript") {
+			continue
+		}
+		for tag, values := range exts {
+			if !strings.Contains(strings.ToLower(tag), "transcript") {
+				continue
+			}
+			for _, v := range values {
+				ref := PodcastTranscriptRef{Type: "unknown"}
+				if u, ok := v.Attrs["url"]; ok {
+					ref.URL = u
+				}
+				if t, ok := v.Attrs["type"]; ok {
+					ref.Type = t
+				}
+				if ref.URL != "" {
+					refs = append(refs, ref)
+				}
+			}
+		}
+	}
+
+	return refs
+}
+
+// itemIdentity generates a deterministic sha256 hash for an item.
+func itemIdentity(feedURL string, item *gofeed.Item) string {
+	idSource := item.GUID
+	if idSource == "" {
+		idSource = item.Link
+	}
+	if idSource == "" {
+		idSource = item.Title
+	}
+
+	h := sha256.New()
+	h.Write([]byte(feedURL))
+	h.Write([]byte(idSource))
+
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func getItemCreationTime(item *gofeed.Item) time.Time {
+	if item.PublishedParsed != nil {
+		return *item.PublishedParsed
+	}
+	if item.UpdatedParsed != nil {
+		return *item.UpdatedParsed
+	}
+
+	return time.Now()
+}
+
+func (s *NewsletterService) getItemTitle(item *gofeed.Item) string {
+	hasAuthor := item.Author != nil && item.Author.Name != ""
+	if !s.config.NewsletterConfig.IsHideAuthorInTitle && hasAuthor {
 		return fmt.Sprintf("[%s] %s", item.Author.Name, item.Title)
 	}
 
 	return item.Title
 }
+
+// -- Template rendering --
 
 func (s *NewsletterService) renderTemplate(templateName string, data any) (string, error) {
 	funcMap := template.FuncMap{
@@ -277,15 +457,17 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 
 // RenderNewsletter renders the newsletter template.
 func (s *NewsletterService) RenderNewsletter(
-	rssFeeds []feeds.RssFeed,
+	categories []NewsletterCategory,
 	feedList []rss.FeedsDetail,
 	failedFeeds []*rss.FeedError,
-) (string, error) {
+	sourceHuntURL string,
+) ([]EmailContent, error) {
 	now := carbon.Now()
 	data := TemplateData{
 		WeekNumber:      now.WeekOfYear(),
-		Feeds:           rssFeeds,
+		Feeds:           categories,
 		DashboardConfig: s.config.DashboardConfig,
+		SourceHuntURL:   sourceHuntURL,
 		DashboardData: struct {
 			FailedFeeds []*rss.FeedError
 			FeedDetails []rss.FeedsDetail
@@ -295,7 +477,19 @@ func (s *NewsletterService) RenderNewsletter(
 		},
 	}
 
-	return s.renderTemplate("newsletter.mjml", data)
+	newsletterContent, err := s.renderTemplate("newsletter.mjml", data)
+	if err != nil {
+		return nil, err
+	}
+
+	contents := []EmailContent{
+		{
+			Subject: s.generateEmailSubject(NewsletterTpl),
+			Content: newsletterContent,
+		},
+	}
+
+	return contents, nil
 }
 
 func (s *NewsletterService) handleOutput(contents []EmailContent) error {
@@ -352,4 +546,55 @@ func (s *NewsletterService) generateEmailSubject(tplType TemplateType) string {
 	now := carbon.Now()
 
 	return fmt.Sprintf("%s %s (第%d周)", tplType, now.ToDateString(), now.WeekOfYear())
+}
+
+
+
+type feedHealthStatus int
+
+const (
+	healthOK feedHealthStatus = iota
+	healthStale
+	healthFailed
+)
+
+func checkFeed(u rss.Feeds, config *rss.Config, staleThreshold time.Duration) feedHealthStatus {
+	fp := gofeed.NewParser()
+	fp.Client = rss.NewHTTPClient(config)
+
+	parsed, err := fp.ParseURL(u.Feed)
+	if err != nil {
+		slog.Warn("FAILED", "feed", u.Feed, "error", err)
+
+		return healthFailed
+	}
+
+	latest := time.Now()
+	if len(parsed.Items) > 0 && parsed.Items[0].PublishedParsed != nil {
+		latest = *parsed.Items[0].PublishedParsed
+	} else if len(parsed.Items) > 0 && parsed.Items[0].UpdatedParsed != nil {
+		latest = *parsed.Items[0].UpdatedParsed
+	}
+
+	age := time.Since(latest)
+	items := len(parsed.Items)
+	status := "OK"
+	var result feedHealthStatus
+	if age > staleThreshold {
+		status = "STALE"
+		result = healthStale
+	} else {
+		result = healthOK
+	}
+
+	slog.Info("HEALTH",
+		"feed", u.Feed,
+		"title", parsed.Title,
+		"items", items,
+		"latest", latest.Format("2006-01-02"),
+		"age_days", int(age.Hours()/24),
+		"status", status,
+	)
+
+	return result
 }
