@@ -49,7 +49,7 @@ func DoWithRetry(client *http.Client, req *http.Request, maxRetries int) ([]byte
 			time.Sleep(delay)
 		}
 
-		resp, err := client.Do(req) //nolint:gosec
+		resp, err := client.Do(req) // #nosec G704
 		if err != nil {
 			lastErr = fmt.Errorf("request attempt %d: %w", attempt+1, err)
 

@@ -287,7 +287,7 @@ func FlushInbox(filePath string, processedLineIndices map[int]bool) error {
 		return os.WriteFile(filePath, []byte{}, fileutil.FilePermPrivate)
 	}
 
-	return os.WriteFile(filePath, []byte(strings.Join(cleaned, "\n")), fileutil.FilePermPrivate) //nolint:gosec
+	return os.WriteFile(filePath, []byte(strings.Join(cleaned, "\n")), fileutil.FilePermPrivate) // #nosec G703
 }
 
 // extractMarkdownLinks extracts URLs from markdown links [text](url).

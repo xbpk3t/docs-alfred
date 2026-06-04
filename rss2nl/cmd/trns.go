@@ -499,4 +499,3 @@ func hasTranscriptLinks(item *gofeed.Item) bool {
 
 	return false
 }
-
