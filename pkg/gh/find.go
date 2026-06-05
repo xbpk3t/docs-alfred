@@ -3,6 +3,7 @@ package gh
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -48,13 +49,9 @@ func FindEntries(ghRoot, query, findURL string) ([]FindEntry, error) {
 
 // SortEntries sorts entries by score descending.
 func SortEntries(entries []FindEntry) {
-	for i := range entries {
-		for j := i + 1; j < len(entries); j++ {
-			if entries[j].Score > entries[i].Score {
-				entries[i], entries[j] = entries[j], entries[i]
-			}
-		}
-	}
+	slices.SortStableFunc(entries, func(a, b FindEntry) int {
+		return b.Score - a.Score
+	})
 }
 
 //nolint:errcheck // stdout CLI output is best-effort

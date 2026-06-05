@@ -12,7 +12,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 
-	"github.com/gookit/goutil/fsutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/service"
 	"github.com/xbpk3t/docs-alfred/service/gh"
@@ -92,7 +91,7 @@ func (p *DocProcessor) getOutputFilename(src string) string {
 }
 
 func (p *DocProcessor) ProcessFile(src string, renderer render.Renderer) error {
-	data, err := p.ReadInput(src, fsutil.IsDir(src))
+	data, err := p.ReadInput(src, isDir(src))
 	if err != nil {
 		slog.Error("read file error",
 			slog.String("file", src),
@@ -148,7 +147,7 @@ func (p *DocProcessor) ReadInput(src string, isDir bool) ([]byte, error) {
 }
 
 func (p *DocProcessor) readSingleFile(src string) ([]byte, error) {
-	if fsutil.IsDir(src) {
+	if isDir(src) {
 		return []byte(""), errors.New("stat path error")
 	}
 
@@ -156,11 +155,17 @@ func (p *DocProcessor) readSingleFile(src string) ([]byte, error) {
 }
 
 func (p *DocProcessor) readAndMergeFiles(src string) ([]byte, error) {
-	if !fsutil.IsDir(src) {
+	if !isDir(src) {
 		return []byte(""), errors.New("stat path error")
 	}
 
 	return pkg.ReadAndMergeFilesRecursively(src, p.SetCurrentFile)
+}
+
+func isDir(path string) bool {
+	fi, err := os.Stat(path)
+
+	return err == nil && fi.IsDir()
 }
 
 func (p *DocProcessor) WriteOutput(content, filename string) error {

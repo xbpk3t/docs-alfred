@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
-
 
 // ContentFetchResult holds fetched content metadata and body.
 type ContentFetchResult struct {
@@ -47,6 +47,8 @@ func NewFetcher() *Fetcher {
 // FetchContent fetches content based on the URL pattern.
 // Supports GitHub repos, YouTube, Bilibili, and generic HTTP pages.
 func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) *ContentFetchResult {
+	slog.Info("FetchContent", "url", urlStr, "type", contentType)
+
 	u := strings.ToLower(urlStr)
 
 	switch {
@@ -121,12 +123,12 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFe
 	}
 
 	body := fmt.Sprintf(`Repository: %s/%s
-	Stars: %d
-	Language: %s
-	License: %s
-	Topics: %s
-	Description: %s
-	URL: %s`,
+		Stars: %d
+		Language: %s
+		License: %s
+		Topics: %s
+		Description: %s
+		URL: %s`,
 		owner, repo,
 		repoData.Stars,
 		repoData.Language,
@@ -159,12 +161,15 @@ func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetc
 			title = rawURL
 		}
 
+		slog.Info("HTTP fetch succeeded", "url", rawURL, "bodyLen", len(body))
+
 		return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 	}
 
-	// HTTP GET failed — try opencli browser fallback with a timeout so it
-	// can't hang (e.g. if Chrome isn't running with the debug port).
 	slog.Warn("HTTP fetch failed, trying opencli fallback", "url", rawURL, "error", err)
+
+	// opencli fallback with a timeout so it can't hang
+	// (e.g. if Chrome isn't running with the debug port).
 	openCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
@@ -175,18 +180,29 @@ func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetc
 
 	slog.Warn("opencli fallback also failed", "url", rawURL, "error", result.Error)
 
-	return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
+	// Distinguish between HTTP-level errors (anti-bot, 4xx -> resolve failure)
+	// and network-level errors (DNS, timeout -> fetch failure).
+	errorStr := err.Error()
+	if isHTTPBlockError(err) {
+		errorStr = "resolve: " + errorStr
+	}
+
+	return &ContentFetchResult{SourceURL: rawURL, Error: errorStr}
+}
+
+// isHTTPBlockError checks whether the error is from an HTTP status code
+// (e.g. 403 anti-bot) rather than a network-level error.
+func isHTTPBlockError(err error) bool {
+	return strings.Contains(err.Error(), "HTTP ")
 }
 
 // fetchWithOpenCLI uses the opencli browser tool to extract page content.
 // opencli drives a real Chrome window to handle JS-rendered pages.
 func (f *Fetcher) fetchWithOpenCLI(ctx context.Context, rawURL string) *ContentFetchResult {
-	// opencli web read writes to a file by default; --stdout 让内容走管道。
-	// --wait-until networkidle 确保 JS 渲染完再提取。
+	// opencli web read writes to a file by default; --stdout pipes content.
 	cmd := exec.CommandContext(ctx, "opencli", "web", "read",
 		"--url", rawURL,
 		"--stdout",
-		"--wait-until", "networkidle",
 	)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -222,26 +238,14 @@ func (f *Fetcher) fetchWithOpenCLI(ctx context.Context, rawURL string) *ContentF
 	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 }
 
-// extractTitle extracts the <title> from HTML content.
-func extractTitle(html string) string {
-	lower := strings.ToLower(html)
-	start := strings.Index(lower, "<title")
-	if start < 0 {
+// extractTitle extracts the <title> from HTML content using goquery.
+func extractTitle(htmlContent string) string {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+	if err != nil {
 		return ""
 	}
-	closingBracket := strings.Index(html[start:], ">")
-	if closingBracket < 0 {
-		return ""
-	}
-	contentStart := start + closingBracket + 1
-	end := strings.Index(strings.ToLower(html[contentStart:]), "</title>")
-	if end < 0 {
-		return ""
-	}
-	result := html[contentStart : contentStart+end]
-	result = strings.TrimSpace(result)
 
-	return result
+	return strings.TrimSpace(doc.Find("title").First().Text())
 }
 
 func getGHToken() string {

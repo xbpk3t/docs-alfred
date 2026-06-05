@@ -6,9 +6,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"time"
+
+	retry "github.com/avast/retry-go/v4"
 )
 
 // DefaultClientTimeout is the default HTTP client timeout.
@@ -42,42 +43,53 @@ func DoWithRetry(client *http.Client, req *http.Request, maxRetries int) ([]byte
 		maxRetries = DefaultMaxRetries
 	}
 
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			delay := exponentialBackoff(attempt, DefaultBaseDelay, DefaultMaxDelay)
-			time.Sleep(delay)
-		}
+	var result []byte
+	err := retry.Do(
+		func() error {
+			// Clone the request since the body may be consumed
+			clonedReq := req.Clone(req.Context())
+			if req.Body != nil {
+				bodyBytes, readErr := io.ReadAll(req.Body)
+				if readErr != nil {
+					return fmt.Errorf("read request body: %w", readErr)
+				}
+				_ = req.Body.Close()
+				clonedReq.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			}
 
-		resp, err := client.Do(req) // #nosec G704
-		if err != nil {
-			lastErr = fmt.Errorf("request attempt %d: %w", attempt+1, err)
+			resp, doErr := client.Do(clonedReq) //nolint:gosec // G704: URL is controlled by the caller
+			if doErr != nil {
+				return doErr
+			}
 
-			continue
-		}
+			body, readErr := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if readErr != nil {
+				return fmt.Errorf("read response: %w", readErr)
+			}
 
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("read response attempt %d: %w", attempt+1, err)
+			if resp.StatusCode >= 500 {
+				return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+			}
 
-			continue
-		}
+			if resp.StatusCode >= 400 {
+				return retry.Unrecoverable(fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body)))
+			}
 
-		if resp.StatusCode >= 500 {
-			lastErr = fmt.Errorf("HTTP %d (attempt %d): %s", resp.StatusCode, attempt+1, string(body))
+			result = body
 
-			continue
-		}
-
-		if resp.StatusCode >= 400 {
-			return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
-		}
-
-		return body, nil
+			return nil
+		},
+		retry.Attempts(uint(maxRetries)),
+		retry.Delay(DefaultBaseDelay),
+		retry.DelayType(retry.BackOffDelay),
+		retry.LastErrorOnly(true),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	return nil, fmt.Errorf("request failed after %d attempts: %w", maxRetries+1, lastErr)
+	return result, nil
 }
 
 // PostJSON performs an HTTP POST with JSON body and returns the response bytes.
@@ -134,14 +146,4 @@ func GetWithRetry(client *http.Client, url string, maxRetries int) ([]byte, erro
 	}
 
 	return DoWithRetry(client, req, maxRetries)
-}
-
-// exponentialBackoff calculates delay with jitter-free exponential backoff.
-func exponentialBackoff(attempt int, baseDelay, maxDelay time.Duration) time.Duration {
-	delay := float64(baseDelay) * math.Pow(2, float64(attempt-1))
-	if delay > float64(maxDelay) {
-		delay = float64(maxDelay)
-	}
-
-	return time.Duration(delay)
 }

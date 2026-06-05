@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
 func TestAppendRecord_InvalidDate(t *testing.T) {
@@ -54,13 +55,13 @@ func TestFindFileByURL_EmptyURL(t *testing.T) {
 }
 
 func TestValidateDateStrict(t *testing.T) {
-	assert.True(t, datePatternStrict.MatchString("2024-01-01"))
-	assert.True(t, datePatternStrict.MatchString("2023-12-31"))
-	assert.False(t, datePatternStrict.MatchString("2024-1-1"))
-	assert.False(t, datePatternStrict.MatchString("2024/01/01"))
-	assert.False(t, datePatternStrict.MatchString("not-a-date"))
-	assert.False(t, datePatternStrict.MatchString(""))
-	assert.False(t, datePatternStrict.MatchString("240101"))
+	assert.True(t, checkutil.DateFullPattern.MatchString("2024-01-01"))
+	assert.True(t, checkutil.DateFullPattern.MatchString("2023-12-31"))
+	assert.False(t, checkutil.DateFullPattern.MatchString("2024-1-1"))
+	assert.False(t, checkutil.DateFullPattern.MatchString("2024/01/01"))
+	assert.False(t, checkutil.DateFullPattern.MatchString("not-a-date"))
+	assert.False(t, checkutil.DateFullPattern.MatchString(""))
+	assert.False(t, checkutil.DateFullPattern.MatchString("240101"))
 }
 
 func TestInferTopicFromURL(t *testing.T) {

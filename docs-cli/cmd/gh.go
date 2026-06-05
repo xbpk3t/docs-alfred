@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
 	gh "github.com/xbpk3t/docs-alfred/service/gh"
 )
@@ -63,7 +62,6 @@ func newGhSearchCmd() *cobra.Command {
 	searchCmd.Flags().StringVar(&docsURL, "docs-url", "https://docs.lucc.dev", "Docs base URL")
 	searchCmd.Flags().StringVarP(&outputFormat, "output", "o", "plain", "Output format: alfred, plain, raw, rofi")
 	searchCmd.Flags().StringVar(&maxAge, "max-age", "24h", "Cache TTL")
-	_ = viper.BindPFlag("output", searchCmd.Flags().Lookup("output"))
 
 	return searchCmd
 }

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>🌅 Linear 今日任务 · {{.Date}} {{.DayOfWeek}}</title>
+  <style>
+    :root {
+      --bg: {{if eq .Theme "dark"}}#1a1a2e{{else}}#ffffff{{end}};
+      --text: {{if eq .Theme "dark"}}#e0e0e0{{else}}#111111{{end}};
+      --border: {{if eq .Theme "dark"}}#2d2d44{{else}}#e0e0e0{{end}};
+      --th-bg: {{if eq .Theme "dark"}}#252540{{else}}#f6f6f6{{end}};
+      --muted: {{if eq .Theme "dark"}}#8888aa{{else}}#888888{{end}};
+      --ai-bg: {{if eq .Theme "dark"}}#1a2a3a{{else}}#f0f7ff{{end}};
+      --ai-border: {{if eq .Theme "dark"}}#2a4a6a{{else}}#cce5ff{{end}};
+      --stats-bg: {{if eq .Theme "dark"}}#252540{{else}}#f9f9f9{{end}};
+      --link: {{if eq .Theme "dark"}}#6db3f2{{else}}#1a73e8{{end}};
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 24px; color: var(--text); background: var(--bg); }
+    h1 { font-size: 22px; margin-bottom: 16px; }
+    h2 { font-size: 18px; margin-top: 24px; padding-bottom: 6px; border-bottom: 2px solid var(--border); }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; font-size: 13px; text-align: left; }
+    th { background: var(--th-bg); font-weight: 600; white-space: nowrap; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .ai-box { background: var(--ai-bg); border: 1px solid var(--ai-border); padding: 12px 20px; margin-top: 0; margin-bottom: 20px; border-radius: 8px; }
+    .ai-box h3 { margin: 12px 0 6px; font-size: 15px; }
+    .ai-box h4 { margin: 8px 0 4px; font-size: 14px; }
+    .ai-box ul { margin: 4px 0 8px; padding-left: 20px; }
+    .ai-box li { margin: 3px 0; line-height: 1.5; font-size: 14px; }
+    .ai-box p { margin: 6px 0; font-size: 14px; }
+    .stats { background: var(--stats-bg); border: 1px solid var(--border); padding: 12px 16px; margin-top: 20px; border-radius: 8px; font-size: 14px; }
+    .link { color: var(--link); text-decoration: none; }
+    .link:hover { text-decoration: underline; }
+    .tag { display: inline-block; font-size: 12px; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <h1>🌅 Linear 今日任务 · {{.Date}} {{.DayOfWeek}}</h1>
+
+  {{if .AISummary}}
+  <div class="ai-box">
+    {{.AISummary | markdownToHTML}}
+  </div>
+  {{end}}
+
+  <h2>▶️ 进行中（{{len .InProgress}} 个）</h2>
+  {{if gt (len .InProgress) 0}}
+  <table>
+    <thead><tr><th>任务</th><th>优先级</th><th>团队</th><th>截止日期</th></tr></thead>
+    <tbody>
+    {{range .InProgress}}
+    <tr>
+      <td><a href="{{.URL}}" class="link" target="_blank">{{.Identifier}}</a> {{.Title}}</td>
+      <td><span class="tag">{{.Priority}}</span></td>
+      <td>{{.TeamName}}</td>
+      <td>{{if .DueDate}}{{.DueDate}}{{else}}-{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="muted">暂无进行中的任务</p>
+  {{end}}
+
+  <h2>📋 待办（{{len .Todo}} 个）</h2>
+  {{if gt (len .Todo) 0}}
+  <table>
+    <thead><tr><th>任务</th><th>优先级</th><th>团队</th><th>截止日期</th></tr></thead>
+    <tbody>
+    {{range .Todo}}
+    <tr>
+      <td><a href="{{.URL}}" class="link" target="_blank">{{.Identifier}}</a> {{.Title}}</td>
+      <td><span class="tag">{{.Priority}}</span></td>
+      <td>{{.TeamName}}</td>
+      <td>{{if .DueDate}}{{.DueDate}}{{else}}-{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="muted">暂无待办任务</p>
+  {{end}}
+
+  <div class="stats">
+    📊 总览：进行中 {{.Stats.InProgress}} · 待办 {{.Stats.Todo}} · 今日截止 {{.Stats.DueToday}}
+  </div>
+</body>
+</html>

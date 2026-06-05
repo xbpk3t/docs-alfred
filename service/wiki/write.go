@@ -10,6 +10,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"mvdan.cc/xurls/v2"
 )
 
 // SummaryFrontmatter is the YAML frontmatter for summary.md files.
@@ -23,12 +24,18 @@ type SummaryFrontmatter struct {
 	Failed    int    `yaml:"failed"`
 }
 
+// Failure type constants for WriteFailureEntry.
+const (
+	FailureFetch    = "fetch"
+	FailureResolve  = "resolve"
+	FailureClassify = "classify"
+)
+
 // WriteOptions contains options for writing wiki entries.
 type WriteOptions struct {
-	WikiRoot    string
-	PendingPath string
-	BatchID     string
-	DryRun      bool
+	WikiRoot string
+	BatchID  string
+	DryRun   bool
 }
 
 // WriteSummary writes a structured summary.md entry with YAML frontmatter.
@@ -77,10 +84,6 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 }
 
 func resolveTopicDir(item *ClassifyItem, opts *WriteOptions) string {
-	if item.Type == TypeInbox || item.TopicPath == "inbox" {
-		return filepath.Join(opts.WikiRoot, "inbox")
-	}
-
 	return filepath.Join(opts.WikiRoot, item.TopicPath)
 }
 
@@ -140,60 +143,88 @@ func renderContent(fm *SummaryFrontmatter, body string) string {
 	return fmt.Sprintf("---\n%s---\n\n%s", string(fmYAML), body)
 }
 
-// WritePending writes a pending.md entry (TS pending.ts style).
-func WritePending(item *ClassifyItem, opts *WriteOptions) (string, error) {
-	pendingBase := opts.PendingPath
-	if pendingBase == "" {
-		pendingBase = "inbox/pending.md"
+var failureFilenames = map[string]string{
+	FailureFetch:    "fetch-failed.md",
+	FailureResolve:  "resolve-failed.md",
+	FailureClassify: "group-failed.md",
+}
+
+// WriteFailureEntry writes a structured failure entry to the appropriate file
+// under <wikiRoot>/failed/<failureType>-failed.md. Each file collects one type:
+//   - fetch:     network-level errors (DNS, timeout) with no opencli fallback
+//   - resolve:   HTTP-level errors (403 anti-bot) where opencli also failed
+//   - classify:  content fetched but AI couldn't assign a topic
+//
+// Format is a structured markdown entry with title, failure reason, and content snippet.
+func WriteFailureEntry(item *ClassifyItem, failureType, extraInfo string, opts *WriteOptions) (string, error) {
+	filename, ok := failureFilenames[failureType]
+	if !ok {
+		return "", fmt.Errorf("unknown failure type: %s", failureType)
 	}
 
-	pendingPath := filepath.Join(opts.WikiRoot, pendingBase)
+	failedDir := filepath.Join(opts.WikiRoot, "failed")
+	path := filepath.Join(failedDir, filename)
 
-	if err := os.MkdirAll(filepath.Dir(pendingPath), fileutil.DirPerm); err != nil {
-		return "", fmt.Errorf("create pending dir: %w", err)
+	if err := os.MkdirAll(failedDir, fileutil.DirPerm); err != nil {
+		return "", fmt.Errorf("create failed dir: %w", err)
 	}
 
+	entry := buildFailureEntry(item, extraInfo)
+
+	if opts.DryRun {
+		slog.Info("[DRY RUN] Would write failure entry", "path", path, "type", failureType)
+
+		return path, nil
+	}
+
+	if err := appendToFile(path, entry); err != nil {
+		return "", err
+	}
+
+	slog.Info("Failure entry written", "path", path, "type", failureType, "url", item.URL)
+
+	return path, nil
+}
+
+func buildFailureEntry(item *ClassifyItem, extraInfo string) string {
 	title := item.Title
 	if title == "" {
 		title = item.URL
 	}
 
-	suggestedTopic := item.TopicPath
-	if suggestedTopic == "" || suggestedTopic == noneVal {
-		suggestedTopic = "(待补充)"
+	bodySnippet := item.Summary
+	if bodySnippet == "" {
+		bodySnippet = "(无内容)"
+	}
+	if len(bodySnippet) > 500 {
+		bodySnippet = bodySnippet[:500] + "..."
 	}
 
-	entry := fmt.Sprintf(`---
+	return fmt.Sprintf(`---
 
 ## [%s](%s)
 
+### 失败原因
 %s
 
-### 建议的 topic 路径 (未分类)
+### 内容片段
 %s
 
-`, title, item.URL, item.Summary, suggestedTopic)
+`, title, item.URL, extraInfo, bodySnippet)
+}
 
-	if opts.DryRun {
-		slog.Info("[DRY RUN] Would append pending", "path", pendingPath)
-
-		return pendingPath, nil
-	}
-
-	// Append to file
-	f, err := os.OpenFile(pendingPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileutil.FilePermPrivate)
+func appendToFile(path, content string) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileutil.FilePermPrivate)
 	if err != nil {
-		return "", fmt.Errorf("open pending file: %w", err)
+		return fmt.Errorf("open failed file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
-	if _, err := f.WriteString(entry); err != nil {
-		return "", fmt.Errorf("write pending: %w", err)
+	if _, err := f.WriteString(content); err != nil {
+		return fmt.Errorf("write failure entry: %w", err)
 	}
 
-	slog.Info("Pending written", "path", pendingPath, "topic", suggestedTopic)
-
-	return pendingPath, nil
+	return nil
 }
 
 // parseSummaryFrontmatterResult holds the result of parsing.
@@ -223,6 +254,10 @@ func parseSummaryFrontmatter(raw string) *parseResult {
 	return &parseResult{fm: &fm, body: bodyRaw}
 }
 
+// urlRegex extracts URLs with schemes (http, https, ftp, etc.) from plain text.
+// Handles both markdown [text](url) and bare URLs in a single pass.
+var urlRegex = xurls.Strict()
+
 // ParseInbox parses inbox.md and returns a list of URL entries.
 func ParseInbox(filePath string) ([]InboxEntry, error) {
 	data, err := os.ReadFile(filePath)
@@ -235,16 +270,10 @@ func ParseInbox(filePath string) ([]InboxEntry, error) {
 	seen := make(map[string]bool)
 
 	for i, line := range lines {
-		mdLinks := extractMarkdownLinks(line)
-		for _, u := range mdLinks {
-			if !seen[u] {
-				seen[u] = true
-				entries = append(entries, InboxEntry{URL: u, LineIndex: i})
+		for _, u := range urlRegex.FindAllString(line, -1) {
+			if !strings.HasPrefix(u, "http") {
+				continue
 			}
-		}
-
-		bareURLs := extractBareURLs(line)
-		for _, u := range bareURLs {
 			if !seen[u] {
 				seen[u] = true
 				entries = append(entries, InboxEntry{URL: u, LineIndex: i})
@@ -288,40 +317,4 @@ func FlushInbox(filePath string, processedLineIndices map[int]bool) error {
 	}
 
 	return os.WriteFile(filePath, []byte(strings.Join(cleaned, "\n")), fileutil.FilePermPrivate) // #nosec G703
-}
-
-// extractMarkdownLinks extracts URLs from markdown links [text](url).
-func extractMarkdownLinks(line string) []string {
-	var urls []string
-	for {
-		start := strings.Index(line, "](")
-		if start < 0 {
-			break
-		}
-		end := strings.Index(line[start+2:], ")")
-		if end < 0 {
-			break
-		}
-		url := line[start+2 : start+2+end]
-		if strings.HasPrefix(url, "http") {
-			urls = append(urls, url)
-		}
-		line = line[start+2+end+1:]
-	}
-
-	return urls
-}
-
-// extractBareURLs extracts bare HTTP URLs from a line.
-func extractBareURLs(line string) []string {
-	var urls []string
-	words := strings.FieldsSeq(line)
-	for w := range words {
-		w = strings.Trim(w, `,.;:!?()[]{}"'<>`)
-		if strings.HasPrefix(w, "http://") || strings.HasPrefix(w, "https://") {
-			urls = append(urls, w)
-		}
-	}
-
-	return urls
 }

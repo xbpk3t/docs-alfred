@@ -7,17 +7,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
 const evTypeRepo = "repo"
-
-var datePatternStrict = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 var errURLNotFound = errors.New("URL not found in this document")
 
@@ -42,7 +40,7 @@ type AppendRecordResult struct {
 
 // AppendRecord appends a record to a data/gh YAML entry.
 func AppendRecord(opts *AppendRecordOptions) (*AppendRecordResult, error) {
-	if !datePatternStrict.MatchString(opts.Date) {
+	if !checkutil.DateFullPattern.MatchString(opts.Date) {
 		return nil, fmt.Errorf("invalid date format %q (expected YYYY-MM-DD)", opts.Date)
 	}
 

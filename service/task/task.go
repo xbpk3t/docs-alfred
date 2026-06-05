@@ -1,7 +1,7 @@
 package task
 
 import (
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/xbpk3t/docs-alfred/service/gh"
@@ -60,8 +60,15 @@ func compareTasks(task1, task2 *Task, ascending bool) bool {
 func SortMainTasksByDate(ascending bool) TaskOption {
 	return func(t *Task) {
 		if len(t.Sub) > 0 {
-			sort.Slice(t.Sub, func(i, j int) bool {
-				return compareTasks(&t.Sub[i], &t.Sub[j], ascending)
+			slices.SortStableFunc(t.Sub, func(a, b Task) int {
+				if compareTasks(&a, &b, ascending) {
+					return -1
+				}
+				if compareTasks(&b, &a, ascending) {
+					return 1
+				}
+
+				return 0
 			})
 		}
 	}

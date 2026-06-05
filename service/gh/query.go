@@ -3,6 +3,8 @@ package gh
 import (
 	"slices"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 // Filter filters repositories by query string.
@@ -12,33 +14,22 @@ func (r Repos) Filter(query string) Repos {
 	}
 
 	query = strings.ToLower(query)
-	var filtered Repos
 
-	for _, repo := range r {
-		if strings.Contains(strings.ToLower(repo.URL), query) ||
+	return lo.Filter(r, func(repo *Repository, _ int) bool {
+		return strings.Contains(strings.ToLower(repo.URL), query) ||
 			strings.Contains(strings.ToLower(repo.Des), query) ||
 			strings.Contains(strings.ToLower(repo.Type), query) ||
-			strings.Contains(strings.ToLower(repo.Tag), query) {
-			filtered = append(filtered, repo)
-		}
-	}
-
-	return filtered
+			strings.Contains(strings.ToLower(repo.Tag), query)
+	})
 }
 
 // ExtractTags extracts unique tags from repositories.
 func (r Repos) ExtractTags() []string {
-	tagMap := make(map[string]struct{})
-	for _, repo := range r {
-		if repo.Tag != "" {
-			tagMap[repo.Tag] = struct{}{}
-		}
-	}
-
-	tags := make([]string, 0, len(tagMap))
-	for tag := range tagMap {
-		tags = append(tags, tag)
-	}
+	tags := lo.Uniq(lo.Map(lo.Filter(r, func(repo *Repository, _ int) bool {
+		return repo.Tag != ""
+	}), func(repo *Repository, _ int) string {
+		return repo.Tag
+	}))
 	slices.Sort(tags)
 
 	return tags
@@ -46,43 +37,23 @@ func (r Repos) ExtractTags() []string {
 
 // ExtractTypesByTag returns all types for a given tag.
 func (r Repos) ExtractTypesByTag(tag string) []string {
-	types := make(map[string]bool)
-	for _, repo := range r {
-		if repo.Tag == tag {
-			types[repo.Type] = true
-		}
-	}
-
-	result := make([]string, 0, len(types))
-	for t := range types {
-		if t != "" {
-			result = append(result, t)
-		}
-	}
-
-	return result
+	return lo.Uniq(lo.Map(lo.Filter(r, func(repo *Repository, _ int) bool {
+		return repo.Tag == tag && repo.Type != ""
+	}), func(repo *Repository, _ int) string {
+		return repo.Type
+	}))
 }
 
 // QueryReposByTag filters repos by tag (type).
 func (r Repos) QueryReposByTag(tag string) Repos {
-	var filtered Repos
-	for _, rp := range r {
-		if rp.Type == tag {
-			filtered = append(filtered, rp)
-		}
-	}
-
-	return filtered
+	return lo.Filter(r, func(repo *Repository, _ int) bool {
+		return repo.Type == tag
+	})
 }
 
 // QueryReposByTagAndType filters repos by tag and type.
 func (r Repos) QueryReposByTagAndType(tag, typeName string) Repos {
-	var result Repos
-	for _, repo := range r {
-		if repo.Tag == tag && repo.Type == typeName {
-			result = append(result, repo)
-		}
-	}
-
-	return result
+	return lo.Filter(r, func(repo *Repository, _ int) bool {
+		return repo.Tag == tag && repo.Type == typeName
+	})
 }
