@@ -54,16 +54,6 @@ func TestGhCheck_InvalidYAML(t *testing.T) {
 	require.NotNil(t, result)
 }
 
-func TestDatePattern(t *testing.T) {
-	assert.True(t, datePattern.MatchString("2024-01-01"))
-	assert.True(t, datePattern.MatchString("1999-12-31"))
-	assert.True(t, datePattern.MatchString("2024-13-01"), "regex only checks format, not month validity")
-	assert.True(t, datePattern.MatchString("2024-00-00"))
-	assert.False(t, datePattern.MatchString("not-a-date"))
-	assert.False(t, datePattern.MatchString("2024/01/01"))
-	assert.False(t, datePattern.MatchString("240101"))
-}
-
 func TestCheckResult_Report(t *testing.T) {
 	r := &CheckResult{}
 	r.addIssue("file.yml", "warn", "test warning")

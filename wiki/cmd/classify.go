@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 
 	"github.com/xbpk3t/docs-alfred/service/wiki"
 )
@@ -18,7 +17,7 @@ func runURLs(cfg *Config, urls []string) error {
 	}
 
 	aiCfg := newAIConfig(cfg)
-	classifier := wiki.NewClassifier(aiCfg, wikiRoot, cfg.Wiki.GhTopicsPath)
+	classifier := wiki.NewClassifier(aiCfg, wikiRoot, cfg.Wiki.GhTopicsURL)
 	fetcher := wiki.NewFetcher()
 	ctx := context.Background()
 
@@ -31,17 +30,18 @@ func runURLs(cfg *Config, urls []string) error {
 	return nil
 }
 
+// processClassifyURL processes a single URL for classification (not inbox mode).
 func processClassifyURL(
 	ctx context.Context, cfg *Config, wikiRoot string,
 	classifier *wiki.Classifier, fetcher *wiki.Fetcher, urlStr string,
 ) {
 	slog.Info("Processing URL", "url", urlStr)
 
-	contentType := wiki.DetectContentType(strings.ToLower(urlStr))
+	contentType := wiki.DetectContentType(urlStr)
 	result := fetcher.FetchContent(ctx, urlStr, contentType)
 
 	if result.Error != "" {
-		slog.Warn("Content fetch failed, skipping URL", "url", urlStr, "error", result.Error)
+		slog.Error("Failed to fetch URL", "url", urlStr, "error", result.Error)
 
 		return
 	}
@@ -53,17 +53,10 @@ func processClassifyURL(
 
 	classResult := classifier.ClassifyURL(ctx, urlStr, title, result.Body)
 	if classResult == nil {
-		slog.Warn("Classification unavailable for URL", "url", urlStr)
+		slog.Warn("Classification unavailable", "url", urlStr)
 
 		return
 	}
-
-	slog.Info("Classified",
-		"url", urlStr,
-		"topic", classResult.TopicPath,
-		"type", classResult.WikiType,
-		"contentType", classResult.ContentType,
-	)
 
 	item := &wiki.ClassifyItem{
 		URL:         urlStr,
@@ -75,25 +68,22 @@ func processClassifyURL(
 	}
 
 	opts := &wiki.WriteOptions{
-		WikiRoot:    wikiRoot,
-		PendingPath: cfg.Wiki.PendingPath,
+		WikiRoot: wikiRoot,
 	}
 
-	if classResult.TopicPath == "none" || classResult.TopicPath == "inbox" || classResult.WikiType == wiki.TypeInbox {
-		path, err := wiki.WritePending(item, opts)
-		if err != nil {
-			slog.Warn("Failed to write pending", "url", urlStr, "error", err)
+	if classResult.TopicPath == "none" || classResult.TopicPath == "inbox" {
+		extraInfo := "AI could not classify the content into any topic.\nSummary: " + classResult.Summary
+		if _, err := wiki.WriteFailureEntry(item, wiki.FailureClassify, extraInfo, opts); err != nil {
+			slog.Error("Failed to write failure entry", "url", urlStr, "error", err)
 
 			return
 		}
-		slog.Info("Written to pending", "path", path)
-	} else {
-		path, err := wiki.WriteSummary(item, opts)
-		if err != nil {
-			slog.Warn("Failed to write summary", "url", urlStr, "error", err)
+		slog.Info("URL written to group-failed (unclassifiable)", "url", urlStr)
 
-			return
-		}
-		slog.Info("Written to summary", "path", path, "topic", classResult.TopicPath)
+		return
+	}
+
+	if _, err := wiki.WriteSummary(item, opts); err != nil {
+		slog.Error("Failed to write summary", "url", urlStr, "error", err)
 	}
 }

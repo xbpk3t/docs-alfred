@@ -12,14 +12,15 @@ import (
 	"time"
 )
 
-// Package-level HTTP client for reuse across requests.
-var httpClient = &http.Client{Timeout: 60 * time.Second}
+// DefaultAITimeout is the default HTTP timeout for AI chat requests.
+const DefaultAITimeout = 3 * time.Minute
 
 // ClientConfig holds the AI client configuration.
 type ClientConfig struct {
 	APIKey  string
 	BaseURL string
 	Model   string
+	Timeout time.Duration // HTTP client timeout; 0 uses default 3 min
 }
 
 // Message represents a chat message.
@@ -114,7 +115,12 @@ func Chat(cfg *ClientConfig, messages []Message) (string, error) {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-	httpResp, err := httpClient.Do(httpReq)
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = DefaultAITimeout
+	}
+
+	httpResp, err := (&http.Client{Timeout: timeout}).Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("http request: %w", err)
 	}

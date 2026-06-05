@@ -12,15 +12,17 @@ import (
 
 // Config holds wiki CLI configuration.
 type Config struct {
-	Wiki WikiConfig `yaml:"wiki"`
 	Ai   AiConfig   `yaml:"ai"`
+	Wiki WikiConfig `yaml:"wiki"`
 }
 
 // WikiConfig wiki-specific config.
 type WikiConfig struct {
-	WikiRoot     string `yaml:"wikiRoot"`
-	GhTopicsPath string `yaml:"ghTopicsPath"`
-	PendingPath  string `yaml:"pendingPath"`
+	WikiRoot      string `yaml:"wikiRoot"`
+	GhTopicsURL   string `yaml:"ghTopicsURL"`
+	Concurrency   int    `yaml:"concurrency"`
+	PerURLTimeout int    `yaml:"perURLTimeout"` // seconds
+	MaxRetries    int    `yaml:"maxRetries"`
 }
 
 // AiConfig AI model configuration.
@@ -32,8 +34,11 @@ type AiConfig struct {
 func defaultConfig() Config {
 	return Config{
 		Wiki: WikiConfig{
-			WikiRoot:    "wiki",
-			PendingPath: "inbox/pending.md",
+			WikiRoot:      "wiki",
+			GhTopicsURL:   "https://docs.lucc.dev/gh.yml",
+			Concurrency:   5,
+			PerURLTimeout: 180, // 3 minutes
+			MaxRetries:    3,
 		},
 		Ai: AiConfig{
 			Model:   "deepseek-v4-flash",

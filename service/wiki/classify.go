@@ -3,15 +3,17 @@ package wiki
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
+	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
 
 //go:embed prompts/*.txt
@@ -55,17 +57,17 @@ type ClassifyResult struct {
 
 // Classifier handles AI-powered classification of URLs.
 type Classifier struct {
-	AIConfig     *ai.ClientConfig
-	WikiRoot     string
-	GhTopicsPath string
+	AIConfig    *ai.ClientConfig
+	WikiRoot    string
+	GhTopicsURL string
 }
 
 // NewClassifier creates a new Classifier.
-func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsPath string) *Classifier {
+func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string) *Classifier {
 	return &Classifier{
-		AIConfig:     aiCfg,
-		WikiRoot:     wikiRoot,
-		GhTopicsPath: ghTopicsPath,
+		AIConfig:    aiCfg,
+		WikiRoot:    wikiRoot,
+		GhTopicsURL: ghTopicsURL,
 	}
 }
 
@@ -152,7 +154,7 @@ func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content str
 
 func (c *Classifier) classifyTopic(ctx context.Context, urlStr, title, content string) (string, error) {
 	dirTree := scanWikiDirs(c.WikiRoot)
-	ghTopicTree := scanGHTopicsJSON(c.GhTopicsPath)
+	ghTopicTree := fetchGHTopicsYAML(ctx, c.GhTopicsURL)
 
 	// Build the prompt from template
 	promptRaw, err := promptFS.ReadFile("prompts/classify-topic.txt")
@@ -177,12 +179,6 @@ func (c *Classifier) classifyTopic(ctx context.Context, urlStr, title, content s
 
 	// AI explicitly says nothing matches
 	if rawPath == noneVal || rawPath == "" {
-		return noneVal, nil
-	}
-
-	// Conservative mode: only accept paths that exist in known topics
-	existingPaths := parseKnownPaths(dirTree, c.GhTopicsPath)
-	if !existingPaths[rawPath] {
 		return noneVal, nil
 	}
 
@@ -292,25 +288,32 @@ func scanTypeDir(topPath, topName string, typ os.DirEntry, lines []string) []str
 	return lines
 }
 
-// scanGHTopicsJSON reads ghTopicsPath as JSON and returns formatted tree.
-// Matches TS classifier.ts logic: parses [{tag, type, topics: [{topic}]}].
-func scanGHTopicsJSON(ghTopicsPath string) string {
-	if ghTopicsPath == "" {
+// fetchGHTopicsYAML fetches gh.yml from a URL and returns a formatted topic tree.
+// The YAML structure is: [{tag, type, topics: [{topic}]}].
+// Returns an empty string if the URL is empty or if any step fails (non-blocking).
+func fetchGHTopicsYAML(ctx context.Context, url string) string {
+	if url == "" {
 		return ""
 	}
-	data, err := os.ReadFile(ghTopicsPath)
+
+	client := httputil.NewClient(10 * time.Second)
+	data, err := httputil.Get(client, url)
 	if err != nil {
+		slog.Warn("Failed to fetch gh topics YAML", "url", url, "error", err)
+
 		return ""
 	}
 
 	var entries []struct {
-		Tag    string `json:"tag"`
-		Type   string `json:"type"`
+		Tag    string `yaml:"tag"`
+		Type   string `yaml:"type"`
 		Topics []struct {
-			Topic string `json:"topic"`
-		} `json:"topics"`
+			Topic string `yaml:"topic"`
+		} `yaml:"topics"`
 	}
-	if err := json.Unmarshal(data, &entries); err != nil {
+	if err := yaml.Unmarshal(data, &entries); err != nil {
+		slog.Warn("Failed to parse gh topics YAML", "error", err)
+
 		return ""
 	}
 
@@ -322,31 +325,6 @@ func scanGHTopicsJSON(ghTopicsPath string) string {
 	}
 
 	return strings.Join(lines, "\n")
-}
-
-// parseKnownPaths builds a set of known topic paths from dirTree and ghTopicsPath.
-func parseKnownPaths(dirTree, ghTopicsPath string) map[string]bool {
-	paths := make(map[string]bool)
-
-	for line := range strings.SplitSeq(dirTree, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" {
-			paths[trimmed] = true
-		}
-	}
-
-	// Also parse ghTopicsPath for known paths
-	if ghTopicsPath != "" {
-		tree := scanGHTopicsJSON(ghTopicsPath)
-		for line := range strings.SplitSeq(tree, "\n") {
-			trimmed := strings.TrimSpace(line)
-			if trimmed != "" {
-				paths[trimmed] = true
-			}
-		}
-	}
-
-	return paths
 }
 
 // ValidateRelativeWikiPath ensures a relative path doesn't escape wikiRoot.

@@ -1,6 +1,10 @@
 package data
 
-import "regexp"
+import (
+	"regexp"
+
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+)
 
 // RuleScope defines which field set to use for validation.
 type RuleScope string
@@ -85,7 +89,7 @@ var ForbiddenFields = map[string]bool{
 
 // date format patterns.
 var (
-	DateFull   = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+	DateFull   = checkutil.DateFullPattern // alias for backward compatibility
 	DateYear   = regexp.MustCompile(`^-?\d{1,4}$`)
 	SeriesHint = regexp.MustCompile(`(系列|三部曲|四部曲|合集)`)
 )

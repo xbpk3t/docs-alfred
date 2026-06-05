@@ -1,0 +1,43 @@
+name: Linear2nl
+
+on:
+  schedule:
+    - cron: "0 23 * * *"    # UTC 23:00 = 北京 7:00（morning）
+    - cron: "0 15 * * *"    # UTC 15:00 = 北京 23:00（evening）
+  workflow_dispatch:
+    inputs:
+      type:
+        description: "morning or evening"
+        required: true
+        default: morning
+
+jobs:
+  morning:
+    if: >
+      github.event.schedule == '0 23 * * *' ||
+      (github.event_name == 'workflow_dispatch' && inputs.type == 'morning')
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run ./linear2nl morning
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          RESEND_TOKEN: ${{ secrets.RESEND_TOKEN }}
+
+  evening:
+    if: >
+      github.event.schedule == '0 15 * * *' ||
+      (github.event_name == 'workflow_dispatch' && inputs.type == 'evening')
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run ./linear2nl evening
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          RESEND_TOKEN: ${{ secrets.RESEND_TOKEN }}

@@ -1,9 +1,5 @@
 package repo
 
-import (
-	"reflect"
-)
-
 // RepoInfo 定义仓库信息接口.
 type RepoInfo interface {
 	// GetName 获取仓库名称.
@@ -14,27 +10,12 @@ type RepoInfo interface {
 	GetURL() string
 }
 
-// GetRepoList 使用反射获取仓库列表.
-func GetRepoList(repos any) []RepoInfo {
-	var repoList []RepoInfo
-
-	// 获取repos的反射值
-	value := reflect.ValueOf(repos)
-
-	// 如果是指针，获取其指向的元素
-	if value.Kind() == reflect.Pointer {
-		value = value.Elem()
+// GetRepoList converts a slice of RepoInfo implementors to a slice of RepoInfo.
+func GetRepoList[T RepoInfo](repos []T) []RepoInfo {
+	result := make([]RepoInfo, len(repos))
+	for i, r := range repos {
+		result[i] = r
 	}
 
-	// 如果是切片
-	if value.Kind() == reflect.Slice {
-		for i := 0; i < value.Len(); i++ {
-			item := value.Index(i).Interface()
-			if repo, ok := item.(RepoInfo); ok {
-				repoList = append(repoList, repo)
-			}
-		}
-	}
-
-	return repoList
+	return result
 }

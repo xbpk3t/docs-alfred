@@ -3,12 +3,9 @@ package gh
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
-
-var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 const maxLines = 1000
 
@@ -159,7 +156,7 @@ func (r *CheckResult) addIssueForRecord(file string, repoIndex, topicIdx, recIdx
 	}
 
 	dateStr, _ := rec["date"].(string)
-	if dateStr != "" && !datePattern.MatchString(dateStr) {
+	if dateStr != "" && !checkutil.DateFullPattern.MatchString(dateStr) {
 		r.addIssue(file, "error",
 			fmt.Sprintf("%s.record[%d]: invalid date format %q (expected YYYY-MM-DD)", prefix, recIdx, dateStr))
 	}
