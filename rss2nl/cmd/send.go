@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	mjml "github.com/Boostport/mjml-go"
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/mmcdole/gofeed"
 	resend "github.com/resend/resend-go/v2"
@@ -24,7 +23,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
 )
 
-//go:embed templates/newsletter.mjml
+//go:embed templates/newsletter.gohtml
 var templates embed.FS
 
 // EmailConfig 邮件配置.
@@ -62,6 +61,7 @@ type NewsletterCategory struct {
 
 // TemplateData represents the data passed to the template.
 type TemplateData struct {
+	Title         string
 	SourceHuntURL string
 	DashboardData struct {
 		FailedFeeds []*rss.FeedError
@@ -439,19 +439,6 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 		return "", fmt.Errorf("failed to render template: %w", err)
 	}
 
-	if templateName == "newsletter.mjml" {
-		htmlOutput, err := mjml.ToHTML(context.Background(), tplBytes.String(),
-			mjml.WithMinify(true),
-			mjml.WithBeautify(true),
-			mjml.WithValidationLevel("soft"),
-		)
-		if err != nil {
-			return "", fmt.Errorf("failed to convert MJML to HTML: %w", err)
-		}
-
-		return htmlOutput, nil
-	}
-
 	return tplBytes.String(), nil
 }
 
@@ -463,7 +450,9 @@ func (s *NewsletterService) RenderNewsletter(
 	sourceHuntURL string,
 ) ([]EmailContent, error) {
 	now := carbon.Now()
+	subject := s.generateEmailSubject(NewsletterTpl)
 	data := TemplateData{
+		Title:           subject,
 		WeekNumber:      now.WeekOfYear(),
 		Feeds:           categories,
 		DashboardConfig: s.config.DashboardConfig,
@@ -477,14 +466,14 @@ func (s *NewsletterService) RenderNewsletter(
 		},
 	}
 
-	newsletterContent, err := s.renderTemplate("newsletter.mjml", data)
+	newsletterContent, err := s.renderTemplate("newsletter.gohtml", data)
 	if err != nil {
 		return nil, err
 	}
 
 	contents := []EmailContent{
 		{
-			Subject: s.generateEmailSubject(NewsletterTpl),
+			Subject: subject,
 			Content: newsletterContent,
 		},
 	}
@@ -547,8 +536,6 @@ func (s *NewsletterService) generateEmailSubject(tplType TemplateType) string {
 
 	return fmt.Sprintf("%s %s (第%d周)", tplType, now.ToDateString(), now.WeekOfYear())
 }
-
-
 
 type feedHealthStatus int
 
