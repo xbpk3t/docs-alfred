@@ -201,3 +201,6 @@ docs.yml
 /.cache/
 /.claude/
 /.codegraph/
+
+
+/packages

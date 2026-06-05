@@ -59,10 +59,11 @@ type EnvConfig struct {
 
 // Feeds Feed URL.
 type Feeds struct {
-	Feed  string  `yaml:"feed"`
-	URL   string  `yaml:"url"`
-	Des   string  `yaml:"des"`
-	Score float64 `yaml:"score,omitempty"` // quality score for hunt seed selection
+	Feed        string  `yaml:"feed"`
+	URL         string  `yaml:"url"`
+	Des         string  `yaml:"des"`
+	LastUpdated string  `yaml:"last_updated,omitempty"`
+	Score       float64 `yaml:"score,omitempty"`
 }
 
 // -- Trns Config --
