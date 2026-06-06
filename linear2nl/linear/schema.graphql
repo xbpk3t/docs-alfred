@@ -1,0 +1,61 @@
+scalar IssueFilter
+
+type Query {
+  viewer: User!
+}
+
+type User {
+  name: String!
+  assignedIssues(filter: IssueFilter!, first: Int): IssueConnection!
+}
+
+type IssueConnection {
+  nodes: [Issue!]!
+}
+
+type Issue {
+  id: ID!
+  title: String!
+  identifier: String!
+  priority: Float!
+  parent: Issue
+  state: WorkflowState!
+  team: Team!
+  dueDate: String
+  url: String!
+  updatedAt: String!
+  completedAt: String
+  description: String
+  history(first: Int): IssueHistoryConnection!
+  comments(first: Int): CommentConnection!
+}
+
+type WorkflowState {
+  name: String!
+  type: String!
+}
+
+type Team {
+  name: String!
+  key: String!
+}
+
+type IssueHistoryConnection {
+  nodes: [IssueHistory!]!
+}
+
+type IssueHistory {
+  fromState: WorkflowState
+  toState: WorkflowState
+  createdAt: String!
+}
+
+type CommentConnection {
+  nodes: [Comment!]!
+}
+
+type Comment {
+  body: String!
+  createdAt: String!
+  user: User
+}

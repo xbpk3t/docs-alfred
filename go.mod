@@ -4,17 +4,23 @@ go 1.25.0
 
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.1
+	github.com/Khan/genqlient v0.8.1
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/PuerkitoBio/purell v1.2.2
 	github.com/adrg/frontmatter v0.2.0
+	github.com/adrg/xdg v0.5.3
 	github.com/asticode/go-astisub v0.40.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
+	github.com/creasty/defaults v1.8.0
 	github.com/dop251/goja v0.0.0-20251008123653-cf18d89f3cf6
 	github.com/dromara/carbon/v2 v2.6.13
+	github.com/go-playground/validator/v10 v10.30.3
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/goccy/go-yaml v1.18.0
+	github.com/google/go-github/v70 v70.0.0
+	github.com/google/renameio/v2 v2.0.2
 	github.com/joho/godotenv v1.5.1
 	github.com/knadh/koanf/parsers/yaml v0.1.0
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
@@ -41,13 +47,19 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
+	github.com/go-playground/locales v0.14.1 // indirect
+	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-shiori/dom v0.0.0-20230515143342-73569d674e1c // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/pprof v0.0.0-20251007162407-5df77e3f7d1d // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
+	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/mmcdole/goxpp v1.1.1 // indirect
@@ -56,6 +68,8 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/vektah/gqlparser/v2 v2.5.19 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect

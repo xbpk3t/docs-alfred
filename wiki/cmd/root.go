@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/creasty/defaults"
+	"github.com/go-playground/validator/v10"
 	"github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
@@ -18,33 +20,24 @@ type Config struct {
 
 // WikiConfig wiki-specific config.
 type WikiConfig struct {
-	WikiRoot      string `yaml:"wikiRoot"`
-	GhTopicsURL   string `yaml:"ghTopicsURL"`
-	Concurrency   int    `yaml:"concurrency"`
-	PerURLTimeout int    `yaml:"perURLTimeout"` // seconds
-	MaxRetries    int    `yaml:"maxRetries"`
+	WikiRoot      string `default:"wiki"                         validate:"required"     yaml:"wikiRoot"`
+	GhTopicsURL   string `default:"https://docs.lucc.dev/gh.yml" validate:"required,url" yaml:"ghTopicsURL"`
+	Concurrency   int    `default:"5"                            validate:"gte=1"        yaml:"concurrency"`
+	PerURLTimeout int    `default:"180"                          validate:"gte=1"        yaml:"perURLTimeout"` // seconds
+	MaxRetries    int    `default:"3"                            validate:"gte=0"        yaml:"maxRetries"`
 }
 
 // AiConfig AI model configuration.
 type AiConfig struct {
-	Model   string `yaml:"model"`
-	BaseURL string `yaml:"baseUrl"`
+	Model   string `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
+	BaseURL string `default:"https://api.lucc.dev/v1" validate:"required,url" yaml:"baseUrl"`
 }
 
 func defaultConfig() Config {
-	return Config{
-		Wiki: WikiConfig{
-			WikiRoot:      "wiki",
-			GhTopicsURL:   "https://docs.lucc.dev/gh.yml",
-			Concurrency:   5,
-			PerURLTimeout: 180, // 3 minutes
-			MaxRetries:    3,
-		},
-		Ai: AiConfig{
-			Model:   "deepseek-v4-flash",
-			BaseURL: "https://api.lucc.dev/v1",
-		},
-	}
+	var cfg Config
+	defaults.MustSet(&cfg)
+
+	return cfg
 }
 
 var (
@@ -105,6 +98,9 @@ func loadConfig() (*Config, error) {
 
 	if wikiRootOpt != "" {
 		cfg.Wiki.WikiRoot = wikiRootOpt
+	}
+	if err := validator.New().Struct(&cfg); err != nil {
+		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
 	return &cfg, nil

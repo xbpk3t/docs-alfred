@@ -127,7 +127,7 @@ func newSendCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&cfgFile, "config", "c", "rss2nl.yml", "配置文件路径")
-	cmd.Flags().StringVar(&trnsOut, "trns-out", ".cache/rss2nl/trns", "Trns cache/output directory")
+	cmd.Flags().StringVar(&trnsOut, "trns-out", fileutil.CachePath("rss2nl/trns"), "Trns cache/output directory")
 	cmd.Flags().BoolVar(&checkOnly, "check", false, "只检查 feed 健康度，不发邮件")
 
 	return cmd
@@ -525,7 +525,7 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 	if s.config.EnvConfig.Debug {
 		for i, content := range contents {
 			filename := fmt.Sprintf("newsletter_%d.html", i+1)
-			if err := os.WriteFile(filename, []byte(content.Content), fileutil.FilePermPrivate); err != nil {
+			if err := fileutil.AtomicWriteFile(filename, []byte(content.Content), fileutil.FilePermPrivate); err != nil {
 				return fmt.Errorf("failed to write file %s: %w", filename, err)
 			}
 			slog.Info("HTML写入成功", "filename", filename)

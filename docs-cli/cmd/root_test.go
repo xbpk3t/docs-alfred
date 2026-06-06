@@ -7,39 +7,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRootCommandUsesCanonicalTopLevelScopes(t *testing.T) {
+func TestRootCommandOwnsWorkspaceActions(t *testing.T) {
 	root := newRootCmd()
 
-	requireCommandNames(t, root.Commands(), []string{"alfred", "data", "workspace"})
-	requireNoCommand(t, root, "catalog")
-	requireNoCommand(t, root, "gh")
-	requireNoCommand(t, root, "images")
-	requireNoCommand(t, root, "blog")
-	requireNoCommand(t, root, "dotfiles")
+	require.Equal(t, "docs-cli", root.Name())
+	requireCommandNames(t, root.Commands(), []string{"check", "sync-plan"})
+	requireNoCommand(t, root, "alfred")
+	requireNoCommand(t, root, "data")
+	requireNoCommand(t, root, "workspace")
 }
 
-func TestAlfredCommandOwnsLauncherSearchCommands(t *testing.T) {
-	alfredCmd, _, err := newRootCmd().Find([]string{"alfred"})
+func TestCheckCommandOwnsWorkspaceChecks(t *testing.T) {
+	checkCmd, _, err := newRootCmd().Find([]string{"check"})
 	require.NoError(t, err)
 
-	requireCommandNames(t, alfredCmd.Commands(), []string{"export", "search", "sync", "validate"})
+	requireCommandNames(t, checkCmd.Commands(), []string{"blog", "dotfiles", "images"})
 }
 
-func TestDataCommandUsesActionFirstDomainCommands(t *testing.T) {
-	dataCmd, _, err := newRootCmd().Find([]string{"data"})
+func TestSyncPlanCommandOwnsWorkspaceSyncPlans(t *testing.T) {
+	syncPlanCmd, _, err := newRootCmd().Find([]string{"sync-plan"})
 	require.NoError(t, err)
 
-	requireCommandNames(t, dataCmd.Commands(), []string{"check", "duplicate", "gh", "render"})
-	requireNoCommand(t, dataCmd, "books")
-	requireNoCommand(t, dataCmd, "movie")
-	requireNoCommand(t, dataCmd, "music")
-}
-
-func TestWorkspaceCommandOwnsWorkspaceChecks(t *testing.T) {
-	workspaceCmd, _, err := newRootCmd().Find([]string{"workspace"})
-	require.NoError(t, err)
-
-	requireCommandNames(t, workspaceCmd.Commands(), []string{"blog", "dotfiles", "images"})
+	requireCommandNames(t, syncPlanCmd.Commands(), []string{"dotfiles"})
 }
 
 func requireCommandNames(t *testing.T, commands []*cobra.Command, want []string) {

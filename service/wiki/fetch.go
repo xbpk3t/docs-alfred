@@ -3,7 +3,6 @@ package wiki
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 
 	"codeberg.org/readeck/go-readability/v2"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/google/go-github/v70/github"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
@@ -71,51 +71,20 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFe
 	if !ok {
 		return &ContentFetchResult{SourceURL: rawURL, Error: "not a valid GitHub repo URL"}
 	}
-	owner, repo := repoRef.Owner, repoRef.Name
+	owner, repoName := repoRef.Owner, repoRef.Name
 
-	apiURL := fmt.Sprintf("%s/repos/%s/%s", f.GHBaseURL, owner, repo)
-	headers := map[string]string{
-		"Accept":     "application/vnd.github.v3+json",
-		"User-Agent": "rss2nl-wiki",
+	ghClient, err := f.githubClient()
+	if err != nil {
+		return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
 	}
-
-	token := getGHToken()
-	if token != "" {
-		headers["Authorization"] = "Bearer " + token
-	}
-
-	timeout := httputil.DefaultClientTimeout
-	if f.GHClient != nil && f.GHClient.Timeout > 0 {
-		timeout = f.GHClient.Timeout
-	}
-
-	respBody, err := httputil.GetBytes(ctx, apiURL, httputil.RequestOptions{
-		Timeout: timeout,
-		Headers: headers,
-	})
+	repoData, _, err := ghClient.Repositories.Get(ctx, owner, repoName)
 	if err != nil {
 		return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
 	}
 
-	var repoData struct {
-		License *struct {
-			SPDXID string `json:"spdx_id"`
-		} `json:"license"`
-		Name        string   `json:"name"`
-		Description string   `json:"description"`
-		Language    string   `json:"language"`
-		URL         string   `json:"html_url"`
-		Topics      []string `json:"topics"`
-		Stars       int      `json:"stargazers_count"`
-	}
-
-	if err := json.Unmarshal(respBody, &repoData); err != nil {
-		return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
-	}
-
 	licenseName := noneVal
-	if repoData.License != nil {
-		licenseName = repoData.License.SPDXID
+	if repoData.GetLicense() != nil && repoData.GetLicense().GetSPDXID() != "" {
+		licenseName = repoData.GetLicense().GetSPDXID()
 	}
 
 	body := fmt.Sprintf(`Repository: %s/%s
@@ -125,21 +94,44 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFe
 		Topics: %s
 		Description: %s
 		URL: %s`,
-		owner, repo,
-		repoData.Stars,
-		repoData.Language,
+		owner, repoName,
+		repoData.GetStargazersCount(),
+		repoData.GetLanguage(),
 		licenseName,
 		strings.Join(repoData.Topics, ", "),
-		repoData.Description,
-		repoData.URL,
+		repoData.GetDescription(),
+		repoData.GetHTMLURL(),
 	)
 
-	title := fmt.Sprintf("%s/%s", owner, repo)
-	if repoData.Description != "" {
-		title = fmt.Sprintf("%s/%s — %s", owner, repo, repoData.Description)
+	title := fmt.Sprintf("%s/%s", owner, repoName)
+	if repoData.GetDescription() != "" {
+		title = fmt.Sprintf("%s/%s — %s", owner, repoName, repoData.GetDescription())
 	}
 
 	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
+}
+
+func (f *Fetcher) githubClient() (*github.Client, error) {
+	client := github.NewClient(f.GHClient)
+	client.UserAgent = "rss2nl-wiki"
+
+	baseURL := strings.TrimSpace(f.GHBaseURL)
+	if baseURL != "" && baseURL != "https://api.github.com" && baseURL != "https://api.github.com/" {
+		if !strings.HasSuffix(baseURL, "/") {
+			baseURL += "/"
+		}
+		parsed, err := url.Parse(baseURL)
+		if err != nil {
+			return nil, fmt.Errorf("parse GitHub base URL: %w", err)
+		}
+		client.BaseURL = parsed
+	}
+
+	if token := getGHToken(); token != "" {
+		client = client.WithAuthToken(token)
+	}
+
+	return client, nil
 }
 
 // fetchHTTPPage fetches a web page via plain HTTP GET.

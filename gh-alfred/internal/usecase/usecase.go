@@ -1,4 +1,4 @@
-package alfred
+package usecase
 
 import (
 	"fmt"

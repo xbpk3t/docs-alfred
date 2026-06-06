@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/creasty/defaults"
+	"github.com/go-playground/validator/v10"
 	"github.com/knadh/koanf/parsers/yaml"
 	env "github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
@@ -14,7 +16,7 @@ import (
 // Config is the top-level configuration for linear2nl.
 type Config struct {
 	Resend  ResendConfig  `koanf:"resend"`
-	Theme   string        `koanf:"theme"`
+	Theme   string        `default:"dark"  koanf:"theme" validate:"oneof=dark light"`
 	Morning MorningConfig `koanf:"morning"`
 	AI      AIConfig      `koanf:"ai"`
 	Linear  LinearConfig  `koanf:"linear"`
@@ -28,13 +30,13 @@ type LinearConfig struct {
 
 // MorningConfig holds morning report configuration.
 type MorningConfig struct {
-	Strategy string `koanf:"strategy"`
+	Strategy string `default:"all_assigned" koanf:"strategy" validate:"oneof=all_assigned focused"`
 }
 
 // AIConfig holds AI summary configuration.
 type AIConfig struct {
-	Model    string        `koanf:"model"`
-	Language string        `koanf:"language"`
+	Model    string        `default:"deepseek-v4-flash" koanf:"model"`
+	Language string        `default:"zh"                koanf:"language"`
 	APIKey   string        `koanf:"apiKey"`
 	BaseURL  string        `koanf:"baseURL"`
 	Timeout  time.Duration `koanf:"timeout"`
@@ -43,7 +45,7 @@ type AIConfig struct {
 // ResendConfig holds Resend email configuration.
 type ResendConfig struct {
 	Token    string   `koanf:"token"`
-	FromName string   `koanf:"fromName"`
+	FromName string   `default:"Linear Bot" koanf:"fromName"`
 	MailTo   []string `koanf:"mailTo"`
 }
 
@@ -108,21 +110,7 @@ func loadEnvOverrides(k *koanf.Koanf) error {
 }
 
 func applyDefaults(cfg *Config) {
-	if cfg.Theme == "" {
-		cfg.Theme = "dark"
-	}
-	if cfg.Morning.Strategy == "" {
-		cfg.Morning.Strategy = "all_assigned"
-	}
-	if cfg.AI.Model == "" {
-		cfg.AI.Model = "deepseek-v4-flash"
-	}
-	if cfg.AI.Language == "" {
-		cfg.AI.Language = "zh"
-	}
-	if cfg.Resend.FromName == "" {
-		cfg.Resend.FromName = "Linear Bot"
-	}
+	defaults.MustSet(cfg)
 }
 
 func validateConfig(cfg *Config) error {
@@ -135,13 +123,20 @@ func validateConfig(cfg *Config) error {
 	if len(cfg.Resend.MailTo) == 0 {
 		return errors.New("resend.mailTo is required")
 	}
-	if cfg.Morning.Strategy != "" &&
-		cfg.Morning.Strategy != "all_assigned" &&
-		cfg.Morning.Strategy != "focused" {
-		return fmt.Errorf("morning.strategy must be 'all_assigned' or 'focused', got %q", cfg.Morning.Strategy)
-	}
-	if cfg.Theme != "dark" && cfg.Theme != "light" {
-		return fmt.Errorf("theme must be 'dark' or 'light', got %q", cfg.Theme)
+	if err := validator.New().Struct(cfg); err != nil {
+		var validationErrors validator.ValidationErrors
+		if errors.As(err, &validationErrors) {
+			for _, validationErr := range validationErrors {
+				switch validationErr.Namespace() {
+				case "Config.Morning.Strategy":
+					return fmt.Errorf("morning.strategy must be 'all_assigned' or 'focused', got %q", cfg.Morning.Strategy)
+				case "Config.Theme":
+					return fmt.Errorf("theme must be 'dark' or 'light', got %q", cfg.Theme)
+				}
+			}
+		}
+
+		return fmt.Errorf("validate config: %w", err)
 	}
 
 	return nil

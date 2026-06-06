@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	yaml "github.com/goccy/go-yaml"
@@ -13,10 +12,11 @@ import (
 )
 
 const (
-	DefaultConfigURL  = "https://cdn.lucc.dev/gh.yml"
-	DefaultConfigPath = "/tmp/docs-cli-gh.yml"
-	DefaultMaxAge     = 24 * time.Hour
+	DefaultConfigURL = "https://cdn.lucc.dev/gh.yml"
+	DefaultMaxAge    = 24 * time.Hour
 )
+
+var DefaultConfigPath = fileutil.CachePath("gh-alfred-gh.yml")
 
 // Manager handles remote repository configuration fetching and caching.
 type Manager struct {
@@ -80,29 +80,8 @@ func (m *Manager) download() ([]byte, error) {
 }
 
 func (m *Manager) writeCache(data []byte) error {
-	dir := filepath.Dir(m.configPath)
-	if err := os.MkdirAll(dir, fileutil.DirPerm); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	tmpFile := m.configPath + ".tmp"
-	out, err := os.Create(tmpFile)
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-
-	if _, err := out.Write(data); err != nil {
-		_ = out.Close()
-		_ = os.Remove(tmpFile)
-
-		return fmt.Errorf("failed to write config: %w", err)
-	}
-	_ = out.Close()
-
-	if err := os.Rename(tmpFile, m.configPath); err != nil {
-		_ = os.Remove(tmpFile)
-
-		return fmt.Errorf("failed to rename config: %w", err)
+	if err := fileutil.AtomicWriteFile(m.configPath, data, fileutil.FilePermPrivate); err != nil {
+		return fmt.Errorf("failed to write config cache: %w", err)
 	}
 
 	return nil
@@ -139,8 +118,18 @@ func (m *Manager) LoadWithCacheTTL() error {
 		return m.loadFromFile()
 	}
 
-	// Cache is fresh: load from file
-	return m.loadFromFile()
+	// Cache is fresh: load from file. If the cache was polluted by a bad
+	// remote response from an older version, ignore it and try to refresh.
+	if err := m.loadFromFile(); err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: cached config invalid, refreshing cache: %v\n", err)
+		if syncErr := m.Sync(); syncErr != nil {
+			return fmt.Errorf("cached config invalid and sync failed: %w", syncErr)
+		}
+
+		return m.loadFromFile()
+	}
+
+	return nil
 }
 
 func (m *Manager) loadFromFile() error {

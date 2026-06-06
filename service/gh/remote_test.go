@@ -64,10 +64,38 @@ func TestLoadFromFile_InvalidYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "gh.yml")
 	require.NoError(t, os.WriteFile(configPath, []byte("invalid: [yaml\n"), 0644))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "unavailable", http.StatusBadGateway)
+	}))
+	t.Cleanup(server.Close)
 
-	m := NewManager(configPath, "")
+	m := NewManager(configPath, server.URL)
 	err := m.LoadWithCacheTTL()
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cached config invalid and sync failed")
+}
+
+func TestLoadWithCacheTTLRefreshesInvalidFreshCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "gh.yml")
+	require.NoError(t, os.WriteFile(configPath, []byte("<!doctype html><title>Redirecting</title>"), 0644))
+	remote := validRemoteConfigYAML("refreshed")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(remote)
+	}))
+	t.Cleanup(server.Close)
+
+	m := NewManager(configPath, server.URL)
+	require.NoError(t, m.LoadWithCacheTTL())
+
+	actual, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	assert.Equal(t, string(remote), string(actual))
+
+	result := m.Filter("refreshed")
+	require.Len(t, result, 1)
+	assert.Equal(t, "https://github.com/acme/refreshed", result[0].URL)
 }
 
 func TestSyncRejectsInvalidRemoteWithoutOverwritingCache(t *testing.T) {

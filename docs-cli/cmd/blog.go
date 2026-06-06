@@ -10,25 +10,18 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
-func newBlogCmd() *cobra.Command {
+func newBlogCheckCmd() *cobra.Command {
 	var dataDir, blogDir string
 
 	cmd := &cobra.Command{
 		Use:   "blog",
-		Short: "Blog consistency commands",
-	}
-
-	checkCmd := &cobra.Command{
-		Use:   cmdCheck,
 		Short: "Check blog/data consistency",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runBlogCheck(dataDir, blogDir)
 		},
 	}
-	checkCmd.Flags().StringVar(&dataDir, "data-dir", "data/gh", "data/gh path")
-	checkCmd.Flags().StringVar(&blogDir, "blog-dir", "blog", "blog path")
-
-	cmd.AddCommand(checkCmd)
+	cmd.Flags().StringVar(&dataDir, "data-dir", "data/gh", "data/gh path")
+	cmd.Flags().StringVar(&blogDir, "blog-dir", "blog", "blog path")
 
 	return cmd
 }

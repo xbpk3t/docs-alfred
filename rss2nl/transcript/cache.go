@@ -114,7 +114,7 @@ func (c *Cache) Set(key string, entry *CacheEntry, content string) error {
 	// Write transcript content
 	txtPath := c.CacheFilePath(key)
 	if content != "" {
-		if err := os.WriteFile(txtPath, []byte(content), fileutil.FilePermPrivate); err != nil {
+		if err := fileutil.AtomicWriteFile(txtPath, []byte(content), fileutil.FilePermPrivate); err != nil {
 			return fmt.Errorf("write transcript: %w", err)
 		}
 		entry.TranscriptPath = txtPath
@@ -127,7 +127,7 @@ func (c *Cache) Set(key string, entry *CacheEntry, content string) error {
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
-	if err := os.WriteFile(metaPath, metaData, fileutil.FilePermPrivate); err != nil {
+	if err := fileutil.AtomicWriteFile(metaPath, metaData, fileutil.FilePermPrivate); err != nil {
 		return fmt.Errorf("write metadata: %w", err)
 	}
 

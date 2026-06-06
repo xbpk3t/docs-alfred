@@ -8,8 +8,6 @@ import (
 	workspaceuc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/workspace"
 )
 
-const cmdImages = "images"
-
 type imagesCheckFlags struct {
 	dataDir     string
 	imagesDir   string
@@ -19,15 +17,10 @@ type imagesCheckFlags struct {
 	skipMissing bool
 }
 
-func newImagesCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   cmdImages,
-		Short: "Docs-images management commands",
-	}
-
+func newImagesCheckCmd() *cobra.Command {
 	var flags imagesCheckFlags
-	checkCmd := &cobra.Command{
-		Use:   cmdCheck,
+	cmd := &cobra.Command{
+		Use:   "images",
 		Short: "Check docs-images against data/gh expectations",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runImagesCheck(workspaceuc.ImagesCheckInput{
@@ -41,14 +34,12 @@ func newImagesCmd() *cobra.Command {
 		},
 	}
 
-	checkCmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
-	checkCmd.Flags().StringVar(&flags.imagesDir, "images-dir", "docs-images", "docs-images path")
-	checkCmd.Flags().BoolVar(&flags.apply, "apply", false, "Apply fixes")
-	checkCmd.Flags().BoolVar(&flags.list, "list", false, "Print full lists")
-	checkCmd.Flags().BoolVar(&flags.skipExtra, "skip-extra-files", false, "Ignore extra files")
-	checkCmd.Flags().BoolVar(&flags.skipMissing, "skip-missing", false, "Do not fail on missing expected dirs")
-
-	cmd.AddCommand(checkCmd)
+	cmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
+	cmd.Flags().StringVar(&flags.imagesDir, "images-dir", "docs-images", "docs-images path")
+	cmd.Flags().BoolVar(&flags.apply, "apply", false, "Apply fixes")
+	cmd.Flags().BoolVar(&flags.list, "list", false, "Print full lists")
+	cmd.Flags().BoolVar(&flags.skipExtra, "skip-extra-files", false, "Ignore extra files")
+	cmd.Flags().BoolVar(&flags.skipMissing, "skip-missing", false, "Do not fail on missing expected dirs")
 
 	return cmd
 }

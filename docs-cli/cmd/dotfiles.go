@@ -13,37 +13,36 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
-const cmdCheck = "check"
+const cmdDotfiles = "dotfiles"
 
-func newDotfilesCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "dotfiles",
-		Short: "Dotfiles consistency commands",
-	}
-
+func newDotfilesCheckCmd() *cobra.Command {
 	var checkPath string
-	checkCmd := &cobra.Command{
-		Use:   cmdCheck,
+
+	cmd := &cobra.Command{
+		Use:   cmdDotfiles,
 		Short: "Check dotfiles/data consistency",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDotfilesCheck(checkPath)
 		},
 	}
-	checkCmd.Flags().StringVar(&checkPath, "dotfiles", "dotfiles", "dotfiles path")
-	cmd.AddCommand(checkCmd)
+	cmd.Flags().StringVar(&checkPath, cmdDotfiles, cmdDotfiles, "dotfiles path")
 
+	return cmd
+}
+
+func newDotfilesSyncPlanCmd() *cobra.Command {
 	var syncPlanPath string
 	var syncPlanJSON bool
-	syncPlanCmd := &cobra.Command{
-		Use:   "sync-plan",
+
+	cmd := &cobra.Command{
+		Use:   cmdDotfiles,
 		Short: "Plan dotfiles synchronization",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDotfilesSyncPlan(syncPlanPath, syncPlanJSON)
 		},
 	}
-	syncPlanCmd.Flags().StringVar(&syncPlanPath, "dotfiles", "dotfiles", "dotfiles path")
-	syncPlanCmd.Flags().BoolVar(&syncPlanJSON, "json", false, "Print JSON output")
-	cmd.AddCommand(syncPlanCmd)
+	cmd.Flags().StringVar(&syncPlanPath, cmdDotfiles, cmdDotfiles, "dotfiles path")
+	cmd.Flags().BoolVar(&syncPlanJSON, "json", false, "Print JSON output")
 
 	return cmd
 }
