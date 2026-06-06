@@ -2,11 +2,11 @@ package gh
 
 import (
 	"path"
-	"strings"
 
 	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 	"github.com/xbpk3t/docs-alfred/service"
 )
 
@@ -75,7 +75,7 @@ func normalizeRepoTopics(repo *Repository, base string, useBase bool) {
 
 	topicBase := base
 	if !useBase {
-		repoName := repoNameFromURL(repo.URL)
+		repoName := urlutil.RepoName(repo.URL)
 		if repoName == "" {
 			return
 		}
@@ -129,21 +129,6 @@ func topicDirName(topic *Topic) string {
 	}
 
 	return topic.Topic
-}
-
-func repoNameFromURL(urlStr string) string {
-	if urlStr == "" {
-		return ""
-	}
-	cleaned := strings.TrimPrefix(urlStr, "https://")
-	cleaned = strings.TrimPrefix(cleaned, "http://")
-	cleaned = strings.TrimSuffix(cleaned, "/")
-	parts := strings.Split(cleaned, "/")
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return strings.TrimSuffix(parts[len(parts)-1], ".git")
 }
 
 func joinPath(parts ...string) string {

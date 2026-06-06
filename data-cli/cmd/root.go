@@ -235,7 +235,7 @@ func newGhAppendCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&opts.file, "file", "", "Target YAML file path")
 	cmd.Flags().StringVar(&opts.url, "url", "", "Repository URL (required unless --file is given)")
-	cmd.Flags().StringVar(&opts.date, "date", "", "Record date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&opts.date, "date", "", "Record date (YYYY-MM-DD; default: today)")
 	cmd.Flags().StringVar(&opts.des, "des", "", "Record description")
 	cmd.Flags().StringVar(&opts.topic, "topic", "", "Topic name (default: inferred from URL)")
 

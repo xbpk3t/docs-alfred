@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 // CheckResult holds the blog check result.
@@ -45,31 +46,21 @@ func RunCheck(dataDir, blogDir string) (*CheckResult, error) {
 
 func collectGHTypes(result *CheckResult, dataDir string) (map[string]bool, error) {
 	ghTypes := make(map[string]bool)
-	err := filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || strings.HasPrefix(d.Name(), ".") {
-			return nil
-		}
-		ext := filepath.Ext(d.Name())
-		if ext != ".yml" && ext != ".yaml" {
-			return nil
-		}
+	files, err := fileutil.ListYAMLFilesRecursive(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("walk data/gh: %w", err)
+	}
+	for _, path := range files {
+		ext := filepath.Ext(path)
 		rel, _ := filepath.Rel(dataDir, path)
 		dirName := filepath.Dir(rel)
 		stem := strings.TrimSuffix(filepath.Base(path), ext)
 		key := dirName + "/" + stem
 		if strings.HasPrefix(dirName, ".") {
-			return nil
+			continue
 		}
 		ghTypes[key] = true
 		result.GHTypes++
-
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("walk data/gh: %w", err)
 	}
 
 	return ghTypes, nil

@@ -54,6 +54,7 @@ func RunImagesCheck(cfg CheckConfig) (*CheckResult, error) {
 	}
 	result.ExistingDirs = existingDirs
 	result.ActualFiles = actualFiles
+	result.DuplicateFiles = findDuplicateFiles(actualFiles)
 
 	expectedSet := make(map[string]bool)
 	for _, d := range expectedDirs {
@@ -108,6 +109,34 @@ func applyFixes(result *CheckResult, cfg CheckConfig) {
 	if len(result.ApplyActions) == 0 {
 		result.ApplyActions = append(result.ApplyActions, "No fixes needed")
 	}
+}
+
+func findDuplicateFiles(actualFiles []string) []string {
+	actualSet := make(map[string]bool, len(actualFiles))
+	for _, f := range actualFiles {
+		actualSet[f] = true
+	}
+
+	var duplicates []string
+	for _, f := range actualFiles {
+		base := filepath.Base(f)
+		matches := duplicateFileRe.FindStringSubmatch(base)
+		if matches == nil {
+			continue
+		}
+
+		originalName := matches[1] + matches[2]
+		dir := filepath.Dir(f)
+		originalRel := originalName
+		if dir != "." {
+			originalRel = filepath.ToSlash(filepath.Join(dir, originalName))
+		}
+		if actualSet[originalRel] {
+			duplicates = append(duplicates, f)
+		}
+	}
+
+	return duplicates
 }
 
 // removeDuplicateFiles deletes files matching name__NUMBER.ext if name.ext exists.
@@ -268,7 +297,7 @@ func collectTopicDirs(file string, topics []any, base string, dirs *[]string) {
 
 func collectRepoTopicDirs(repo map[string]any, base, file string, dirs *[]string, useBase bool) {
 	urlStr, _ := repo["url"].(string)
-	repoName := repoNameFromURL(urlStr)
+	repoName := urlutil.RepoName(urlStr)
 	if repoName == "" {
 		return
 	}
@@ -308,10 +337,6 @@ func topicHasPicture(topic map[string]any) bool {
 	return hp
 }
 
-func repoNameFromURL(urlStr string) string {
-	return urlutil.RepoName(urlStr)
-}
-
 // collectExistingFilesAndDirs returns both directories and files in imagesDir.
 //
 //nolint:nonamedreturns // named returns preferred for readability here
@@ -321,6 +346,13 @@ func collectExistingFilesAndDirs(imagesDir string) (dirs, files []string, err er
 			return walkErr
 		}
 		if path == imagesDir {
+			return nil
+		}
+		if strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+
 			return nil
 		}
 		rel, _ := filepath.Rel(imagesDir, path)

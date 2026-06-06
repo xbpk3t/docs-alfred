@@ -1,9 +1,8 @@
 package gh
 
 import (
-	"strings"
-
 	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 const GhURL = "https://github.com/"
@@ -89,18 +88,18 @@ func (t *Topic) MarshalJSON() ([]byte, error) {
 }
 
 func (r *Repository) IsValid() bool {
-	return strings.Contains(r.URL, GhURL)
+	_, ok := urlutil.GitHubOwnerRepo(r.URL)
+
+	return ok
 }
 
 func (r *Repository) FullName() string {
-	if !r.IsValid() {
+	repo, ok := urlutil.GitHubOwnerRepo(r.URL)
+	if !ok {
 		return ""
 	}
-	if sx, found := strings.CutPrefix(r.URL, GhURL); found {
-		return sx
-	}
 
-	return ""
+	return repo.Owner + "/" + repo.Name
 }
 
 func (r *Repository) GetDes() string {

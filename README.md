@@ -9,10 +9,11 @@ go install github.com/xbpk3t/docs-alfred/docs-cli@main
 ```
 
 ```shell
-docs-cli check images
-docs-cli check blog
-docs-cli check dotfiles
-docs-cli sync-plan dotfiles
+docs-cli images check
+docs-cli images fix
+docs-cli blog check
+docs-cli dotfiles check
+docs-cli dotfiles sync-plan
 ```
 
 ## gh-alfred

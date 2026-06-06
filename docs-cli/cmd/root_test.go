@@ -7,28 +7,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRootCommandOwnsWorkspaceActions(t *testing.T) {
+func TestRootCommandOwnsWorkspaceResources(t *testing.T) {
 	root := newRootCmd()
 
 	require.Equal(t, "docs-cli", root.Name())
-	requireCommandNames(t, root.Commands(), []string{"check", "sync-plan"})
+	requireCommandNames(t, root.Commands(), []string{"blog", "dotfiles", "images"})
+	requireNoCommand(t, root, cmdCheck)
+	requireNoCommand(t, root, "sync-plan")
 	requireNoCommand(t, root, "alfred")
 	requireNoCommand(t, root, "data")
 	requireNoCommand(t, root, "workspace")
 }
 
-func TestCheckCommandOwnsWorkspaceChecks(t *testing.T) {
-	checkCmd, _, err := newRootCmd().Find([]string{"check"})
+func TestImagesCommandOwnsImageActions(t *testing.T) {
+	imagesCmd, _, err := newRootCmd().Find([]string{"images"})
 	require.NoError(t, err)
 
-	requireCommandNames(t, checkCmd.Commands(), []string{"blog", "dotfiles", "images"})
+	requireCommandNames(t, imagesCmd.Commands(), []string{cmdCheck, "fix"})
 }
 
-func TestSyncPlanCommandOwnsWorkspaceSyncPlans(t *testing.T) {
-	syncPlanCmd, _, err := newRootCmd().Find([]string{"sync-plan"})
+func TestBlogCommandOwnsBlogActions(t *testing.T) {
+	blogCmd, _, err := newRootCmd().Find([]string{"blog"})
 	require.NoError(t, err)
 
-	requireCommandNames(t, syncPlanCmd.Commands(), []string{"dotfiles"})
+	requireCommandNames(t, blogCmd.Commands(), []string{cmdCheck})
+}
+
+func TestDotfilesCommandOwnsDotfilesActions(t *testing.T) {
+	dotfilesCmd, _, err := newRootCmd().Find([]string{"dotfiles"})
+	require.NoError(t, err)
+
+	requireCommandNames(t, dotfilesCmd.Commands(), []string{cmdCheck, "sync-plan"})
 }
 
 func requireCommandNames(t *testing.T, commands []*cobra.Command, want []string) {

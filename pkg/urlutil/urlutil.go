@@ -15,6 +15,13 @@ type GitHubRepo struct {
 	Name  string
 }
 
+// Repo identifies a hosted source-code repository by host, owner/group, and name.
+type Repo struct {
+	Host  string
+	Owner string
+	Name  string
+}
+
 // Normalize canonicalizes a URL for comparison and persistence keys.
 func Normalize(rawURL string) string {
 	normalized, err := purell.NormalizeURLString(rawURL,
@@ -99,20 +106,39 @@ func RepoName(rawURL string) string {
 
 // GitHubOwnerRepo parses a github.com repository URL.
 func GitHubOwnerRepo(rawURL string) (GitHubRepo, bool) {
-	u, err := url.Parse(rawURL)
-	if err != nil {
+	repo, ok := SourceRepo(rawURL)
+	if !ok || repo.Host != "github.com" {
 		return GitHubRepo{}, false
 	}
-	if !strings.EqualFold(u.Hostname(), "github.com") {
-		return GitHubRepo{}, false
+
+	return GitHubRepo{Owner: repo.Owner, Name: repo.Name}, true
+}
+
+// SourceRepo parses a supported source-code repository URL.
+func SourceRepo(rawURL string) (Repo, bool) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return Repo{}, false
+	}
+
+	host := strings.ToLower(u.Hostname())
+	if host != "github.com" && host != "gitlab.com" {
+		return Repo{}, false
 	}
 
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-		return GitHubRepo{}, false
+		return Repo{}, false
 	}
 
-	return GitHubRepo{Owner: parts[0], Name: strings.TrimSuffix(parts[1], ".git")}, true
+	return Repo{Host: host, Owner: parts[0], Name: strings.TrimSuffix(parts[1], ".git")}, true
+}
+
+// IsSourceRepo returns true for supported source-code repository URLs.
+func IsSourceRepo(rawURL string) bool {
+	_, ok := SourceRepo(rawURL)
+
+	return ok
 }
 
 func repoNameFromPath(path string) string {

@@ -3,7 +3,6 @@ package data
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	yamlparser "github.com/goccy/go-yaml/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 const (
@@ -54,23 +54,7 @@ func RunStructuredDataCheck(targetDir, scope string) (*CheckResult, error) {
 }
 
 func listYAMLFiles(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("read dir %s: %w", dir, err)
-	}
-
-	var files []string
-	for _, e := range entries {
-		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		ext := filepath.Ext(e.Name())
-		if ext == extYML || ext == extYAML {
-			files = append(files, filepath.Join(dir, e.Name()))
-		}
-	}
-
-	return files, nil
+	return fileutil.ListYAMLFiles(dir)
 }
 
 func checkFile(file, scope string) []checkutil.Issue {

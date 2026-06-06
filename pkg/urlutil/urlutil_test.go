@@ -38,6 +38,39 @@ func TestGitHubOwnerRepo(t *testing.T) {
 	}
 }
 
+func TestSourceRepo(t *testing.T) {
+	tests := []struct {
+		input string
+		host  string
+		owner string
+		name  string
+		ok    bool
+	}{
+		{input: "https://github.com/owner/repo.git/tree/main", host: "github.com", owner: "owner", name: "repo", ok: true},
+		{input: "https://gitlab.com/group/project/-/issues", host: "gitlab.com", owner: "group", name: "project", ok: true},
+		{input: "https://example.com/owner/repo", ok: false},
+		{input: "https://github.com/search", ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			repo, ok := SourceRepo(tt.input)
+			if ok != tt.ok {
+				t.Fatalf("SourceRepo(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if !ok {
+				return
+			}
+			if repo.Host != tt.host || repo.Owner != tt.owner || repo.Name != tt.name {
+				t.Fatalf("SourceRepo(%q) = %#v", tt.input, repo)
+			}
+			if !IsSourceRepo(tt.input) {
+				t.Fatalf("IsSourceRepo(%q) = false, want true", tt.input)
+			}
+		})
+	}
+}
+
 func TestDomainBlocked(t *testing.T) {
 	blocked := map[string]bool{"example.com": true}
 	if !DomainBlocked("blog.example.com", blocked) {

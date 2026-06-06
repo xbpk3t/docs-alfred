@@ -16,10 +16,10 @@ const (
 
 // Issue represents a single validation issue.
 type Issue struct {
-	File     string
-	Severity string
-	Message  string
-	Line     int
+	File     string `json:"file"`
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+	Line     int    `json:"line,omitempty"`
 }
 
 // Result is the common check result type.

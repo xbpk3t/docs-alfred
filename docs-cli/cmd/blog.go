@@ -3,30 +3,46 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/workspace"
-	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
-func newBlogCheckCmd() *cobra.Command {
-	var dataDir, blogDir string
+type blogCheckFlags struct {
+	dataDir string
+	blogDir string
+	format  string
+}
 
+func newBlogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "blog",
-		Short: "Check blog/data consistency",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runBlogCheck(dataDir, blogDir)
-		},
+		Short: "Blog consistency commands",
 	}
-	cmd.Flags().StringVar(&dataDir, "data-dir", "data/gh", "data/gh path")
-	cmd.Flags().StringVar(&blogDir, "blog-dir", "blog", "blog path")
+
+	cmd.AddCommand(newBlogCheckCmd())
 
 	return cmd
 }
 
-func runBlogCheck(dataDir, blogDir string) error {
+func newBlogCheckCmd() *cobra.Command {
+	var flags blogCheckFlags
+
+	cmd := &cobra.Command{
+		Use:   cmdCheck,
+		Short: "Check blog/data consistency",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runBlogCheck(flags.dataDir, flags.blogDir, flags.format)
+		},
+	}
+	cmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
+	cmd.Flags().StringVar(&flags.blogDir, "blog-dir", "blog", "blog path")
+	addFormatFlag(cmd, &flags.format)
+
+	return cmd
+}
+
+func runBlogCheck(dataDir, blogDir, format string) error {
 	result, err := workspaceuc.RunBlogCheck(workspaceuc.BlogCheckInput{
 		DataDir: dataDir,
 		BlogDir: blogDir,
@@ -35,9 +51,16 @@ func runBlogCheck(dataDir, blogDir string) error {
 		return err
 	}
 
-	checkutil.ReportIssues(result.Issues, "blog check")
-	fmt.Fprintf(os.Stderr, "summary: data/gh types=%d blog dirs=%d\n", result.GHTypes, result.BlogDirs)
-	if checkutil.HasErrors(result.Issues) {
+	textDetails := fmt.Sprintf("summary: data/gh types=%d blog dirs=%d\n", result.GHTypes, result.BlogDirs)
+	if err := writeCheckCommandOutput(format, &checkCommandOutput{
+		Name:    "blog check",
+		Issues:  result.Issues,
+		Summary: result.Summary(),
+	}, textDetails); err != nil {
+		return err
+	}
+
+	if workspaceuc.HasIssueErrors(result.Issues) {
 		return errors.New("blog check failed")
 	}
 

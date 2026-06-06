@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/xbpk3t/docs-alfred/internal/datarender"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -262,16 +263,17 @@ func RunGhAppend(input *GhAppendInput) (*GhAppendResult, error) {
 	if input.URL == "" && input.File == "" {
 		return nil, errors.New("either --url or --file is required")
 	}
-	if input.Date == "" || input.Des == "" {
-		return nil, errors.New("--date and --des are required")
+	if input.Des == "" {
+		return nil, errors.New("--des is required")
 	}
+	date := resolveGhAppendDate(input.Date)
 
-	slog.Info("Appending record", "url", input.URL, "date", input.Date, "des", input.Des)
+	slog.Info("Appending record", "url", input.URL, "date", date, "des", input.Des)
 
 	result, err := ghcheck.AppendRecord(&ghcheck.AppendRecordOptions{
 		File:  input.File,
 		URL:   input.URL,
-		Date:  input.Date,
+		Date:  date,
 		Des:   input.Des,
 		Topic: input.Topic,
 	})
@@ -280,4 +282,12 @@ func RunGhAppend(input *GhAppendInput) (*GhAppendResult, error) {
 	}
 
 	return &GhAppendResult{File: result.File, Diff: result.Diff}, nil
+}
+
+func resolveGhAppendDate(date string) string {
+	if date != "" {
+		return date
+	}
+
+	return time.Now().Format(time.DateOnly)
 }

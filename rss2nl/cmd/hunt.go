@@ -724,13 +724,7 @@ func classifyCandidate(rawURL, title string) candidateType {
 }
 
 func isRepoURL(u string) bool {
-	if !strings.Contains(u, "github.com") && !strings.Contains(u, "gitlab.com") {
-		return false
-	}
-	path := strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://")
-	segments := strings.Split(strings.Trim(path, "/"), "/")
-
-	return len(segments) >= 2
+	return urlutil.IsSourceRepo(u)
 }
 
 func isNewsletterDomain(domain, lowerTitle string) bool {
