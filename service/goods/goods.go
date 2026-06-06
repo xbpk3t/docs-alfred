@@ -2,7 +2,6 @@ package goods
 
 import (
 	yaml "github.com/goccy/go-yaml"
-	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/service/gh"
 )
 
@@ -27,9 +26,4 @@ type Item struct {
 	Des   string `json:"des"   yaml:"des,omitempty"`
 	URL   string `json:"url"   yaml:"url,omitempty"`
 	Use   bool   `json:"use"   yaml:"use,omitempty"`
-}
-
-// ParseConfig 解析配置文件.
-func ParseConfig(data []byte) ([]Goods, error) {
-	return parser.NewParser[Goods](data).ParseFlatten()
 }

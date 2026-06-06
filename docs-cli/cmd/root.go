@@ -12,13 +12,13 @@ func Execute() error {
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "docs-cli",
-		Short: "CLI for data rendering, validation, and GitHub repo queries",
+		Short: "CLI for data rendering, validation, and Alfred repo queries",
 		Long: `docs-cli: data rendering, data validation, docs-images/dotfiles/blog checking,
-and GitHub repository search and sync.`,
+and Alfred GitHub repository search and sync.`,
 	}
 
 	rootCmd.AddCommand(newDataCmd())
-	rootCmd.AddCommand(newCatalogCmd())
+	rootCmd.AddCommand(newAlfredCmd())
 	rootCmd.AddCommand(newWorkspaceCmd())
 
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})

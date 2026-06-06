@@ -1,7 +1,6 @@
 package dotfiles
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,9 +17,6 @@ type CheckResult struct {
 	DfOnlyCount int
 	GhOnlyCount int
 }
-
-// CheckIssue represents a single check issue.
-type CheckIssue = checkutil.Issue
 
 // RunCheck compares dotfiles categories with data/gh categories.
 func RunCheck(dotfilesDir, ghDir string) (*CheckResult, error) {
@@ -236,17 +232,4 @@ func isYAMLFileNoDotfiles(dir, name string) bool {
 
 func contains(slice []string, s string) bool {
 	return slices.Contains(slice, s)
-}
-
-// Report prints the check result.
-func (r *CheckResult) Report(command string) {
-	base := &checkutil.Result{Issues: r.Issues}
-	base.Report(command)
-	fmt.Fprintf(os.Stderr, "summary: shared=%d df-only=%d gh-only=%d\n",
-		r.SharedCount, r.DfOnlyCount, r.GhOnlyCount)
-}
-
-// HasErrors returns true if there are any error-severity issues.
-func (r *CheckResult) HasErrors() bool {
-	return checkutil.HasErrors(r.Issues)
 }

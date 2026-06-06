@@ -6,8 +6,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	yaml "github.com/goccy/go-yaml"
 )
 
@@ -195,21 +198,16 @@ func collectYAMLFilesRecursive(root string) ([]string, error) {
 		return nil, fmt.Errorf("gh root dir: %w", err)
 	}
 
-	var files []string
-	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || strings.HasPrefix(d.Name(), ".") {
-			return nil
-		}
-		ext := filepath.Ext(d.Name())
-		if ext == ".yml" || ext == ".yaml" {
-			files = append(files, path)
-		}
+	pattern := filepath.Join(root, "**", "*.{yml,yaml}")
+	files, err := doublestar.FilepathGlob(pattern, doublestar.WithFilesOnly())
+	if err != nil {
+		return nil, err
+	}
 
-		return nil
+	files = slices.DeleteFunc(files, func(path string) bool {
+		return strings.HasPrefix(filepath.Base(path), ".")
 	})
+	sort.Strings(files)
 
 	return files, err
 }

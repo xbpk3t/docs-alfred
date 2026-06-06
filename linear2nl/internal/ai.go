@@ -21,12 +21,6 @@ type morningPromptData struct {
 	Issues []IssueView
 }
 
-type eveningPromptData struct {
-	Lang      string
-	Completed []IssueView
-	Changes   []StateChangeView
-}
-
 type eveningDeepPromptData struct {
 	Lang   string
 	Issues []IssueDetail
@@ -64,23 +58,6 @@ func (p *AIProvider) MorningSummary(issues []IssueView) string {
 	})
 	if err != nil {
 		slog.Warn("failed to render morning prompt", "error", err)
-
-		return ""
-	}
-
-	return p.chat(prompt)
-}
-
-// EveningSummary generates AI summary for the evening report (simple version).
-// Returns markdown string; empty if AI is unavailable or call fails.
-func (p *AIProvider) EveningSummary(completed []IssueView, changes []StateChangeView) string {
-	prompt, err := p.renderPrompt("prompts/evening-summary.txt", eveningPromptData{
-		Lang:      p.lang,
-		Completed: completed,
-		Changes:   changes,
-	})
-	if err != nil {
-		slog.Warn("failed to render evening prompt", "error", err)
 
 		return ""
 	}

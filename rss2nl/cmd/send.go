@@ -17,10 +17,10 @@ import (
 	"github.com/mmcdole/gofeed"
 	resend "github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
-	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:embed templates/*.gohtml
@@ -226,12 +226,12 @@ func (s *NewsletterService) ProcessAllFeeds() ([]NewsletterCategory, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	p := pool.NewWithResults[NewsletterCategory]().
-		WithContext(ctx).
-		WithMaxGoroutines(10)
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(10)
 
-	for _, feed := range s.config.Feeds {
-		p.Go(func(ctx context.Context) (NewsletterCategory, error) {
+	results := make([]NewsletterCategory, len(s.config.Feeds))
+	for i, feed := range s.config.Feeds {
+		g.Go(func() error {
 			category, err := s.processSingleFeed(ctx, feed)
 			if err != nil {
 				slog.Error("Failed to process feed",
@@ -242,17 +242,18 @@ func (s *NewsletterService) ProcessAllFeeds() ([]NewsletterCategory, error) {
 					Message: "Failed to fetch feed",
 					Err:     err,
 				})
-
-				return category, nil
 			}
 
-			return category, nil
+			results[i] = category
+
+			return nil
 		})
 	}
 
-	results, err := p.Wait()
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		slog.Error("Error processing feeds", slog.Any("error", err))
+
+		return nil, err
 	}
 
 	s.failedFeeds = s.failedFeeds[:0]

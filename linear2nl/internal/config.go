@@ -3,10 +3,10 @@ package internal
 import (
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/knadh/koanf/parsers/yaml"
+	env "github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 )
@@ -51,6 +51,7 @@ type ResendConfig struct {
 // Env var overrides (applied after YAML, so they win):
 //
 //	LINEAR2NL_MORNING_STRATEGY  → morning.strategy
+//	LINEAR2NL_AI_MODEL          → ai.model
 //	LINEAR_API_KEY              → linear.apiKey
 //	RESEND_TOKEN                → resend.token
 //
@@ -63,28 +64,17 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 
-	// 2. Unmarshal into struct
+	// 2. Env var overrides and fallbacks. Load after YAML so env wins.
+	if err := loadEnvOverrides(k); err != nil {
+		return nil, fmt.Errorf("load env config: %w", err)
+	}
+
+	// 3. Unmarshal into struct
 	var cfg Config
 	if err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"}); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
-	// 3. Env var overrides (manually — koanf is case-sensitive so env.Provider
-	//    can't handle camelCase keys like apiKey/baseURL).
-	if v := os.Getenv("LINEAR2NL_MORNING_STRATEGY"); v != "" {
-		cfg.Morning.Strategy = v
-	}
-	if v := os.Getenv("LINEAR2NL_AI_MODEL"); v != "" {
-		cfg.AI.Model = v
-	}
-
-	// 4. Env var fallbacks (non-prefixed, standard names)
-	if cfg.Linear.APIKey == "" {
-		cfg.Linear.APIKey = os.Getenv("LINEAR_API_KEY")
-	}
-	if cfg.Resend.Token == "" {
-		cfg.Resend.Token = os.Getenv("RESEND_TOKEN")
-	}
 	// AI apiKey/baseURL fall through to pkg/ai.DefaultConfig()
 	// which reads OPENAI_API_KEY / OPENAI_BASE_URL / LLM_MODEL.
 
@@ -95,6 +85,26 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func loadEnvOverrides(k *koanf.Koanf) error {
+	return k.Load(env.Provider(".", env.Opt{TransformFunc: func(key, value string) (string, any) {
+		if value == "" {
+			return "", nil
+		}
+		switch key {
+		case "LINEAR2NL_MORNING_STRATEGY":
+			return "morning.strategy", value
+		case "LINEAR2NL_AI_MODEL":
+			return "ai.model", value
+		case "LINEAR_API_KEY":
+			return "linear.apiKey", value
+		case "RESEND_TOKEN":
+			return "resend.token", value
+		default:
+			return "", nil
+		}
+	}}), nil)
 }
 
 func applyDefaults(cfg *Config) {

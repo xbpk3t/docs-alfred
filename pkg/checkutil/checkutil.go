@@ -27,13 +27,6 @@ type Result struct {
 	Issues []Issue
 }
 
-// AddIssue appends a validation issue.
-func (r *Result) AddIssue(file, severity, message string) {
-	r.Issues = append(r.Issues, Issue{
-		File: file, Severity: severity, Message: message,
-	})
-}
-
 // HasErrors returns true if any error-severity issues exist.
 func (r *Result) HasErrors() bool {
 	for _, issue := range r.Issues {

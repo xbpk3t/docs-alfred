@@ -8,19 +8,17 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/PuerkitoBio/purell"
 	"github.com/mmcdole/gofeed"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
-	"golang.org/x/net/publicsuffix"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // -- Types (matching TS schema) --
@@ -776,52 +774,16 @@ func normalizeConfidence(score, fallback float64) float64 {
 // normalizeURL canonicalizes a URL using purell (lowercase scheme/host,
 // remove default port, normalize path, strip fragment).
 func normalizeURL(rawURL string) string {
-	normalized, err := purell.NormalizeURLString(rawURL,
-		purell.FlagLowercaseScheme|
-			purell.FlagLowercaseHost|
-			purell.FlagRemoveDefaultPort|
-			purell.FlagRemoveDotSegments|
-			purell.FlagRemoveFragment|
-			purell.FlagRemoveDuplicateSlashes|
-			purell.FlagSortQuery)
-	if err != nil {
-		return rawURL
-	}
-
-	return strings.TrimRight(normalized, "/")
+	return urlutil.Normalize(rawURL)
 }
 
 func extractDomain(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-
-	return u.Hostname()
+	return urlutil.Domain(rawURL)
 }
 
 // isBlocked checks if a domain matches any blocked entry by registrable domain.
 func isBlocked(domain string, blockedSet map[string]bool) bool {
-	// First try exact match
-	if blockedSet[domain] {
-		return true
-	}
-	// Then try registrable domain match
-	regDomain, err := publicsuffix.EffectiveTLDPlusOne(domain)
-	if err != nil {
-		// Fallback to suffix matching for IP addresses or unusual TLDs
-		parts := strings.Split(domain, ".")
-		for i := range slices.Backward(parts) {
-			partial := strings.Join(parts[i:], ".")
-			if blockedSet[partial] {
-				return true
-			}
-		}
-
-		return false
-	}
-
-	return blockedSet[regDomain]
+	return urlutil.DomainBlocked(domain, blockedSet)
 }
 
 // -- State persistence --

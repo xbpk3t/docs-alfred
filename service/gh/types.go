@@ -50,6 +50,8 @@ type Config struct {
 type Topic struct {
 	Topic    string          `json:"topic"            yaml:"topic"`
 	Des      string          `json:"des,omitempty"    yaml:"des,omitempty"`
+	Meta     *TopicMeta      `json:"-"                yaml:"meta,omitempty"`
+	Sub      Topics          `json:"sub,omitempty"    yaml:"sub,omitempty"`
 	PicDir   string          `json:"picDir,omitempty" yaml:"picDir,omitempty"`
 	Pictures []string        `json:"pic,omitempty"    yaml:"pic,omitempty"`
 	URLs     string          `json:"url,omitempty"    yaml:"url,omitempty"`
@@ -62,10 +64,17 @@ type Topic struct {
 	HTO      []string        `json:"hto,omitempty"    yaml:"hto,omitempty"`
 	Table    []yaml.MapSlice `json:"table,omitempty"  yaml:"table,omitempty"`
 	Tables   Tables          `json:"tables,omitempty" yaml:"tables,omitempty"`
+	HasPic   bool            `json:"hasPic,omitempty" yaml:"hasPic,omitempty"`
 	IsX      bool            `json:"isX,omitempty"    yaml:"isX,omitempty"`
 }
 
 type Topics []Topic
+
+type TopicMeta struct {
+	Slug   string `json:"slug,omitempty"   yaml:"slug,omitempty"`
+	HasPic bool   `json:"hasPic,omitempty" yaml:"hasPic,omitempty"`
+	IsX    bool   `json:"isX,omitempty"    yaml:"isX,omitempty"`
+}
 
 type Table struct {
 	Name  string          `json:"name,omitempty"  yaml:"name,omitempty"`

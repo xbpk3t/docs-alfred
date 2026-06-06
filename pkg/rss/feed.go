@@ -4,13 +4,12 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"sync"
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
 	carbon "github.com/dromara/carbon/v2"
-	"github.com/gorilla/feeds"
 	"github.com/mmcdole/gofeed"
+	"golang.org/x/sync/errgroup"
 )
 
 // NewHTTPClient creates an HTTP client with timeout from config.
@@ -39,32 +38,19 @@ func getMaxAttempts(cfg *Config) uint {
 	return uint(cfg.FeedConfig.MaxTries)
 }
 
-// sendErrorFeed 发送错误Feed.
-func sendErrorFeed(ch chan<- *gofeed.Feed, url string, lastError error) {
-	errorMsg := "unknown error"
-	if lastError != nil {
-		errorMsg = lastError.Error()
-	}
-	ch <- &gofeed.Feed{
-		FeedType: LogKeyError,
-		Title:    url,
-		Custom:   map[string]string{LogKeyError: errorMsg},
-	}
-}
-
 // FetchURLWithRetry 重试获取URL内容.
-func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, cfg *Config) {
-	if err := validateURL(url); err != nil {
-		slog.Error("Invalid URL", slog.String(LogKeyURL, url), slog.Any(LogKeyError, err))
-		ch <- nil
+func FetchURLWithRetry(ctx context.Context, url string, cfg *Config) (*gofeed.Feed, *FeedError) {
+	if feedErr := validateURL(url); feedErr != nil {
+		slog.Error("Invalid URL", slog.String(LogKeyURL, url), slog.Any(LogKeyError, feedErr))
 
-		return
+		return nil, feedErr
 	}
 
 	fp := createFeedParser(cfg)
 
 	var attempts uint = 0
 	var lastError error
+	var feed *gofeed.Feed
 
 	err := retry.Do(
 		func() error {
@@ -74,7 +60,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 
 				return ctx.Err()
 			default:
-				feed, err := fp.ParseURL(url)
+				parsedFeed, err := fp.ParseURLWithContext(url, ctx)
 				if err != nil {
 					slog.Error("Parse FeedConfig Error",
 						slog.String(LogKeyURL, url),
@@ -83,7 +69,7 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 
 					return err
 				}
-				ch <- feed
+				feed = parsedFeed
 
 				return nil
 			}
@@ -103,160 +89,74 @@ func FetchURLWithRetry(ctx context.Context, url string, ch chan<- *gofeed.Feed, 
 		}),
 	)
 	if err != nil {
+		if lastError == nil {
+			lastError = err
+		}
 		slog.Error("Parse FeedConfig Error after retries",
 			slog.String(LogKeyURL, url),
 			slog.Uint64(LogKeyAttempts, uint64(attempts)),
 			slog.Any(LogKeyError, err))
-		sendErrorFeed(ch, url, lastError)
-	}
-}
 
-// validateURL 验证URL.
-func validateURL(url string) error {
-	if url == "" {
-		return &FeedError{
+		return nil, &FeedError{
 			URL:     url,
-			Message: "empty URL",
-			Err:     nil,
+			Message: lastError.Error(),
+			Err:     lastError,
 		}
 	}
-
-	return nil
-}
-
-// FetchURLs 批量获取URLs.
-func FetchURLs(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed, []*FeedError) {
-	allFeeds := make([]*gofeed.Feed, 0)
-	failedFeeds := make([]*FeedError, 0)
-	ch := make(chan *gofeed.Feed, len(urls))
-	var wg sync.WaitGroup
-
-	for _, url := range urls {
-		wg.Add(1)
-		go func(url string) {
-			defer wg.Done()
-			FetchURLWithRetry(ctx, url, ch, cfg)
-		}(url)
-	}
-
-	go func() {
-		wg.Wait()
-		close(ch)
-	}()
-
-	for feed := range ch {
-		if feed != nil {
-			if feed.FeedType == "error" {
-				// 记录失败的feed并使用原始错误信息
-				slog.Error("Failed to fetch feed",
-					slog.String("url", feed.Title),
-					slog.String("error", feed.Custom["error"]))
-				// 添加到失败列表
-				failedFeeds = append(failedFeeds, &FeedError{
-					URL:     feed.Title,
-					Message: feed.Custom["error"],
-					Err:     nil,
-				})
-			} else {
-				allFeeds = append(allFeeds, feed)
-			}
-		}
-	}
-
-	return allFeeds, failedFeeds
-}
-
-// MergeAllFeeds 合并所有feeds.
-func MergeAllFeeds(feedTitle string, allFeeds []*gofeed.Feed, cfg *Config) (*feeds.Feed, error) {
-	if err := validateFeeds(allFeeds); err != nil {
-		return nil, err
-	}
-
-	feed := createBaseFeed(feedTitle)
-	items := processFeeds(allFeeds, cfg)
-	feed.Items = items
 
 	return feed, nil
 }
 
-func validateFeeds(feedItems []*gofeed.Feed) error {
-	if len(feedItems) == 0 {
-		slog.Info("No feeds found, skipping")
-
-		return nil
+// validateURL 验证URL.
+func validateURL(url string) *FeedError {
+	if url == "" {
+		return &FeedError{
+			URL:     url,
+			Message: "empty URL",
+			Kind:    FeedFailureKindInvalidURL,
+		}
 	}
 
 	return nil
 }
 
-func createBaseFeed(title string) *feeds.Feed {
-	return &feeds.Feed{
-		Title:       title,
-		Description: "Merged feeds from " + title,
-		Created:     time.Now(),
-	}
+type fetchURLResult struct {
+	feed *gofeed.Feed
+	err  *FeedError
 }
 
-func processFeeds(allFeeds []*gofeed.Feed, cfg *Config) []*feeds.Item {
-	seen := make(map[string]bool)
-	var mergedItems []*feeds.Item
+// FetchURLs 批量获取URLs.
+func FetchURLs(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed, []*FeedError) {
+	results := make([]fetchURLResult, len(urls))
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(DefaultFeedFetchConcurrency)
 
-	for _, sourceFeed := range allFeeds {
-		items := processSingleFeed(sourceFeed, seen, cfg)
-		mergedItems = append(mergedItems, items...)
+	for i, url := range urls {
+		g.Go(func() error {
+			feed, feedErr := FetchURLWithRetry(ctx, url, cfg)
+			results[i] = fetchURLResult{feed: feed, err: feedErr}
+
+			return nil
+		})
 	}
 
-	return mergedItems
-}
+	_ = g.Wait()
 
-func processSingleFeed(sourceFeed *gofeed.Feed, seen map[string]bool, cfg *Config) []*feeds.Item {
-	var items []*feeds.Item
-
-	for i, item := range sourceFeed.Items {
-		if i >= cfg.FeedConfig.FeedLimit {
-			break
+	allFeeds := make([]*gofeed.Feed, 0, len(urls))
+	failedFeeds := make([]*FeedError, 0)
+	for _, result := range results {
+		if result.err != nil {
+			slog.Error("Failed to fetch feed",
+				slog.String(LogKeyURL, result.err.URL),
+				slog.String(LogKeyError, result.err.Message))
+			failedFeeds = append(failedFeeds, result.err)
 		}
-
-		if seen[item.Link] {
-			continue
+		if result.feed != nil {
+			allFeeds = append(allFeeds, result.feed)
 		}
-
-		created := getItemCreationTime(item)
-		if !FilterFeedsWithTimeRange(created, time.Now(), cfg.NewsletterConfig.Schedule) {
-			continue
-		}
-
-		feedItem := &feeds.Item{
-			Title:   item.Title,
-			Link:    &feeds.Link{Href: item.Link},
-			Author:  &feeds.Author{Name: getAuthor(sourceFeed)},
-			Created: created,
-		}
-
-		items = append(items, feedItem)
-		seen[item.Link] = true
 	}
 
-	return items
-}
-
-func getItemCreationTime(item *gofeed.Item) time.Time {
-	if item.PublishedParsed != nil {
-		return *item.PublishedParsed
-	}
-	if item.UpdatedParsed != nil {
-		return *item.UpdatedParsed
-	}
-
-	return time.Now()
-}
-
-func getAuthor(feed *gofeed.Feed) string {
-	if feed.Title != "" {
-		return feed.Title
-	}
-
-	return ""
+	return allFeeds, failedFeeds
 }
 
 // FilterFeedsWithTimeRange 根据时间范围过滤feeds.

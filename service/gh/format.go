@@ -12,11 +12,14 @@ func FormatAlfredItems(repos Repos, docsURL string) []wf.AlfredItem {
 	var items []wf.AlfredItem
 
 	for _, repo := range repos {
+		fullName := repo.FullName()
 		item := wf.AlfredItem{
-			Title:    repo.FullName(),
-			Subtitle: repo.GetDes(),
-			Arg:      repo.GetURL(),
-			Valid:    true,
+			Title:        fullName,
+			Subtitle:     formatRepoSubtitle(repo),
+			Arg:          repo.GetURL(),
+			Autocomplete: fullName,
+			Text:         &wf.AlfredText{Copy: repo.GetURL(), Largetype: fullName},
+			Valid:        true,
 		}
 
 		switch {
@@ -32,7 +35,7 @@ func FormatAlfredItems(repos Repos, docsURL string) []wf.AlfredItem {
 
 		item.Mods = make(map[string]*wf.AlfredMod)
 		if repo.Doc != "" {
-			docURL := fmt.Sprintf("%s/#/%s", docsURL, repo.Doc)
+			docURL := BuildDocURL(docsURL, repo.Doc)
 			item.Mods["cmd"] = &wf.AlfredMod{
 				Valid:    true,
 				Arg:      docURL,
@@ -44,6 +47,40 @@ func FormatAlfredItems(repos Repos, docsURL string) []wf.AlfredItem {
 	}
 
 	return items
+}
+
+// BuildDocURL resolves either an absolute documentation URL or a docs route path.
+func BuildDocURL(docsURL, doc string) string {
+	if doc == "" {
+		return ""
+	}
+	if strings.HasPrefix(doc, "http://") || strings.HasPrefix(doc, "https://") {
+		return doc
+	}
+	if docsURL == "" {
+		docsURL = "https://docs.lucc.dev"
+	}
+	if base, _, found := strings.Cut(docsURL, "#"); found {
+		docsURL = base
+	}
+
+	return fmt.Sprintf("%s/#/%s", strings.TrimRight(docsURL, "/"), strings.TrimLeft(doc, "/"))
+}
+
+func formatRepoSubtitle(repo *Repository) string {
+	parts := make([]string, 0, 2)
+	if repo != nil && repo.Type != "" {
+		if repo.Tag != "" {
+			parts = append(parts, fmt.Sprintf("[%s#%s]", repo.Tag, repo.Type))
+		} else {
+			parts = append(parts, fmt.Sprintf("[%s]", repo.Type))
+		}
+	}
+	if repo != nil && repo.GetDes() != "" {
+		parts = append(parts, repo.GetDes())
+	}
+
+	return strings.Join(parts, " ")
 }
 
 // FormatPlain returns plain-text output of repos with labels.
@@ -59,7 +96,7 @@ func FormatPlain(repos Repos, docsURL string) string {
 			fmt.Fprintf(&sb, "desc: %s\n", repo.GetDes())
 		}
 		if repo.Doc != "" {
-			docURL := fmt.Sprintf("%s/#/%s", docsURL, repo.Doc)
+			docURL := BuildDocURL(docsURL, repo.Doc)
 			fmt.Fprintf(&sb, "doc: %s\n", repo.Doc)
 			fmt.Fprintf(&sb, "docs: %s\n", docURL)
 		}
