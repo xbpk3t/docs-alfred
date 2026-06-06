@@ -58,7 +58,7 @@ func ExtractTopics(outPath string) error {
 		return fmt.Errorf("marshal backbone: %w", err)
 	}
 
-	if err := os.WriteFile(outPath, outData, fileutil.FilePermPrivate); err != nil {
+	if err := fileutil.AtomicWriteFile(outPath, outData, fileutil.FilePermPrivate); err != nil {
 		return fmt.Errorf("write %s: %w", outPath, err)
 	}
 

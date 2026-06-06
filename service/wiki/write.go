@@ -75,7 +75,7 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 		return summaryPath, nil
 	}
 
-	if err := os.WriteFile(summaryPath, []byte(content), fileutil.FilePermPrivate); err != nil {
+	if err := fileutil.AtomicWriteFile(summaryPath, []byte(content), fileutil.FilePermPrivate); err != nil {
 		return "", fmt.Errorf("write summary: %w", err)
 	}
 
@@ -308,8 +308,8 @@ func FlushInbox(filePath string, processedLineIndices map[int]bool) error {
 	}
 
 	if len(cleaned) == 0 {
-		return os.WriteFile(filePath, []byte{}, fileutil.FilePermPrivate)
+		return fileutil.AtomicWriteFile(filePath, []byte{}, fileutil.FilePermPrivate)
 	}
 
-	return os.WriteFile(filePath, []byte(strings.Join(cleaned, "\n")), fileutil.FilePermPrivate) // #nosec G703
+	return fileutil.AtomicWriteFile(filePath, []byte(strings.Join(cleaned, "\n")), fileutil.FilePermPrivate) // #nosec G703
 }

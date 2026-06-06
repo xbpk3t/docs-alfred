@@ -7,42 +7,46 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	datauc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/data"
+	"github.com/xbpk3t/docs-alfred/data-cli/internal/usecase"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/data"
 	ghcheck "github.com/xbpk3t/docs-alfred/pkg/gh"
 )
 
-type dataRenderFlags struct {
+type renderFlags struct {
 	config  string
 	extract string
 	out     string
 }
 
-func newDataCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "data",
+// Execute is the entry point for the data-cli binary.
+func Execute() error {
+	return newRootCmd().Execute()
+}
+
+func newRootCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   "data-cli",
 		Short: "Data rendering and validation commands",
 	}
 
-	cmd.AddCommand(newDataRenderCmd())
-	cmd.AddCommand(newDataCheckCmd())
-	cmd.AddCommand(newDataDuplicateCmd())
-	cmd.AddCommand(newDataGhCmd())
+	rootCmd.AddCommand(newRenderCmd())
+	rootCmd.AddCommand(newCheckCmd())
+	rootCmd.AddCommand(newDuplicateCmd())
+	rootCmd.AddCommand(newGhCmd())
+	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
-	return cmd
+	return rootCmd
 }
 
-// ---- render ----
-
-func newDataRenderCmd() *cobra.Command {
-	var flags dataRenderFlags
+func newRenderCmd() *cobra.Command {
+	var flags renderFlags
 
 	cmd := &cobra.Command{
 		Use:   "render",
 		Short: "Render YAML data into outputs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := datauc.RunRender(datauc.RenderInput{
+			_, err := usecase.RunRender(usecase.RenderInput{
 				Config:  flags.config,
 				Extract: flags.extract,
 				Out:     flags.out,
@@ -59,9 +63,7 @@ func newDataRenderCmd() *cobra.Command {
 	return cmd
 }
 
-// ---- check/duplicate ----
-
-func newDataCheckCmd() *cobra.Command {
+func newCheckCmd() *cobra.Command {
 	var dataPath, ruleScope string
 
 	cmd := &cobra.Command{
@@ -86,7 +88,7 @@ func newDataCheckCmd() *cobra.Command {
 }
 
 func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string) error {
-	result, err := datauc.RunDomainCheck(datauc.DomainCheckInput{
+	result, err := usecase.RunDomainCheck(usecase.DomainCheckInput{
 		Domain:    domain,
 		Path:      dataPath,
 		RuleScope: ruleScope,
@@ -103,7 +105,7 @@ func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string) error {
 	return nil
 }
 
-func newDataDuplicateCmd() *cobra.Command {
+func newDuplicateCmd() *cobra.Command {
 	var dataPath string
 
 	cmd := &cobra.Command{
@@ -135,7 +137,7 @@ func parseDataDomainArg(value string) (data.DataDomain, error) {
 }
 
 func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
-	result, err := datauc.RunDomainDuplicate(datauc.DomainDuplicateInput{
+	result, err := usecase.RunDomainDuplicate(usecase.DomainDuplicateInput{
 		Domain: domain,
 		Path:   dataPath,
 	})
@@ -159,23 +161,19 @@ func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
 	return fmt.Errorf("data duplicate %s found duplicates", domain)
 }
 
-// ---- gh ----
-
-func newDataGhCmd() *cobra.Command {
+func newGhCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gh",
 		Short: "GitHub data entry operations",
 	}
 
-	cmd.AddCommand(newDataGhFindCmd())
-	cmd.AddCommand(newDataGhAppendCmd())
+	cmd.AddCommand(newGhFindCmd())
+	cmd.AddCommand(newGhAppendCmd())
 
 	return cmd
 }
 
-// ---- gh find ----
-
-func newDataGhFindCmd() *cobra.Command {
+func newGhFindCmd() *cobra.Command {
 	var query, findURL string
 	var limit int
 
@@ -192,7 +190,7 @@ func newDataGhFindCmd() *cobra.Command {
 				return errors.New("provide a query, --query, or --url")
 			}
 
-			return runDataGhFind(q, findURL, limit)
+			return runGhFind(q, findURL, limit)
 		},
 	}
 
@@ -203,8 +201,8 @@ func newDataGhFindCmd() *cobra.Command {
 	return cmd
 }
 
-func runDataGhFind(query, findURL string, limit int) error {
-	result, err := datauc.RunGhFind(datauc.GhFindInput{
+func runGhFind(query, findURL string, limit int) error {
+	result, err := usecase.RunGhFind(usecase.GhFindInput{
 		Query: query,
 		URL:   findURL,
 		Limit: limit,
@@ -218,9 +216,7 @@ func runDataGhFind(query, findURL string, limit int) error {
 	return err
 }
 
-// ---- gh append-record ----
-
-func newDataGhAppendCmd() *cobra.Command {
+func newGhAppendCmd() *cobra.Command {
 	var opts struct {
 		file  string
 		url   string
@@ -233,7 +229,7 @@ func newDataGhAppendCmd() *cobra.Command {
 		Use:   "append-record",
 		Short: "Append a record to a data/gh entry",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDataGhAppend(opts.file, opts.url, opts.date, opts.des, opts.topic)
+			return runGhAppend(opts.file, opts.url, opts.date, opts.des, opts.topic)
 		},
 	}
 
@@ -246,8 +242,8 @@ func newDataGhAppendCmd() *cobra.Command {
 	return cmd
 }
 
-func runDataGhAppend(file, url, date, des, topic string) error {
-	result, err := datauc.RunGhAppend(&datauc.GhAppendInput{
+func runGhAppend(file, url, date, des, topic string) error {
+	result, err := usecase.RunGhAppend(&usecase.GhAppendInput{
 		File:  file,
 		URL:   url,
 		Date:  date,

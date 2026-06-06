@@ -193,7 +193,7 @@ func (p *docProcessor) writeOutput(content, filename string) error {
 	}
 
 	outputPath := filepath.Join(p.Dst, filename)
-	if err := os.WriteFile(outputPath, []byte(content), fileutil.FilePermPrivate); err != nil {
+	if err := fileutil.AtomicWriteFile(outputPath, []byte(content), fileutil.FilePermPrivate); err != nil {
 		return fmt.Errorf("write file error: %w", err)
 	}
 

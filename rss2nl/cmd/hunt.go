@@ -145,16 +145,16 @@ func newHuntCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&opts.config, "config", "c", "rss2nl.yml", "Config file path")
-	cmd.Flags().StringVar(&opts.state, "state", ".cache/rss2nl/hunt/feeds-hunt-state.json", "State file path")
+	cmd.Flags().StringVar(&opts.state, "state", fileutil.CachePath("rss2nl/hunt/feeds-hunt-state.json"), "State file path")
 	cmd.Flags().StringArrayVar(&opts.category, "category", nil, "Category to scan")
 	cmd.Flags().StringVar(&opts.providers, "providers", "", "Providers: exa,tavily")
 	cmd.Flags().IntVar(&opts.max, "max", 0, "Global candidate cap")
 	cmd.Flags().IntVar(&opts.perCat, "per-category", 0, "Candidate cap per category")
 	cmd.Flags().IntVar(&opts.providerMax, "provider-max", 0, "Raw candidates per provider per category")
 	cmd.Flags().IntVar(&opts.seedLimit, "seed-limit", 0, "Seed source cap per category")
-	cmd.Flags().StringVar(&opts.reportMd, "report-md", ".cache/rss2nl/hunt/feeds-hunt-report.md", "Markdown report")
-	cmd.Flags().StringVar(&opts.reportHTML, "report-html", ".cache/rss2nl/hunt/feeds-hunt-report.html", "HTML report")
-	cmd.Flags().StringVar(&opts.reportJSON, "report-json", ".cache/rss2nl/hunt/feeds-hunt-report.json", "JSON report")
+	cmd.Flags().StringVar(&opts.reportMd, "report-md", fileutil.CachePath("rss2nl/hunt/feeds-hunt-report.md"), "Markdown report")
+	cmd.Flags().StringVar(&opts.reportHTML, "report-html", fileutil.CachePath("rss2nl/hunt/feeds-hunt-report.html"), "HTML report")
+	cmd.Flags().StringVar(&opts.reportJSON, "report-json", fileutil.CachePath("rss2nl/hunt/feeds-hunt-report.json"), "JSON report")
 	cmd.Flags().StringArrayVar(&opts.blocked, "blocked-domain", nil, "Extra blocked domain")
 	cmd.Flags().BoolVar(&opts.newOnly, "new-only", false, "Only accept candidates not in state")
 	cmd.Flags().BoolVar(&opts.dryRun, "dry-run", false, "Write reports only")
@@ -812,8 +812,7 @@ func saveHuntState(path string, state *huntState) {
 	if err != nil {
 		return
 	}
-	_ = fileutil.EnsureFileDir(path)
-	_ = os.WriteFile(path, data, fileutil.FilePermPrivate)
+	_ = fileutil.AtomicWriteFile(path, data, fileutil.FilePermPrivate)
 }
 
 // -- Report generation --
@@ -825,16 +824,13 @@ func writeHuntReports(report *huntReport, mdPath, htmlPath, jsonPath string) {
 
 		return
 	}
-	_ = fileutil.EnsureFileDir(jsonPath)
-	_ = os.WriteFile(jsonPath, jsonData, fileutil.FilePermPrivate)
+	_ = fileutil.AtomicWriteFile(jsonPath, jsonData, fileutil.FilePermPrivate)
 
 	mdContent := renderHuntMarkdown(report)
-	_ = fileutil.EnsureFileDir(mdPath)
-	_ = os.WriteFile(mdPath, []byte(mdContent), fileutil.FilePermPrivate)
+	_ = fileutil.AtomicWriteFile(mdPath, []byte(mdContent), fileutil.FilePermPrivate)
 
 	htmlContent := renderHuntHTML(report)
-	_ = fileutil.EnsureFileDir(htmlPath)
-	_ = os.WriteFile(htmlPath, []byte(htmlContent), fileutil.FilePermPrivate)
+	_ = fileutil.AtomicWriteFile(htmlPath, []byte(htmlContent), fileutil.FilePermPrivate)
 
 	fmt.Fprintln(os.Stdout, mdContent) //nolint:errcheck
 }

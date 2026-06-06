@@ -107,10 +107,7 @@ func WriteConfigYAMLFromDir(src, out string) (int, error) {
 		return 0, err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(out), fileutil.DirPerm); err != nil {
-		return 0, fmt.Errorf("create output dir: %w", err)
-	}
-	if err := os.WriteFile(out, data, fileutil.FilePermPrivate); err != nil {
+	if err := fileutil.AtomicWriteFile(out, data, fileutil.FilePermPrivate); err != nil {
 		return 0, fmt.Errorf("write gh.yml: %w", err)
 	}
 

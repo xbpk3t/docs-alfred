@@ -1,0 +1,90 @@
+query AssignedIssues($filter: IssueFilter!, $first: Int) {
+  viewer {
+    assignedIssues(filter: $filter, first: $first) {
+      nodes {
+        id
+        title
+        identifier
+        priority
+        parent {
+          id
+        }
+        state {
+          name
+          type
+        }
+        team {
+          name
+          key
+        }
+        dueDate
+        url
+        updatedAt
+        completedAt
+      }
+    }
+  }
+}
+
+query StateChanges($filter: IssueFilter!, $first: Int, $historyFirst: Int) {
+  viewer {
+    assignedIssues(filter: $filter, first: $first) {
+      nodes {
+        id
+        identifier
+        title
+        team {
+          name
+          key
+        }
+        url
+        updatedAt
+        history(first: $historyFirst) {
+          nodes {
+            fromState {
+              name
+            }
+            toState {
+              name
+            }
+            createdAt
+          }
+        }
+      }
+    }
+  }
+}
+
+query UpdatedIssuesWithDetails($filter: IssueFilter!, $first: Int, $commentsFirst: Int) {
+  viewer {
+    assignedIssues(filter: $filter, first: $first) {
+      nodes {
+        id
+        identifier
+        title
+        description
+        priority
+        url
+        completedAt
+        updatedAt
+        state {
+          name
+          type
+        }
+        team {
+          name
+          key
+        }
+        comments(first: $commentsFirst) {
+          nodes {
+            body
+            createdAt
+            user {
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}

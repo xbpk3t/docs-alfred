@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 const (
-	DefaultFeedFailureStatePath            = ".cache/rss2nl/feed-failures.json"
 	DefaultFeedFailureExampleLimit         = 5
 	DefaultTransientEscalateAfterRuns      = 3
 	DefaultSuppressTransientUntilEscalated = true
@@ -30,6 +30,8 @@ const (
 	feedFailureKindNetwork                 = "network"
 	feedFailureKindUnknown                 = "unknown"
 )
+
+var DefaultFeedFailureStatePath = fileutil.CachePath("rss2nl/feed-failures.json")
 
 // FeedFailureKind is a coarse class for grouping and routing feed failures.
 type FeedFailureKind string
@@ -487,16 +489,10 @@ func containsAny(s string, needles ...string) bool {
 }
 
 func loadFeedFailureState(path string) (feedFailureState, error) {
-	state := feedFailureState{
-		Version: feedFailureStateVersion,
-		Feeds:   make(map[string]feedFailureStateItem),
-	}
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return state, nil
-	}
+	state := newFeedFailureState()
+	data, err := readFeedFailureStateData(path)
 	if err != nil {
-		return state, fmt.Errorf("read feed failure state: %w", err)
+		return state, err
 	}
 	if len(data) == 0 {
 		return state, nil
@@ -511,15 +507,48 @@ func loadFeedFailureState(path string) (feedFailureState, error) {
 	return state, nil
 }
 
-func saveFeedFailureState(path string, state feedFailureState) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("create feed failure state dir: %w", err)
+func newFeedFailureState() feedFailureState {
+	return feedFailureState{
+		Version: feedFailureStateVersion,
+		Feeds:   make(map[string]feedFailureStateItem),
 	}
+}
+
+func readFeedFailureStateData(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		return data, nil
+	case errors.Is(err, os.ErrNotExist):
+		return readLegacyFeedFailureStateData(path)
+	default:
+		return nil, fmt.Errorf("read feed failure state: %w", err)
+	}
+}
+
+func readLegacyFeedFailureStateData(path string) ([]byte, error) {
+	legacyPath := fileutil.LegacyCachePath("rss2nl/feed-failures.json")
+	if path != DefaultFeedFailureStatePath || legacyPath == path {
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(legacyPath)
+	switch {
+	case err == nil:
+		return data, nil
+	case errors.Is(err, os.ErrNotExist):
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("read legacy feed failure state: %w", err)
+	}
+}
+
+func saveFeedFailureState(path string, state feedFailureState) error {
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal feed failure state: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := fileutil.AtomicWriteFile(path, data, fileutil.FilePermPrivate); err != nil {
 		return fmt.Errorf("write feed failure state: %w", err)
 	}
 

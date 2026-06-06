@@ -72,7 +72,7 @@ func newTrnsCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&flags.outDir, "out", ".cache/rss2nl/trns", "Trns cache/output directory")
+	cmd.Flags().StringVar(&flags.outDir, "out", fileutil.CachePath("rss2nl/trns"), "Trns cache/output directory")
 	cmd.Flags().IntVar(&flags.limit, "limit", 0, "Episodes to process per feed")
 	cmd.Flags().BoolVar(&flags.refresh, "refresh", false, "Ignore existing cached trns data")
 	cmd.PersistentFlags().StringVar(&flags.cfgFile, "config", "rss2nl.yml", "Config file path")
@@ -94,7 +94,7 @@ func newTrnsCmd() *cobra.Command {
 			return runTrnsCheck(source, flags)
 		},
 	}
-	checkCmd.Flags().StringVar(&flags.outDir, "out", ".cache/rss2nl/trns", "Trns cache/output directory")
+	checkCmd.Flags().StringVar(&flags.outDir, "out", fileutil.CachePath("rss2nl/trns"), "Trns cache/output directory")
 	checkCmd.Flags().IntVar(&flags.limit, "limit", 0, "Episodes to inspect per feed")
 	checkCmd.Flags().BoolVar(&flags.strict, "strict", false, "Exit non-zero when any trns feed fails")
 
@@ -143,7 +143,9 @@ func runTrns(source string, flags *trnsFlags) error {
 	if err != nil {
 		return fmt.Errorf("marshal index: %w", err)
 	}
-	_ = os.WriteFile(indexPath, idxData, fileutil.FilePermPrivate)
+	if err := fileutil.AtomicWriteFile(indexPath, idxData, fileutil.FilePermPrivate); err != nil {
+		return fmt.Errorf("write index: %w", err)
+	}
 
 	found, cached, failed := computeStats(entries)
 

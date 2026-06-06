@@ -13,6 +13,7 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -160,7 +161,7 @@ func appendYAMLRecord(file, findURL, topicName, date, des string) error {
 
 	recSeq.Values = append(recSeq.Values, newRecord)
 
-	if err := os.WriteFile(file, []byte(f.String()), 0600); err != nil {
+	if err := fileutil.AtomicWriteFile(file, []byte(f.String()), fileutil.FilePermPrivate); err != nil {
 		return fmt.Errorf("write yaml: %w", err)
 	}
 

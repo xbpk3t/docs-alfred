@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/creasty/defaults"
+	"github.com/go-playground/validator/v10"
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 
 	yaml "github.com/goccy/go-yaml"
@@ -31,15 +33,15 @@ type ResendConfig struct {
 
 // NewsletterConfig 新闻通讯配置.
 type NewsletterConfig struct {
-	Schedule            string `yaml:"schedule"`
+	Schedule            string `validate:"oneof=daily weekly" yaml:"schedule"`
 	IsHideAuthorInTitle bool   `yaml:"isHideAuthorInTitle"`
 }
 
 // FeedConfig Feed相关配置.
 type FeedConfig struct {
-	Timeout   int `default:"30" yaml:"timeout"`   // HTTP请求超时时间（秒）
-	MaxTries  int `default:"3"  yaml:"maxTries"`  // 最大重试次数
-	FeedLimit int `default:"30" yaml:"feedLimit"` // Feed数量限制
+	Timeout   int `default:"30" validate:"gte=0" yaml:"timeout"`   // HTTP请求超时时间（秒）
+	MaxTries  int `default:"3"  validate:"gte=0" yaml:"maxTries"`  // 最大重试次数
+	FeedLimit int `default:"30" validate:"gte=0" yaml:"feedLimit"` // Feed数量限制
 }
 
 type DashboardConfig struct {
@@ -55,7 +57,7 @@ type FeedsDetail struct {
 }
 
 type EnvConfig struct {
-	Debug bool `default:"true" yaml:"debug"`
+	Debug bool `yaml:"debug"`
 }
 
 // Feeds Feed URL.
@@ -97,9 +99,9 @@ type TrnsAsrConfig struct {
 
 // TrnsSummaryConfig AI 摘要配置.
 type TrnsSummaryConfig struct {
-	Model    string `yaml:"model,omitempty"`
-	BaseURL  string `yaml:"baseUrl,omitempty"`
-	Provider string `yaml:"provider,omitempty"`
+	Model    string `default:"deepseek-v4-flash"       yaml:"model,omitempty"`
+	BaseURL  string `default:"https://api.lucc.dev/v1" yaml:"baseUrl,omitempty"`
+	Provider string `default:"openai"                  yaml:"provider,omitempty"`
 	Language string `yaml:"language,omitempty"`
 	Enabled  bool   `yaml:"enabled,omitempty"`
 }
@@ -187,22 +189,22 @@ func NewConfig(configFile string) (*Config, error) {
 }
 
 func (c *Config) applyDefaults() {
-	// Trns summary defaults
-	if c.TrnsConfig.Summary.Model == "" {
-		c.TrnsConfig.Summary.Model = "deepseek-v4-flash"
-	}
-	if c.TrnsConfig.Summary.BaseURL == "" {
-		c.TrnsConfig.Summary.BaseURL = "https://api.lucc.dev/v1"
-	}
-	if c.TrnsConfig.Summary.Provider == "" {
-		c.TrnsConfig.Summary.Provider = "openai"
-	}
+	defaults.MustSet(c)
 }
 
 // Validate 验证通用配置（各命令共享的校验）.
 func (c *Config) Validate() error {
-	if !isValidSchedule(c.NewsletterConfig.Schedule) {
-		return fmt.Errorf("invalid schedule: %s", c.NewsletterConfig.Schedule)
+	if err := validator.New().Struct(c); err != nil {
+		var validationErrors validator.ValidationErrors
+		if errors.As(err, &validationErrors) {
+			for _, validationErr := range validationErrors {
+				if validationErr.Namespace() == "Config.NewsletterConfig.Schedule" {
+					return fmt.Errorf("invalid schedule: %s", c.NewsletterConfig.Schedule)
+				}
+			}
+		}
+
+		return err
 	}
 
 	return nil
@@ -218,11 +220,4 @@ func (c *Config) ValidateForSend() error {
 	}
 
 	return nil
-}
-
-func isValidSchedule(schedule string) bool {
-	scheduleTimeRanges := GetScheduleTimeRanges()
-	_, exists := scheduleTimeRanges[schedule]
-
-	return exists
 }

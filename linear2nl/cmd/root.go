@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/yuin/goldmark"
 )
 
@@ -180,7 +181,7 @@ func sendEmail(cfg *internal.Config, subject, htmlBody string) error {
 
 func writeHTML(htmlBody, suffix string) error {
 	filename := fmt.Sprintf("linear2nl_%s.html", suffix)
-	if err := os.WriteFile(filename, []byte(htmlBody), 0600); err != nil {
+	if err := fileutil.AtomicWriteFile(filename, []byte(htmlBody), fileutil.FilePermPrivate); err != nil {
 		return fmt.Errorf("write file: %w", err)
 	}
 	slog.Info("HTML written to file", "filename", filename)

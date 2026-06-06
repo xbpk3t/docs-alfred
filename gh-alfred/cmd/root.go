@@ -5,32 +5,36 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	alfreduc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/alfred"
+	"github.com/xbpk3t/docs-alfred/gh-alfred/internal/usecase"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
 	gh "github.com/xbpk3t/docs-alfred/service/gh"
 )
 
-const cmdAlfred = "alfred"
+// Execute is the entry point for the gh-alfred binary.
+func Execute() error {
+	return newRootCmd().Execute()
+}
 
-func newAlfredCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   cmdAlfred,
+func newRootCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   "gh-alfred",
 		Short: "Alfred GitHub repo search and cache sync",
 	}
 
-	cmd.AddCommand(newAlfredSearchCmd())
-	cmd.AddCommand(newAlfredSyncCmd())
-	cmd.AddCommand(newAlfredExportCmd())
-	cmd.AddCommand(newAlfredValidateCmd())
+	rootCmd.AddCommand(newSearchCmd())
+	rootCmd.AddCommand(newSyncCmd())
+	rootCmd.AddCommand(newExportCmd())
+	rootCmd.AddCommand(newValidateCmd())
+	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
-	return cmd
+	return rootCmd
 }
 
-func newAlfredSearchCmd() *cobra.Command {
+func newSearchCmd() *cobra.Command {
 	var configURL, cachePath, docsURL string
 	var maxAge string
 
-	searchCmd := &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "search [query]",
 		Short: "Search GitHub repositories from remote gh.yml for Alfred",
 		Args:  cobra.MaximumNArgs(1),
@@ -40,7 +44,7 @@ func newAlfredSearchCmd() *cobra.Command {
 				query = args[0]
 			}
 
-			result, err := alfreduc.RunSearch(alfreduc.SearchInput{
+			result, err := usecase.RunSearch(usecase.SearchInput{
 				ConfigURL: configURL,
 				CachePath: cachePath,
 				Query:     query,
@@ -55,27 +59,27 @@ func newAlfredSearchCmd() *cobra.Command {
 				}})
 			}
 
-			return runAlfredSearchOutput(result.Repos, docsURL)
+			return runSearchOutput(result.Repos, docsURL)
 		},
 	}
 
-	searchCmd.Flags().StringVar(&configURL, "url", gh.DefaultConfigURL, "Remote gh.yml URL")
-	searchCmd.Flags().StringVar(&cachePath, "cache", gh.DefaultConfigPath, "Local cache path")
-	searchCmd.Flags().StringVar(&docsURL, "docs-url", "https://docs.lucc.dev", "Docs base URL")
-	searchCmd.Flags().StringVar(&maxAge, "max-age", "24h", "Cache TTL")
+	cmd.Flags().StringVar(&configURL, "url", gh.DefaultConfigURL, "Remote gh.yml URL")
+	cmd.Flags().StringVar(&cachePath, "cache", gh.DefaultConfigPath, "Local cache path")
+	cmd.Flags().StringVar(&docsURL, "docs-url", "https://docs.lucc.dev", "Docs base URL")
+	cmd.Flags().StringVar(&maxAge, "max-age", "24h", "Cache TTL")
 
-	return searchCmd
+	return cmd
 }
 
-func newAlfredSyncCmd() *cobra.Command {
+func newSyncCmd() *cobra.Command {
 	var configURL, cachePath string
 
-	syncCmd := &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Force refresh remote gh.yml cache",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "Syncing from %s to %s...\n", configURL, cachePath)
-			_, err := alfreduc.RunSync(alfreduc.SyncInput{
+			_, err := usecase.RunSync(usecase.SyncInput{
 				ConfigURL: configURL,
 				CachePath: cachePath,
 			})
@@ -87,20 +91,20 @@ func newAlfredSyncCmd() *cobra.Command {
 		},
 	}
 
-	syncCmd.Flags().StringVar(&configURL, "url", gh.DefaultConfigURL, "Remote gh.yml URL")
-	syncCmd.Flags().StringVar(&cachePath, "cache", gh.DefaultConfigPath, "Cache write path")
+	cmd.Flags().StringVar(&configURL, "url", gh.DefaultConfigURL, "Remote gh.yml URL")
+	cmd.Flags().StringVar(&cachePath, "cache", gh.DefaultConfigPath, "Cache write path")
 
-	return syncCmd
+	return cmd
 }
 
-func newAlfredExportCmd() *cobra.Command {
+func newExportCmd() *cobra.Command {
 	var src, out string
 
-	exportCmd := &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Export split data/gh YAML into a validated gh.yml Alfred artifact",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result, err := alfreduc.RunExport(alfreduc.ExportInput{Src: src, Out: out})
+			result, err := usecase.RunExport(usecase.ExportInput{Src: src, Out: out})
 			if err != nil {
 				return err
 			}
@@ -109,20 +113,20 @@ func newAlfredExportCmd() *cobra.Command {
 		},
 	}
 
-	exportCmd.Flags().StringVar(&src, "src", "data/gh", "Source data/gh directory")
-	exportCmd.Flags().StringVar(&out, "out", "gh.yml", "Output gh.yml path")
+	cmd.Flags().StringVar(&src, "src", "data/gh", "Source data/gh directory")
+	cmd.Flags().StringVar(&out, "out", "gh.yml", "Output gh.yml path")
 
-	return exportCmd
+	return cmd
 }
 
-func newAlfredValidateCmd() *cobra.Command {
+func newValidateCmd() *cobra.Command {
 	var file string
 
-	validateCmd := &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "validate",
 		Short: "Validate a gh.yml Alfred artifact for search",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result, err := alfreduc.RunValidate(alfreduc.ValidateInput{File: file})
+			result, err := usecase.RunValidate(usecase.ValidateInput{File: file})
 			if err != nil {
 				return err
 			}
@@ -131,12 +135,10 @@ func newAlfredValidateCmd() *cobra.Command {
 		},
 	}
 
-	validateCmd.Flags().StringVar(&file, "file", "gh.yml", "gh.yml path")
+	cmd.Flags().StringVar(&file, "file", "gh.yml", "gh.yml path")
 
-	return validateCmd
+	return cmd
 }
-
-// ---- output ----
 
 func writeFormatterOutput(format string, data any) error {
 	formatter := wf.GetFormatter(format)
@@ -154,7 +156,7 @@ func writeOutput(s string) error {
 	return err
 }
 
-func runAlfredSearchOutput(repos gh.Repos, docsURL string) error {
+func runSearchOutput(repos gh.Repos, docsURL string) error {
 	items := gh.FormatAlfredItems(repos, docsURL)
 
 	return writeFormatterOutput("alfred", items)
