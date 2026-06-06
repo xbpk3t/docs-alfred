@@ -33,17 +33,10 @@ const (
 	DomainNtl   DataDomain = "ntl"
 )
 
-var AllDataDomains = []DataDomain{
-	DomainBooks, DomainMovie, DomainTV, DomainMusic, DomainDiary,
-	DomainGH, DomainGoods, DomainTask, DomainNtl,
-}
-
-var DuplicateDomains = []DataDomain{DomainBooks, DomainMusic, DomainGH}
-
 const (
-	fieldAlias = "alias"
-	fieldCast  = "cast"
-	fieldLabel = "label"
+	fieldAlias  = "alias"
+	fieldCast   = "cast"
+	fieldLabel  = "label"
 	fieldAuthor = "author"
 )
 

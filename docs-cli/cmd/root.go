@@ -6,6 +6,10 @@ import (
 
 // Execute is the entry point for the docs-cli binary.
 func Execute() error {
+	return newRootCmd().Execute()
+}
+
+func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "docs-cli",
 		Short: "CLI for data rendering, validation, and GitHub repo queries",
@@ -14,12 +18,10 @@ and GitHub repository search and sync.`,
 	}
 
 	rootCmd.AddCommand(newDataCmd())
-	rootCmd.AddCommand(newGhCmd())
-	rootCmd.AddCommand(newImagesCmd())
-	rootCmd.AddCommand(newDotfilesCmd())
-	rootCmd.AddCommand(newBlogCmd())
+	rootCmd.AddCommand(newCatalogCmd())
+	rootCmd.AddCommand(newWorkspaceCmd())
 
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
-	return rootCmd.Execute()
+	return rootCmd
 }

@@ -3,7 +3,7 @@ package task
 import (
 	"fmt"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 
 	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/render"

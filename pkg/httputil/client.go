@@ -3,6 +3,7 @@
 package httputil
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,8 +24,20 @@ const DefaultBaseDelay = 1 * time.Second
 // DefaultMaxDelay is the maximum delay for exponential backoff.
 const DefaultMaxDelay = 30 * time.Second
 
+// RequestOptions configures helper HTTP requests.
+type RequestOptions struct {
+	Headers    map[string]string
+	Timeout    time.Duration
+	MaxRetries int
+}
+
 // newRestyClient creates a resty client with retry and backoff configured.
 func newRestyClient(timeout time.Duration, maxRetries int) *resty.Client {
+	return NewRestyClient(timeout, maxRetries)
+}
+
+// NewRestyClient creates a resty client with retry and backoff configured.
+func NewRestyClient(timeout time.Duration, maxRetries int) *resty.Client {
 	if timeout <= 0 {
 		timeout = DefaultClientTimeout
 	}
@@ -44,6 +57,51 @@ func newRestyClient(timeout time.Duration, maxRetries int) *resty.Client {
 			// Retry on 5xx
 			return r.StatusCode() >= 500
 		})
+}
+
+// GetBytes performs an HTTP GET and returns response bytes.
+func GetBytes(ctx context.Context, url string, opts RequestOptions) ([]byte, error) {
+	rc := NewRestyClient(opts.Timeout, opts.MaxRetries)
+	req := rc.R().SetContext(ctx)
+	for k, v := range opts.Headers {
+		req.SetHeader(k, v)
+	}
+
+	resp, err := req.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("get %s: %w", url, err)
+	}
+	if resp.StatusCode() >= 400 {
+		return nil, fmt.Errorf("GET %s: HTTP %d: %s", url, resp.StatusCode(), string(resp.Body()))
+	}
+
+	return resp.Body(), nil
+}
+
+// PostJSONWithResult posts a JSON payload, optionally decoding a 2xx JSON response into result.
+func PostJSONWithResult(ctx context.Context, url string, payload, result any, opts RequestOptions) ([]byte, error) {
+	rc := NewRestyClient(opts.Timeout, opts.MaxRetries)
+	req := rc.R().
+		SetContext(ctx).
+		SetHeader("Content-Type", "application/json").
+		SetBody(payload)
+
+	for k, v := range opts.Headers {
+		req.SetHeader(k, v)
+	}
+	if result != nil {
+		req.SetResult(result)
+	}
+
+	resp, err := req.Post(url)
+	if err != nil {
+		return nil, fmt.Errorf("post %s: %w", url, err)
+	}
+	if resp.StatusCode() >= 400 {
+		return nil, fmt.Errorf("POST %s: HTTP %d: %s", url, resp.StatusCode(), string(resp.Body()))
+	}
+
+	return resp.Body(), nil
 }
 
 // NewClient creates an HTTP client with the given timeout.
@@ -97,26 +155,7 @@ func DoWithRetry(client *http.Client, req *http.Request, maxRetries int) ([]byte
 // PostJSON performs an HTTP POST with JSON body and returns the response bytes.
 // Uses resty with automatic retry and backoff.
 func PostJSON(url string, body []byte, headers map[string]string) ([]byte, error) {
-	rc := newRestyClient(DefaultClientTimeout, DefaultMaxRetries)
-
-	r := rc.R().
-		SetHeader("Content-Type", "application/json").
-		SetBody(body)
-
-	for k, v := range headers {
-		r.SetHeader(k, v)
-	}
-
-	resp, err := r.Post(url)
-	if err != nil {
-		return nil, fmt.Errorf("post %s: %w", url, err)
-	}
-
-	if resp.StatusCode() >= 400 {
-		return nil, fmt.Errorf("POST %s: HTTP %d: %s", url, resp.StatusCode(), string(resp.Body()))
-	}
-
-	return resp.Body(), nil
+	return PostJSONWithResult(context.Background(), url, body, nil, RequestOptions{Headers: headers})
 }
 
 // Get performs an HTTP GET and returns the response bytes.

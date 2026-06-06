@@ -1,8 +1,12 @@
 package ai
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,6 +88,64 @@ func TestChat_NoAPIKey(t *testing.T) {
 	_, err := Chat(cfg, []Message{{Role: "user", Content: "hello"}})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "OPENAI_API_KEY not set")
+}
+
+func TestChat_Content(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+		var req ChatRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.Equal(t, "test-model", req.Model)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hello"}}]}`))
+	}))
+	defer server.Close()
+
+	got, err := Chat(&ClientConfig{
+		APIKey:  "sk-test",
+		BaseURL: server.URL,
+		Model:   "test-model",
+		Timeout: time.Second,
+	}, []Message{{Role: "user", Content: "hello"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, "hello", got)
+}
+
+func TestChat_ReasoningContentFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"reasoning_content":"reasoning"}}]}`))
+	}))
+	defer server.Close()
+
+	got, err := Chat(&ClientConfig{
+		APIKey:  "sk-test",
+		BaseURL: server.URL,
+		Model:   "test-model",
+		Timeout: time.Second,
+	}, []Message{{Role: "user", Content: "hello"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, "reasoning", got)
+}
+
+func TestChat_HTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "rate limited", http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	_, err := Chat(&ClientConfig{
+		APIKey:  "sk-test",
+		BaseURL: server.URL,
+		Model:   "test-model",
+		Timeout: time.Second,
+	}, []Message{{Role: "user", Content: "hello"}})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "HTTP 429")
+	assert.Contains(t, err.Error(), "rate limited")
 }
 
 func TestMessage_Struct(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
 
@@ -345,34 +346,61 @@ func brief(item *parsedItem) ItemBrief {
 
 // FormatDuplicateReport returns a human-readable string of the report.
 func FormatDuplicateReport(report *DuplicateReport) string {
-	var lines []string
-
-	for _, dup := range report.URLDuplicates {
-		lines = append(lines, "ERROR 重复 URL: "+dup.URL)
-		for _, entry := range dup.Entries {
-			lines = append(lines, fmt.Sprintf("  → %s: %s — %s", entry.File, entry.Name, entry.Author))
-		}
-	}
-
-	for _, dup := range report.NameAuthorDuplicates {
-		lines = append(lines, "ERROR 重复名称+作者: "+dup.Key)
-		for _, entry := range dup.Entries {
-			lines = append(lines, fmt.Sprintf("  → %s: %s — %s", entry.File, entry.Name, entry.Author))
-		}
-	}
-
-	return strings.Join(lines, "\n")
+	return formatDuplicateReport("data duplicate", report.issues(false))
 }
 
 // FormatGHDuplicateReport returns a human-readable string of the gh duplicate report.
 func FormatGHDuplicateReport(report *DuplicateReport) string {
-	var lines []string
-	for _, dup := range report.URLDuplicates {
-		lines = append(lines, "ERROR 重复 URL: "+dup.URL)
-		for _, entry := range dup.Entries {
-			lines = append(lines, "  → "+entry.File)
+	return formatDuplicateReport("data gh duplicate", report.issues(true))
+}
+
+func formatDuplicateReport(name string, issues []checkutil.Issue) string {
+	result := &checkutil.Result{Issues: issues}
+
+	return result.ReportResult(name)
+}
+
+func (r *DuplicateReport) issues(ghOnly bool) []checkutil.Issue {
+	if r == nil {
+		return nil
+	}
+
+	var issues []checkutil.Issue
+	for _, dup := range r.URLDuplicates {
+		issues = append(issues, checkutil.Issue{
+			File:     "duplicate",
+			Severity: checkutil.SeverityError,
+			Message:  "重复 URL: " + dup.URL + formatDuplicateEntries(dup.Entries, ghOnly),
+		})
+	}
+
+	if !ghOnly {
+		for _, dup := range r.NameAuthorDuplicates {
+			issues = append(issues, checkutil.Issue{
+				File:     "duplicate",
+				Severity: checkutil.SeverityError,
+				Message:  "重复名称+作者: " + dup.Key + formatDuplicateEntries(dup.Entries, false),
+			})
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	return issues
+}
+
+func formatDuplicateEntries(entries []ItemBrief, ghOnly bool) string {
+	var lines []string
+	for _, entry := range entries {
+		if ghOnly {
+			lines = append(lines, "  -> "+entry.File)
+
+			continue
+		}
+
+		lines = append(lines, fmt.Sprintf("  -> %s: %s - %s", entry.File, entry.Name, entry.Author))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+
+	return "\n" + strings.Join(lines, "\n")
 }

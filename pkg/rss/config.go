@@ -13,13 +13,13 @@ import (
 // Config 主配置结构.
 type Config struct {
 	WikiConfig       WikiConfig       `yaml:"wiki,omitempty"`
-	TrnsConfig       TrnsConfig       `yaml:"trns,omitempty"`
+	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
 	ResendConfig     ResendConfig     `yaml:"resend"`
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
 	Feeds            []FeedsDetail    `yaml:"feeds"`
+	TrnsConfig       TrnsConfig       `yaml:"trns,omitempty"`
 	HuntConfig       HuntConfig       `yaml:"hunt,omitempty"`
 	FeedConfig       FeedConfig       `yaml:"feed"`
-	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
 	EnvConfig        EnvConfig        `yaml:"env"`
 }
 
@@ -43,8 +43,9 @@ type FeedConfig struct {
 }
 
 type DashboardConfig struct {
-	IsShowFetchFailedFeeds bool `yaml:"isShowFetchFailedFeeds"`
-	IsShowFeedDetail       bool `yaml:"isShowFeedDetail"`
+	FetchFailureReport     FeedFailureReportConfig `yaml:"fetchFailureReport,omitempty"`
+	IsShowFetchFailedFeeds bool                    `yaml:"isShowFetchFailedFeeds"`
+	IsShowFeedDetail       bool                    `yaml:"isShowFeedDetail"`
 }
 
 // FeedsDetail Feed详情.

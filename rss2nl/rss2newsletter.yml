@@ -14,6 +14,12 @@ newsletter:
 dashboard:
   isShowFetchFailedFeeds: true
   isShowFeedDetail: true
+  fetchFailureReport:
+    mode: grouped
+    exampleLimit: 5
+    transientEscalateAfterRuns: 3
+    suppressTransientUntilEscalated: true
+    statePath: .cache/rss2nl/feed-failures.json
 
 env:
   debug: false  # Write HTML to disk instead of sending email

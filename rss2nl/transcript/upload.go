@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
 
 // LitterboxUploader uploads transcripts to litterbox for temporary sharing.
@@ -51,25 +53,23 @@ func (u *LitterboxUploader) Upload(ctx context.Context, filename, content string
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.BaseURL+"/resources/litterbox/upload.php", buf)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+	timeout := httputil.DefaultClientTimeout
+	if u.HTTPClient != nil && u.HTTPClient.Timeout > 0 {
+		timeout = u.HTTPClient.Timeout
 	}
-	req.Header.Set("Content-Type", contentType)
 
-	resp, err := u.HTTPClient.Do(req)
+	resp, err := httputil.NewRestyClient(timeout, httputil.DefaultMaxRetries).
+		R().
+		SetContext(ctx).
+		SetHeader("Content-Type", contentType).
+		SetBody(buf).
+		Post(u.BaseURL + "/resources/litterbox/upload.php")
 	if err != nil {
 		return nil, fmt.Errorf("upload request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("upload failed (HTTP %d): %s", resp.StatusCode, string(body))
+	body := resp.Body()
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("upload failed (HTTP %d): %s", resp.StatusCode(), string(body))
 	}
 
 	url := strings.TrimSpace(string(body))

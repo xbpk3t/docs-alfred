@@ -23,7 +23,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
 )
 
-//go:embed templates/newsletter.gohtml
+//go:embed templates/*.gohtml
 var templates embed.FS
 
 // EmailConfig 邮件配置.
@@ -44,6 +44,7 @@ type NewsletterItem struct {
 	EnclosureType      string
 	SourceLink         string
 	ItemHash           string
+	TrnsURL            string
 	PodcastTranscripts []PodcastTranscriptRef
 }
 
@@ -55,8 +56,9 @@ type PodcastTranscriptRef struct {
 
 // NewsletterCategory holds items grouped by category with extra metadata.
 type NewsletterCategory struct {
-	Category string
-	Items    []NewsletterItem
+	Category    string
+	Items       []NewsletterItem
+	FailedFeeds []*rss.FeedError
 }
 
 // TemplateData represents the data passed to the template.
@@ -64,12 +66,13 @@ type TemplateData struct {
 	Title         string
 	SourceHuntURL string
 	DashboardData struct {
-		FailedFeeds []*rss.FeedError
-		FeedDetails []rss.FeedsDetail
+		FailedFeeds   []*rss.FeedError
+		FailureReport *rss.FeedFailureReport
+		FeedDetails   []rss.FeedsDetail
 	}
 	Feeds           []NewsletterCategory
-	WeekNumber      int
 	DashboardConfig rss.DashboardConfig
+	WeekNumber      int
 }
 
 // EmailContent represents a single email content.
@@ -137,6 +140,13 @@ func runSend(config *rss.Config, trnsOut string) error {
 	categories, err := service.ProcessAllFeeds()
 	if err != nil {
 		return err
+	}
+
+	// Process transcripts for podcast items and set trns URLs
+	if config.TrnsConfig.Enabled {
+		for i := range categories {
+			ProcessNewsletterTrns(categories[i].Items, config, trnsOut)
+		}
 	}
 
 	// Inject hunt source discovery link
@@ -227,12 +237,13 @@ func (s *NewsletterService) ProcessAllFeeds() ([]NewsletterCategory, error) {
 				slog.Error("Failed to process feed",
 					slog.String("type", feed.Type),
 					slog.Any("error", err))
-				s.failedFeeds = append(s.failedFeeds, &rss.FeedError{
-					URL:     feed.URLs[0].Feed,
+				category.FailedFeeds = append(category.FailedFeeds, &rss.FeedError{
+					URL:     firstFeedURL(feed),
 					Message: "Failed to fetch feed",
+					Err:     err,
 				})
 
-				return NewsletterCategory{Category: feed.Type}, nil
+				return category, nil
 			}
 
 			return category, nil
@@ -244,23 +255,29 @@ func (s *NewsletterService) ProcessAllFeeds() ([]NewsletterCategory, error) {
 		slog.Error("Error processing feeds", slog.Any("error", err))
 	}
 
+	s.failedFeeds = s.failedFeeds[:0]
+	for _, category := range results {
+		s.failedFeeds = append(s.failedFeeds, category.FailedFeeds...)
+	}
+
 	return results, nil
 }
 
 func (s *NewsletterService) processSingleFeed(ctx context.Context, feedGroup rss.FeedsDetail) (NewsletterCategory, error) {
+	category := NewsletterCategory{Category: feedGroup.Type}
 	urls := lo.Compact(lo.Map(feedGroup.URLs, func(item rss.Feeds, _ int) string {
 		return item.Feed
 	}))
 
 	allFeeds, failedFeeds := rss.FetchURLs(ctx, urls, s.config)
-	s.failedFeeds = append(s.failedFeeds, failedFeeds...)
+	category.FailedFeeds = failedFeeds
 
 	if len(allFeeds) == 0 {
 		slog.Info("No feeds fetched for category",
 			slog.String("category", feedGroup.Type),
 			slog.Int("total_urls", len(urls)))
 
-		return NewsletterCategory{Category: feedGroup.Type}, nil
+		return category, nil
 	}
 
 	items, err := s.mergeFeedItems(feedGroup.Type, allFeeds)
@@ -270,10 +287,12 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feedGroup rss
 			slog.Int("feeds_count", len(allFeeds)),
 			slog.Any("error", err))
 
-		return NewsletterCategory{Category: feedGroup.Type}, nil
+		return category, nil
 	}
 
-	return NewsletterCategory{Category: feedGroup.Type, Items: items}, nil
+	category.Items = items
+
+	return category, nil
 }
 
 // mergeFeedItems merges all feed results into a deduplicated list of NewsletterItems.
@@ -451,6 +470,14 @@ func (s *NewsletterService) RenderNewsletter(
 ) ([]EmailContent, error) {
 	now := carbon.Now()
 	subject := s.generateEmailSubject(NewsletterTpl)
+	failureReport, reportErr := rss.BuildFeedFailureReport(
+		failedFeeds,
+		s.config.DashboardConfig.FetchFailureReport,
+		time.Now(),
+	)
+	if reportErr != nil {
+		slog.Warn("Failed to update feed failure report state", "error", reportErr)
+	}
 	data := TemplateData{
 		Title:           subject,
 		WeekNumber:      now.WeekOfYear(),
@@ -458,11 +485,13 @@ func (s *NewsletterService) RenderNewsletter(
 		DashboardConfig: s.config.DashboardConfig,
 		SourceHuntURL:   sourceHuntURL,
 		DashboardData: struct {
-			FailedFeeds []*rss.FeedError
-			FeedDetails []rss.FeedsDetail
+			FailedFeeds   []*rss.FeedError
+			FailureReport *rss.FeedFailureReport
+			FeedDetails   []rss.FeedsDetail
 		}{
-			FailedFeeds: failedFeeds,
-			FeedDetails: feedList,
+			FailedFeeds:   failedFeeds,
+			FailureReport: failureReport,
+			FeedDetails:   feedList,
 		},
 	}
 
@@ -479,6 +508,16 @@ func (s *NewsletterService) RenderNewsletter(
 	}
 
 	return contents, nil
+}
+
+func firstFeedURL(feed rss.FeedsDetail) string {
+	for _, u := range feed.URLs {
+		if u.Feed != "" {
+			return u.Feed
+		}
+	}
+
+	return ""
 }
 
 func (s *NewsletterService) handleOutput(contents []EmailContent) error {

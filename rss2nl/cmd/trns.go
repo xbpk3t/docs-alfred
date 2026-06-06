@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
@@ -498,4 +501,223 @@ func hasTranscriptLinks(item *gofeed.Item) bool {
 	}
 
 	return false
+}
+
+// -- Trns page rendering --
+
+type trnsPageView struct {
+	Title        string
+	FeedTitle    string
+	EpisodeURL   string
+	Status       string
+	Summary      string
+	SummaryError string
+	Content      string
+}
+
+type itemTrnsContent struct {
+	Content string
+	Source  string
+}
+
+type cachedItemTrns struct {
+	content string
+	source  string
+	ok      bool
+}
+
+type itemTrnsSummary struct {
+	text    string
+	errText string
+}
+
+func renderTrnsPage(view *trnsPageView) string {
+	funcMap := template.FuncMap{}
+
+	tmpl, err := template.New("trns-page.gohtml").Funcs(funcMap).ParseFS(templates, "templates/trns-page.gohtml")
+	if err != nil {
+		slog.Warn("Failed to parse trns page template", "error", err)
+
+		return fmt.Sprintf("<pre>%s</pre>", view.Content)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, view); err != nil {
+		slog.Warn("Failed to render trns page", "error", err)
+
+		return fmt.Sprintf("<pre>%s</pre>", view.Content)
+	}
+
+	return buf.String()
+}
+
+// -- Newsletter trns integration --
+
+// ProcessNewsletterTrns fetches transcripts for podcast newsletter items,
+// renders HTML pages, uploads to Litterbox, and sets TrnsURL on items.
+func ProcessNewsletterTrns(items []NewsletterItem, cfg *rss.Config, outDir string) {
+	if !cfg.TrnsConfig.Enabled {
+		return
+	}
+
+	expiration := cfg.TrnsConfig.TemporaryUpload.ExpirationDuration
+	if !cfg.TrnsConfig.TemporaryUpload.Enabled && expiration == "" {
+		return
+	}
+
+	cache := transcript.NewCache(outDir)
+	pipeline := buildPipeline(&trnsFlags{asr: cfg.TrnsConfig.Asr.Enabled, language: cfg.TrnsConfig.Asr.Language})
+	summarizer := setupSummarizer(cfg)
+	uploader := transcript.NewLitterboxUploader(expiration)
+
+	for i := range items {
+		item := &items[i]
+		if item.EnclosureURL == "" && len(item.PodcastTranscripts) == 0 {
+			continue
+		}
+
+		trnsURL, err := processItemTrns(item, cfg, cache, pipeline, summarizer, uploader, outDir)
+		if err != nil {
+			slog.Debug("Trns for newsletter item failed", "title", item.Title, "error", err)
+
+			continue
+		}
+		if trnsURL != "" {
+			item.TrnsURL = trnsURL
+		}
+	}
+}
+
+func processItemTrns(
+	item *NewsletterItem,
+	cfg *rss.Config,
+	cache *transcript.Cache,
+	pipeline *transcript.Pipeline,
+	summarizer *transcript.Summarizer,
+	uploader *transcript.LitterboxUploader,
+	outDir string,
+) (string, error) {
+	feedTitle := item.SourceLink
+	key := cache.Key(feedTitle, item.ItemHash, item.Link, item.Title)
+
+	trns, err := getNewsletterItemTrns(item, feedTitle, key, cache, pipeline)
+	if err != nil {
+		return "", err
+	}
+
+	summary := summarizeItemTrns(summarizer, item.Title, trns.Content)
+	html := renderTrnsPage(&trnsPageView{
+		Title:        item.Title,
+		FeedTitle:    feedTitle,
+		EpisodeURL:   item.Link,
+		Status:       trns.Source,
+		Summary:      summary.text,
+		SummaryError: summary.errText,
+		Content:      trns.Content,
+	})
+
+	return uploadItemTrns(uploader, item.ItemHash, html)
+}
+
+func getNewsletterItemTrns(
+	item *NewsletterItem,
+	feedTitle, key string,
+	cache *transcript.Cache,
+	pipeline *transcript.Pipeline,
+) (*itemTrnsContent, error) {
+	cached, err := readCachedItemTrns(cache, key)
+	if err != nil {
+		return nil, err
+	}
+	if cached.ok {
+		return &itemTrnsContent{Content: cached.content, Source: cached.source}, nil
+	}
+
+	return fetchAndCacheItemTrns(item, feedTitle, key, cache, pipeline)
+}
+
+func fetchAndCacheItemTrns(
+	item *NewsletterItem,
+	feedTitle, key string,
+	cache *transcript.Cache,
+	pipeline *transcript.Pipeline,
+) (*itemTrnsContent, error) {
+	epRef := transcript.EpisodeRef{
+		Title:       item.Title,
+		URL:         item.Link,
+		Description: item.Description,
+		Content:     item.Content,
+		FeedTitle:   feedTitle,
+	}
+	if item.EnclosureURL != "" {
+		epRef.EnclosureURL = item.EnclosureURL
+	}
+
+	result, source, fetchErr := pipeline.Fetch(context.Background(), &epRef)
+	if fetchErr != nil || result == nil || result.Content == "" {
+		return nil, fmt.Errorf("no transcript found: %w", fetchErr)
+	}
+
+	cacheEntry := &transcript.CacheEntry{
+		EpisodeTitle: item.Title,
+		EpisodeURL:   item.Link,
+		FeedTitle:    feedTitle,
+		Source:       source,
+		ContentType:  result.ContentType,
+	}
+	if cacheErr := cache.Set(key, cacheEntry, result.Content); cacheErr != nil {
+		slog.Warn("Failed to cache trns for newsletter", "key", key, "error", cacheErr)
+	}
+
+	return &itemTrnsContent{
+		Content: result.Content,
+		Source:  source,
+	}, nil
+}
+
+func summarizeItemTrns(summarizer *transcript.Summarizer, title, content string) itemTrnsSummary {
+	if summarizer == nil {
+		return itemTrnsSummary{}
+	}
+
+	result, err := summarizer.GenerateSummary(context.Background(), title, content)
+	if err != nil {
+		return itemTrnsSummary{errText: err.Error()}
+	}
+	if result == nil {
+		return itemTrnsSummary{}
+	}
+
+	return itemTrnsSummary{text: result.Summary}
+}
+
+func uploadItemTrns(uploader *transcript.LitterboxUploader, itemHash, html string) (string, error) {
+	if uploader == nil {
+		return "", nil
+	}
+
+	filename := fmt.Sprintf("trns-%s.html", itemHash[:min(16, len(itemHash))])
+	result, err := uploader.Upload(context.Background(), filename, html)
+	if err != nil {
+		return "", fmt.Errorf("upload trns page: %w", err)
+	}
+
+	return result.URL, nil
+}
+
+func readCachedItemTrns(cache *transcript.Cache, key string) (cachedItemTrns, error) {
+	entry, _ := cache.Get(key)
+	if entry == nil {
+		return cachedItemTrns{}, nil
+	}
+
+	cached, readErr := cache.ReadTranscript(key)
+	if readErr != nil {
+		return cachedItemTrns{}, fmt.Errorf("cache read failed: %w", readErr)
+	}
+	if cached == "" {
+		return cachedItemTrns{}, errors.New("cache read failed: empty transcript")
+	}
+
+	return cachedItemTrns{content: cached, source: entry.Source, ok: true}, nil
 }

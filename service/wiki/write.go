@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adrg/frontmatter"
 	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"mvdan.cc/xurls/v2"
@@ -235,23 +236,17 @@ type parseResult struct {
 
 // parseSummaryFrontmatter parses YAML frontmatter from a summary.md file.
 func parseSummaryFrontmatter(raw string) *parseResult {
-	idx := strings.Index(raw, "---")
-	if idx < 0 {
+	if !strings.HasPrefix(raw, "---") {
 		return nil
 	}
-	end := strings.Index(raw[idx+3:], "---")
-	if end < 0 {
-		return nil
-	}
-	fmRaw := raw[idx+3 : idx+3+end]
-	bodyRaw := raw[idx+3+end+3:]
 
 	var fm SummaryFrontmatter
-	if err := yaml.Unmarshal([]byte(fmRaw), &fm); err != nil {
+	body, err := frontmatter.Parse(strings.NewReader(raw), &fm)
+	if err != nil || len(body) == len(raw) {
 		return nil
 	}
 
-	return &parseResult{fm: &fm, body: bodyRaw}
+	return &parseResult{fm: &fm, body: string(body)}
 }
 
 // urlRegex extracts URLs with schemes (http, https, ftp, etc.) from plain text.
