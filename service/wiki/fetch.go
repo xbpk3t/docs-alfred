@@ -16,6 +16,7 @@ import (
 	"codeberg.org/readeck/go-readability/v2"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // ContentFetchResult holds fetched content metadata and body.
@@ -50,10 +51,11 @@ func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) 
 	slog.Info("FetchContent", "url", urlStr, "type", contentType)
 
 	u := strings.ToLower(urlStr)
+	if _, ok := urlutil.GitHubOwnerRepo(urlStr); ok {
+		return f.fetchGitHubRepo(ctx, urlStr)
+	}
 
 	switch {
-	case strings.HasPrefix(u, "https://github.com"):
-		return f.fetchGitHubRepo(ctx, urlStr)
 	case strings.Contains(u, "youtube.com") || strings.Contains(u, "youtu.be"):
 		return &ContentFetchResult{Title: "YouTube Video", SourceURL: urlStr, Body: "Video content requires manual review."}
 	case strings.Contains(u, "bilibili.com"):
@@ -65,15 +67,11 @@ func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) 
 
 // fetchGitHubRepo fetches GitHub repository information via the API.
 func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFetchResult {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
-	}
-	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
-	if len(parts) < 2 {
+	repoRef, ok := urlutil.GitHubOwnerRepo(rawURL)
+	if !ok {
 		return &ContentFetchResult{SourceURL: rawURL, Error: "not a valid GitHub repo URL"}
 	}
-	owner, repo := parts[0], parts[1]
+	owner, repo := repoRef.Owner, repoRef.Name
 
 	apiURL := fmt.Sprintf("%s/repos/%s/%s", f.GHBaseURL, owner, repo)
 	headers := map[string]string{

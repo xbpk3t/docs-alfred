@@ -2,8 +2,6 @@ package dotfiles
 
 import (
 	"bytes"
-	"encoding/json"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,45 +144,5 @@ func mapToGh(filePath string) *GhMap {
 		Category: category,
 		GhDir:    ghDir,
 		GhFiles:  ghFiles,
-	}
-}
-
-// PrintResult prints the sync plan result.
-func (r *SyncPlanResult) PrintResult(jsonOutput bool) {
-	if jsonOutput {
-		data, err := json.MarshalIndent(r, "", "  ")
-		if err != nil {
-			slog.Error("Failed to marshal sync plan", "error", err)
-
-			return
-		}
-		os.Stdout.Write(data) //nolint:errcheck // JSON delivery to stdout pipe
-
-		return
-	}
-
-	if !r.OK {
-		slog.Error("Sync plan failed", "error", r.Error)
-
-		return
-	}
-
-	slog.Info("Dotfiles sync plan", "path", r.DotfilesPath, "changed", len(r.ChangedFiles))
-	for _, f := range r.ChangedFiles {
-		status := f.Status
-		switch status {
-		case "M":
-			status = "modified"
-		case "A":
-			status = "added"
-		case "D":
-			status = "deleted"
-		case "??":
-			status = "untracked"
-		}
-		slog.Info("Changed file", "status", status, "path", f.Path)
-		if f.Gh != nil {
-			slog.Info("Gh mapping", "category", f.Gh.Category, "files", strings.Join(f.Gh.GhFiles, ", "))
-		}
 	}
 }

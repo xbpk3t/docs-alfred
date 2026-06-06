@@ -17,9 +17,6 @@ type CheckResult struct {
 	TotalRecords int
 }
 
-// CheckIssue represents a single check issue.
-type CheckIssue = checkutil.Issue
-
 // RunGhCheck validates all data/gh YAML entries.
 func RunGhCheck(ghRoot string) (*CheckResult, error) {
 	result := &CheckResult{}
@@ -166,18 +163,6 @@ func (r *CheckResult) addIssueForRecord(file string, repoIndex, topicIdx, recIdx
 		r.addIssue(file, "error",
 			fmt.Sprintf("%s.record[%d]: missing or empty des", prefix, recIdx))
 	}
-}
-
-// Report prints the check result.
-func (r *CheckResult) Report(command string) {
-	// Use checkutil for base formatting
-	r2 := &checkutil.Result{Issues: r.Issues}
-	r2.Report(command)
-}
-
-// HasErrors returns true if the check result has any error-severity issues.
-func HasErrors(r *CheckResult) bool {
-	return checkutil.HasErrors(r.Issues)
 }
 
 func isValidURL(str string) bool {

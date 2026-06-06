@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/xbpk3t/docs-alfred/internal/datarender"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	pkgdata "github.com/xbpk3t/docs-alfred/pkg/data"
 	ghcheck "github.com/xbpk3t/docs-alfred/pkg/gh"
@@ -175,15 +176,12 @@ func RunRender(input RenderInput) (*RenderResult, error) {
 		return &RenderResult{Extracted: true, OutputPath: result.OutputPath}, nil
 	}
 
-	configs, err := loadRenderConfigs(input.Config)
+	configCount, err := datarender.Run(input.Config)
 	if err != nil {
 		return nil, err
 	}
-	if err := processRenderConfigs(configs); err != nil {
-		return nil, err
-	}
 
-	return &RenderResult{ConfigCount: len(configs)}, nil
+	return &RenderResult{ConfigCount: configCount}, nil
 }
 
 type extractTopicsInput struct {

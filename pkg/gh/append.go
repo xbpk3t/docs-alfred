@@ -13,6 +13,7 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 const evTypeRepo = "repo"
@@ -98,7 +99,7 @@ func findFileByURL(ghRoot, url string) (string, error) {
 		}
 		repo := ev.Repo
 		repoURL, _ := repo["url"].(string)
-		if strings.TrimRight(repoURL, "/") == strings.TrimRight(url, "/") {
+		if urlutil.Equal(repoURL, url) {
 			foundFiles = append(foundFiles, filepath.Join(ghRoot, ev.File))
 		}
 
@@ -124,12 +125,7 @@ func findFileByURL(ghRoot, url string) (string, error) {
 }
 
 func inferTopicFromURL(urlStr string) string {
-	parts := strings.Split(strings.TrimRight(urlStr, "/"), "/")
-	if len(parts) > 0 {
-		return parts[len(parts)-1]
-	}
-
-	return ""
+	return urlutil.RepoName(urlStr)
 }
 
 func getGitDiffStat(file string) (string, error) {
@@ -269,7 +265,7 @@ func sectionContainsURL(section *ast.MappingNode, findURL string) bool {
 		if !ok {
 			continue
 		}
-		if strings.TrimRight(urlStr.Value, "/") == strings.TrimRight(findURL, "/") {
+		if urlutil.Equal(urlStr.Value, findURL) {
 			return true
 		}
 	}

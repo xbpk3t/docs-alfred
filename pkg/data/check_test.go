@@ -46,86 +46,89 @@ func TestCheckFile_EmptyContent(t *testing.T) {
 	assert.Equal(t, 0, len(issues), "empty file should produce no issues")
 }
 
-func TestCheckScoreField(t *testing.T) {
+func TestCheckFile_ScoreValidation(t *testing.T) {
 	tests := []struct {
 		name   string
-		val    any
+		score  string
 		hasErr bool
 	}{
-		{"valid score 0", 0, false},
-		{"valid score 5", 5, false},
-		{"invalid score -1", -1, true},
-		{"invalid score 6", 6, true},
+		{"valid score 0", "0", false},
+		{"valid score 5", "5", false},
+		{"invalid score -1", "-1", true},
+		{"invalid score 6", "6", true},
 		{"non-int score", "high", true},
-		{"float valid", float64(3), false},
-		{"float invalid", float64(6), true},
+		{"float valid", "3.0", false},
+		{"float invalid", "3.5", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			issues := checkScoreField("test.yml", tt.val)
-			if tt.hasErr {
-				assert.Greater(t, len(issues), 0)
-			} else {
-				assert.Equal(t, 0, len(issues))
-			}
+			issues := checkYAMLContent(t, "books.yml", "books", "- name: test\n  score: "+tt.score+"\n")
+			assertHasError(t, issues, tt.hasErr)
 		})
 	}
 }
 
-func TestCheckDateFieldValue_DateFull(t *testing.T) {
+func TestCheckFile_DateFullValidation(t *testing.T) {
 	tests := []struct {
 		name   string
-		val    any
+		date   string
 		hasErr bool
 	}{
-		{"valid date", "2024-01-01", false},
-		{"invalid pattern", "2024", true},
-		{"invalid date", "not-a-date", true},
-		{"wrong type", 12345, true},
+		{"valid date", "\"2024-01-01\"", false},
+		{"invalid pattern", "\"2024\"", true},
+		{"invalid date", "\"not-a-date\"", true},
+		{"wrong type", "12345", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			issues := checkDateFieldValue("test.yml", tt.val, "field", DateFull, "date")
-			if tt.hasErr {
-				assert.Greater(t, len(issues), 0)
-			} else {
-				assert.Equal(t, 0, len(issues))
-			}
+			issues := checkYAMLContent(t, "books.yml", "books", "- name: test\n  readAt: "+tt.date+"\n")
+			assertHasError(t, issues, tt.hasErr)
 		})
 	}
 }
 
-func TestCheckDateFieldValue_Year(t *testing.T) {
+func TestCheckFile_YearValidation(t *testing.T) {
 	tests := []struct {
 		name   string
-		val    any
+		year   string
 		hasErr bool
 	}{
-		{"valid year", "2024", false},
-		{"invalid year", "not-a-year", true},
-		{"wrong type", 12345, true},
+		{"valid year string", "\"2024\"", false},
+		{"valid year int", "2024", false},
+		{"invalid year", "\"not-a-year\"", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			issues := checkDateFieldValue("test.yml", tt.val, "publishAt", DateYear, "year")
-			if tt.hasErr {
-				assert.Greater(t, len(issues), 0)
-			} else {
-				assert.Equal(t, 0, len(issues))
-			}
+			issues := checkYAMLContent(t, "books.yml", "books", "- name: test\n  publishAt: "+tt.year+"\n")
+			assertHasError(t, issues, tt.hasErr)
 		})
 	}
 }
 
-func TestCheckIsSequence(t *testing.T) {
-	issues := checkIsSequence("test.yml", []any{"a", "b"}, "items")
-	assert.Equal(t, 0, len(issues))
+func TestCheckFile_SequenceValidation(t *testing.T) {
+	issues := checkYAMLContent(t, "books.yml", "books", "- name: test\n  record:\n    - date: 2024-01-01\n")
+	assertHasError(t, issues, false)
 
-	issues = checkIsSequence("test.yml", "not-an-array", "items")
-	assert.Greater(t, len(issues), 0)
+	issues = checkYAMLContent(t, "books.yml", "books", "- name: test\n  record: not-an-array\n")
+	assertHasError(t, issues, true)
+}
+
+func checkYAMLContent(t *testing.T, filename, scope, content string) []checkutil.Issue {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, filename)
+	require.NoError(t, os.WriteFile(file, []byte(content), 0644))
+
+	return checkFile(file, scope)
+}
+
+func assertHasError(t *testing.T, issues []checkutil.Issue, want bool) {
+	t.Helper()
+	assert.Equal(t, want, checkutil.HasErrors(issues), "issues: %#v", issues)
 }
 
 func TestResolveScopeAuto(t *testing.T) {

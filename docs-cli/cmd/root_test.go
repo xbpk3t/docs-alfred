@@ -10,11 +10,19 @@ import (
 func TestRootCommandUsesCanonicalTopLevelScopes(t *testing.T) {
 	root := newRootCmd()
 
-	requireCommandNames(t, root.Commands(), []string{"catalog", "data", "workspace"})
+	requireCommandNames(t, root.Commands(), []string{"alfred", "data", "workspace"})
+	requireNoCommand(t, root, "catalog")
 	requireNoCommand(t, root, "gh")
 	requireNoCommand(t, root, "images")
 	requireNoCommand(t, root, "blog")
 	requireNoCommand(t, root, "dotfiles")
+}
+
+func TestAlfredCommandOwnsLauncherSearchCommands(t *testing.T) {
+	alfredCmd, _, err := newRootCmd().Find([]string{"alfred"})
+	require.NoError(t, err)
+
+	requireCommandNames(t, alfredCmd.Commands(), []string{"export", "search", "sync", "validate"})
 }
 
 func TestDataCommandUsesActionFirstDomainCommands(t *testing.T) {

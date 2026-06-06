@@ -16,6 +16,8 @@ const (
 	DefaultMaxRetries = 3
 	// DefaultFeedLimit 默认Feed数量限制.
 	DefaultFeedLimit = 10
+	// DefaultFeedFetchConcurrency controls concurrent feed fetches per group.
+	DefaultFeedFetchConcurrency = 10
 )
 
 // 日志字段常量.

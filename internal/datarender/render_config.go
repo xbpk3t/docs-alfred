@@ -1,4 +1,4 @@
-package data
+package datarender
 
 import (
 	"bytes"
@@ -39,6 +39,19 @@ type docsConfig struct {
 	Src   string        `yaml:"src"`
 	Cmd   string        `yaml:"cmd"`
 	IsDir bool          `yaml:"-"`
+}
+
+// Run renders all configured data sources from cfgFile and returns the config count.
+func Run(cfgFile string) (int, error) {
+	configs, err := loadRenderConfigs(cfgFile)
+	if err != nil {
+		return 0, err
+	}
+	if err := processRenderConfigs(configs); err != nil {
+		return 0, err
+	}
+
+	return len(configs), nil
 }
 
 func newDocProcessor(fileType fileType) *docProcessor {
@@ -256,28 +269,9 @@ func (dc *docsConfig) processSingle(fileType fileType, processor *docProcessor) 
 }
 
 func (dc *docsConfig) processGithubDir(fileType fileType, processor *docProcessor) error {
-	entries, err := os.ReadDir(dc.Src)
+	allRepos, err := servicegh.LoadConfigReposFromDir(dc.Src)
 	if err != nil {
-		return fmt.Errorf("read gh dir error: %w", err)
-	}
-
-	var allRepos servicegh.ConfigRepos
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		tag := entry.Name()
-		repos, subErr := dc.processGithubSubDir(tag, processor)
-		if subErr != nil {
-			return subErr
-		}
-		if repos != nil {
-			allRepos = append(allRepos, repos...)
-		}
-	}
-
-	if len(allRepos) == 0 {
-		return errors.New("no gh data found in any subdirectory")
+		return err
 	}
 
 	return dc.marshalAndWriteGithubOutput(allRepos, fileType, processor)
@@ -308,38 +302,6 @@ func (dc *docsConfig) marshalAndWriteGithubOutput(
 	}
 
 	return nil
-}
-
-func (dc *docsConfig) processGithubSubDir(tag string, processor *docProcessor) (servicegh.ConfigRepos, error) {
-	subDir := filepath.Join(dc.Src, tag)
-
-	data, readErr := rootpkg.ReadAndMergeFilesRecursively(subDir, processor.setCurrentFile)
-	if readErr != nil {
-		slog.Error("read gh subdir error", "dir", subDir, "error", readErr.Error())
-
-		return nil, nil
-	}
-
-	if len(data) == 0 {
-		return nil, nil
-	}
-
-	renderer := servicegh.NewGithubYAMLRender(tag)
-	if modeErr := dc.configureParseMode(renderer); modeErr != nil {
-		return nil, fmt.Errorf("configure parse mode for gh subdir %s error: %w", tag, modeErr)
-	}
-
-	content, renderErr := renderer.Render(data)
-	if renderErr != nil {
-		return nil, fmt.Errorf("render gh subdir %s error: %w", tag, renderErr)
-	}
-
-	var repos servicegh.ConfigRepos
-	if unmarshalErr := yaml.Unmarshal([]byte(content), &repos); unmarshalErr != nil {
-		return nil, fmt.Errorf("unmarshal gh subdir %s error: %w", tag, unmarshalErr)
-	}
-
-	return repos, nil
 }
 
 func (dc *docsConfig) createRenderer() (render.Renderer, error) {

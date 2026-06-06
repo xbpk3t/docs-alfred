@@ -7,14 +7,12 @@ import (
 	"io"
 
 	yaml "github.com/goccy/go-yaml"
-	"github.com/goccy/go-yaml/parser"
 )
 
 // Parser YAML配置解析器.
 type Parser[T any] struct {
-	fileName        string
-	data            []byte
-	continueOnError bool
+	fileName string
+	data     []byte
 }
 
 // NewParser 创建解析器.
@@ -22,13 +20,6 @@ func NewParser[T any](data []byte) *Parser[T] {
 	return &Parser[T]{
 		data: data,
 	}
-}
-
-// WithContinueOnError configures the parser to skip decode errors and continue.
-func (p *Parser[T]) WithContinueOnError() *Parser[T] {
-	p.continueOnError = true
-
-	return p
 }
 
 // WithFileName 设置文件名.
@@ -65,10 +56,6 @@ func (p *Parser[T]) ParseMulti() ([]T, error) {
 			break
 		}
 		if err != nil {
-			if p.continueOnError {
-				continue
-			}
-
 			return nil, fmt.Errorf("解析配置失败: %w", err)
 		}
 		results = append(results, item)
@@ -90,24 +77,10 @@ func (p *Parser[T]) ParseFlatten() ([]T, error) {
 			break
 		}
 		if err != nil {
-			if p.continueOnError {
-				continue
-			}
-
 			return nil, fmt.Errorf("解析配置失败: %w", err)
 		}
 		results = append(results, item...)
 	}
 
 	return results, nil
-}
-
-// IsMultiDocument checks if the YAML content contains multiple documents.
-func (p *Parser[T]) IsMultiDocument() (bool, error) {
-	file, err := parser.ParseBytes(p.data, parser.ParseComments)
-	if err != nil {
-		return false, fmt.Errorf("解析YAML失败: %w", err)
-	}
-
-	return len(file.Docs) > 1, nil
 }

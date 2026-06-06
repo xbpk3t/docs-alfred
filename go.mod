@@ -9,20 +9,21 @@ require (
 	github.com/adrg/frontmatter v0.2.0
 	github.com/asticode/go-astisub v0.40.0
 	github.com/avast/retry-go/v4 v4.7.0
+	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/dop251/goja v0.0.0-20251008123653-cf18d89f3cf6
 	github.com/dromara/carbon/v2 v2.6.13
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/goccy/go-yaml v1.18.0
-	github.com/gorilla/feeds v1.2.0
 	github.com/joho/godotenv v1.5.1
 	github.com/knadh/koanf/parsers/yaml v0.1.0
+	github.com/knadh/koanf/providers/env/v2 v2.0.0
 	github.com/knadh/koanf/providers/file v1.1.2
 	github.com/knadh/koanf/v2 v2.1.2
+	github.com/lithammer/fuzzysearch v1.1.8
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/resend/resend-go/v2 v2.27.0
 	github.com/samber/lo v1.52.0
-	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.4.13
@@ -46,7 +47,7 @@ require (
 	github.com/google/pprof v0.0.0-20251007162407-5df77e3f7d1d // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/knadh/koanf/maps v0.1.1 // indirect
+	github.com/knadh/koanf/maps v0.1.2 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/mmcdole/goxpp v1.1.1 // indirect

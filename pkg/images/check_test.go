@@ -3,6 +3,7 @@ package images
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,10 +12,10 @@ import (
 
 func TestDuplicateFileRe(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
+		name      string
+		input     string
 		wantMatch bool
-		original string
+		original  string
 	}{
 		{"name__1.jpg matches", "photo__1.jpg", true, "photo.jpg"},
 		{"name__999.ext", "file__999.txt", true, "file.txt"},
@@ -148,15 +149,6 @@ func TestMoveExtraFiles(t *testing.T) {
 	assert.NoError(t, err, "expected file should remain")
 }
 
-func TestCollectExpectedDirsOnly(t *testing.T) {
-	// Test with non-existent data dir
-	result, err := CollectExpectedDirsOnly(CheckConfig{
-		DataDir: "/tmp/nonexistent-data-dir-12345",
-	})
-	require.Error(t, err, "expected error for non-existent dir")
-	assert.Nil(t, result)
-}
-
 func TestRunImagesCheck_NonExistentDir(t *testing.T) {
 	result, err := RunImagesCheck(CheckConfig{
 		DataDir:   "/tmp/nonexistent-data-dir-12345",
@@ -170,14 +162,15 @@ func TestCheckResult_ReportApply(t *testing.T) {
 	r := &CheckResult{
 		ApplyActions: []string{"Removed 2 duplicate file(s)", "Hidden 1 extra director(ies)"},
 	}
-	// Report should not panic with apply actions
-	r.Report(CheckConfig{Apply: true})
+	report := r.ReportResult(CheckConfig{Apply: true})
+	assert.Contains(t, report, "[apply]")
+	assert.Contains(t, report, "Removed 2 duplicate file(s)")
 }
 
 func TestCheckResult_ReportNoApply(t *testing.T) {
 	r := &CheckResult{
 		MissingDirs: []string{"some/dir"},
 	}
-	// Report should not panic
-	r.Report(CheckConfig{})
+	report := r.ReportResult(CheckConfig{})
+	assert.True(t, strings.Contains(report, "ERROR some/dir") || strings.Contains(report, "some/dir"))
 }

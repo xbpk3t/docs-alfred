@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	DefaultConfigURL  = "https://docs.lucc.dev/gh.yml"
+	DefaultConfigURL  = "https://cdn.lucc.dev/gh.yml"
 	DefaultConfigPath = "/tmp/docs-cli-gh.yml"
 	DefaultMaxAge     = 24 * time.Hour
 )
@@ -47,21 +47,42 @@ func (m *Manager) SetTTL(ttl time.Duration) {
 	m.maxAge = ttl
 }
 
-// Sync downloads the configuration file from remote URL.
+// Sync downloads and validates the configuration file from remote URL.
 func (m *Manager) Sync() error {
-	dir := filepath.Dir(m.configPath)
-	if err := os.MkdirAll(dir, fileutil.DirPerm); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
+	data, err := m.download()
+	if err != nil {
+		return err
+	}
+	if err := ValidateConfigYAML(data); err != nil {
+		return fmt.Errorf("invalid remote config: %w", err)
 	}
 
+	return m.writeCache(data)
+}
+
+func (m *Manager) download() ([]byte, error) {
 	resp, err := http.Get(m.configURL)
 	if err != nil {
-		return fmt.Errorf("failed to download config: %w", err)
+		return nil, fmt.Errorf("failed to download config: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to download config: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to download config: HTTP %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config response: %w", err)
+	}
+
+	return data, nil
+}
+
+func (m *Manager) writeCache(data []byte) error {
+	dir := filepath.Dir(m.configPath)
+	if err := os.MkdirAll(dir, fileutil.DirPerm); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	tmpFile := m.configPath + ".tmp"
@@ -70,7 +91,7 @@ func (m *Manager) Sync() error {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 
-	if _, err := io.Copy(out, resp.Body); err != nil {
+	if _, err := out.Write(data); err != nil {
 		_ = out.Close()
 		_ = os.Remove(tmpFile)
 
@@ -85,17 +106,6 @@ func (m *Manager) Sync() error {
 	}
 
 	return nil
-}
-
-// Load loads the configuration file (auto-syncs if missing).
-func (m *Manager) Load() error {
-	if _, err := os.Stat(m.configPath); os.IsNotExist(err) {
-		if err := m.Sync(); err != nil {
-			return fmt.Errorf("config file not found and sync failed: %w", err)
-		}
-	}
-
-	return m.loadFromFile()
 }
 
 // LoadWithCacheTTL loads config with cache TTL checking.
@@ -138,6 +148,9 @@ func (m *Manager) loadFromFile() error {
 	if err != nil {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
+	if err := ValidateConfigYAML(data); err != nil {
+		return fmt.Errorf("invalid cached config: %w", err)
+	}
 
 	var configRepos ConfigRepos
 	if err := yaml.Unmarshal(data, &configRepos); err != nil {
@@ -147,11 +160,6 @@ func (m *Manager) loadFromFile() error {
 	m.repos = configRepos.ToRepos()
 
 	return nil
-}
-
-// GetRepos returns all repositories.
-func (m *Manager) GetRepos() Repos {
-	return m.repos
 }
 
 // Filter filters repositories by query.

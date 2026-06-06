@@ -30,7 +30,7 @@ linters:
       - path: internal/repos/github\.go
         linters:
           - gocritic
-      - path: cmd/catalog\.go
+      - path: cmd/alfred\.go
         linters:
           - gocritic
       - path: internal/install/

@@ -8,6 +8,12 @@ go install github.com/xbpk3t/docs-alfred/docs-cli@main
 
 ```
 
+```shell
+docs-cli alfred search <query>
+docs-cli data check gh
+docs-cli workspace images check
+```
+
 
 ## rss2nl
 

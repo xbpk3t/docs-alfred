@@ -9,6 +9,7 @@ import (
 
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	ghlib "github.com/xbpk3t/docs-alfred/pkg/gh"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // Patterns for duplicate file detection: name__NUMBER.ext.
@@ -107,21 +108,6 @@ func applyFixes(result *CheckResult, cfg CheckConfig) {
 	if len(result.ApplyActions) == 0 {
 		result.ApplyActions = append(result.ApplyActions, "No fixes needed")
 	}
-}
-
-// CollectExpectedDirsOnly returns expected image directories without checking existing.
-func CollectExpectedDirsOnly(cfg CheckConfig) (*CheckResult, error) {
-	expectedDirs, err := collectExpectedImageDirs(cfg.DataDir)
-	if err != nil {
-		return nil, fmt.Errorf("collect expected dirs: %w", err)
-	}
-
-	result := &CheckResult{ExpectedDirs: expectedDirs}
-	if len(expectedDirs) == 0 {
-		result.Warnings = append(result.Warnings, "No expected image directories found")
-	}
-
-	return result, nil
 }
 
 // removeDuplicateFiles deletes files matching name__NUMBER.ext if name.ext exists.
@@ -323,18 +309,7 @@ func topicHasPicture(topic map[string]any) bool {
 }
 
 func repoNameFromURL(urlStr string) string {
-	if urlStr == "" {
-		return ""
-	}
-	cleaned := strings.TrimPrefix(urlStr, "https://")
-	cleaned = strings.TrimPrefix(cleaned, "http://")
-	cleaned = strings.TrimSuffix(cleaned, "/")
-	parts := strings.Split(cleaned, "/")
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return strings.TrimSuffix(parts[len(parts)-1], ".git")
+	return urlutil.RepoName(urlStr)
 }
 
 // collectExistingFilesAndDirs returns both directories and files in imagesDir.
@@ -422,9 +397,4 @@ func (r *CheckResult) ReportResult(cfg CheckConfig) string {
 	}
 
 	return out.String()
-}
-
-// Report prints the check result.
-func (r *CheckResult) Report(cfg CheckConfig) {
-	fmt.Fprint(os.Stderr, r.ReportResult(cfg))
 }

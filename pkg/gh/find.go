@@ -2,9 +2,11 @@ package gh
 
 import (
 	"fmt"
-	"os"
 	"slices"
 	"strings"
+
+	"github.com/lithammer/fuzzysearch/fuzzy"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // FindEntry represents a gh entry found by search with its relevance score.
@@ -23,7 +25,7 @@ type FindEntry struct {
 // FindEntries searches for entries in gh data matching a text query or exact URL.
 func FindEntries(ghRoot, query, findURL string) ([]FindEntry, error) {
 	var entries []FindEntry
-	lowerQuery := strings.ToLower(query)
+	lowerQuery := strings.ToLower(strings.TrimSpace(query))
 
 	err := WalkGhRepos(ghRoot, func(ev WalkerEvent) error {
 		if ev.Type != evTypeRepo {
@@ -90,11 +92,6 @@ func FormatEntriesResult(entries []FindEntry) string {
 	return out.String()
 }
 
-// FormatEntries prints entries for compatibility with existing callers.
-func FormatEntries(entries []FindEntry) {
-	fmt.Fprint(os.Stdout, FormatEntriesResult(entries)) //nolint:errcheck // stdout CLI output is best-effort
-}
-
 // ---- internal scoring helpers ----
 
 func scoreEntry(repo map[string]any, repoURL, lowerQuery, findURL string, ev *WalkerEvent) FindEntry {
@@ -106,7 +103,7 @@ func scoreEntry(repo map[string]any, repoURL, lowerQuery, findURL string, ev *Wa
 }
 
 func scoreEntryByExactURL(repo map[string]any, repoURL, findURL string, ev *WalkerEvent) FindEntry {
-	if !strings.EqualFold(strings.TrimRight(repoURL, "/"), strings.TrimRight(findURL, "/")) {
+	if !urlutil.Equal(repoURL, findURL) {
 		return FindEntry{} // no match
 	}
 
@@ -134,53 +131,85 @@ func scoreEntryByExactURL(repo map[string]any, repoURL, findURL string, ev *Walk
 }
 
 func scoreByURLMatch(repoURL, lowerQuery string) int {
-	if strings.EqualFold(repoURL, lowerQuery) {
+	if lowerQuery == "" {
+		return 0
+	}
+	if urlutil.Equal(repoURL, lowerQuery) {
 		return 100
 	}
 	if strings.Contains(strings.ToLower(repoURL), lowerQuery) {
 		return 80
+	}
+	if isFuzzyMatch(lowerQuery, repoURL) {
+		return 50
 	}
 
 	return 0
 }
 
 func scoreByNameMatch(repoURL, lowerQuery string) int {
-	parts := strings.Split(repoURL, "/")
-	if len(parts) == 0 {
+	if lowerQuery == "" {
 		return 0
 	}
-	repoName := strings.ToLower(parts[len(parts)-1])
+	repoName := strings.ToLower(urlutil.RepoName(repoURL))
 	if repoName == lowerQuery {
 		return 90
 	}
 	if strings.Contains(repoName, lowerQuery) {
 		return 70
 	}
+	if isFuzzyMatch(lowerQuery, repoName) {
+		return 55
+	}
 
 	return 0
 }
 
 func scoreByTextMatch(des, zk, lowerQuery string) int {
+	if lowerQuery == "" {
+		return 0
+	}
 	if strings.Contains(strings.ToLower(des), lowerQuery) ||
 		strings.Contains(strings.ToLower(zk), lowerQuery) {
 		return 60
+	}
+	if isFuzzyMatch(lowerQuery, des) || isFuzzyMatch(lowerQuery, zk) {
+		return 40
 	}
 
 	return 0
 }
 
 func scoreByTopicMatch(topics []any, lowerQuery string) int {
+	if lowerQuery == "" {
+		return 0
+	}
 	for _, t := range topics {
-		if topic, ok := t.(map[string]any); ok {
-			if topicName, ok := topic["topic"].(string); ok {
-				if strings.Contains(strings.ToLower(topicName), lowerQuery) {
-					return 85
-				}
-			}
+		topic, ok := t.(map[string]any)
+		if !ok {
+			continue
+		}
+		topicName, ok := topic["topic"].(string)
+		if !ok {
+			continue
+		}
+		if strings.Contains(strings.ToLower(topicName), lowerQuery) {
+			return 85
+		}
+		if isFuzzyMatch(lowerQuery, topicName) {
+			return 65
 		}
 	}
 
 	return 0
+}
+
+func isFuzzyMatch(query, target string) bool {
+	if len([]rune(query)) < 3 || target == "" {
+		return false
+	}
+
+	return fuzzy.MatchFold(query, target)
 }
 
 func scoreEntryByTextQuery(repo map[string]any, repoURL, lowerQuery string, ev *WalkerEvent) FindEntry {

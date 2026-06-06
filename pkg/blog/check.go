@@ -16,9 +16,6 @@ type CheckResult struct {
 	BlogDirs int
 }
 
-// CheckIssue represents a single check issue.
-type CheckIssue = checkutil.Issue
-
 // RunCheck compares blog directories with data/gh YAML files.
 func RunCheck(dataDir, blogDir string) (*CheckResult, error) {
 	result := &CheckResult{}
@@ -112,16 +109,4 @@ func collectBlogDirs(result *CheckResult, blogDir string) (map[string]bool, erro
 	}
 
 	return blogDirs, nil
-}
-
-// Report prints the check result.
-func (r *CheckResult) Report(command string) {
-	base := &checkutil.Result{Issues: r.Issues}
-	base.Report(command)
-	fmt.Fprintf(os.Stderr, "summary: data/gh types=%d blog dirs=%d\n", r.GHTypes, r.BlogDirs)
-}
-
-// HasErrors returns true if there are any error-severity issues.
-func (r *CheckResult) HasErrors() bool {
-	return checkutil.HasErrors(r.Issues)
 }

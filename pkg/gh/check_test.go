@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
 func TestIsValidURL(t *testing.T) {
@@ -20,13 +21,13 @@ func TestIsValidURL(t *testing.T) {
 
 func TestCheckResult_HasErrors(t *testing.T) {
 	r := &CheckResult{}
-	assert.False(t, HasErrors(r))
+	assert.False(t, checkutil.HasErrors(r.Issues))
 
-	r.Issues = append(r.Issues, CheckIssue{Severity: "warn", Message: "warning"})
-	assert.False(t, HasErrors(r))
+	r.Issues = append(r.Issues, checkutil.Issue{Severity: "warn", Message: "warning"})
+	assert.False(t, checkutil.HasErrors(r.Issues))
 
-	r.Issues = append(r.Issues, CheckIssue{Severity: "error", Message: "error"})
-	assert.True(t, HasErrors(r))
+	r.Issues = append(r.Issues, checkutil.Issue{Severity: "error", Message: "error"})
+	assert.True(t, checkutil.HasErrors(r.Issues))
 }
 
 func TestGhCheck_UnreadableDir(t *testing.T) {
@@ -54,10 +55,13 @@ func TestGhCheck_InvalidYAML(t *testing.T) {
 	require.NotNil(t, result)
 }
 
-func TestCheckResult_Report(t *testing.T) {
+func TestCheckResult_ReportResult(t *testing.T) {
 	r := &CheckResult{}
 	r.addIssue("file.yml", "warn", "test warning")
 	r.addIssue("file.yml", "error", "test error")
-	// Report should not panic
-	r.Report("test command")
+
+	report := (&checkutil.Result{Issues: r.Issues}).ReportResult("test command")
+	assert.Contains(t, report, "WARN file.yml: test warning")
+	assert.Contains(t, report, "ERROR file.yml: test error")
+	assert.Contains(t, report, "test command failed")
 }

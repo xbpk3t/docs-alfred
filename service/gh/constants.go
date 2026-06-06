@@ -6,8 +6,8 @@ const (
 	IconQs      = "icons/a.svg"
 	IconDoc     = "icons/b.svg"
 	IconQsDoc   = "icons/ab.svg"
-	IconError   = "icons/error.png"
-	IconWarning = "icons/warning.png"
+	IconError   = IconSearch
+	IconWarning = IconCheck
 	IconTypes   = "icons/types.svg"
 	IconTags    = "icons/tags.svg"
 
