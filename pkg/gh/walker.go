@@ -6,12 +6,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
-	"sort"
 	"strings"
 
-	"github.com/bmatcuk/doublestar/v4"
 	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 // Event type constants for the gh YAML walker.
@@ -193,21 +191,10 @@ func emitRepoEvents(fn func(WalkerEvent) error, relPath, filenameStem string, se
 }
 
 func collectYAMLFilesRecursive(root string) ([]string, error) {
-	_, err := os.Stat(root)
+	files, err := fileutil.ListYAMLFilesRecursive(root)
 	if err != nil {
 		return nil, fmt.Errorf("gh root dir: %w", err)
 	}
 
-	pattern := filepath.Join(root, "**", "*.{yml,yaml}")
-	files, err := doublestar.FilepathGlob(pattern, doublestar.WithFilesOnly())
-	if err != nil {
-		return nil, err
-	}
-
-	files = slices.DeleteFunc(files, func(path string) bool {
-		return strings.HasPrefix(filepath.Base(path), ".")
-	})
-	sort.Strings(files)
-
-	return files, err
+	return files, nil
 }

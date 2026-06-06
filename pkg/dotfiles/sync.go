@@ -6,15 +6,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
-// SyncPlanOptions holds options for the sync-plan.
-type SyncPlanOptions struct {
+// SyncRecordOptions holds options for sync-record.
+type SyncRecordOptions struct {
 	DotfilesPath string
-	JSON         bool
 }
 
-// ChangeFile represents a changed file in the sync plan.
+// ChangeFile represents a changed file in the sync record plan.
 type ChangeFile struct {
 	Gh     *GhMap `json:"gh,omitempty"`
 	Path   string `json:"path"`
@@ -28,8 +29,8 @@ type GhMap struct {
 	GhFiles  []string `json:"ghFiles"`
 }
 
-// SyncPlanResult holds the sync plan result.
-type SyncPlanResult struct {
+// SyncRecordResult holds the sync record result.
+type SyncRecordResult struct {
 	DotfilesPath string       `json:"dotfilesPath"`
 	Error        string       `json:"error,omitempty"`
 	ChangedFiles []ChangeFile `json:"changedFiles"`
@@ -41,12 +42,12 @@ const (
 	ghDataPrefix   = "data/gh"
 )
 
-// RunSyncPlan plans dotfiles synchronization based on git changes.
-func RunSyncPlan(opts SyncPlanOptions) *SyncPlanResult {
+// RunSyncRecord plans dotfiles record synchronization based on git changes.
+func RunSyncRecord(opts SyncRecordOptions) *SyncRecordResult {
 	dotfilesPath := opts.DotfilesPath
 
 	if info, err := os.Stat(dotfilesPath); err != nil || !info.IsDir() {
-		return &SyncPlanResult{
+		return &SyncRecordResult{
 			DotfilesPath: dotfilesPath,
 			OK:           false,
 			Error:        "dotfiles path not found: " + dotfilesPath,
@@ -55,7 +56,7 @@ func RunSyncPlan(opts SyncPlanOptions) *SyncPlanResult {
 
 	gitDir := filepath.Join(dotfilesPath, ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
-		return &SyncPlanResult{
+		return &SyncRecordResult{
 			DotfilesPath: dotfilesPath,
 			OK:           false,
 			Error:        dotfilesPath + " exists but is not a git repository",
@@ -74,7 +75,7 @@ func RunSyncPlan(opts SyncPlanOptions) *SyncPlanResult {
 		changes = append(changes, change)
 	}
 
-	result := &SyncPlanResult{
+	result := &SyncRecordResult{
 		DotfilesPath: dotfilesPath,
 		OK:           true,
 		ChangedFiles: changes,
@@ -126,14 +127,9 @@ func mapToGh(filePath string) *GhMap {
 	category := parts[0]
 	ghDir := filepath.Join(ghDataPrefix, category)
 
-	ghRoot := ghDir
 	var ghFiles []string
-	if entries, err := os.ReadDir(ghRoot); err == nil {
-		for _, e := range entries {
-			if !e.IsDir() && (strings.HasSuffix(e.Name(), ".yml") || strings.HasSuffix(e.Name(), ".yaml")) {
-				ghFiles = append(ghFiles, filepath.Join(ghDir, e.Name()))
-			}
-		}
+	if files, err := fileutil.ListYAMLFiles(ghDir); err == nil {
+		ghFiles = files
 	}
 
 	if len(ghFiles) == 0 {

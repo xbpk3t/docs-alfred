@@ -8,6 +8,7 @@ import (
 
 	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
 
@@ -162,7 +163,7 @@ func collectGhRepoEntries(targetDir string) ([]ghEntry, error) {
 		}
 
 		dirPath := filepath.Join(targetDir, entry.Name())
-		yamlFiles, err := filepath.Glob(filepath.Join(dirPath, "*.yml"))
+		yamlFiles, err := fileutil.ListYAMLFiles(dirPath)
 		if err != nil {
 			continue
 		}
@@ -263,23 +264,14 @@ func groupURLDuplicates(repoEntries []ghEntry) *DuplicateReport {
 }
 
 func parseDomainFiles(targetDir string) ([]parsedItem, error) {
-	entries, err := os.ReadDir(targetDir)
+	files, err := fileutil.ListYAMLFiles(targetDir)
 	if err != nil {
-		return nil, fmt.Errorf("read dir %s: %w", targetDir, err)
+		return nil, err
 	}
 
 	var items []parsedItem
 
-	for _, e := range entries {
-		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		ext := filepath.Ext(e.Name())
-		if ext != extYML && ext != extYAML {
-			continue
-		}
-
-		docPath := filepath.Join(targetDir, e.Name())
+	for _, docPath := range files {
 		data, err := os.ReadFile(docPath)
 		if err != nil {
 			continue
@@ -292,7 +284,7 @@ func parseDomainFiles(targetDir string) ([]parsedItem, error) {
 		}
 
 		for _, doc := range docs {
-			items = append(items, parseYAMLDocItems(doc, e.Name())...)
+			items = append(items, parseYAMLDocItems(doc, filepath.Base(docPath))...)
 		}
 	}
 

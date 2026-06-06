@@ -77,6 +77,37 @@ func TestRemoveDuplicateFiles(t *testing.T) {
 	assert.NoError(t, err, "orphan file should exist")
 }
 
+func TestFindDuplicateFiles(t *testing.T) {
+	actualFiles := []string{
+		"photo.jpg",
+		"photo__1.jpg",
+		"nested/archive.tar.gz",
+		"nested/archive.tar__2.gz",
+		"orphan__3.png",
+		"plain.txt",
+	}
+
+	assert.Equal(t, []string{"photo__1.jpg", "nested/archive.tar__2.gz"}, findDuplicateFiles(actualFiles))
+}
+
+func TestCollectExistingFilesAndDirsSkipsHiddenEntries(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "visible"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".hidden"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "visible", "keep.txt"), []byte("keep"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".hidden", "skip.txt"), []byte("skip"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".root-hidden.txt"), []byte("skip"), 0644))
+
+	dirs, files, err := collectExistingFilesAndDirs(dir)
+	require.NoError(t, err)
+
+	assert.Contains(t, dirs, "visible")
+	assert.NotContains(t, dirs, ".hidden")
+	assert.Contains(t, files, "visible/keep.txt")
+	assert.NotContains(t, files, ".hidden/skip.txt")
+	assert.NotContains(t, files, ".root-hidden.txt")
+}
+
 func TestHideExtraDirs(t *testing.T) {
 	dir := t.TempDir()
 

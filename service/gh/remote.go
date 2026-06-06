@@ -2,13 +2,12 @@ package gh
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"time"
 
 	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
 
 const (
@@ -61,19 +60,9 @@ func (m *Manager) Sync() error {
 }
 
 func (m *Manager) download() ([]byte, error) {
-	resp, err := http.Get(m.configURL)
+	data, err := httputil.Get(httputil.NewClient(httputil.DefaultClientTimeout), m.configURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download config: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to download config: HTTP %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config response: %w", err)
 	}
 
 	return data, nil

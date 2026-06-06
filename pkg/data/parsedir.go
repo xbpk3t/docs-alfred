@@ -6,31 +6,21 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 // ParseYAMLDir reads all YAML files in a directory and attempts to parse them.
 func ParseYAMLDir(path string) (int, []error) {
-	entries, err := os.ReadDir(path)
+	files, err := fileutil.ListYAMLFiles(path)
 	if err != nil {
-		return 0, []error{fmt.Errorf("read dir %s: %w", path, err)}
+		return 0, []error{err}
 	}
 
 	var errs []error
 	count := 0
-	for _, e := range entries {
-		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		ext := filepath.Ext(e.Name())
-		if ext != extYML && ext != extYAML {
-			continue
-		}
-
-		filePath := filepath.Join(path, e.Name())
+	for _, filePath := range files {
 		if err := parseYAMLFile(filePath); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", filePath, err))
 

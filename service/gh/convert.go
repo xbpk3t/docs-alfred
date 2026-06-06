@@ -1,5 +1,7 @@
 package gh
 
+import "github.com/xbpk3t/docs-alfred/pkg/urlutil"
+
 // ToRepos converts ConfigRepos to flat Repos list.
 func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
@@ -68,5 +70,7 @@ func processAllSubRepos(repo *Repository) Repos {
 }
 
 func isValidGithubURL(url string) bool {
-	return len(url) > len(GhURL) && url[:len(GhURL)] == GhURL
+	_, ok := urlutil.GitHubOwnerRepo(url)
+
+	return ok
 }

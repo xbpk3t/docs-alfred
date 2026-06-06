@@ -1,108 +1,130 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/workspace"
-	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
 const cmdDotfiles = "dotfiles"
 
-func newDotfilesCheckCmd() *cobra.Command {
-	var checkPath string
+type dotfilesFlags struct {
+	path    string
+	dataDir string
+	format  string
+}
 
+func newDotfilesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   cmdDotfiles,
+		Short: "Dotfiles consistency commands",
+	}
+
+	cmd.AddCommand(newDotfilesCheckCmd())
+	cmd.AddCommand(newDotfilesSyncRecordCmd())
+
+	return cmd
+}
+
+func newDotfilesCheckCmd() *cobra.Command {
+	var flags dotfilesFlags
+
+	cmd := &cobra.Command{
+		Use:   cmdCheck,
 		Short: "Check dotfiles/data consistency",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDotfilesCheck(checkPath)
+			return runDotfilesCheck(flags.path, flags.dataDir, flags.format)
 		},
 	}
-	cmd.Flags().StringVar(&checkPath, cmdDotfiles, cmdDotfiles, "dotfiles path")
+	cmd.Flags().StringVar(&flags.path, "path", cmdDotfiles, "dotfiles path")
+	cmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
+	addFormatFlag(cmd, &flags.format)
 
 	return cmd
 }
 
-func newDotfilesSyncPlanCmd() *cobra.Command {
-	var syncPlanPath string
-	var syncPlanJSON bool
+func newDotfilesSyncRecordCmd() *cobra.Command {
+	var flags dotfilesFlags
 
 	cmd := &cobra.Command{
-		Use:   cmdDotfiles,
-		Short: "Plan dotfiles synchronization",
+		Use:   "sync-record",
+		Short: "Plan dotfiles record synchronization",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDotfilesSyncPlan(syncPlanPath, syncPlanJSON)
+			return runDotfilesSyncRecord(flags.path, flags.format)
 		},
 	}
-	cmd.Flags().StringVar(&syncPlanPath, cmdDotfiles, cmdDotfiles, "dotfiles path")
-	cmd.Flags().BoolVar(&syncPlanJSON, "json", false, "Print JSON output")
+	cmd.Flags().StringVar(&flags.path, "path", cmdDotfiles, "dotfiles path")
+	addFormatFlag(cmd, &flags.format)
 
 	return cmd
 }
 
-func runDotfilesCheck(dotfilesPath string) error {
+func runDotfilesCheck(dotfilesPath, dataDir, format string) error {
 	result, err := workspaceuc.RunDotfilesCheck(workspaceuc.DotfilesCheckInput{
 		DotfilesPath: dotfilesPath,
+		DataDir:      dataDir,
 	})
 	if err != nil {
 		return err
 	}
 
-	checkutil.ReportIssues(result.Issues, "dotfiles check")
-	fmt.Fprintf(os.Stderr, "summary: shared=%d df-only=%d gh-only=%d\n",
+	textDetails := fmt.Sprintf("summary: shared=%d df-only=%d gh-only=%d\n",
 		result.SharedCount, result.DfOnlyCount, result.GhOnlyCount)
-	if checkutil.HasErrors(result.Issues) {
+	if err := writeCheckCommandOutput(format, &checkCommandOutput{
+		Name:    "dotfiles check",
+		Issues:  result.Issues,
+		Summary: result.Summary(),
+	}, textDetails); err != nil {
+		return err
+	}
+
+	if workspaceuc.HasIssueErrors(result.Issues) {
 		return errors.New("dotfiles check failed")
 	}
 
 	return nil
 }
 
-func runDotfilesSyncPlan(dotfilesPath string, jsonOutput bool) error {
-	result := workspaceuc.RunDotfilesSyncPlan(workspaceuc.DotfilesSyncPlanInput{
+func runDotfilesSyncRecord(dotfilesPath, format string) error {
+	result := workspaceuc.RunDotfilesSyncRecord(workspaceuc.DotfilesSyncRecordInput{
 		DotfilesPath: dotfilesPath,
-		JSON:         jsonOutput,
 	})
 
-	if err := writeDotfilesSyncPlanResult(result, jsonOutput); err != nil {
+	if err := writeDotfilesSyncRecordResult(result, format); err != nil {
 		return err
 	}
 	if !result.OK {
-		return fmt.Errorf("sync-plan failed: %s", result.Error)
+		return fmt.Errorf("sync-record failed: %s", result.Error)
 	}
 
 	return nil
 }
 
-func writeDotfilesSyncPlanResult(result *workspaceuc.DotfilesSyncPlanResult, jsonOutput bool) error {
-	if jsonOutput {
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return err
-		}
-
-		return writeOutput(string(data))
+func writeDotfilesSyncRecordResult(result *workspaceuc.DotfilesSyncRecordResult, format string) error {
+	format, err := normalizeOutputFormat(format)
+	if err != nil {
+		return err
+	}
+	if format == outputFormatJSON {
+		return writeJSONOutput(result)
 	}
 
 	if !result.OK {
-		slog.Error("Sync plan failed", "error", result.Error)
+		fmt.Fprintf(os.Stderr, "sync-record failed: %s\n", result.Error)
 
 		return nil
 	}
 
-	slog.Info("Dotfiles sync plan", "path", result.DotfilesPath, "changed", len(result.ChangedFiles))
+	fmt.Fprintf(os.Stderr, "dotfiles sync record: path=%s changed=%d\n", result.DotfilesPath, len(result.ChangedFiles))
 	for _, f := range result.ChangedFiles {
 		status := formatDotfilesChangeStatus(f.Status)
-		slog.Info("Changed file", "status", status, "path", f.Path)
+		fmt.Fprintf(os.Stderr, "%s %s\n", status, f.Path)
 		if f.Gh != nil {
-			slog.Info("Gh mapping", "category", f.Gh.Category, "files", strings.Join(f.Gh.GhFiles, ", "))
+			fmt.Fprintf(os.Stderr, "  gh category=%s files=%s\n", f.Gh.Category, strings.Join(f.Gh.GhFiles, ", "))
 		}
 	}
 

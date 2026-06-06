@@ -15,8 +15,9 @@ func newRootCmd() *cobra.Command {
 		Short: "Docs workspace consistency commands",
 	}
 
-	rootCmd.AddCommand(newCheckCmd())
-	rootCmd.AddCommand(newSyncPlanCmd())
+	rootCmd.AddCommand(newImagesCmd())
+	rootCmd.AddCommand(newBlogCmd())
+	rootCmd.AddCommand(newDotfilesCmd())
 
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 

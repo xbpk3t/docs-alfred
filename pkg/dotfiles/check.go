@@ -8,6 +8,7 @@ import (
 
 	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 // CheckResult holds the dotfiles check result.
@@ -175,30 +176,19 @@ func hasContentNixFiles(dir string) bool {
 }
 
 func hasYAMLFiles(dir string) bool {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return false
-	}
-	for _, e := range entries {
-		if !e.IsDir() && (strings.HasSuffix(e.Name(), ".yml") || strings.HasSuffix(e.Name(), ".yaml")) {
-			return true
-		}
-	}
+	files, err := fileutil.ListYAMLFiles(dir)
 
-	return false
+	return err == nil && len(files) > 0
 }
 
 func hasAllTypesMarkedNoDotfiles(dir string) bool {
-	entries, err := os.ReadDir(dir)
+	files, err := fileutil.ListYAMLFiles(dir)
 	if err != nil {
 		return false
 	}
 
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yml") {
-			continue
-		}
-		if !isYAMLFileNoDotfiles(dir, e.Name()) {
+	for _, file := range files {
+		if !isYAMLFileNoDotfiles(file) {
 			return false
 		}
 	}
@@ -206,8 +196,8 @@ func hasAllTypesMarkedNoDotfiles(dir string) bool {
 	return true
 }
 
-func isYAMLFileNoDotfiles(dir, name string) bool {
-	data, err := os.ReadFile(filepath.Join(dir, name))
+func isYAMLFileNoDotfiles(path string) bool {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return false
 	}
