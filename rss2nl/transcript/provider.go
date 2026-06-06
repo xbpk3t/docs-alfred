@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"net/url"
 	"os/exec"
 	"strings"
 	"time"
-	"unicode"
 
+	"github.com/PuerkitoBio/goquery"
+	"github.com/asticode/go-astisub"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"mvdan.cc/xurls/v2"
 )
 
 // TranscriptResult holds the result of a transcript fetch.
@@ -199,23 +202,28 @@ func (p *DescriptionLinkProvider) Fetch(ctx context.Context, ep *EpisodeRef) (*T
 }
 
 // extractTranscriptLinksFromText extracts transcript URLs from HTML text.
-// TS source: description-link.ts lines 33-68.
+// Uses goquery for href extraction, xurls for bare URL detection,
+// and html.UnescapeString for entity decoding.
 func extractTranscriptLinksFromText(text, baseURL string) []string {
 	var candidates []string
 
-	// Extract href="..." candidates
-	hrefPattern := `href=["']([^"']+)["']`
-	for _, match := range regexFindAll(hrefPattern, text) {
-		candidate := normalizeCandidateURL(match, baseURL)
-		if candidate != "" {
-			candidates = append(candidates, candidate)
-		}
+	// Extract href="..." candidates via goquery
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(text))
+	if err == nil {
+		doc.Find("a[href]").Each(func(_ int, sel *goquery.Selection) {
+			if href, ok := sel.Attr("href"); ok {
+				candidate := normalizeCandidateURL(href, baseURL)
+				if candidate != "" {
+					candidates = append(candidates, candidate)
+				}
+			}
+		})
 	}
 
-	// Extract bare URL candidates (after HTML entity decoding)
-	decoded := decodeHTMLEntities(text)
-	urlPattern := `https?://[^\s<>"]+`
-	for _, match := range regexFindAll(urlPattern, decoded) {
+	// Extract bare URL candidates via xurls (after HTML entity decoding)
+	decoded := html.UnescapeString(text)
+	rxRelaxed := xurls.Relaxed()
+	for _, match := range rxRelaxed.FindAllString(decoded, -1) {
 		candidate := normalizeCandidateURL(match, baseURL)
 		if candidate != "" {
 			candidates = append(candidates, candidate)
@@ -241,7 +249,7 @@ func normalizeCandidateURL(raw, baseURL string) string {
 	raw = strings.TrimRight(raw, "),.;\\]")
 
 	// Decode HTML entities
-	raw = decodeHTMLEntities(raw)
+	raw = html.UnescapeString(raw)
 
 	// Parse as URL (with optional base URL)
 	u, err := url.Parse(raw)
@@ -286,77 +294,6 @@ func isTranscriptURL(rawURL string) bool {
 	}
 
 	return false
-}
-
-func regexFindAll(pattern, text string) []string {
-	if strings.HasPrefix(pattern, `href=["']`) {
-		return findHrefMatches(text)
-	}
-
-	return findURLMatches(text)
-}
-
-func findHrefMatches(text string) []string {
-	var results []string
-	remaining := text
-	for {
-		idx := strings.Index(remaining, `href="`)
-		if idx < 0 {
-			idx = strings.Index(remaining, `href='`)
-		}
-		if idx < 0 {
-			break
-		}
-		start := idx + 6 // len('href="') or len(`href='`)
-		endQuote := strings.IndexAny(remaining[start:], `"'`)
-		if endQuote < 0 {
-			break
-		}
-		results = append(results, remaining[start:start+endQuote])
-		remaining = remaining[start+endQuote+1:]
-	}
-
-	return results
-}
-
-func findURLMatches(text string) []string {
-	var results []string
-	remaining := text
-	for {
-		idx := strings.Index(remaining, "http")
-		if idx < 0 {
-			break
-		}
-		// Find end of URL (space, closing bracket, etc.)
-		end := strings.IndexAny(remaining[idx:], " \t\n\r<>\"'")
-		if end < 0 {
-			results = append(results, remaining[idx:])
-
-			break
-		}
-		results = append(results, remaining[idx:idx+end])
-		remaining = remaining[idx+end:]
-	}
-
-	return results
-}
-
-func decodeHTMLEntities(s string) string {
-	replacements := map[string]string{
-		"&amp;":  "&",
-		"&lt;":   "<",
-		"&gt;":   ">",
-		"&quot;": "\"",
-		"&#39;":  "'",
-		"&#x27;": "'",
-		"&#x2F;": "/",
-		"&#xA;":  "\n",
-	}
-	for k, v := range replacements {
-		s = strings.ReplaceAll(s, k, v)
-	}
-
-	return s
 }
 
 func detectContentTypeFromURL(rawURL string) string {
@@ -458,10 +395,8 @@ func (p *Pipeline) Fetch(ctx context.Context, ep *EpisodeRef) (*TranscriptResult
 
 func normalizeTranscriptContent(content, contentType string) string {
 	switch contentType {
-	case "vtt":
-		return cleanVTT(content)
-	case "srt":
-		return cleanSRT(content)
+	case "vtt", "srt":
+		return cleanSubtitle(content, contentType)
 	case "json":
 		return content // Pass through JSON as-is
 	default:
@@ -469,60 +404,50 @@ func normalizeTranscriptContent(content, contentType string) string {
 	}
 }
 
-func cleanVTT(content string) string {
+// cleanSubtitle parses VTT/SRT content via go-astisub and extracts plain text.
+// Handles non-standard formats (ASS-style tags, encoding issues) that yt-dlp
+// may produce from sources like Bilibili.
+func cleanSubtitle(content, contentType string) string {
+	var sub *astisub.Subtitles
+	var err error
+
+	r := strings.NewReader(content)
+	switch contentType {
+	case "vtt":
+		sub, err = astisub.ReadFromWebVTT(r)
+	case "srt":
+		sub, err = astisub.ReadFromSRT(r)
+	}
+	if err != nil || sub == nil {
+		// Fallback: return content stripped of obvious timestamp lines
+		return fallbackCleanSubtitle(content)
+	}
+
+	var lines []string
+	for _, item := range sub.Items {
+		for _, line := range item.Lines {
+			text := strings.TrimSpace(line.String())
+			if text != "" {
+				lines = append(lines, text)
+			}
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// fallbackCleanSubtitle is a minimal stripper used when go-astisub fails to parse.
+func fallbackCleanSubtitle(content string) string {
 	var lines []string
 	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
-		// Skip VTT headers and timestamps
-		if trimmed == "" || trimmed == "WEBVTT" || strings.HasPrefix(trimmed, "NOTE ") {
-			continue
-		}
-		if strings.Contains(trimmed, "-->") {
-			continue
-		}
-		if strings.TrimLeft(trimmed, "0") == "" {
-			continue
-		}
-		if _, err := fmt.Sscanf(trimmed, "%d:%d:%d", new(int), new(int), new(int)); err == nil {
-			continue
-		}
-		// Check if it's a numeric cue number
-		if isDigits(trimmed) {
+		if trimmed == "" || strings.Contains(trimmed, "-->") {
 			continue
 		}
 		lines = append(lines, trimmed)
 	}
 
 	return strings.Join(lines, "\n")
-}
-
-func cleanSRT(content string) string {
-	var lines []string
-	for line := range strings.SplitSeq(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if strings.Contains(trimmed, "-->") {
-			continue
-		}
-		if isDigits(trimmed) {
-			continue
-		}
-		lines = append(lines, trimmed)
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-func isDigits(s string) bool {
-	for _, r := range s {
-		if !unicode.IsDigit(r) {
-			return false
-		}
-	}
-
-	return s != ""
 }
 
 var contentTypeMap = map[string]string{

@@ -105,14 +105,11 @@ func (m *Merger) writeResult(result any) error {
 	}()
 
 	encoder := yaml.NewEncoder(file)
-	// 显式关闭编码器，确保缓冲区刷新
+	defer func() { _ = encoder.Close() }()
+
 	if err = encoder.Encode(result); err != nil {
 		_ = file.Close() // 立即关闭文件（避免defer覆盖错误）
 
-		return errcode.WithError(errcode.ErrEncodeYAML, err)
-	}
-
-	if err := encoder.Encode(result); err != nil {
 		return errcode.WithError(errcode.ErrEncodeYAML, err)
 	}
 

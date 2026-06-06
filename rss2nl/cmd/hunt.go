@@ -13,11 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/purell"
 	"github.com/mmcdole/gofeed"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/rss"
+	"golang.org/x/net/publicsuffix"
 )
 
 // -- Types (matching TS schema) --
@@ -667,8 +669,8 @@ func buildDiscoveryQuery(category string, seedURLs, seedDescs, recentTopics []st
 func buildTavilyQuery(category string, seedURLs, recentTopics []string) string {
 	maxLen := 400
 	query := fmt.Sprintf("Find high-quality technical source/homepage URLs for %s. "+
-			"Prefer engineering blogs, authors, newsletters, project homepages. "+
-			"Avoid RSS feeds, individual articles, SEO farms, social feeds, marketing pages, known domains.", category)
+		"Prefer engineering blogs, authors, newsletters, project homepages. "+
+		"Avoid RSS feeds, individual articles, SEO farms, social feeds, marketing pages, known domains.", category)
 
 	for _, seedURL := range seedURLs {
 		var suffix string
@@ -779,16 +781,22 @@ func normalizeConfidence(score, fallback float64) float64 {
 
 // -- URL helpers --
 
+// normalizeURL canonicalizes a URL using purell (lowercase scheme/host,
+// remove default port, normalize path, strip fragment).
 func normalizeURL(rawURL string) string {
-	u, err := url.Parse(rawURL)
+	normalized, err := purell.NormalizeURLString(rawURL,
+		purell.FlagLowercaseScheme|
+			purell.FlagLowercaseHost|
+			purell.FlagRemoveDefaultPort|
+			purell.FlagRemoveDotSegments|
+			purell.FlagRemoveFragment|
+			purell.FlagRemoveDuplicateSlashes|
+			purell.FlagSortQuery)
 	if err != nil {
 		return rawURL
 	}
-	u.Scheme = "https"
-	u.RawQuery = ""
-	u.Fragment = ""
 
-	return strings.TrimRight(u.String(), "/")
+	return strings.TrimRight(normalized, "/")
 }
 
 func extractDomain(rawURL string) string {
@@ -800,16 +808,28 @@ func extractDomain(rawURL string) string {
 	return u.Hostname()
 }
 
+// isBlocked checks if a domain matches any blocked entry by registrable domain.
 func isBlocked(domain string, blockedSet map[string]bool) bool {
-	parts := strings.Split(domain, ".")
-	for i := range slices.Backward(parts) {
-		partial := strings.Join(parts[i:], ".")
-		if blockedSet[partial] {
-			return true
+	// First try exact match
+	if blockedSet[domain] {
+		return true
+	}
+	// Then try registrable domain match
+	regDomain, err := publicsuffix.EffectiveTLDPlusOne(domain)
+	if err != nil {
+		// Fallback to suffix matching for IP addresses or unusual TLDs
+		parts := strings.Split(domain, ".")
+		for i := range slices.Backward(parts) {
+			partial := strings.Join(parts[i:], ".")
+			if blockedSet[partial] {
+				return true
+			}
 		}
+
+		return false
 	}
 
-	return false
+	return blockedSet[regDomain]
 }
 
 // -- State persistence --

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"codeberg.org/readeck/go-readability/v2"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
@@ -152,6 +153,13 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFe
 func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetchResult {
 	data, err := httputil.Get(f.HTTPClient, rawURL)
 	if err == nil {
+		slog.Info("HTTP fetch succeeded", "url", rawURL, "bodyLen", len(data))
+
+		if result := f.extractWithReadability(data, rawURL); result != nil {
+			return result
+		}
+
+		// Fallback: goquery title + truncated raw body
 		body := string(data)
 		if len(body) > f.MaxBodySize {
 			body = body[:f.MaxBodySize] + "..."
@@ -160,8 +168,6 @@ func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetc
 		if title == "" {
 			title = rawURL
 		}
-
-		slog.Info("HTTP fetch succeeded", "url", rawURL, "bodyLen", len(body))
 
 		return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 	}
@@ -188,6 +194,46 @@ func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetc
 	}
 
 	return &ContentFetchResult{SourceURL: rawURL, Error: errorStr}
+}
+
+// extractWithReadability uses go-readability to extract article content.
+// Returns nil if extraction fails or produces empty content.
+func (f *Fetcher) extractWithReadability(data []byte, rawURL string) *ContentFetchResult {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil
+	}
+
+	article, err := readability.FromReader(bytes.NewReader(data), parsedURL)
+	if err != nil || article.Node == nil {
+		return nil
+	}
+
+	var buf strings.Builder
+	if err := article.RenderText(&buf); err != nil {
+		return nil
+	}
+
+	body := buf.String()
+	if strings.TrimSpace(body) == "" {
+		return nil
+	}
+
+	if len(body) > f.MaxBodySize {
+		body = body[:f.MaxBodySize] + "..."
+	}
+
+	title := article.Title()
+	if title == "" {
+		title = extractTitle(string(data))
+	}
+	if title == "" {
+		title = rawURL
+	}
+
+	slog.Info("go-readability extraction succeeded", "url", rawURL, "bodyLen", len(body))
+
+	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 }
 
 // isHTTPBlockError checks whether the error is from an HTTP status code
