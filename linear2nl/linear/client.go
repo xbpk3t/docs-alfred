@@ -23,7 +23,8 @@ const issuesQuery = `query($filter: IssueFilter!, $first: Int) {
 		viewer {
 			assignedIssues(filter: $filter, first: $first) {
 				nodes {
-					id title identifier priority parentId
+					id title identifier priority
+					parent { id }
 					state { name type }
 					team { name key }
 					dueDate url updatedAt completedAt
@@ -421,8 +422,10 @@ func (c *Client) doRawQuery(ctx context.Context, query string, vars map[string]a
 type issueNode struct {
 	DueDate     *string `json:"dueDate"`
 	CompletedAt *string `json:"completedAt"`
-	ParentID    *string `json:"parentId"`
-	State       struct {
+	Parent      *struct {
+		ID string `json:"id"`
+	} `json:"parent"`
+	State struct {
 		Name string `json:"name"`
 		Type string `json:"type"`
 	} `json:"state"`
@@ -443,7 +446,7 @@ func mapIssues(nodes []issueNode) []Issue {
 	for i := range nodes {
 		n := &nodes[i]
 		// Skip sub-issues — only show top-level issues.
-		if n.ParentID != nil {
+		if n.Parent != nil {
 			continue
 		}
 		iss := Issue{
