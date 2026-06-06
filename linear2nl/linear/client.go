@@ -1,13 +1,13 @@
 package linear
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
+
+	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
 
 // GraphQL field/argument keys used in queries.
@@ -377,35 +377,20 @@ func (c *Client) doRawQuery(ctx context.Context, query string, vars map[string]a
 		Query:     query,
 		Variables: vars,
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, linearAPI, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", c.apiKey)
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("http request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
-	}
 
 	var envelope gqlEnvelope
-	if err := json.Unmarshal(respBody, &envelope); err != nil {
-		return fmt.Errorf("parse response: %w", err)
+	timeout := httputil.DefaultClientTimeout
+	if c.http != nil && c.http.Timeout > 0 {
+		timeout = c.http.Timeout
+	}
+	if _, err := httputil.PostJSONWithResult(ctx, linearAPI, payload, &envelope, httputil.RequestOptions{
+		Timeout:    timeout,
+		MaxRetries: httputil.DefaultMaxRetries,
+		Headers: map[string]string{
+			"Authorization": c.apiKey,
+		},
+	}); err != nil {
+		return fmt.Errorf("http request: %w", err)
 	}
 	if len(envelope.Errors) > 0 {
 		return fmt.Errorf("GraphQL errors: %s", envelope.Errors[0].Message)

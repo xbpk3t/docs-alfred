@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -77,29 +76,27 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFe
 	owner, repo := parts[0], parts[1]
 
 	apiURL := fmt.Sprintf("%s/repos/%s/%s", f.GHBaseURL, owner, repo)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, http.NoBody)
-	if err != nil {
-		return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
+	headers := map[string]string{
+		"Accept":     "application/vnd.github.v3+json",
+		"User-Agent": "rss2nl-wiki",
 	}
 
 	token := getGHToken()
 	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+		headers["Authorization"] = "Bearer " + token
 	}
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "rss2nl-wiki")
 
-	resp, err := f.GHClient.Do(req)
+	timeout := httputil.DefaultClientTimeout
+	if f.GHClient != nil && f.GHClient.Timeout > 0 {
+		timeout = f.GHClient.Timeout
+	}
+
+	respBody, err := httputil.GetBytes(ctx, apiURL, httputil.RequestOptions{
+		Timeout: timeout,
+		Headers: headers,
+	})
 	if err != nil {
 		return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-
-		return &ContentFetchResult{SourceURL: rawURL, Error: fmt.Sprintf("GitHub API: HTTP %d: %s", resp.StatusCode, string(body))}
 	}
 
 	var repoData struct {
@@ -114,7 +111,7 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFe
 		Stars       int      `json:"stargazers_count"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&repoData); err != nil {
+	if err := json.Unmarshal(respBody, &repoData); err != nil {
 		return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
 	}
 
@@ -151,7 +148,11 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFe
 // Falls back to opencli (browser-based) when the server blocks the request
 // (e.g. zhihu ZSE anti-bot protection).
 func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetchResult {
-	data, err := httputil.Get(f.HTTPClient, rawURL)
+	timeout := httputil.DefaultClientTimeout
+	if f.HTTPClient != nil && f.HTTPClient.Timeout > 0 {
+		timeout = f.HTTPClient.Timeout
+	}
+	data, err := httputil.GetBytes(ctx, rawURL, httputil.RequestOptions{Timeout: timeout})
 	if err == nil {
 		slog.Info("HTTP fetch succeeded", "url", rawURL, "bodyLen", len(data))
 

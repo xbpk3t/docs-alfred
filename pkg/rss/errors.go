@@ -13,6 +13,10 @@ type FeedError struct {
 	Err     error
 	URL     string
 	Message string
+	Kind    FeedFailureKind
+	// Transient marks source/network failures that should be grouped and
+	// escalated only after repeated runs.
+	Transient bool
 }
 
 func (e *FeedError) Error() string {

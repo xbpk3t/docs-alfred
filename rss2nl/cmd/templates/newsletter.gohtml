@@ -16,6 +16,12 @@
     .muted { color: #666; font-size: 12px; }
     .section { margin-top: 20px; }
     .feeds-hunt { background: #f8fafc; border: 1px solid #ddd; padding: 10px 12px; }
+    .item-extra-link { font-size: 12px; color: #0f62fe; text-decoration: none; margin-left: 8px; }
+    .item-extra-link:hover { text-decoration: underline; }
+    .failure-status { color: #666; font-size: 12px; }
+    .failure-suppressed { color: #666; }
+    .failure-escalated { color: #9f1239; font-weight: 600; }
+    .failure-examples { margin: 4px 0 0; padding-left: 16px; }
   </style>
 </head>
 <body>
@@ -27,6 +33,44 @@
 
   {{if .DashboardConfig.IsShowFetchFailedFeeds}}
   <h2>Fetch Failed Feeds</h2>
+  {{if .DashboardData.FailureReport}}
+  {{if .DashboardData.FailureReport.TotalFailures}}
+  <table>
+    <thead><tr><th>Source / Error</th><th>Status</th><th>Examples</th></tr></thead>
+    <tbody>
+    {{range .DashboardData.FailureReport.Groups}}
+    <tr>
+      <td>
+        <strong>{{.Host}}</strong><br />
+        <span class="muted">{{.KindLabel}} · {{.Count}} feed{{if ne .Count 1}}s{{end}}</span>
+      </td>
+      <td>
+        {{if .Escalated}}
+        <span class="failure-escalated">{{.Status}}</span>
+        {{else if .Suppressed}}
+        <span class="failure-suppressed">{{.Status}}</span>
+        {{else}}
+        <span class="failure-status">{{.Status}}</span>
+        {{end}}
+      </td>
+      <td>
+        <ul class="failure-examples">
+          {{range .ExampleURLs}}
+          <li>{{.}}</li>
+          {{end}}
+          {{if .RemainingCount}}
+          <li class="muted">+{{.RemainingCount}} more</li>
+          {{end}}
+        </ul>
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="muted">None</p>
+  {{end}}
+  {{else}}
   {{if .DashboardData.FailedFeeds}}
   <table>
     <thead><tr><th>Feed</th><th>Error</th></tr></thead>
@@ -38,6 +82,7 @@
   </table>
   {{else}}
   <p class="muted">None</p>
+  {{end}}
   {{end}}
   {{end}}
 
@@ -62,7 +107,7 @@
   <h2>{{.Category}}</h2>
   <ul>
     {{range .Items}}
-    <li><a href="{{.Link}}" target="_blank" rel="noreferrer">{{.Title}}</a> <span class="muted">{{.PubDate}}</span></li>
+    <li><a href="{{.Link}}" target="_blank" rel="noreferrer">{{.Title}}</a>{{if .TrnsURL}} <a class="item-extra-link" href="{{.TrnsURL}}" target="_blank" rel="noreferrer">trns</a>{{end}} <span class="muted">{{.PubDate}}</span></li>
     {{else}}
     <li class="muted">No items</li>
     {{end}}

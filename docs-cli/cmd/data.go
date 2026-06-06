@@ -7,10 +7,10 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	datauc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/data"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/data"
 	ghcheck "github.com/xbpk3t/docs-alfred/pkg/gh"
-	"github.com/xbpk3t/docs-alfred/pkg/images"
 )
 
 type dataRenderFlags struct {
@@ -26,15 +26,8 @@ func newDataCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(newDataRenderCmd())
-
-	// Domain-first subcommands: data <domain> check/duplicate
-	for _, d := range data.AllDataDomains {
-		if d == data.DomainGH {
-			continue // gh has its own command with find/append-record
-		}
-		cmd.AddCommand(newDomainCmd(d))
-	}
-
+	cmd.AddCommand(newDataCheckCmd())
+	cmd.AddCommand(newDataDuplicateCmd())
 	cmd.AddCommand(newDataGhCmd())
 
 	return cmd
@@ -49,7 +42,13 @@ func newDataRenderCmd() *cobra.Command {
 		Use:   "render",
 		Short: "Render YAML data into outputs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDataRender(flags)
+			_, err := datauc.RunRender(datauc.RenderInput{
+				Config:  flags.config,
+				Extract: flags.extract,
+				Out:     flags.out,
+			})
+
+			return err
 		},
 	}
 
@@ -60,110 +59,63 @@ func newDataRenderCmd() *cobra.Command {
 	return cmd
 }
 
-func runDataRender(flags dataRenderFlags) error {
-	if flags.extract == "topics" {
-		if flags.out == "" {
-			return errors.New("--out is required when --extract is set")
-		}
+// ---- check/duplicate ----
 
-		return data.ExtractTopics(flags.out)
-	}
-
-	configs, err := data.LoadRenderConfigs(flags.config)
-	if err != nil {
-		return err
-	}
-	data.ProcessRenderConfigs(configs)
-
-	return nil
-}
-
-// ---- domain: data <domain> {check, duplicate} ----
-
-// newDomainCmd creates "data <domain>" with check/duplicate subcommands.
-func newDomainCmd(domain data.DataDomain) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   string(domain),
-		Short: fmt.Sprintf("%s data operations", domain),
-	}
-
-	cmd.AddCommand(newDomainCheckCmd(domain))
-
-	if data.IsDuplicateDomain(domain) {
-		cmd.AddCommand(newDomainDuplicateCmd(domain))
-	}
-
-	return cmd
-}
-
-func newDomainCheckCmd(domain data.DataDomain) *cobra.Command {
-	var dataPath, scope string
+func newDataCheckCmd() *cobra.Command {
+	var dataPath, ruleScope string
 
 	cmd := &cobra.Command{
-		Use:   cmdCheck,
-		Short: fmt.Sprintf("Check %s data validity", domain),
+		Use:   "check <domain>",
+		Short: "Check data validity for a domain",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDomainCheck(domain, dataPath, scope)
+			domain, err := parseDataDomainArg(args[0])
+			if err != nil {
+				return err
+			}
+
+			return runDomainCheck(domain, dataPath, ruleScope)
 		},
 	}
 
 	cmd.Flags().StringVar(&dataPath, "path", "", "Override data directory")
-	cmd.Flags().StringVar(&scope, "scope", "", "Structured data check scope")
+	cmd.Flags().StringVar(&ruleScope, "rule-scope", "", "Override structured data check rule scope")
+	_ = cmd.Flags().MarkHidden("rule-scope")
 
 	return cmd
 }
 
-func runDomainCheck(domain data.DataDomain, dataPath, scope string) error {
-	path := dataPath
-	if path == "" {
-		path = data.DefaultPathForDomain(domain)
-	}
-	s := scope
-	if s == "" {
-		s = data.DefaultScopeForDomain(domain)
-	}
-
-	slog.Info("Checking domain", "domain", domain, "path", path, "scope", s)
-
-	if data.IsStructuredCheckDomain(domain) {
-		result, err := data.RunStructuredDataCheck(path, s)
-		if err != nil {
-			return err
-		}
-		checkutil.ReportIssues(result.Issues, "data check "+string(domain))
-		if checkutil.HasErrors(result.Issues) {
-			return fmt.Errorf("data check %s failed", domain)
-		}
-
-		return nil
+func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string) error {
+	result, err := datauc.RunDomainCheck(datauc.DomainCheckInput{
+		Domain:    domain,
+		Path:      dataPath,
+		RuleScope: ruleScope,
+	})
+	if err != nil {
+		return err
 	}
 
-	// For goods/task, at least validate YAML parsing
-	if domain == data.DomainGoods || domain == data.DomainTask {
-		count, errs := data.ParseYAMLDir(path)
-		for _, e := range errs {
-			slog.Error("YAML parse error", "error", e)
-		}
-		if len(errs) > 0 {
-			return fmt.Errorf("data check %s: %d file(s) failed YAML parsing", domain, len(errs))
-		}
-		slog.Info("Data check passed", "domain", domain, "files", count)
-
-		return nil
+	checkutil.ReportIssues(result.Issues, "data check "+string(domain))
+	if checkutil.HasErrors(result.Issues) {
+		return fmt.Errorf("data check %s failed", domain)
 	}
-
-	slog.Info("Data check passed", "domain", domain)
 
 	return nil
 }
 
-func newDomainDuplicateCmd(domain data.DataDomain) *cobra.Command {
+func newDataDuplicateCmd() *cobra.Command {
 	var dataPath string
 
 	cmd := &cobra.Command{
-		Use:   "duplicate",
-		Short: fmt.Sprintf("Find duplicate %s records", domain),
+		Use:   "duplicate <domain>",
+		Short: "Find duplicate records for a domain",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			domain, err := parseDataDomainArg(args[0])
+			if err != nil {
+				return err
+			}
+
 			return runDomainDuplicate(domain, dataPath)
 		},
 	}
@@ -173,22 +125,34 @@ func newDomainDuplicateCmd(domain data.DataDomain) *cobra.Command {
 	return cmd
 }
 
-func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
-	path := dataPath
-	if path == "" {
-		path = data.DefaultPathForDomain(domain)
+func parseDataDomainArg(value string) (data.DataDomain, error) {
+	domain := data.DataDomain(value)
+	if _, ok := data.SpecForDomain(domain); !ok {
+		return "", fmt.Errorf("unknown data domain %q", value)
 	}
 
-	slog.Info("Checking duplicates", "domain", domain, "path", path)
+	return domain, nil
+}
 
-	report, err := data.RunDuplicateCheck(path)
+func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
+	result, err := datauc.RunDomainDuplicate(datauc.DomainDuplicateInput{
+		Domain: domain,
+		Path:   dataPath,
+	})
 	if err != nil {
 		return err
 	}
+
+	report := result.Report
 	if len(report.URLDuplicates) == 0 && len(report.NameAuthorDuplicates) == 0 {
 		slog.Info("Data duplicate passed", "domain", domain)
 
 		return nil
+	}
+	if domain == data.DomainGH {
+		fmt.Fprint(os.Stderr, data.FormatGHDuplicateReport(report))
+
+		return fmt.Errorf("data duplicate %s found %d duplicate URLs", domain, len(report.URLDuplicates))
 	}
 	fmt.Fprint(os.Stderr, data.FormatDuplicateReport(report))
 
@@ -198,95 +162,15 @@ func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
 // ---- gh ----
 
 func newDataGhCmd() *cobra.Command {
-	var ghPath, imagesDir string
-
 	cmd := &cobra.Command{
 		Use:   "gh",
-		Short: "GitHub data operations",
+		Short: "GitHub data entry operations",
 	}
 
-	checkCmd := &cobra.Command{
-		Use:   cmdCheck,
-		Short: "Check data/gh YAML entries",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDataGhCheck(ghPath, imagesDir)
-		},
-	}
-	checkCmd.Flags().StringVar(&ghPath, "path", "data/gh", "Path to data/gh directory")
-	checkCmd.Flags().StringVar(&imagesDir, "images-dir", "docs-images", "Path to docs-images directory")
-
-	dupCmd := &cobra.Command{
-		Use:   "duplicate",
-		Short: "Find duplicate records by URL in data/gh",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDataGhDuplicate(ghPath)
-		},
-	}
-	dupCmd.Flags().StringVar(&ghPath, "path", "data/gh", "Path to data/gh directory")
-
-	findCmd := newDataGhFindCmd()
-	appendCmd := newDataGhAppendCmd()
-
-	cmd.AddCommand(checkCmd, dupCmd, findCmd, appendCmd)
+	cmd.AddCommand(newDataGhFindCmd())
+	cmd.AddCommand(newDataGhAppendCmd())
 
 	return cmd
-}
-
-func runDataGhCheck(path, imagesDir string) error {
-	slog.Info("Checking data/gh", "path", path)
-
-	// 1. YAML walker + entry/record validation
-	result, err := ghcheck.RunGhCheck(path)
-	if err != nil {
-		return err
-	}
-
-	// 2. Image-dir expectation validation
-	slog.Info("Checking image-dir expectations", "images-dir", imagesDir)
-
-	imgResult, imgErr := images.RunImagesCheck(images.CheckConfig{
-		DataDir:     path,
-		ImagesDir:   imagesDir,
-		SkipMissing: true,
-		SkipExtra:   true,
-	})
-	if imgErr != nil {
-		return imgErr
-	}
-	for _, w := range imgResult.Warnings {
-		result.Issues = append(result.Issues, ghcheck.CheckIssue{
-			File: cmdImages, Severity: "warn", Message: w,
-		})
-	}
-	for _, e := range imgResult.Errors {
-		result.Issues = append(result.Issues, ghcheck.CheckIssue{
-			File: "images", Severity: "error", Message: e,
-		})
-	}
-
-	result.Report("data gh check")
-
-	if ghcheck.HasErrors(result) {
-		return errors.New("data gh check failed")
-	}
-
-	return nil
-}
-
-func runDataGhDuplicate(path string) error {
-	slog.Info("Finding duplicate URLs in data/gh", "path", path)
-	report, err := data.RunGHDuplicateCheck(path)
-	if err != nil {
-		return err
-	}
-	if len(report.URLDuplicates) == 0 {
-		slog.Info("data gh duplicate passed")
-
-		return nil
-	}
-	fmt.Fprint(os.Stderr, data.FormatGHDuplicateReport(report))
-
-	return fmt.Errorf("data gh duplicate found %d duplicate URLs", len(report.URLDuplicates))
 }
 
 // ---- gh find ----
@@ -320,23 +204,18 @@ func newDataGhFindCmd() *cobra.Command {
 }
 
 func runDataGhFind(query, findURL string, limit int) error {
-	ghRoot := "data/gh"
-	slog.Info("Searching data/gh", "query", query, "url", findURL, "limit", limit)
-
-	entries, err := ghcheck.FindEntries(ghRoot, query, findURL)
+	result, err := datauc.RunGhFind(datauc.GhFindInput{
+		Query: query,
+		URL:   findURL,
+		Limit: limit,
+	})
 	if err != nil {
 		return err
 	}
 
-	ghcheck.SortEntries(entries)
+	_, err = os.Stdout.WriteString(ghcheck.FormatEntriesResult(result.Entries))
 
-	if limit > 0 && limit < len(entries) {
-		entries = entries[:limit]
-	}
-
-	ghcheck.FormatEntries(entries)
-
-	return nil
+	return err
 }
 
 // ---- gh append-record ----
@@ -368,16 +247,7 @@ func newDataGhAppendCmd() *cobra.Command {
 }
 
 func runDataGhAppend(file, url, date, des, topic string) error {
-	if url == "" && file == "" {
-		return errors.New("either --url or --file is required")
-	}
-	if date == "" || des == "" {
-		return errors.New("--date and --des are required")
-	}
-
-	slog.Info("Appending record", "url", url, "date", date, "des", des)
-
-	result, err := ghcheck.AppendRecord(&ghcheck.AppendRecordOptions{
+	result, err := datauc.RunGhAppend(&datauc.GhAppendInput{
 		File:  file,
 		URL:   url,
 		Date:  date,
@@ -385,7 +255,7 @@ func runDataGhAppend(file, url, date, des, topic string) error {
 		Topic: topic,
 	})
 	if err != nil {
-		return fmt.Errorf("append-record failed: %w", err)
+		return err
 	}
 
 	slog.Info("Record appended", "file", result.File)

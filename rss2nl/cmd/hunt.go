@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -90,10 +91,17 @@ type huntWarning struct {
 	Message  string       `json:"message"`
 }
 
+type huntFailure struct {
+	Provider huntProvider `json:"provider"`
+	Category string       `json:"category"`
+	Message  string       `json:"message"`
+}
+
 type huntReport struct {
 	GeneratedAt string          `json:"generatedAt"`
 	Candidates  []huntCandidate `json:"candidates"`
 	Warnings    []huntWarning   `json:"warnings"`
+	Failures    []huntFailure   `json:"failures,omitempty"`
 	Stats       huntStats       `json:"stats"`
 	DryRun      bool            `json:"dryRun"`
 }
@@ -536,19 +544,6 @@ func discoverExa(category string, seedURLs, seedDescs []string, maxResults int, 
 		},
 	}
 
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil
-	}
-
-	// Exa uses x-api-key header (not Authorization: Bearer)
-	resp, err := httputil.PostJSON("https://api.exa.ai/search", body, map[string]string{
-		"x-api-key": apiKey,
-	})
-	if err != nil {
-		return nil
-	}
-
 	var result struct {
 		Results []struct {
 			URL        string   `json:"url"`
@@ -558,7 +553,10 @@ func discoverExa(category string, seedURLs, seedDescs []string, maxResults int, 
 			Score      float64  `json:"score"`
 		} `json:"results"`
 	}
-	if err := json.Unmarshal(resp, &result); err != nil || len(result.Results) == 0 {
+	// Exa uses x-api-key header (not Authorization: Bearer)
+	if _, err := httputil.PostJSONWithResult(context.Background(), "https://api.exa.ai/search", payload, &result, httputil.RequestOptions{
+		Headers: map[string]string{"x-api-key": apiKey},
+	}); err != nil || len(result.Results) == 0 {
 		return nil
 	}
 
@@ -602,18 +600,6 @@ func discoverTavily(category string, seedURLs, seedDescs []string, maxResults in
 		"include_raw_content": false,
 	}
 
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil
-	}
-
-	resp, err := httputil.PostJSON("https://api.tavily.com/search", body, map[string]string{
-		"Content-Type": "application/json",
-	})
-	if err != nil {
-		return nil
-	}
-
 	var result struct {
 		Results []struct {
 			URL     string  `json:"url"`
@@ -622,7 +608,13 @@ func discoverTavily(category string, seedURLs, seedDescs []string, maxResults in
 			Score   float64 `json:"score"`
 		} `json:"results"`
 	}
-	if err := json.Unmarshal(resp, &result); err != nil || len(result.Results) == 0 {
+	if _, err := httputil.PostJSONWithResult(
+		context.Background(),
+		"https://api.tavily.com/search",
+		payload,
+		&result,
+		httputil.RequestOptions{},
+	); err != nil || len(result.Results) == 0 {
 		return nil
 	}
 
@@ -912,78 +904,216 @@ func renderHuntMarkdown(report *huntReport) string {
 	return b.String()
 }
 
-func renderHuntHTML(report *huntReport) string {
-	funcMap := template.FuncMap{
-		"percent": func(f float64) string {
-			return fmt.Sprintf("%.0f", f*100)
-		},
-		"isNewBadge": func(isNew bool) string {
-			if isNew {
-				return `<span style="background:#22c55e;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px">NEW</span>`
-			}
+// -- Hunt report HTML view types (matching hunt-report.gohtml) --
 
-			return ""
+type huntReportView struct {
+	Title                 string
+	GeneratedAt           string
+	Mode                  string
+	Stats                 []huntStatView
+	Warnings              []huntWarningView
+	Failures              []huntFailureView
+	Categories            []huntCategoryView
+	HasWarnings           bool
+	HasFailures           bool
+	HasMultipleCategories bool
+	HasNoCandidates       bool
+}
+
+type huntStatView struct {
+	Value any
+	Label string
+}
+
+type huntWarningView struct {
+	Message string
+}
+
+type huntFailureView struct {
+	Message string
+}
+
+type huntCategoryView struct {
+	Name       string
+	ID         string
+	Candidates []huntCandidateView
+	Count      int
+}
+
+type huntCandidateView struct {
+	Title         string
+	URL           string
+	Status        string
+	Reason        string
+	Provider      string
+	CandidateType string
+	Domain        string
+	Confidence    string
+	EvidenceURLs  []string
+	HasEvidence   bool
+}
+
+func buildHuntReportView(report *huntReport) huntReportView {
+	categories := groupCandidatesByCategory(report.Candidates)
+
+	return huntReportView{
+		Title:       "Source Discovery " + report.GeneratedAt[:10],
+		GeneratedAt: report.GeneratedAt,
+		Mode:        huntReportMode(report.DryRun),
+		Stats: []huntStatView{
+			{Label: "Accepted", Value: report.Stats.AcceptedCandidates},
+			{Label: "Categories", Value: report.Stats.CategoriesScanned},
+			{Label: "Provider calls", Value: report.Stats.ProviderCalls},
+			{Label: "Successful calls", Value: report.Stats.SuccessfulCalls},
+			{Label: "Raw candidates", Value: report.Stats.RawCandidates},
+			{Label: "Filtered", Value: report.Stats.FilteredCandidates},
 		},
+		HasWarnings:           len(report.Warnings) > 0,
+		Warnings:              buildWarningViews(report.Warnings),
+		HasFailures:           len(report.Failures) > 0,
+		Failures:              buildFailureViews(report.Failures),
+		HasMultipleCategories: len(categories) > 1,
+		HasNoCandidates:       len(categories) == 0,
+		Categories:            categories,
+	}
+}
+
+func buildWarningViews(warnings []huntWarning) []huntWarningView {
+	views := make([]huntWarningView, len(warnings))
+	for i, w := range warnings {
+		parts := []string{}
+		if w.Provider != "" {
+			parts = append(parts, string(w.Provider))
+		}
+		if w.Category != "" {
+			parts = append(parts, w.Category)
+		}
+		msg := w.Message
+		if len(parts) > 0 {
+			msg = strings.Join(parts, "/") + ": " + msg
+		}
+		views[i] = huntWarningView{Message: msg}
 	}
 
-	//nolint:lll
-	tmplSrc := `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Source Discovery Report</title>
-<style>
-  :root { --bg: #fff; --text: #1f2937; --border: #e5e7eb; --card-bg: #f9fafb; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #111827; --text: #f3f4f6; --border: #374151; --card-bg: #1f2937; }
-  }
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); max-width: 960px; margin: 0 auto; padding: 20px; }  //nolint:lll
-  h1 { font-size: 1.5em; margin-bottom: 0.25em; }
-  .meta { color: #6b7280; font-size: 0.9em; margin-bottom: 1.5em; }
-  .stats { display: flex; gap: 1em; margin-bottom: 1.5em; }
-  .stat { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 20px; flex: 1; text-align: center; }  //nolint:lll
-  .stat-value { font-size: 1.5em; font-weight: 700; }
-  .stat-label { font-size: 0.8em; color: #6b7280; }
-  .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 15px; margin-bottom: 1em; border-radius: 4px; color: #92400e; }  //nolint:lll
-  .candidate { padding: 12px 0; border-bottom: 1px solid var(--border); }
-  .candidate-title { font-weight: 600; }
-  .candidate-title a { color: #3b82f6; text-decoration: none; }
-  .candidate-title a:hover { text-decoration: underline; }
-  .candidate-meta { font-size: 0.85em; color: #6b7280; margin-top: 4px; }
-  .candidate-reason { font-size: 0.85em; margin-top: 4px; }
-  .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
-  .badge-exa { background: #dbeafe; color: #1e40af; }
-  .badge-tavily { background: #fce7f3; color: #9d174d; }
-  .badge-repo { background: #d1fae5; color: #065f46; }
-</style>
-</head>
-<body>
-<h1>Source Discovery Report</h1>
-<div class="meta">Generated: {{.GeneratedAt}} · Dry Run: {{.DryRun}}</div>
-<div class="stats">
-  <div class="stat"><div class="stat-value">{{.Stats.CategoriesScanned}}</div><div class="stat-label">Categories</div></div>
-  <div class="stat"><div class="stat-value">{{.Stats.AcceptedCandidates}}</div><div class="stat-label">Candidates</div></div>
-</div>
-{{range .Warnings}}
-<div class="warning">⚠ {{.Message}}</div>
-{{end}}
-{{range .Candidates}}
-<div class="candidate">
-  <div class="candidate-title">{{isNewBadge .IsNew}} <a href="{{.URL}}" target="_blank">{{.Title}}</a></div>
-  <div class="candidate-meta">
-    <span class="badge badge-{{.Provider}}">{{.Provider}}</span>
-    <span class="badge badge-{{.CandidateType}}">{{.CandidateType}}</span>
-    {{.Category}} · Score: {{percent .Score}}% · Confidence: {{percent .Confidence}}%
-  </div>
-  {{if .Reason}}<div class="candidate-reason">{{.Reason}}</div>{{end}}
-</div>
-{{end}}
-</body>
-</html>`
+	return views
+}
 
-	tmpl, err := template.New("hunt-report").Funcs(funcMap).Parse(tmplSrc)
+func buildFailureViews(failures []huntFailure) []huntFailureView {
+	views := make([]huntFailureView, len(failures))
+	for i, f := range failures {
+		views[i] = huntFailureView{
+			Message: fmt.Sprintf("%s/%s: %s", f.Provider, f.Category, f.Message),
+		}
+	}
+
+	return views
+}
+
+func groupCandidatesByCategory(candidates []huntCandidate) []huntCategoryView {
+	groups := make(map[string][]*huntCandidate)
+	for i := range candidates {
+		c := &candidates[i]
+		groups[c.Category] = append(groups[c.Category], c)
+	}
+
+	// Sort category names for stable output
+	names := make([]string, 0, len(groups))
+	for name := range groups {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+
+	views := make([]huntCategoryView, 0, len(names))
+	for _, name := range names {
+		group := groups[name]
+		candidateViews := make([]huntCandidateView, len(group))
+		for i := range group {
+			c := group[i]
+			candidateViews[i] = buildCandidateView(c)
+		}
+		views = append(views, huntCategoryView{
+			Name:       name,
+			ID:         categoryID(name),
+			Count:      len(group),
+			Candidates: candidateViews,
+		})
+	}
+
+	return views
+}
+
+func buildCandidateView(c *huntCandidate) huntCandidateView {
+	title := c.Title
+	if title == "" {
+		title = c.NormalizedURL
+	}
+
+	reason := c.Reason
+	if reason == "" {
+		reason = "No reason provided."
+	}
+
+	return huntCandidateView{
+		Title:         title,
+		URL:           c.NormalizedURL,
+		Status:        candidateStatus(c),
+		Reason:        reason,
+		HasEvidence:   len(c.EvidenceURLs) > 0,
+		EvidenceURLs:  c.EvidenceURLs,
+		Provider:      string(c.Provider),
+		CandidateType: string(c.CandidateType),
+		Domain:        c.Domain,
+		Confidence:    formatConfidence(c.Confidence),
+	}
+}
+
+func candidateStatus(c *huntCandidate) string {
+	if c.IsNew {
+		return "new"
+	}
+
+	return fmt.Sprintf("seen %dx", c.SeenCount)
+}
+
+func formatConfidence(f float64) string {
+	if f <= 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("%.2f", f)
+}
+
+func categoryID(name string) string {
+	slug := strings.ToLower(name)
+	slug = strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			return r
+		}
+
+		return '-'
+	}, slug)
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		slug = "unknown"
+	}
+
+	return "category-" + slug
+}
+
+func huntReportMode(dryRun bool) string {
+	if dryRun {
+		return "dry-run"
+	}
+
+	return "stateful"
+}
+
+func renderHuntHTML(report *huntReport) string {
+	view := buildHuntReportView(report)
+
+	funcMap := template.FuncMap{}
+
+	tmpl, err := template.New("hunt-report.gohtml").Funcs(funcMap).ParseFS(templates, "templates/hunt-report.gohtml")
 	if err != nil {
 		slog.Warn("Failed to parse hunt HTML template", "error", err)
 
@@ -991,7 +1121,7 @@ func renderHuntHTML(report *huntReport) string {
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, report); err != nil {
+	if err := tmpl.Execute(&buf, view); err != nil {
 		slog.Warn("Failed to render hunt HTML", "error", err)
 
 		return fmt.Sprintf("<pre>%s</pre>", renderHuntMarkdown(report))

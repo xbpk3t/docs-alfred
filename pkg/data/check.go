@@ -112,11 +112,6 @@ func checkFile(file, scope string) []checkutil.Issue {
 		issues = append(issues, docIssues...)
 	}
 
-	// Struct-based validation — disabled in favor of AST path above,
-	// which produces richer field-level checks with line/column info.
-	// structIssues := validateWithStructs(file, data, ruleScope)
-	// issues = append(issues, structIssues...)
-
 	return issues
 }
 

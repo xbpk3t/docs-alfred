@@ -3,28 +3,28 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
+	cataloguc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/catalog"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
 	gh "github.com/xbpk3t/docs-alfred/service/gh"
 )
 
-const cmdGH = "gh"
+const cmdCatalog = "catalog"
 
-func newGhCmd() *cobra.Command {
+func newCatalogCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   cmdGH,
+		Use:   cmdCatalog,
 		Short: "Remote GitHub repo search and cache sync",
 	}
 
-	cmd.AddCommand(newGhSearchCmd())
-	cmd.AddCommand(newGhSyncCmd())
+	cmd.AddCommand(newCatalogSearchCmd())
+	cmd.AddCommand(newCatalogSyncCmd())
 
 	return cmd
 }
 
-func newGhSearchCmd() *cobra.Command {
+func newCatalogSearchCmd() *cobra.Command {
 	var configURL, cachePath, docsURL, outputFormat string
 	var maxAge string
 
@@ -38,22 +38,17 @@ func newGhSearchCmd() *cobra.Command {
 				query = args[0]
 			}
 
-			manager := gh.NewManager(cachePath, configURL)
-
-			if maxAge != "" {
-				d, err := time.ParseDuration(maxAge)
-				if err == nil {
-					manager.SetTTL(d)
-				}
+			result, err := cataloguc.RunSearch(cataloguc.SearchInput{
+				ConfigURL: configURL,
+				CachePath: cachePath,
+				Query:     query,
+				MaxAge:    maxAge,
+			})
+			if err != nil {
+				return err
 			}
 
-			if err := manager.LoadWithCacheTTL(); err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			repos := manager.Filter(query)
-
-			return runGhSearchOutput(repos, outputFormat, docsURL)
+			return runCatalogSearchOutput(result.Repos, outputFormat, docsURL)
 		},
 	}
 
@@ -66,17 +61,20 @@ func newGhSearchCmd() *cobra.Command {
 	return searchCmd
 }
 
-func newGhSyncCmd() *cobra.Command {
+func newCatalogSyncCmd() *cobra.Command {
 	var configURL, cachePath string
 
 	syncCmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Force refresh remote gh.yml cache",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			manager := gh.NewManager(cachePath, configURL)
 			fmt.Fprintf(os.Stderr, "Syncing from %s to %s...\n", configURL, cachePath)
-			if err := manager.Sync(); err != nil {
-				return fmt.Errorf("sync failed: %w", err)
+			_, err := cataloguc.RunSync(cataloguc.SyncInput{
+				ConfigURL: configURL,
+				CachePath: cachePath,
+			})
+			if err != nil {
+				return err
 			}
 
 			return writeOutput("Sync completed successfully")
@@ -90,23 +88,6 @@ func newGhSyncCmd() *cobra.Command {
 }
 
 // ---- output ----
-
-func runGhSearchOutput(repos gh.Repos, outputFormat, docsURL string) error {
-	switch outputFormat {
-	case "alfred":
-		items := gh.FormatAlfredItems(repos, docsURL)
-
-		return writeFormatterOutput("alfred", items)
-	case "plain":
-		return writeOutput(gh.FormatPlain(repos, docsURL))
-	case "raw":
-		return writeFormatterOutput("raw", repos)
-	case "rofi":
-		return writeOutput(gh.FormatRofi(repos))
-	default:
-		return writeOutput(gh.FormatPlain(repos, docsURL))
-	}
-}
 
 func writeFormatterOutput(format string, data any) error {
 	formatter := wf.GetFormatter(format)
@@ -122,4 +103,21 @@ func writeOutput(s string) error {
 	_, err := os.Stdout.WriteString(s + "\n")
 
 	return err
+}
+
+func runCatalogSearchOutput(repos gh.Repos, outputFormat, docsURL string) error {
+	switch outputFormat {
+	case "alfred":
+		items := gh.FormatAlfredItems(repos, docsURL)
+
+		return writeFormatterOutput("alfred", items)
+	case "plain":
+		return writeOutput(gh.FormatPlain(repos, docsURL))
+	case "raw":
+		return writeFormatterOutput("raw", repos)
+	case "rofi":
+		return writeOutput(gh.FormatRofi(repos))
+	default:
+		return writeOutput(gh.FormatPlain(repos, docsURL))
+	}
 }

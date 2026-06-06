@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/pkg/images"
+	workspaceuc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/workspace"
 )
 
 const cmdImages = "images"
@@ -13,7 +13,6 @@ const cmdImages = "images"
 type imagesCheckFlags struct {
 	dataDir     string
 	imagesDir   string
-	scope       string
 	apply       bool
 	list        bool
 	skipExtra   bool
@@ -31,23 +30,19 @@ func newImagesCmd() *cobra.Command {
 		Use:   cmdCheck,
 		Short: "Check docs-images against data/gh expectations",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := images.CheckConfig{
+			return runImagesCheck(workspaceuc.ImagesCheckInput{
 				DataDir:     flags.dataDir,
 				ImagesDir:   flags.imagesDir,
-				Scope:       flags.scope,
 				Apply:       flags.apply,
 				List:        flags.list,
 				SkipExtra:   flags.skipExtra,
 				SkipMissing: flags.skipMissing,
-			}
-
-			return runImagesCheck(cfg)
+			})
 		},
 	}
 
 	checkCmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
 	checkCmd.Flags().StringVar(&flags.imagesDir, "images-dir", "docs-images", "docs-images path")
-	checkCmd.Flags().StringVar(&flags.scope, "scope", "", "Only check a path prefix")
 	checkCmd.Flags().BoolVar(&flags.apply, "apply", false, "Apply fixes")
 	checkCmd.Flags().BoolVar(&flags.list, "list", false, "Print full lists")
 	checkCmd.Flags().BoolVar(&flags.skipExtra, "skip-extra-files", false, "Ignore extra files")
@@ -58,20 +53,21 @@ func newImagesCmd() *cobra.Command {
 	return cmd
 }
 
-func runImagesCheck(cfg images.CheckConfig) error {
-	fmt.Fprintf(os.Stderr, "Checking docs-images from data-dir=%q images-dir=%q...\n", cfg.DataDir, cfg.ImagesDir)
+func runImagesCheck(input workspaceuc.ImagesCheckInput) error {
+	fmt.Fprintf(os.Stderr, "Checking docs-images from data-dir=%q images-dir=%q...\n", input.DataDir, input.ImagesDir)
 
-	result, err := images.RunImagesCheck(cfg)
+	result, err := workspaceuc.RunImagesCheck(input)
 	if err != nil {
 		return err
 	}
 
-	result.Report(cfg)
+	report := workspaceuc.FormatImagesReport(result, input)
+	fmt.Fprint(os.Stderr, report)
 
 	if len(result.Errors) > 0 {
 		return fmt.Errorf("images check found %d errors", len(result.Errors))
 	}
-	if len(result.MissingDirs) > 0 && !cfg.SkipMissing {
+	if len(result.MissingDirs) > 0 && !input.SkipMissing {
 		return fmt.Errorf("images check: %d missing expected dirs", len(result.MissingDirs))
 	}
 

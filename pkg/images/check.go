@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	ghlib "github.com/xbpk3t/docs-alfred/pkg/gh"
 )
 
@@ -17,7 +18,6 @@ var duplicateFileRe = regexp.MustCompile(`^(.+[^_])__\d+(\.[^.]+)$`)
 type CheckConfig struct {
 	DataDir     string
 	ImagesDir   string
-	Scope       string
 	Apply       bool
 	List        bool
 	SkipExtra   bool
@@ -337,7 +337,6 @@ func repoNameFromURL(urlStr string) string {
 	return strings.TrimSuffix(parts[len(parts)-1], ".git")
 }
 
-
 // collectExistingFilesAndDirs returns both directories and files in imagesDir.
 //
 //nolint:nonamedreturns // named returns preferred for readability here
@@ -363,55 +362,69 @@ func collectExistingFilesAndDirs(imagesDir string) (dirs, files []string, err er
 	return dirs, files, err
 }
 
-// Report prints the check result.
-func (r *CheckResult) Report(cfg CheckConfig) {
+// Issues returns the check result as common checkutil issues.
+func (r *CheckResult) Issues(cfg CheckConfig) []checkutil.Issue {
+	var issues []checkutil.Issue
 	for _, w := range r.Warnings {
-		fmt.Fprintf(os.Stderr, "WARN %s\n", w)
+		issues = append(issues, checkutil.Issue{
+			File: "images", Severity: checkutil.SeverityWarn, Message: w,
+		})
 	}
 	for _, e := range r.Errors {
-		fmt.Fprintf(os.Stderr, "ERROR %s\n", e)
+		issues = append(issues, checkutil.Issue{
+			File: "images", Severity: checkutil.SeverityError, Message: e,
+		})
 	}
+	for _, d := range r.DuplicateFiles {
+		issues = append(issues, checkutil.Issue{
+			File: d, Severity: checkutil.SeverityWarn, Message: "duplicate image file",
+		})
+	}
+	if !cfg.SkipMissing {
+		for _, d := range r.MissingDirs {
+			issues = append(issues, checkutil.Issue{
+				File: d, Severity: checkutil.SeverityError, Message: "missing expected image dir",
+			})
+		}
+	}
+	if !cfg.SkipExtra {
+		for _, d := range r.ExtraDirs {
+			issues = append(issues, checkutil.Issue{
+				File: d, Severity: checkutil.SeverityWarn, Message: "extra image dir",
+			})
+		}
+	}
+
+	return issues
+}
+
+// ReportResult returns the formatted check result.
+func (r *CheckResult) ReportResult(cfg CheckConfig) string {
+	var out strings.Builder
+
+	checkResult := &checkutil.Result{Issues: r.Issues(cfg)}
+	out.WriteString(checkResult.ReportResult("images check"))
+
 	if cfg.List {
 		for _, d := range r.ExpectedDirs {
-			fmt.Fprintf(os.Stderr, "expected: %s\n", d)
+			fmt.Fprintf(&out, "expected: %s\n", d)
 		}
 		for _, d := range r.ExistingDirs {
-			fmt.Fprintf(os.Stderr, "existing: %s\n", d)
+			fmt.Fprintf(&out, "existing: %s\n", d)
 		}
 	}
 
-	r.printMissingDirs(cfg)
-	r.printExtraDirs(cfg)
-	r.printApplyActions(cfg)
-
-	if (len(r.MissingDirs) == 0 || cfg.SkipMissing) && (len(r.ExtraDirs) == 0 || cfg.SkipExtra) {
-		fmt.Fprintf(os.Stderr, "✅ images check passed\n")
-	}
-}
-
-func (r *CheckResult) printMissingDirs(cfg CheckConfig) {
-	if len(r.MissingDirs) > 0 && !cfg.SkipMissing {
-		fmt.Fprintf(os.Stderr, "❌ Missing expected dirs (%d):\n", len(r.MissingDirs))
-		for _, d := range r.MissingDirs {
-			fmt.Fprintf(os.Stderr, "  %s\n", d)
-		}
-	}
-}
-
-func (r *CheckResult) printExtraDirs(cfg CheckConfig) {
-	if len(r.ExtraDirs) > 0 && !cfg.SkipExtra {
-		fmt.Fprintf(os.Stderr, "⚠ Extra dirs (%d):\n", len(r.ExtraDirs))
-		for _, d := range r.ExtraDirs {
-			fmt.Fprintf(os.Stderr, "  %s\n", d)
-		}
-	}
-}
-
-func (r *CheckResult) printApplyActions(cfg CheckConfig) {
 	if cfg.Apply && len(r.ApplyActions) > 0 {
-		fmt.Fprintf(os.Stderr, "\n[apply]\n")
+		out.WriteString("\n[apply]\n")
 		for _, a := range r.ApplyActions {
-			fmt.Fprintf(os.Stderr, "  %s\n", a)
+			fmt.Fprintf(&out, "  %s\n", a)
 		}
 	}
+
+	return out.String()
+}
+
+// Report prints the check result.
+func (r *CheckResult) Report(cfg CheckConfig) {
+	fmt.Fprint(os.Stderr, r.ReportResult(cfg))
 }

@@ -54,36 +54,45 @@ func SortEntries(entries []FindEntry) {
 	})
 }
 
-//nolint:errcheck // stdout CLI output is best-effort
-func FormatEntries(entries []FindEntry) {
-	if len(entries) == 0 {
-		fmt.Fprintln(os.Stdout, "No entries found.")
+// FormatEntriesResult returns a human-readable result list.
+func FormatEntriesResult(entries []FindEntry) string {
+	var out strings.Builder
 
-		return
+	if len(entries) == 0 {
+		out.WriteString("No entries found.\n")
+
+		return out.String()
 	}
 
-	fmt.Fprintf(os.Stdout, "Found %d result(s):\n\n", len(entries))
+	fmt.Fprintf(&out, "Found %d result(s):\n\n", len(entries))
 	for i := range entries {
 		e := &entries[i]
 		title := e.Topic
 		if title == "" {
 			title = e.RepoURL
 		}
-		fmt.Fprintf(os.Stdout, "[%d] %s\n", i+1, title)
-		fmt.Fprintf(os.Stdout, "    file:  %s\n", e.File)
-		fmt.Fprintf(os.Stdout, "    url:   %s\n", e.RepoURL)
-		fmt.Fprintf(os.Stdout, "    rel:   %s\n", e.Relation)
+		fmt.Fprintf(&out, "[%d] %s\n", i+1, title)
+		fmt.Fprintf(&out, "    file:  %s\n", e.File)
+		fmt.Fprintf(&out, "    url:   %s\n", e.RepoURL)
+		fmt.Fprintf(&out, "    rel:   %s\n", e.Relation)
 		if e.SecType != "" {
-			fmt.Fprintf(os.Stdout, "    type:  %s\n", e.SecType)
+			fmt.Fprintf(&out, "    type:  %s\n", e.SecType)
 		}
 		if e.Zk != "" {
-			fmt.Fprintf(os.Stdout, "    zk:    %s\n", e.Zk)
+			fmt.Fprintf(&out, "    zk:    %s\n", e.Zk)
 		}
 		if e.Records > 0 {
-			fmt.Fprintf(os.Stdout, "    records: %d\n", e.Records)
+			fmt.Fprintf(&out, "    records: %d\n", e.Records)
 		}
-		fmt.Fprintln(os.Stdout)
+		out.WriteString("\n")
 	}
+
+	return out.String()
+}
+
+// FormatEntries prints entries for compatibility with existing callers.
+func FormatEntries(entries []FindEntry) {
+	fmt.Fprint(os.Stdout, FormatEntriesResult(entries)) //nolint:errcheck // stdout CLI output is best-effort
 }
 
 // ---- internal scoring helpers ----

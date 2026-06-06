@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/pkg/blog"
+	workspaceuc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/workspace"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
 func newBlogCmd() *cobra.Command {
@@ -31,12 +34,17 @@ func newBlogCmd() *cobra.Command {
 }
 
 func runBlogCheck(dataDir, blogDir string) error {
-	result, err := blog.RunCheck(dataDir, blogDir)
+	result, err := workspaceuc.RunBlogCheck(workspaceuc.BlogCheckInput{
+		DataDir: dataDir,
+		BlogDir: blogDir,
+	})
 	if err != nil {
 		return err
 	}
-	result.Report("blog check")
-	if result.HasErrors() {
+
+	checkutil.ReportIssues(result.Issues, "blog check")
+	fmt.Fprintf(os.Stderr, "summary: data/gh types=%d blog dirs=%d\n", result.GHTypes, result.BlogDirs)
+	if checkutil.HasErrors(result.Issues) {
 		return errors.New("blog check failed")
 	}
 

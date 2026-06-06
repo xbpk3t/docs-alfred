@@ -1,15 +1,15 @@
 package ai
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
 
 // DefaultAITimeout is the default HTTP timeout for AI chat requests.
@@ -92,53 +92,43 @@ func ConfigWithOverrides(apiKey, baseURL, model string) *ClientConfig {
 // Chat sends a chat completion request and returns the response content.
 // Handles DeepSeek's non-standard `reasoning_content` field.
 func Chat(cfg *ClientConfig, messages []Message) (string, error) {
+	return ChatContext(context.Background(), cfg, messages)
+}
+
+// ChatContext sends a chat completion request with caller-controlled context.
+// Handles DeepSeek's non-standard `reasoning_content` field.
+func ChatContext(ctx context.Context, cfg *ClientConfig, messages []Message) (string, error) {
 	if cfg.APIKey == "" {
 		return "", errors.New("OPENAI_API_KEY not set")
 	}
 
-	req := ChatRequest{
+	requestBody := ChatRequest{
 		Model:    cfg.Model,
 		Messages: messages,
 	}
 
-	body, err := json.Marshal(req)
-	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
-	}
-
 	url := strings.TrimRight(cfg.BaseURL, "/") + "/chat/completions"
-	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
 	timeout := cfg.Timeout
 	if timeout <= 0 {
 		timeout = DefaultAITimeout
 	}
 
-	httpResp, err := (&http.Client{Timeout: timeout}).Do(httpReq)
+	respBody, err := httputil.PostJSONWithResult(ctx, url, requestBody, nil, httputil.RequestOptions{
+		Timeout:    timeout,
+		MaxRetries: 1,
+		Headers: map[string]string{
+			"Authorization": "Bearer " + cfg.APIKey,
+		},
+	})
 	if err != nil {
 		return "", fmt.Errorf("http request: %w", err)
 	}
-	defer func() { _ = httpResp.Body.Close() }()
 
-	return parseChatResponse(httpResp)
+	return parseChatResponseBody(respBody)
 }
 
-func parseChatResponse(httpResp *http.Response) (string, error) {
-	respBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read response: %w", err)
-	}
-
-	if httpResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error (HTTP %d): %s", httpResp.StatusCode, string(respBody))
-	}
-
+func parseChatResponseBody(respBody []byte) (string, error) {
 	var resp ChatResponse
 	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return "", fmt.Errorf("parse response: %w", err)

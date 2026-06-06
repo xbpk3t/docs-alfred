@@ -169,7 +169,7 @@ func (c *Classifier) classifyTopic(ctx context.Context, urlStr, title, content s
 	prompt = strings.ReplaceAll(prompt, "{{url}}", urlStr)
 	prompt = strings.ReplaceAll(prompt, "{{content}}", truncate(content, 3000))
 
-	result, err := ai.Chat(c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
+	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +196,7 @@ func (c *Classifier) classifyType(ctx context.Context, urlStr, title, content st
 	prompt = strings.ReplaceAll(prompt, "{{url}}", urlStr)
 	prompt = strings.ReplaceAll(prompt, "{{content}}", truncate(content, 3000))
 
-	result, err := ai.Chat(c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
+	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
 		return TypeInbox, err
 	}
@@ -229,7 +229,7 @@ func (c *Classifier) summarizeText(ctx context.Context, urlStr, title, content, 
 	prompt = strings.ReplaceAll(prompt, "{{type}}", wikiType)
 	prompt = strings.ReplaceAll(prompt, "{{content}}", truncate(content, 5000))
 
-	result, err := ai.Chat(c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
+	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
 		return "", fmt.Errorf("summarize: %w", err)
 	}
@@ -296,8 +296,7 @@ func fetchGHTopicsYAML(ctx context.Context, url string) string {
 		return ""
 	}
 
-	client := httputil.NewClient(10 * time.Second)
-	data, err := httputil.Get(client, url)
+	data, err := httputil.GetBytes(ctx, url, httputil.RequestOptions{Timeout: 10 * time.Second})
 	if err != nil {
 		slog.Warn("Failed to fetch gh topics YAML", "url", url, "error", err)
 

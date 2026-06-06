@@ -1,6 +1,8 @@
 package gh
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,4 +80,48 @@ func TestInferTopicFromURL(t *testing.T) {
 		result := inferTopicFromURL(tt.url)
 		assert.Equal(t, tt.expected, result, "inferTopicFromURL(%q)", tt.url)
 	}
+}
+
+func TestAppendYAMLRecord_TopicLevelRecord(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "repos.yml")
+	content := `- type: dev
+  repo:
+    - url: https://github.com/owner/repo
+  topics:
+    - topic: repo
+      record:
+        - date: 2024-01-01
+          des: old
+`
+	require.NoError(t, os.WriteFile(file, []byte(content), 0600))
+
+	err := appendYAMLRecord(file, "https://github.com/owner/repo", "repo", "2024-02-03", "new record")
+
+	require.NoError(t, err)
+	updated, err := os.ReadFile(file)
+	require.NoError(t, err)
+	assert.Contains(t, string(updated), `date: "2024-02-03"`)
+	assert.Contains(t, string(updated), "des: new record")
+}
+
+func TestAppendYAMLRecord_SectionLevelRecordFallback(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "repos.yml")
+	content := `- type: dev
+  repo:
+    - url: https://github.com/owner/repo
+  record:
+    - date: 2024-01-01
+      des: old
+`
+	require.NoError(t, os.WriteFile(file, []byte(content), 0600))
+
+	err := appendYAMLRecord(file, "https://github.com/owner/repo", "repo", "2024-02-03", "new record")
+
+	require.NoError(t, err)
+	updated, err := os.ReadFile(file)
+	require.NoError(t, err)
+	assert.Contains(t, string(updated), `date: "2024-02-03"`)
+	assert.Contains(t, string(updated), "des: new record")
 }

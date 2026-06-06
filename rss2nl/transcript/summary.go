@@ -49,7 +49,7 @@ func (s *Summarizer) GenerateSummary(ctx context.Context, episodeTitle, transcri
 		{Role: "user", Content: userMsg},
 	}
 
-	result, err := ai.Chat(s.Config, messages)
+	result, err := ai.ChatContext(ctx, s.Config, messages)
 	if err != nil {
 		return nil, fmt.Errorf("ai summary: %w", err)
 	}

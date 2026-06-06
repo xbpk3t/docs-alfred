@@ -9,6 +9,9 @@ import (
 
 // Filter filters repositories by query string.
 func (r Repos) Filter(query string) Repos {
+	if len(r) == 0 {
+		return nil
+	}
 	if query == "" {
 		return r
 	}

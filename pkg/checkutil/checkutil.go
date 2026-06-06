@@ -104,47 +104,5 @@ func HasErrors(issues []Issue) bool {
 	return false
 }
 
-// ---- field validators ----
-
-// YearPattern matches 4-digit years (YYYY).
-var YearPattern = regexp.MustCompile(`^\d{4}$`)
-
 // DateFullPattern matches YYYY-MM-DD dates.
 var DateFullPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-
-// CheckScore validates score is in range 0-5.
-func CheckScore(score int) *Issue {
-	if score < 0 || score > 5 {
-		return &Issue{Severity: SeverityError, Message: "score must be between 0 and 5"}
-	}
-
-	return nil
-}
-
-// CheckDate validates a date field matches the required format.
-func CheckDate(value, field, format string) *Issue {
-	if value == "" {
-		return nil
-	}
-	switch format {
-	case "date":
-		if !DateFullPattern.MatchString(value) {
-			return &Issue{Severity: SeverityError, Message: field + " must be YYYY-MM-DD format"}
-		}
-	case "year":
-		if !YearPattern.MatchString(value) {
-			return &Issue{Severity: SeverityError, Message: field + " must be YYYY format"}
-		}
-	}
-
-	return nil
-}
-
-// CheckRequired returns an issue if the field value is empty.
-func CheckRequired(value, field string) *Issue {
-	if value == "" {
-		return &Issue{Severity: SeverityError, Message: "missing required field '" + field + "'"}
-	}
-
-	return nil
-}

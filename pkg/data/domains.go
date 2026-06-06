@@ -5,66 +5,47 @@ import (
 	"strings"
 )
 
-// IsStructuredCheckDomain returns true for domains that use structured field validation.
-func IsStructuredCheckDomain(domain DataDomain) bool {
-	switch domain {
-	case DomainBooks, DomainMovie, DomainTV, DomainMusic, DomainDiary, DomainNtl:
-		return true
-	}
-
-	return false
+// DomainSpec defines the default behavior for a data domain.
+type DomainSpec struct {
+	Domain          DataDomain
+	DefaultPath     string
+	RuleScope       RuleScope
+	StructuredCheck bool
+	DuplicateCheck  bool
+	YAMLParseOnly   bool
 }
 
-// IsDuplicateDomain returns true for domains supporting duplicate detection.
-func IsDuplicateDomain(domain DataDomain) bool {
-	switch domain {
-	case DomainBooks, DomainMusic, DomainGH:
-		return true
+var domainSpecs = []DomainSpec{
+	{Domain: DomainBooks, DefaultPath: "data/books", RuleScope: ScopeBooks, StructuredCheck: true, DuplicateCheck: true},
+	{Domain: DomainMovie, DefaultPath: "data/books", RuleScope: ScopeMovie, StructuredCheck: true},
+	{Domain: DomainTV, DefaultPath: "data/books", RuleScope: ScopeMovie, StructuredCheck: true},
+	{Domain: DomainMusic, DefaultPath: "data/music", RuleScope: ScopeMusic, StructuredCheck: true, DuplicateCheck: true},
+	{Domain: DomainDiary, DefaultPath: "data/diary", RuleScope: ScopeDiary, StructuredCheck: true},
+	{Domain: DomainGH, DefaultPath: "data/gh", DuplicateCheck: true},
+	{Domain: DomainGoods, DefaultPath: "data/goods", YAMLParseOnly: true},
+	{Domain: DomainTask, DefaultPath: "data", YAMLParseOnly: true},
+	{Domain: DomainNtl, DefaultPath: "data/.archive/z/ntl", RuleScope: RuleScope(DomainNtl), StructuredCheck: true},
+}
+
+// SpecForDomain returns the configured behavior for a data domain.
+func SpecForDomain(domain DataDomain) (DomainSpec, bool) {
+	for _, spec := range domainSpecs {
+		if spec.Domain == domain {
+			return spec, true
+		}
 	}
 
-	return false
+	return DomainSpec{}, false
 }
 
 // DefaultPathForDomain returns the default data path for a domain.
 func DefaultPathForDomain(domain DataDomain) string {
-	switch domain {
-	case DomainBooks, DomainMovie, DomainTV:
-		return "data/books"
-	case DomainMusic:
-		return "data/music"
-	case DomainDiary:
-		return "data/diary"
-	case DomainGH:
-		return "data/gh"
-	case DomainGoods:
-		return "data/goods"
-	case DomainTask:
-		return "data"
-	case DomainNtl:
-		return "data/.archive/z/ntl"
+	spec, ok := SpecForDomain(domain)
+	if !ok {
+		return ""
 	}
 
-	return ""
-}
-
-// DefaultScopeForDomain returns the default validation scope for a domain.
-func DefaultScopeForDomain(domain DataDomain) string {
-	switch domain {
-	case DomainBooks:
-		return string(ScopeBooks)
-	case DomainMovie:
-		return string(ScopeMovie)
-	case DomainTV:
-		return string(DomainTV)
-	case DomainMusic:
-		return string(ScopeMusic)
-	case DomainDiary:
-		return string(ScopeDiary)
-	case DomainNtl:
-		return string(DomainNtl)
-	}
-
-	return "auto"
+	return spec.DefaultPath
 }
 
 // ResolveScope determines the actual RuleScope based on scope and filename.

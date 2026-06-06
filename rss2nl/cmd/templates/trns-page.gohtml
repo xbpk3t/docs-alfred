@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{.Title}}</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #111111;
+      --muted: #666666;
+      --border: #eeeeee;
+      --summary-bg: #f8fafc;
+      --summary-border: #dddddd;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1a2e;
+        --text: #e0e0e0;
+        --muted: #888888;
+        --border: #2a2a3e;
+        --summary-bg: #16213e;
+        --summary-border: #2a2a4e;
+      }
+    }
+
+    [data-theme="dark"] {
+      --bg: #1a1a2e;
+      --text: #e0e0e0;
+      --muted: #888888;
+      --border: #2a2a3e;
+      --summary-bg: #16213e;
+      --summary-border: #2a2a4e;
+    }
+
+    [data-theme="light"] {
+      --bg: #ffffff;
+      --text: #111111;
+      --muted: #666666;
+      --border: #eeeeee;
+      --summary-bg: #f8fafc;
+      --summary-border: #dddddd;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.2s, color 0.2s;
+    }
+
+    main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    h2 { font-size: 18px; margin-top: 24px; }
+    .meta { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+    .meta a { color: var(--muted); }
+    .transcript { white-space: pre-wrap; font-size: 14px; line-height: 1.6; border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .summary { background: var(--summary-bg); border: 1px solid var(--summary-border); padding: 12px; margin: 12px 0; border-radius: 6px; }
+    .summary-error { color: var(--muted); font-size: 13px; padding: 8px 12px; background: var(--summary-bg); border: 1px solid var(--summary-border); border-radius: 6px; margin: 12px 0; }
+
+    .theme-toggle {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+      z-index: 100;
+    }
+    .theme-toggle:hover { background: var(--summary-bg); }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">&#9790;</button>
+  <main>
+    <h1>{{.Title}}</h1>
+    <div class="meta">
+      <div>Feed: {{.FeedTitle}}</div>
+      {{if .EpisodeURL}}<div>Episode: <a href="{{.EpisodeURL}}" target="_blank" rel="noreferrer">{{.EpisodeURL}}</a></div>{{end}}
+      <div>Status: {{.Status}}</div>
+    </div>
+    {{if .Summary}}
+    <div class="summary">
+      <h2>AI Summary</h2>
+      <p>{{.Summary}}</p>
+    </div>
+    {{end}}
+    {{if .SummaryError}}
+    <div class="summary-error">
+      <strong>AI Summary unavailable:</strong> {{.SummaryError}}
+    </div>
+    {{end}}
+    {{if and (not .Summary) (not .SummaryError)}}
+    <p class="muted">summary unavailable</p>
+    {{end}}
+    <div class="transcript">{{.Content}}</div>
+  </main>
+  <script>
+    (() => {
+      const saved = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'dark' || (!saved && prefersDark)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else if (saved === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+      const btn = document.querySelector('.theme-toggle');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme');
+          const next = current === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          localStorage.setItem('theme', next);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
