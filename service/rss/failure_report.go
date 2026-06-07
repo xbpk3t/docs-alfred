@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -312,15 +312,15 @@ func buildGroupedFailureReport(
 	failures []classifiedFeedFailure,
 	cfg FeedFailureReportConfig,
 ) *FeedFailureReport {
-	sort.Slice(failures, func(i, j int) bool {
-		if failures[i].Host != failures[j].Host {
-			return failures[i].Host < failures[j].Host
+	slices.SortStableFunc(failures, func(a, b classifiedFeedFailure) int {
+		if a.Host != b.Host {
+			return strings.Compare(a.Host, b.Host)
 		}
-		if failures[i].Kind != failures[j].Kind {
-			return failures[i].Kind < failures[j].Kind
+		if a.Kind != b.Kind {
+			return strings.Compare(string(a.Kind), string(b.Kind))
 		}
 
-		return failures[i].URL < failures[j].URL
+		return strings.Compare(a.URL, b.URL)
 	})
 
 	grouped := make(map[string]*FeedFailureGroup)
@@ -387,18 +387,26 @@ func updateFeedFailureReportCounts(report *FeedFailureReport, group *FeedFailure
 }
 
 func sortFeedFailureGroups(groups []FeedFailureGroup) {
-	sort.Slice(groups, func(i, j int) bool {
-		if groups[i].Escalated != groups[j].Escalated {
-			return groups[i].Escalated
+	slices.SortStableFunc(groups, func(a, b FeedFailureGroup) int {
+		if a.Escalated != b.Escalated {
+			if a.Escalated {
+				return -1 // escalated first
+			}
+
+			return 1
 		}
-		if groups[i].Transient != groups[j].Transient {
-			return !groups[i].Transient
+		if a.Transient != b.Transient {
+			if a.Transient {
+				return 1 // non-transient first
+			}
+
+			return -1
 		}
-		if groups[i].Host != groups[j].Host {
-			return groups[i].Host < groups[j].Host
+		if a.Host != b.Host {
+			return strings.Compare(a.Host, b.Host)
 		}
 
-		return groups[i].Kind < groups[j].Kind
+		return strings.Compare(string(a.Kind), string(b.Kind))
 	})
 }
 

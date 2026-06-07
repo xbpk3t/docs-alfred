@@ -9,7 +9,6 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -112,7 +111,7 @@ func runTrns(source string, flags *trnsFlags) error {
 	}
 
 	outDir := flags.outDir
-	if errMkdir := os.MkdirAll(outDir, fileutil.DirPerm); errMkdir != nil {
+	if errMkdir := fileutil.EnsureDir(outDir); errMkdir != nil {
 		return fmt.Errorf("mkdir %s: %w", outDir, errMkdir)
 	}
 

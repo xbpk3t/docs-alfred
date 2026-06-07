@@ -107,7 +107,7 @@ func (c *Cache) Get(key string) (*CacheEntry, error) {
 func (c *Cache) Set(key string, entry *CacheEntry, content string) error {
 	cacheDir := filepath.Join(c.baseDir, key)
 	// Ensure cache subdirectory exists
-	if err := os.MkdirAll(cacheDir, fileutil.DirPerm); err != nil {
+	if err := fileutil.EnsureDir(cacheDir); err != nil {
 		return fmt.Errorf("create cache dir: %w", err)
 	}
 

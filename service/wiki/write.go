@@ -43,7 +43,7 @@ type WriteOptions struct {
 // Follows TS writer.ts: appendToSummaryFile.
 func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 	topicDir := resolveTopicDir(item, opts)
-	if err := os.MkdirAll(topicDir, fileutil.DirPerm); err != nil {
+	if err := fileutil.EnsureDir(topicDir); err != nil {
 		return "", fmt.Errorf("create topic dir: %w", err)
 	}
 
@@ -166,7 +166,7 @@ func WriteFailureEntry(item *ClassifyItem, failureType, extraInfo string, opts *
 	failedDir := filepath.Join(opts.WikiRoot, "failed")
 	path := filepath.Join(failedDir, filename)
 
-	if err := os.MkdirAll(failedDir, fileutil.DirPerm); err != nil {
+	if err := fileutil.EnsureDir(failedDir); err != nil {
 		return "", fmt.Errorf("create failed dir: %w", err)
 	}
 

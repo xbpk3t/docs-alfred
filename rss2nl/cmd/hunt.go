@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gosimple/slug"
 	"github.com/mmcdole/gofeed"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
@@ -1036,20 +1037,12 @@ func formatConfidence(f float64) string {
 }
 
 func categoryID(name string) string {
-	slug := strings.ToLower(name)
-	slug = strings.Map(func(r rune) rune {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
-			return r
-		}
-
-		return '-'
-	}, slug)
-	slug = strings.Trim(slug, "-")
-	if slug == "" {
-		slug = "unknown"
+	s := slug.Make(name)
+	if s == "" {
+		s = "unknown"
 	}
 
-	return "category-" + slug
+	return "category-" + s
 }
 
 func huntReportMode(dryRun bool) string {

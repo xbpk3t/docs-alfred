@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 	"github.com/xbpk3t/docs-alfred/service/ghdata"
 )
@@ -202,7 +203,7 @@ func moveExtraFiles(imagesDir string, extraDirs, actualFiles []string) int {
 
 	moved := 0
 	tempDir := filepath.Join(filepath.Dir(imagesDir), ".temp")
-	_ = os.MkdirAll(tempDir, 0750)
+	_ = fileutil.EnsureDir(tempDir)
 
 	for _, f := range actualFiles {
 		fileDir := filepath.Dir(f)
