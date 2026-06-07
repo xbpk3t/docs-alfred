@@ -187,7 +187,7 @@ func isDir(path string) bool {
 }
 
 func (p *docProcessor) writeOutput(content, filename string) error {
-	if err := os.MkdirAll(p.Dst, fileutil.DirPerm); err != nil {
+	if err := fileutil.EnsureDir(p.Dst); err != nil {
 		return fmt.Errorf("create dir error: %w", err)
 	}
 

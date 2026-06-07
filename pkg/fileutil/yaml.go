@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -39,7 +39,7 @@ func ListYAMLFiles(dir string) ([]string, error) {
 		}
 		files = append(files, filepath.Join(dir, entry.Name()))
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 
 	return files, nil
 }
@@ -62,7 +62,7 @@ func ListYAMLFilesRecursive(root string) ([]string, error) {
 			files = append(files, path)
 		}
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 
 	return files, nil
 }

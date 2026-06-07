@@ -11,7 +11,7 @@ func TestRootCommandOwnsWorkspaceResources(t *testing.T) {
 	root := newRootCmd()
 
 	require.Equal(t, "docs-cli", root.Name())
-	requireCommandNames(t, root.Commands(), []string{"blog", "dotfiles", "images"})
+	requireCommandNames(t, root.Commands(), []string{"blog", "dotfiles", "images", "wiki"})
 	requireNoCommand(t, root, cmdCheck)
 	requireNoCommand(t, root, "sync-record")
 	requireNoCommand(t, root, "alfred")
@@ -38,6 +38,21 @@ func TestDotfilesCommandOwnsDotfilesActions(t *testing.T) {
 	require.NoError(t, err)
 
 	requireCommandNames(t, dotfilesCmd.Commands(), []string{cmdCheck, "sync-record"})
+}
+
+func TestWikiCommandFlags(t *testing.T) {
+	wikiCmd, _, err := newRootCmd().Find([]string{"wiki"})
+	require.NoError(t, err)
+
+	require.Equal(t, "wiki", wikiCmd.Name())
+	require.True(t, wikiCmd.HasAvailableFlags())
+	require.True(t, wikiCmd.Flags().HasFlags())
+
+	// Verify expected flags exist
+	f := wikiCmd.Flags()
+	require.NotNil(t, f.Lookup("inbox"))
+	require.NotNil(t, f.Lookup("config"))
+	require.NotNil(t, f.Lookup("wiki-root"))
 }
 
 func requireCommandNames(t *testing.T, commands []*cobra.Command, want []string) {

@@ -14,6 +14,7 @@ docs-cli images fix
 docs-cli blog check
 docs-cli dotfiles check
 docs-cli dotfiles sync-record
+docs-cli wiki
 ```
 
 
@@ -39,15 +40,6 @@ data-cli gh append-record --url <url> --des <description>
 ```shell
 
 go install github.com/xbpk3t/docs-alfred/rss2nl@main
-
-```
-
-## wiki
-
-
-```shell
-
-go install github.com/xbpk3t/docs-alfred/wiki@main
 
 ```
 
