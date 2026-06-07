@@ -1,4 +1,4 @@
-package gh
+package presenter
 
 const (
 	IconCheck   = "icons/check.svg"
@@ -10,6 +10,4 @@ const (
 	IconWarning = IconCheck
 	IconTypes   = "icons/types.svg"
 	IconTags    = "icons/tags.svg"
-
-	GithubSearchURL = "https://github.com/search?q=%s&type=repositories"
 )

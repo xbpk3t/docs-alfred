@@ -1,4 +1,4 @@
-package gh
+package ghdata
 
 import (
 	"fmt"
@@ -33,12 +33,12 @@ func FindEntries(ghRoot, query, findURL string) ([]FindEntry, error) {
 		}
 
 		repo := ev.Repo
-		repoURL, _ := repo["url"].(string)
+		repoURL := repo.URL
 		if repoURL == "" {
 			return nil
 		}
 
-		e := scoreEntry(repo, repoURL, lowerQuery, findURL, &ev)
+		e := scoreEntry(&repo, repoURL, lowerQuery, findURL, &ev)
 		if e.Score > 0 {
 			entries = append(entries, e)
 		}
@@ -94,7 +94,7 @@ func FormatEntriesResult(entries []FindEntry) string {
 
 // ---- internal scoring helpers ----
 
-func scoreEntry(repo map[string]any, repoURL, lowerQuery, findURL string, ev *WalkerEvent) FindEntry {
+func scoreEntry(repo *Repo, repoURL, lowerQuery, findURL string, ev *WalkerEvent) FindEntry {
 	if findURL != "" {
 		return scoreEntryByExactURL(repo, repoURL, findURL, ev)
 	}
@@ -102,30 +102,25 @@ func scoreEntry(repo map[string]any, repoURL, lowerQuery, findURL string, ev *Wa
 	return scoreEntryByTextQuery(repo, repoURL, lowerQuery, ev)
 }
 
-func scoreEntryByExactURL(repo map[string]any, repoURL, findURL string, ev *WalkerEvent) FindEntry {
+func scoreEntryByExactURL(repo *Repo, repoURL, findURL string, ev *WalkerEvent) FindEntry {
 	if !urlutil.Equal(repoURL, findURL) {
 		return FindEntry{} // no match
 	}
 
-	topics, _ := repo["topics"].([]any)
 	var topicNames []string
-	for _, t := range topics {
-		if topic, ok := t.(map[string]any); ok {
-			if tn, ok := topic["topic"].(string); ok && tn != "" {
-				topicNames = append(topicNames, tn)
-			}
+	for _, topic := range repo.Topics {
+		if topic.Topic != "" {
+			topicNames = append(topicNames, topic.Topic)
 		}
 	}
-	des, _ := repo["des"].(string)
-	secType, _ := ev.Section["type"].(string)
 
 	return FindEntry{
 		File:     "data/gh/" + ev.File,
 		RepoURL:  repoURL,
 		Relation: ev.Relation,
-		SecType:  secType,
+		SecType:  ev.Section.Type,
 		Topic:    strings.Join(topicNames, ", "),
-		Des:      des,
+		Des:      repo.Des,
 		Score:    100,
 	}
 }
@@ -180,17 +175,13 @@ func scoreByTextMatch(des, zk, lowerQuery string) int {
 	return 0
 }
 
-func scoreByTopicMatch(topics []any, lowerQuery string) int {
+func scoreByTopicMatch(topics []Topic, lowerQuery string) int {
 	if lowerQuery == "" {
 		return 0
 	}
-	for _, t := range topics {
-		topic, ok := t.(map[string]any)
-		if !ok {
-			continue
-		}
-		topicName, ok := topic["topic"].(string)
-		if !ok {
+	for _, topic := range topics {
+		topicName := topic.Topic
+		if topicName == "" {
 			continue
 		}
 		if strings.Contains(strings.ToLower(topicName), lowerQuery) {
@@ -212,17 +203,13 @@ func isFuzzyMatch(query, target string) bool {
 	return fuzzy.MatchFold(query, target)
 }
 
-func scoreEntryByTextQuery(repo map[string]any, repoURL, lowerQuery string, ev *WalkerEvent) FindEntry {
-	topics, _ := repo["topics"].([]any)
-
+func scoreEntryByTextQuery(repo *Repo, repoURL, lowerQuery string, ev *WalkerEvent) FindEntry {
 	var score int
 	score = max(score, scoreByURLMatch(repoURL, lowerQuery))
 	score = max(score, scoreByNameMatch(repoURL, lowerQuery))
 
-	des, _ := repo["des"].(string)
-	zk, _ := repo["zk"].(string)
-	score = max(score, scoreByTextMatch(des, zk, lowerQuery))
-	score = max(score, scoreByTopicMatch(topics, lowerQuery))
+	score = max(score, scoreByTextMatch(repo.Des, repo.Zk, lowerQuery))
+	score = max(score, scoreByTopicMatch(repo.Topics, lowerQuery))
 
 	if score <= 0 {
 		return FindEntry{}
@@ -230,27 +217,21 @@ func scoreEntryByTextQuery(repo map[string]any, repoURL, lowerQuery string, ev *
 
 	var topicNames []string
 	recordCount := 0
-	for _, t := range topics {
-		if topic, ok := t.(map[string]any); ok {
-			if tn, ok := topic["topic"].(string); ok && tn != "" {
-				topicNames = append(topicNames, tn)
-			}
-			if recs, ok := topic["record"].([]any); ok {
-				recordCount += len(recs)
-			}
+	for _, topic := range repo.Topics {
+		if topic.Topic != "" {
+			topicNames = append(topicNames, topic.Topic)
 		}
+		recordCount += len(topic.Record)
 	}
-
-	secType, _ := ev.Section["type"].(string)
 
 	return FindEntry{
 		File:     "data/gh/" + ev.File,
 		RepoURL:  repoURL,
 		Relation: ev.Relation,
-		SecType:  secType,
+		SecType:  ev.Section.Type,
 		Topic:    strings.Join(topicNames, ", "),
-		Des:      des,
-		Zk:       zk,
+		Des:      repo.Des,
+		Zk:       repo.Zk,
 		Records:  recordCount,
 		Score:    score,
 	}

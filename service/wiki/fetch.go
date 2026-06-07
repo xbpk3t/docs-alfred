@@ -15,6 +15,7 @@ import (
 	"codeberg.org/readeck/go-readability/v2"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/go-github/v70/github"
+	"github.com/xbpk3t/docs-alfred/pkg/htmlutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
@@ -150,12 +151,12 @@ func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetc
 			return result
 		}
 
-		// Fallback: goquery title + truncated raw body
-		body := string(data)
+		// Fallback: goquery title + Markdown body from the original HTML.
+		body := markdownFallbackBody(data)
 		if len(body) > f.MaxBodySize {
 			body = body[:f.MaxBodySize] + "..."
 		}
-		title := extractTitle(body)
+		title := extractTitle(string(data))
 		if title == "" {
 			title = rawURL
 		}
@@ -185,6 +186,15 @@ func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetc
 	}
 
 	return &ContentFetchResult{SourceURL: rawURL, Error: errorStr}
+}
+
+func markdownFallbackBody(data []byte) string {
+	body, err := htmlutil.ToMarkdown(string(data))
+	if err == nil && strings.TrimSpace(body) != "" {
+		return body
+	}
+
+	return string(data)
 }
 
 // extractWithReadability uses go-readability to extract article content.

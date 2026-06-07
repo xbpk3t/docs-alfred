@@ -4,7 +4,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/xbpk3t/docs-alfred/service/gh"
+	"github.com/xbpk3t/docs-alfred/service/content"
 )
 
 type Task struct {
@@ -16,10 +16,10 @@ type Task struct {
 	Review string `json:"review,omitempty" yaml:"review,omitempty"` // 类似上面的Item，但是是用来记录和复盘的
 	// 附加内容，类似tracking。用来标识该task的一些metrics之类的。
 	// 比如说milestone类型的task（比如本月开销，购买了哪些东西，就可以写到item里）
-	Sub    Tasks     `json:"sub,omitempty"    yaml:"sub,omitempty"`
-	Item   []string  `json:"item,omitempty"   yaml:"item,omitempty"`
-	Qs     []string  `json:"qs,omitempty"     yaml:"qs,omitempty"`
-	Topics gh.Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
+	Sub    Tasks          `json:"sub,omitempty"    yaml:"sub,omitempty"`
+	Item   []string       `json:"item,omitempty"   yaml:"item,omitempty"`
+	Qs     []string       `json:"qs,omitempty"     yaml:"qs,omitempty"`
+	Topics content.Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
 }
 
 type Tasks []Task

@@ -1,4 +1,4 @@
-package gh
+package ghindex
 
 import (
 	"net/http"

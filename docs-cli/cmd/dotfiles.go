@@ -52,7 +52,7 @@ func newDotfilesSyncRecordCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "sync-record",
-		Short: "Plan dotfiles record synchronization",
+		Short: "Inspect dotfiles changes for record synchronization",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDotfilesSyncRecord(flags.path, flags.format)
 		},

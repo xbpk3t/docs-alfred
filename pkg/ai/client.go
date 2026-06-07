@@ -2,18 +2,25 @@ package ai
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
-	"strings"
 	"time"
 
-	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/llms/openai"
 )
 
 // DefaultAITimeout is the default HTTP timeout for AI chat requests.
 const DefaultAITimeout = 3 * time.Minute
+
+// Role constants for chat messages.
+const (
+	RoleUser      = "user"
+	RoleSystem    = "system"
+	RoleAssistant = "assistant"
+)
 
 // ClientConfig holds the AI client configuration.
 type ClientConfig struct {
@@ -102,55 +109,79 @@ func ChatContext(ctx context.Context, cfg *ClientConfig, messages []Message) (st
 		return "", errors.New("OPENAI_API_KEY not set")
 	}
 
-	requestBody := ChatRequest{
-		Model:    cfg.Model,
-		Messages: messages,
-	}
-
-	url := strings.TrimRight(cfg.BaseURL, "/") + "/chat/completions"
-
 	timeout := cfg.Timeout
 	if timeout <= 0 {
 		timeout = DefaultAITimeout
 	}
 
-	respBody, err := httputil.PostJSONWithResult(ctx, url, requestBody, nil, httputil.RequestOptions{
-		Timeout:    timeout,
-		MaxRetries: 1,
-		Headers: map[string]string{
-			"Authorization": "Bearer " + cfg.APIKey,
-		},
-	})
+	model, err := openai.New(
+		openai.WithToken(cfg.APIKey),
+		openai.WithBaseURL(cfg.BaseURL),
+		openai.WithModel(cfg.Model),
+		openai.WithHTTPClient(&http.Client{Timeout: timeout}),
+	)
 	if err != nil {
-		return "", fmt.Errorf("http request: %w", err)
+		return "", fmt.Errorf("create AI client: %w", err)
 	}
 
-	return parseChatResponseBody(respBody)
-}
-
-func parseChatResponseBody(respBody []byte) (string, error) {
-	var resp ChatResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("parse response: %w", err)
+	callOptions := []llms.CallOption{}
+	if cfg.Model != "" {
+		callOptions = append(callOptions, llms.WithModel(cfg.Model))
 	}
 
-	if resp.Error != nil && resp.Error.Message != "" {
-		return "", fmt.Errorf("API error: %s", resp.Error.Message)
-	}
+	resp, err := model.GenerateContent(ctx, toLLMSMessages(messages), callOptions...)
+	if err != nil {
+		if isEmptyResponseError(err) {
+			return "", errors.New("no choices returned")
+		}
 
-	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("generate content: %w", err)
+	}
+	if resp == nil || len(resp.Choices) == 0 {
 		return "", errors.New("no choices returned")
 	}
 
-	msg := resp.Choices[0].Message
-
-	// Priority: content > reasoning_content > error
-	if msg.Content != "" {
-		return msg.Content, nil
-	}
-	if msg.ReasoningContent != "" {
-		return msg.ReasoningContent, nil
+	content := extractChoiceContent(resp.Choices[0])
+	if content == "" {
+		return "", errors.New("empty response from AI model")
 	}
 
-	return "", errors.New("empty response from AI model")
+	return content, nil
+}
+
+func extractChoiceContent(choice *llms.ContentChoice) string {
+	if choice.Content != "" {
+		return choice.Content
+	}
+	if choice.ReasoningContent != "" {
+		return choice.ReasoningContent
+	}
+
+	return ""
+}
+
+func isEmptyResponseError(err error) bool {
+	return errors.Is(err, openai.ErrEmptyResponse) || err.Error() == "empty response"
+}
+
+func toLLMSMessages(messages []Message) []llms.MessageContent {
+	converted := make([]llms.MessageContent, 0, len(messages))
+	for _, msg := range messages {
+		converted = append(converted, llms.TextParts(toLLMSRole(msg.Role), msg.Content))
+	}
+
+	return converted
+}
+
+func toLLMSRole(role string) llms.ChatMessageType {
+	switch role {
+	case RoleSystem:
+		return llms.ChatMessageTypeSystem
+	case RoleAssistant:
+		return llms.ChatMessageTypeAI
+	case RoleUser:
+		return llms.ChatMessageTypeHuman
+	default:
+		return llms.ChatMessageTypeGeneric
+	}
 }

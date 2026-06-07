@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/data-cli/internal/usecase"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
-	"github.com/xbpk3t/docs-alfred/pkg/data"
-	ghcheck "github.com/xbpk3t/docs-alfred/pkg/gh"
+	"github.com/xbpk3t/docs-alfred/service/data"
+	"github.com/xbpk3t/docs-alfred/service/ghdata"
 )
 
 type renderFlags struct {
@@ -211,7 +211,7 @@ func runGhFind(query, findURL string, limit int) error {
 		return err
 	}
 
-	_, err = os.Stdout.WriteString(ghcheck.FormatEntriesResult(result.Entries))
+	_, err = os.Stdout.WriteString(ghdata.FormatEntriesResult(result.Entries))
 
 	return err
 }

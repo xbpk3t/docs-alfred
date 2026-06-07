@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.1
+	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/Khan/genqlient v0.8.1
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/PuerkitoBio/purell v1.2.2
@@ -15,6 +16,7 @@ require (
 	github.com/creasty/defaults v1.8.0
 	github.com/dop251/goja v0.0.0-20251008123653-cf18d89f3cf6
 	github.com/dromara/carbon/v2 v2.6.13
+	github.com/gabriel-vasile/mimetype v1.4.13
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/go-viper/mapstructure/v2 v2.4.0
@@ -32,7 +34,8 @@ require (
 	github.com/samber/lo v1.52.0
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
-	github.com/yuin/goldmark v1.4.13
+	github.com/tmc/langchaingo v0.1.14
+	github.com/yuin/goldmark v1.7.1
 	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
 	mvdan.cc/xurls/v2 v2.6.0
@@ -47,7 +50,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-shiori/dom v0.0.0-20230515143342-73569d674e1c // indirect
@@ -66,6 +68,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
+	github.com/pkoukk/tiktoken-go v0.1.6 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.19 // indirect

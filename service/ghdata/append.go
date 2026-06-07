@@ -1,4 +1,4 @@
-package gh
+package ghdata
 
 import (
 	"bytes"
@@ -99,7 +99,7 @@ func findFileByURL(ghRoot, url string) (string, error) {
 			return nil
 		}
 		repo := ev.Repo
-		repoURL, _ := repo["url"].(string)
+		repoURL := repo.URL
 		if urlutil.Equal(repoURL, url) {
 			foundFiles = append(foundFiles, filepath.Join(ghRoot, ev.File))
 		}

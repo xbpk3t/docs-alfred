@@ -2,7 +2,7 @@ package goods
 
 import (
 	yaml "github.com/goccy/go-yaml"
-	"github.com/xbpk3t/docs-alfred/service/gh"
+	"github.com/xbpk3t/docs-alfred/service/content"
 )
 
 // Goods 定义商品配置结构.
@@ -11,7 +11,7 @@ type Goods struct {
 	Type   string          `json:"type"   yaml:"type"`
 	Des    string          `json:"des"    yaml:"des,omitempty"`
 	Using  Item            `json:"using"  yaml:"using"`
-	Topics []gh.Topic      `json:"topics" yaml:"topics,omitempty"`
+	Topics []content.Topic `json:"topics" yaml:"topics,omitempty"`
 	Item   []yaml.MapSlice `json:"item"   yaml:"item"`
 	// Record []string        `json:"record" yaml:"record,omitempty"`
 	Score int `json:"score" yaml:"score"`

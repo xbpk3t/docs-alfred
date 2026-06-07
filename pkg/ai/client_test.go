@@ -85,7 +85,7 @@ func TestChat_NoAPIKey(t *testing.T) {
 	os.Unsetenv("LLM_AxonHub")
 
 	cfg := DefaultConfig()
-	_, err := Chat(cfg, []Message{{Role: "user", Content: "hello"}})
+	_, err := Chat(cfg, []Message{{Role: RoleUser, Content: "hello"}})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "OPENAI_API_KEY not set")
 }
@@ -106,7 +106,7 @@ func TestChat_Content(t *testing.T) {
 		BaseURL: server.URL,
 		Model:   "test-model",
 		Timeout: time.Second,
-	}, []Message{{Role: "user", Content: "hello"}})
+	}, []Message{{Role: RoleUser, Content: "hello"}})
 
 	require.NoError(t, err)
 	assert.Equal(t, "hello", got)
@@ -124,7 +124,7 @@ func TestChat_ReasoningContentFallback(t *testing.T) {
 		BaseURL: server.URL,
 		Model:   "test-model",
 		Timeout: time.Second,
-	}, []Message{{Role: "user", Content: "hello"}})
+	}, []Message{{Role: RoleUser, Content: "hello"}})
 
 	require.NoError(t, err)
 	assert.Equal(t, "reasoning", got)
@@ -132,7 +132,8 @@ func TestChat_ReasoningContentFallback(t *testing.T) {
 
 func TestChat_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "rate limited", http.StatusTooManyRequests)
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"rate limited"}}`))
 	}))
 	defer server.Close()
 
@@ -141,16 +142,34 @@ func TestChat_HTTPError(t *testing.T) {
 		BaseURL: server.URL,
 		Model:   "test-model",
 		Timeout: time.Second,
-	}, []Message{{Role: "user", Content: "hello"}})
+	}, []Message{{Role: RoleUser, Content: "hello"}})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "HTTP 429")
+	assert.Contains(t, err.Error(), "API returned unexpected status code: 429")
 	assert.Contains(t, err.Error(), "rate limited")
 }
 
+func TestChat_EmptyChoicesPreservesError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[]}`))
+	}))
+	defer server.Close()
+
+	_, err := Chat(&ClientConfig{
+		APIKey:  "sk-test",
+		BaseURL: server.URL,
+		Model:   "test-model",
+		Timeout: time.Second,
+	}, []Message{{Role: RoleUser, Content: "hello"}})
+
+	require.Error(t, err)
+	assert.Equal(t, "no choices returned", err.Error())
+}
+
 func TestMessage_Struct(t *testing.T) {
-	m := Message{Role: "user", Content: "test message"}
-	assert.Equal(t, "user", m.Role)
+	m := Message{Role: RoleUser, Content: "test message"}
+	assert.Equal(t, RoleUser, m.Role)
 	assert.Equal(t, "test message", m.Content)
 }
 
@@ -158,7 +177,7 @@ func TestChatRequest_Struct(t *testing.T) {
 	r := ChatRequest{
 		Model: "test-model",
 		Messages: []Message{
-			{Role: "user", Content: "hello"},
+			{Role: RoleUser, Content: "hello"},
 		},
 	}
 	assert.Equal(t, "test-model", r.Model)

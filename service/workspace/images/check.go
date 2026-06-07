@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
-	ghlib "github.com/xbpk3t/docs-alfred/pkg/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
+	"github.com/xbpk3t/docs-alfred/service/ghdata"
 )
 
 // Patterns for duplicate file detection: name__NUMBER.ext.
@@ -227,13 +227,13 @@ func moveExtraFiles(imagesDir string, extraDirs, actualFiles []string) int {
 func collectExpectedImageDirs(dataDir string) ([]string, error) {
 	var dirs []string
 
-	err := ghlib.WalkGhRepos(dataDir, func(ev ghlib.WalkerEvent) error {
+	err := ghdata.WalkGhRepos(dataDir, func(ev ghdata.WalkerEvent) error {
 		if ev.Type != "section" {
 			return nil
 		}
 
 		section := ev.Section
-		typeVal, _ := section["type"].(string)
+		typeVal := section.Type
 		if typeVal == "" {
 			return nil
 		}
@@ -247,22 +247,16 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 		typeBase := tag + "/" + typeVal
 
 		// Collect topic dirs
-		if topics, ok := section["topics"].([]any); ok {
-			collectTopicDirs(ev.File, topics, typeBase, &dirs)
-		}
+		collectTopicDirs(section.Topics, typeBase, &dirs)
 
 		// Collect using repo topic dirs
-		if using, ok := section["using"].(map[string]any); ok {
-			collectRepoTopicDirs(using, typeBase, ev.File, &dirs, true)
+		if section.Using != nil {
+			collectRepoTopicDirs(section.Using, typeBase, &dirs, true)
 		}
 
 		// Collect repo topic dirs
-		if repos, ok := section["repo"].([]any); ok {
-			for _, r := range repos {
-				if repo, ok := r.(map[string]any); ok {
-					collectRepoTopicDirs(repo, typeBase, ev.File, &dirs, false)
-				}
-			}
+		for _, repo := range section.Repos {
+			collectRepoTopicDirs(&repo, typeBase, &dirs, false)
 		}
 
 		return nil
@@ -271,32 +265,25 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 	return dirs, err
 }
 
-func collectTopicDirs(file string, topics []any, base string, dirs *[]string) {
-	for _, t := range topics {
-		topic, ok := t.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		topicDirName := getTopicDirName(topic)
+func collectTopicDirs(topics []ghdata.Topic, base string, dirs *[]string) {
+	for _, topic := range topics {
+		topicDirName := topic.DirName()
 		if topicDirName == "" {
 			continue
 		}
 
 		topicBase := base + "/" + topicDirName
 
-		if topicHasPicture(topic) {
+		if topic.HasPicture() {
 			*dirs = append(*dirs, topicBase)
 		}
 
-		if subs, ok := topic["sub"].([]any); ok {
-			collectTopicDirs(file, subs, topicBase, dirs)
-		}
+		collectTopicDirs(topic.Sub, topicBase, dirs)
 	}
 }
 
-func collectRepoTopicDirs(repo map[string]any, base, file string, dirs *[]string, useBase bool) {
-	urlStr, _ := repo["url"].(string)
+func collectRepoTopicDirs(repo *ghdata.Repo, base string, dirs *[]string, useBase bool) {
+	urlStr := repo.URL
 	repoName := urlutil.RepoName(urlStr)
 	if repoName == "" {
 		return
@@ -308,33 +295,7 @@ func collectRepoTopicDirs(repo map[string]any, base, file string, dirs *[]string
 		topicBase = base
 	}
 
-	if topics, ok := repo["topics"].([]any); ok {
-		collectTopicDirs(file, topics, topicBase, dirs)
-	}
-}
-
-func getTopicDirName(topic map[string]any) string {
-	if meta, ok := topic["meta"].(map[string]any); ok {
-		if slug, ok := meta["slug"].(string); ok && slug != "" {
-			return slug
-		}
-	}
-	if t, ok := topic["topic"].(string); ok && t != "" {
-		return t
-	}
-
-	return ""
-}
-
-func topicHasPicture(topic map[string]any) bool {
-	if meta, ok := topic["meta"].(map[string]any); ok {
-		if hp, ok := meta["hasPic"].(bool); ok && hp {
-			return true
-		}
-	}
-	hp, _ := topic["hasPic"].(bool)
-
-	return hp
+	collectTopicDirs(repo.Topics, topicBase, dirs)
 }
 
 // collectExistingFilesAndDirs returns both directories and files in imagesDir.

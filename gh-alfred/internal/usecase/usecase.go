@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	gh "github.com/xbpk3t/docs-alfred/service/gh"
+	"github.com/xbpk3t/docs-alfred/service/ghindex"
 )
 
 // SearchInput holds input for Alfred search.
@@ -18,12 +18,12 @@ type SearchInput struct {
 
 // SearchResult holds Alfred search results.
 type SearchResult struct {
-	Repos gh.Repos
+	Repos ghindex.Repos
 }
 
 // RunSearch searches GitHub repositories from remote gh.yml.
 func RunSearch(input SearchInput) (*SearchResult, error) {
-	manager := gh.NewManager(input.CachePath, input.ConfigURL)
+	manager := ghindex.NewManager(input.CachePath, input.ConfigURL)
 
 	if input.MaxAge != "" {
 		d, err := time.ParseDuration(input.MaxAge)
@@ -55,14 +55,14 @@ type SyncResult struct {
 func RunSync(input SyncInput) (*SyncResult, error) {
 	configURL := input.ConfigURL
 	if configURL == "" {
-		configURL = gh.DefaultConfigURL
+		configURL = ghindex.DefaultConfigURL
 	}
 	cachePath := input.CachePath
 	if cachePath == "" {
-		cachePath = gh.DefaultConfigPath
+		cachePath = ghindex.DefaultConfigPath
 	}
 
-	manager := gh.NewManager(cachePath, configURL)
+	manager := ghindex.NewManager(cachePath, configURL)
 	if err := manager.Sync(); err != nil {
 		return nil, fmt.Errorf("sync failed: %w", err)
 	}
@@ -95,7 +95,7 @@ func RunExport(input ExportInput) (*ExportResult, error) {
 		out = "gh.yml"
 	}
 
-	repoCount, err := gh.WriteConfigYAMLFromDir(src, out)
+	repoCount, err := ghindex.WriteConfigYAMLFromDir(src, out)
 	if err != nil {
 		return nil, fmt.Errorf("export gh.yml failed: %w", err)
 	}
@@ -119,7 +119,7 @@ func RunValidate(input ValidateInput) (*ValidateResult, error) {
 	if file == "" {
 		file = "gh.yml"
 	}
-	if err := gh.ValidateConfigYAMLFile(file); err != nil {
+	if err := ghindex.ValidateConfigYAMLFile(file); err != nil {
 		return nil, fmt.Errorf("validate gh.yml failed: %w", err)
 	}
 

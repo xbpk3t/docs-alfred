@@ -1,4 +1,4 @@
-package pkg
+package fileutil
 
 import (
 	"fmt"
@@ -44,8 +44,8 @@ func processSingleFile(src string, setCurrentFile func(string), fileInfo os.File
 	return data, nil
 }
 
-// ReadSingleFileWithExt 读取指定扩展名的单个文件.
-func ReadSingleFileWithExt(src string, setCurrentFile func(string)) ([]byte, error) {
+// ReadSingleFile reads one file and optionally reports its base name.
+func ReadSingleFile(src string, setCurrentFile func(string)) ([]byte, error) {
 	fileInfo, err := checkPathValidity(src)
 	if err != nil {
 		return nil, err
@@ -69,8 +69,7 @@ func processDirectoryEntry(src string, file os.DirEntry, setCurrentFile func(str
 	fullPath := filepath.Join(src, file.Name())
 
 	if file.IsDir() {
-		// 递归处理子目录
-		subData, err := ReadAndMergeFilesRecursively(fullPath, setCurrentFile)
+		subData, err := ReadAndMergeYAMLFilesRecursive(fullPath, setCurrentFile)
 		if err != nil {
 			return nil, err
 		}
@@ -78,7 +77,7 @@ func processDirectoryEntry(src string, file os.DirEntry, setCurrentFile func(str
 		return subData, nil
 	}
 
-	// 跳过非 yml/yaml 文件和被排除的文件
+	// 跳过非 yml/yaml 文件
 	if ext := filepath.Ext(file.Name()); ext != ".yml" && ext != ".yaml" {
 		return nil, nil // 返回nil表示跳过该文件
 	}
@@ -112,8 +111,8 @@ func appendFileData(mergedData, data []byte) []byte {
 	return append(mergedData, data...)
 }
 
-// ReadAndMergeFilesRecursively 递归读取并合并文件.
-func ReadAndMergeFilesRecursively(src string, setCurrentFile func(string)) ([]byte, error) {
+// ReadAndMergeYAMLFilesRecursive recursively reads YAML files and merges their contents.
+func ReadAndMergeYAMLFilesRecursive(src string, setCurrentFile func(string)) ([]byte, error) {
 	files, err := readDirectory(src)
 	if err != nil {
 		return nil, err
