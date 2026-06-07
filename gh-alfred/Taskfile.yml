@@ -1,0 +1,28 @@
+version: "3"
+
+vars:
+  OUTPUT: gh-alfred.alfredworkflow
+
+tasks:
+  default:
+    desc: Build universal binary and pack .alfredworkflow
+    cmds:
+      - task: release
+        vars:
+          ARCH: amd64
+      - task: release
+        vars:
+          ARCH: arm64
+      - lipo -create -output .workflow/gh-alfred gh-alfred_amd64 gh-alfred_arm64
+      - rm gh-alfred_amd64 gh-alfred_arm64
+      - cd .workflow && zip -r ../"{{.OUTPUT}}" .
+
+  release:
+    desc: Build for a specific architecture
+    cmds:
+      - GOOS=darwin GOARCH={{.ARCH}} CGO_ENABLED=1 go build -ldflags "-s -w" -o gh-alfred_{{.ARCH}} .
+
+  build:
+    desc: Build for current architecture (dev)
+    cmds:
+      - go build -o .workflow/gh-alfred .

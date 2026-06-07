@@ -14,6 +14,7 @@ type AlfredItem struct {
 	Subtitle     string                `json:"subtitle,omitempty"`
 	Arg          string                `json:"arg,omitempty"`
 	Autocomplete string                `json:"autocomplete,omitempty"`
+	QuicklookURL string                `json:"quicklookurl,omitempty"`
 	Valid        bool                  `json:"valid"`
 }
 
@@ -39,7 +40,8 @@ type AlfredText struct {
 
 // AlfredOutput represents the complete Alfred wf output.
 type AlfredOutput struct {
-	Items []AlfredItem `json:"items"`
+	Variables map[string]string `json:"variables,omitempty"`
+	Items     []AlfredItem      `json:"items"`
 }
 
 // AlfredFormatter formats output for Alfred wf.

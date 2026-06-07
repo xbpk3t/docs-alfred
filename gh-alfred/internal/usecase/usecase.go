@@ -32,7 +32,7 @@ func RunSearch(input SearchInput) (*SearchResult, error) {
 		}
 	}
 
-	if err := manager.LoadWithCacheTTL(); err != nil {
+	if err := manager.LoadWithBackgroundSync(); err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 

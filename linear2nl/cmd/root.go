@@ -58,6 +58,7 @@ Subcommands:
 
 	rootCmd.AddCommand(newMorningCmd())
 	rootCmd.AddCommand(newEveningCmd())
+	rootCmd.AddCommand(newExportCmd())
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -179,12 +180,15 @@ func sendEmail(cfg *internal.Config, subject, htmlBody string) error {
 	return nil
 }
 
-func writeHTML(htmlBody, suffix string) error {
-	filename := fmt.Sprintf("linear2nl_%s.html", suffix)
-	if err := fileutil.AtomicWriteFile(filename, []byte(htmlBody), fileutil.FilePermPrivate); err != nil {
+func writeOutput(data []byte, filename string) error {
+	if err := fileutil.AtomicWriteFile(filename, data, fileutil.FilePermPrivate); err != nil {
 		return fmt.Errorf("write file: %w", err)
 	}
-	slog.Info("HTML written to file", "filename", filename)
+	slog.Info("output written", "filename", filename)
 
 	return nil
+}
+
+func writeHTML(htmlBody, suffix string) error {
+	return writeOutput([]byte(htmlBody), fmt.Sprintf("linear2nl_%s.html", suffix))
 }

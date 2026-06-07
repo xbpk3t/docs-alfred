@@ -326,6 +326,7 @@ type UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssue s
 	UpdatedAt   string                                                                                             `json:"updatedAt"`
 	State       UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueStateWorkflowState        `json:"state"`
 	Team        UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueTeam                      `json:"team"`
+	Parent      UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue               `json:"parent"`
 	Comments    UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueCommentsCommentConnection `json:"comments"`
 }
 
@@ -379,6 +380,11 @@ func (v *UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIss
 	return v.Team
 }
 
+// GetParent returns UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssue.Parent, and is useful for accessing the field via an interface.
+func (v *UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssue) GetParent() UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue {
+	return v.Parent
+}
+
 // GetComments returns UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssue.Comments, and is useful for accessing the field via an interface.
 func (v *UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssue) GetComments() UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueCommentsCommentConnection {
 	return v.Comments
@@ -424,6 +430,22 @@ type UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueCo
 // GetName returns UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesCommentUser.Name, and is useful for accessing the field via an interface.
 func (v *UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesCommentUser) GetName() string {
 	return v.Name
+}
+
+// UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue includes the requested fields of the GraphQL type Issue.
+type UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue struct {
+	Id         string `json:"id"`
+	Identifier string `json:"identifier"`
+}
+
+// GetId returns UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue.Id, and is useful for accessing the field via an interface.
+func (v *UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue) GetId() string {
+	return v.Id
+}
+
+// GetIdentifier returns UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue.Identifier, and is useful for accessing the field via an interface.
+func (v *UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue) GetIdentifier() string {
+	return v.Identifier
 }
 
 // UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueStateWorkflowState includes the requested fields of the GraphQL type WorkflowState.
@@ -642,6 +664,10 @@ query UpdatedIssuesWithDetails ($filter: IssueFilter!, $first: Int, $commentsFir
 				team {
 					name
 					key
+				}
+				parent {
+					id
+					identifier
 				}
 				comments(first: $commentsFirst) {
 					nodes {
