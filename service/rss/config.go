@@ -7,9 +7,10 @@ import (
 
 	"github.com/creasty/defaults"
 	"github.com/go-playground/validator/v10"
-	"github.com/xbpk3t/docs-alfred/pkg/errcode"
+	"github.com/knadh/koanf/v2"
 
-	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/pkg/configutil"
+	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 )
 
 // Config 主配置结构.
@@ -173,8 +174,13 @@ func NewConfig(configFile string) (*Config, error) {
 		return nil, errcode.WithError(errcode.ErrReadConfig, err)
 	}
 
+	k, err := configutil.LoadYAMLBytes(data)
+	if err != nil {
+		return nil, errcode.WithError(errcode.ErrUnmarshalConfig, err)
+	}
+
 	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	if err := k.UnmarshalWithConf("", &config, koanf.UnmarshalConf{Tag: "yaml"}); err != nil {
 		return nil, errcode.WithError(errcode.ErrUnmarshalConfig, err)
 	}
 
