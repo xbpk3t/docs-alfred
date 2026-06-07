@@ -20,10 +20,11 @@ type backboneEntry struct {
 	Topics []topicEntry `json:"topics"`
 }
 
-// ExtractTopics extracts topic backbone from data/rendered/gh.json.
+// ExtractTopics extracts topic backbone from docs/public/gh.json.
 // Produces: [{tag, type, topics: [{topic, ...}]}].
 func ExtractTopics(outPath string) error {
-	renderedPath := "data/rendered/gh.json"
+	// TODO: 改成可配置path
+	renderedPath := "docs/public/gh.json"
 	data, err := os.ReadFile(renderedPath)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", renderedPath, err)
