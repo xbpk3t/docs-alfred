@@ -12,6 +12,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// DefaultUserAgent is a realistic browser UA to avoid bot detection (e.g. Substack 403).
+// TODO: consider using a random-UA library (e.g. corpix/uarand) if rotation becomes necessary.
+const DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
 // NewHTTPClient creates an HTTP client with timeout from config.
 func NewHTTPClient(cfg *Config) *http.Client {
 	return &http.Client{
@@ -22,6 +27,7 @@ func NewHTTPClient(cfg *Config) *http.Client {
 // createFeedParser 创建Feed解析器.
 func createFeedParser(cfg *Config) *gofeed.Parser {
 	fp := gofeed.NewParser()
+	fp.UserAgent = DefaultUserAgent
 	fp.Client = &http.Client{
 		Timeout: time.Duration(cfg.FeedConfig.Timeout) * time.Second,
 	}
