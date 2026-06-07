@@ -587,6 +587,7 @@ const (
 
 func checkFeed(u rss.Feeds, config *rss.Config, staleThreshold time.Duration) feedHealthStatus {
 	fp := gofeed.NewParser()
+	fp.UserAgent = rss.DefaultUserAgent
 	fp.Client = rss.NewHTTPClient(config)
 
 	parsed, err := fp.ParseURL(u.Feed)
