@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -13,22 +12,10 @@ import (
 )
 
 func TestDefaultConfig_Defaults(t *testing.T) {
-	// Save env and restore
-	oldKey := os.Getenv("OPENAI_API_KEY")
-	oldBase := os.Getenv("OPENAI_BASE_URL")
-	oldAxon := os.Getenv("LLM_AxonHub")
-	oldModel := os.Getenv("LLM_MODEL")
-	defer func() {
-		os.Setenv("OPENAI_API_KEY", oldKey)
-		os.Setenv("OPENAI_BASE_URL", oldBase)
-		os.Setenv("LLM_AxonHub", oldAxon)
-		os.Setenv("LLM_MODEL", oldModel)
-	}()
-
-	os.Unsetenv("OPENAI_API_KEY")
-	os.Unsetenv("OPENAI_BASE_URL")
-	os.Unsetenv("LLM_AxonHub")
-	os.Unsetenv("LLM_MODEL")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("OPENAI_BASE_URL", "")
+	t.Setenv("LLM_AxonHub", "")
+	t.Setenv("LLM_MODEL", "")
 
 	cfg := DefaultConfig()
 	assert.NotNil(t, cfg)
@@ -38,20 +25,10 @@ func TestDefaultConfig_Defaults(t *testing.T) {
 }
 
 func TestDefaultConfig_WithEnv(t *testing.T) {
-	oldKey := os.Getenv("OPENAI_API_KEY")
-	oldBase := os.Getenv("OPENAI_BASE_URL")
-	oldAxon := os.Getenv("LLM_AxonHub")
-	oldModel := os.Getenv("LLM_MODEL")
-	defer func() {
-		os.Setenv("OPENAI_API_KEY", oldKey)
-		os.Setenv("OPENAI_BASE_URL", oldBase)
-		os.Setenv("LLM_AxonHub", oldAxon)
-		os.Setenv("LLM_MODEL", oldModel)
-	}()
-
-	os.Setenv("OPENAI_API_KEY", "sk-test-key")
-	os.Setenv("OPENAI_BASE_URL", "https://custom.api.com/v1")
-	os.Setenv("LLM_MODEL", "deepseek-v4-flash")
+	t.Setenv("OPENAI_API_KEY", "sk-test-key")
+	t.Setenv("OPENAI_BASE_URL", "https://custom.api.com/v1")
+	t.Setenv("LLM_AxonHub", "")
+	t.Setenv("LLM_MODEL", "deepseek-v4-flash")
 
 	cfg := DefaultConfig()
 	assert.Equal(t, "sk-test-key", cfg.APIKey)
@@ -60,29 +37,16 @@ func TestDefaultConfig_WithEnv(t *testing.T) {
 }
 
 func TestDefaultConfig_LLMAxonHubFallback(t *testing.T) {
-	oldKey := os.Getenv("OPENAI_API_KEY")
-	oldAxon := os.Getenv("LLM_AxonHub")
-	defer func() {
-		os.Setenv("OPENAI_API_KEY", oldKey)
-		os.Setenv("LLM_AxonHub", oldAxon)
-	}()
-
-	os.Unsetenv("OPENAI_API_KEY")
-	os.Setenv("LLM_AxonHub", "sk-axon-fallback-key")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("LLM_AxonHub", "sk-axon-fallback-key")
 
 	cfg := DefaultConfig()
 	assert.Equal(t, "sk-axon-fallback-key", cfg.APIKey, "LLM_AxonHub fallback key")
 }
 
 func TestChat_NoAPIKey(t *testing.T) {
-	oldKey := os.Getenv("OPENAI_API_KEY")
-	oldAxon := os.Getenv("LLM_AxonHub")
-	defer func() {
-		os.Setenv("OPENAI_API_KEY", oldKey)
-		os.Setenv("LLM_AxonHub", oldAxon)
-	}()
-	os.Unsetenv("OPENAI_API_KEY")
-	os.Unsetenv("LLM_AxonHub")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("LLM_AxonHub", "")
 
 	cfg := DefaultConfig()
 	_, err := Chat(cfg, []Message{{Role: RoleUser, Content: "hello"}})

@@ -15,6 +15,7 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/mmcdole/gofeed"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
@@ -237,18 +238,16 @@ func runHunt(opts *struct {
 // -- Blocked set --
 
 func buildBlockedSet(defaults, configBlocked, flagBlocked []string) map[string]bool {
-	set := make(map[string]bool)
-	for _, d := range defaults {
-		set[strings.ToLower(d)] = true
-	}
-	for _, d := range configBlocked {
-		set[strings.ToLower(d)] = true
-	}
-	for _, d := range flagBlocked {
-		set[strings.ToLower(d)] = true
-	}
+	domains := slices.Concat(defaults, configBlocked, flagBlocked)
+	domains = lo.FilterMap(domains, func(domain string, _ int) (string, bool) {
+		domain = strings.ToLower(strings.TrimSpace(domain))
 
-	return set
+		return domain, domain != ""
+	})
+
+	return lo.SliceToMap(domains, func(domain string) (string, bool) {
+		return domain, true
+	})
 }
 
 // -- Category processing --
@@ -280,32 +279,26 @@ func buildExceptSet(cfg *rss.Config) map[string]bool {
 }
 
 func filterByCLI(categories []rss.FeedsDetail, categoryFilter []string) []rss.FeedsDetail {
-	catMap := make(map[string]bool)
-	for _, c := range categoryFilter {
-		for item := range strings.SplitSeq(c, ",") {
-			catMap[strings.TrimSpace(item)] = true
-		}
-	}
+	filters := lo.FlatMap(categoryFilter, func(category string, _ int) []string {
+		return strings.Split(category, ",")
+	})
+	catMap := lo.SliceToMap(lo.FilterMap(filters, func(category string, _ int) (string, bool) {
+		category = strings.TrimSpace(category)
 
-	var filtered []rss.FeedsDetail
-	for _, f := range categories {
-		if catMap[f.Type] {
-			filtered = append(filtered, f)
-		}
-	}
+		return category, category != ""
+	}), func(category string) (string, bool) {
+		return category, true
+	})
 
-	return filtered
+	return lo.Filter(categories, func(feed rss.FeedsDetail, _ int) bool {
+		return catMap[feed.Type]
+	})
 }
 
 func filterByExcept(categories []rss.FeedsDetail, except map[string]bool) []rss.FeedsDetail {
-	var filtered []rss.FeedsDetail
-	for _, f := range categories {
-		if !except[f.Type] {
-			filtered = append(filtered, f)
-		}
-	}
-
-	return filtered
+	return lo.Filter(categories, func(feed rss.FeedsDetail, _ int) bool {
+		return !except[feed.Type]
+	})
 }
 
 func processCategory(
@@ -963,17 +956,12 @@ func buildFailureViews(failures []huntFailure) []huntFailureView {
 }
 
 func groupCandidatesByCategory(candidates []huntCandidate) []huntCategoryView {
-	groups := make(map[string][]*huntCandidate)
-	for i := range candidates {
-		c := &candidates[i]
-		groups[c.Category] = append(groups[c.Category], c)
-	}
+	groups := lo.GroupBy(candidates, func(candidate huntCandidate) string {
+		return candidate.Category
+	})
 
 	// Sort category names for stable output
-	names := make([]string, 0, len(groups))
-	for name := range groups {
-		names = append(names, name)
-	}
+	names := lo.Keys(groups)
 	slices.Sort(names)
 
 	views := make([]huntCategoryView, 0, len(names))
@@ -981,8 +969,7 @@ func groupCandidatesByCategory(candidates []huntCandidate) []huntCategoryView {
 		group := groups[name]
 		candidateViews := make([]huntCandidateView, len(group))
 		for i := range group {
-			c := group[i]
-			candidateViews[i] = buildCandidateView(c)
+			candidateViews[i] = buildCandidateView(&group[i])
 		}
 		views = append(views, huntCategoryView{
 			Name:       name,

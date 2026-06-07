@@ -14,11 +14,12 @@ import (
 	"github.com/avast/retry-go/v4"
 	"github.com/creasty/defaults"
 	"github.com/go-playground/validator/v10"
-	"github.com/goccy/go-yaml"
+	"github.com/knadh/koanf/v2"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
+	"github.com/xbpk3t/docs-alfred/pkg/configutil"
 	"github.com/xbpk3t/docs-alfred/service/wiki"
 )
 
@@ -56,8 +57,8 @@ func defaultWikiConfig() wikiConfig {
 }
 
 var (
-	wikiConfigFile  string
-	wikiRootOpt     string
+	wikiConfigFile string
+	wikiRootOpt    string
 )
 
 func newWikiCmd() *cobra.Command {
@@ -106,8 +107,13 @@ func loadWikiConfig() (*wikiConfig, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
+
+		k, err := configutil.LoadYAMLBytes(data)
+		if err != nil {
 			return nil, fmt.Errorf("parse config: %w", err)
+		}
+		if err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "yaml"}); err != nil {
+			return nil, fmt.Errorf("unmarshal config: %w", err)
 		}
 	}
 

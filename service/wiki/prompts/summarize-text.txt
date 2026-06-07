@@ -2,13 +2,13 @@
 
 ## 文章信息
 
-- 标题: {{title}}
-- URL: {{url}}
-- 类型: {{type}}
+- 标题: {{.Title}}
+- URL: {{.URL}}
+- 类型: {{.Type}}
 
 ## 文章内容
 
-{{content}}
+{{.Content}}
 
 ## 要求
 

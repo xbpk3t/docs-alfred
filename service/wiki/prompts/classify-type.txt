@@ -8,12 +8,12 @@
 
 ## 待分类条目
 
-- URL: {{url}}
-- 标题: {{title}}
+- URL: {{.URL}}
+- 标题: {{.Title}}
 
 ## 内容摘要
 
-{{content}}
+{{.Content}}
 
 ## 要求
 

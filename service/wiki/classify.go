@@ -1,6 +1,7 @@
 package wiki
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -156,18 +158,16 @@ func (c *Classifier) classifyTopic(ctx context.Context, urlStr, title, content s
 	dirTree := scanWikiDirs(c.WikiRoot)
 	ghTopicTree := fetchGHTopicsYAML(ctx, c.GhTopicsURL)
 
-	// Build the prompt from template
-	promptRaw, err := promptFS.ReadFile("prompts/classify-topic.txt")
+	prompt, err := renderPrompt("classify-topic.txt", &promptData{
+		DirTree:     dirTree,
+		GHTopicTree: ghTopicTree,
+		Title:       truncate(title, 200),
+		URL:         urlStr,
+		Content:     truncate(content, 3000),
+	})
 	if err != nil {
-		return "", fmt.Errorf("read classify-topic prompt: %w", err)
+		return "", err
 	}
-
-	prompt := string(promptRaw)
-	prompt = strings.ReplaceAll(prompt, "{{dirTree}}", dirTree)
-	prompt = strings.ReplaceAll(prompt, "{{ghTopicTree}}", ghTopicTree)
-	prompt = strings.ReplaceAll(prompt, "{{title}}", truncate(title, 200))
-	prompt = strings.ReplaceAll(prompt, "{{url}}", urlStr)
-	prompt = strings.ReplaceAll(prompt, "{{content}}", truncate(content, 3000))
 
 	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
@@ -186,15 +186,14 @@ func (c *Classifier) classifyTopic(ctx context.Context, urlStr, title, content s
 }
 
 func (c *Classifier) classifyType(ctx context.Context, urlStr, title, content string) (ClassifyType, error) {
-	promptRaw, err := promptFS.ReadFile("prompts/classify-type.txt")
+	prompt, err := renderPrompt("classify-type.txt", &promptData{
+		Title:   truncate(title, 200),
+		URL:     urlStr,
+		Content: truncate(content, 3000),
+	})
 	if err != nil {
-		return TypeInbox, fmt.Errorf("read classify-type prompt: %w", err)
+		return TypeInbox, err
 	}
-
-	prompt := string(promptRaw)
-	prompt = strings.ReplaceAll(prompt, "{{title}}", truncate(title, 200))
-	prompt = strings.ReplaceAll(prompt, "{{url}}", urlStr)
-	prompt = strings.ReplaceAll(prompt, "{{content}}", truncate(content, 3000))
 
 	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
@@ -218,16 +217,15 @@ func (c *Classifier) summarizeText(ctx context.Context, urlStr, title, content, 
 		return "", errors.New("empty content, skipping summary")
 	}
 
-	promptRaw, err := promptFS.ReadFile("prompts/summarize-text.txt")
+	prompt, err := renderPrompt("summarize-text.txt", &promptData{
+		Title:   truncate(title, 200),
+		URL:     urlStr,
+		Type:    wikiType,
+		Content: truncate(content, 5000),
+	})
 	if err != nil {
-		return "", fmt.Errorf("read summarize prompt: %w", err)
+		return "", err
 	}
-
-	prompt := string(promptRaw)
-	prompt = strings.ReplaceAll(prompt, "{{title}}", truncate(title, 200))
-	prompt = strings.ReplaceAll(prompt, "{{url}}", urlStr)
-	prompt = strings.ReplaceAll(prompt, "{{type}}", wikiType)
-	prompt = strings.ReplaceAll(prompt, "{{content}}", truncate(content, 5000))
 
 	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
@@ -235,6 +233,31 @@ func (c *Classifier) summarizeText(ctx context.Context, urlStr, title, content, 
 	}
 
 	return strings.TrimSpace(result), nil
+}
+
+type promptData struct {
+	DirTree     string
+	GHTopicTree string
+	Title       string
+	URL         string
+	Type        string
+	Content     string
+}
+
+func renderPrompt(name string, data *promptData) (string, error) {
+	tmpl, err := template.New(name).
+		Option("missingkey=error").
+		ParseFS(promptFS, "prompts/"+name)
+	if err != nil {
+		return "", fmt.Errorf("parse prompt %s: %w", name, err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("render prompt %s: %w", name, err)
+	}
+
+	return buf.String(), nil
 }
 
 // scanWikiDirs scans wikiRoot for existing topic directories.

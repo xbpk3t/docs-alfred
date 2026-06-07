@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
@@ -68,13 +69,11 @@ func RunDuplicateCheck(targetDir string) (*DuplicateReport, error) {
 
 //nolint:gocritic // groupByURL returns unnamed results; named returns conflict with nonamedreturns
 func groupByURL(items []parsedItem) ([]URLDupEntry, map[string]bool) {
-	byURL := make(map[string][]parsedItem)
-	for _, item := range items {
-		if item.url == "" {
-			continue
-		}
-		byURL[item.url] = append(byURL[item.url], item)
-	}
+	byURL := lo.GroupBy(lo.Filter(items, func(item parsedItem, _ int) bool {
+		return item.url != ""
+	}), func(item parsedItem) string {
+		return item.url
+	})
 
 	urlMatchItems := make(map[string]bool)
 	var entries []URLDupEntry
@@ -82,9 +81,10 @@ func groupByURL(items []parsedItem) ([]URLDupEntry, map[string]bool) {
 		if len(list) <= 1 {
 			continue
 		}
-		entryList := make([]ItemBrief, len(list))
-		for i, item := range list {
-			entryList[i] = brief(&item)
+		entryList := lo.Map(list, func(item parsedItem, _ int) ItemBrief {
+			return brief(&item)
+		})
+		for _, item := range list {
 			urlMatchItems[item.file+":"+item.name] = true
 		}
 		entries = append(entries, URLDupEntry{
@@ -97,30 +97,24 @@ func groupByURL(items []parsedItem) ([]URLDupEntry, map[string]bool) {
 }
 
 func groupByNameAuthor(items []parsedItem, urlMatchItems map[string]bool) []NameAuthorDupEntry {
-	byNameAuthor := make(map[string][]parsedItem)
-	for _, item := range items {
-		key := item.name + " | " + item.author
-		byNameAuthor[key] = append(byNameAuthor[key], item)
-	}
+	byNameAuthor := lo.GroupBy(items, func(item parsedItem) string {
+		return item.name + " | " + item.author
+	})
 
 	var entries []NameAuthorDupEntry
 	for key, list := range byNameAuthor {
 		if len(list) <= 1 {
 			continue
 		}
-		var uncaught []parsedItem
-		for _, item := range list {
-			if !urlMatchItems[item.file+":"+item.name] {
-				uncaught = append(uncaught, item)
-			}
-		}
+		uncaught := lo.Filter(list, func(item parsedItem, _ int) bool {
+			return !urlMatchItems[item.file+":"+item.name]
+		})
 		if len(uncaught) <= 1 {
 			continue
 		}
-		entryList := make([]ItemBrief, len(uncaught))
-		for i, item := range uncaught {
-			entryList[i] = brief(&item)
-		}
+		entryList := lo.Map(uncaught, func(item parsedItem, _ int) ItemBrief {
+			return brief(&item)
+		})
 		entries = append(entries, NameAuthorDupEntry{
 			Key:     key,
 			Entries: entryList,
