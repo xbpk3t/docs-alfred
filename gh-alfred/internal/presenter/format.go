@@ -1,14 +1,15 @@
-package gh
+package presenter
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
+	"github.com/xbpk3t/docs-alfred/service/ghindex"
 )
 
 // FormatAlfredItems builds Alfred items for the given repos.
-func FormatAlfredItems(repos Repos, docsURL string) []wf.AlfredItem {
+func FormatAlfredItems(repos ghindex.Repos, docsURL string) []wf.AlfredItem {
 	var items []wf.AlfredItem
 
 	for _, repo := range repos {
@@ -67,7 +68,7 @@ func BuildDocURL(docsURL, doc string) string {
 	return fmt.Sprintf("%s/#/%s", strings.TrimRight(docsURL, "/"), strings.TrimLeft(doc, "/"))
 }
 
-func formatRepoSubtitle(repo *Repository) string {
+func formatRepoSubtitle(repo *ghindex.Repository) string {
 	parts := make([]string, 0, 2)
 	if repo != nil && repo.Type != "" {
 		if repo.Tag != "" {
@@ -84,7 +85,7 @@ func formatRepoSubtitle(repo *Repository) string {
 }
 
 // FormatPlain returns plain-text output of repos with labels.
-func FormatPlain(repos Repos, docsURL string) string {
+func FormatPlain(repos ghindex.Repos, docsURL string) string {
 	var sb strings.Builder
 
 	for i, repo := range repos {
@@ -113,7 +114,7 @@ func FormatPlain(repos Repos, docsURL string) string {
 }
 
 // FormatRofi returns a simple list of "fullname - desc" lines for each repo.
-func FormatRofi(repos Repos) string {
+func FormatRofi(repos ghindex.Repos) string {
 	var lines []string
 	for _, repo := range repos {
 		line := repo.FullName()

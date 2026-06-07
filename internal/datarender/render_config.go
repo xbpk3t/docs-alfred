@@ -10,11 +10,10 @@ import (
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
-	rootpkg "github.com/xbpk3t/docs-alfred/pkg"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/service"
-	servicegh "github.com/xbpk3t/docs-alfred/service/gh"
+	"github.com/xbpk3t/docs-alfred/service/ghindex"
 	"github.com/xbpk3t/docs-alfred/service/goods"
 	"github.com/xbpk3t/docs-alfred/service/task"
 )
@@ -170,7 +169,7 @@ func (p *docProcessor) readSingleFile(src string) ([]byte, error) {
 		return []byte(""), errors.New("stat path error")
 	}
 
-	return rootpkg.ReadSingleFileWithExt(src, p.setCurrentFile)
+	return fileutil.ReadSingleFile(src, p.setCurrentFile)
 }
 
 func (p *docProcessor) readAndMergeFiles(src string) ([]byte, error) {
@@ -178,7 +177,7 @@ func (p *docProcessor) readAndMergeFiles(src string) ([]byte, error) {
 		return []byte(""), errors.New("stat path error")
 	}
 
-	return rootpkg.ReadAndMergeFilesRecursively(src, p.setCurrentFile)
+	return fileutil.ReadAndMergeYAMLFilesRecursive(src, p.setCurrentFile)
 }
 
 func isDir(path string) bool {
@@ -269,7 +268,7 @@ func (dc *docsConfig) processSingle(fileType fileType, processor *docProcessor) 
 }
 
 func (dc *docsConfig) processGithubDir(fileType fileType, processor *docProcessor) error {
-	allRepos, err := servicegh.LoadConfigReposFromDir(dc.Src)
+	allRepos, err := ghindex.LoadConfigReposFromDir(dc.Src)
 	if err != nil {
 		return err
 	}
@@ -278,7 +277,7 @@ func (dc *docsConfig) processGithubDir(fileType fileType, processor *docProcesso
 }
 
 func (dc *docsConfig) marshalAndWriteGithubOutput(
-	allRepos servicegh.ConfigRepos,
+	allRepos ghindex.ConfigRepos,
 	fileType fileType,
 	processor *docProcessor,
 ) error {
@@ -310,7 +309,7 @@ func (dc *docsConfig) createRenderer() (render.Renderer, error) {
 	case "task":
 		renderer = task.NewTaskYAMLRender()
 	case "gh":
-		renderer = servicegh.NewGithubYAMLRender("")
+		renderer = ghindex.NewGithubYAMLRender("")
 	case "goods":
 		renderer = goods.NewGoodsYAMLRender()
 	default:

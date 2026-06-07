@@ -19,7 +19,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
-	"github.com/xbpk3t/docs-alfred/pkg/rss"
+	"github.com/xbpk3t/docs-alfred/service/rss"
 	"golang.org/x/sync/errgroup"
 )
 

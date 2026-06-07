@@ -5,14 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"mime"
 	"net/http"
 	"net/url"
 	"os/exec"
+	"path"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/asticode/go-astisub"
+	"github.com/gabriel-vasile/mimetype"
+	"github.com/xbpk3t/docs-alfred/pkg/htmlutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"mvdan.cc/xurls/v2"
 )
@@ -39,10 +43,10 @@ type Provider interface {
 
 const (
 	plaintextContentType = "plaintext"
-	vttContentType  = "vtt"
-	srtContentType  = "srt"
-	jsonContentType = "json"
-	htmlContentType = "html"
+	vttContentType       = "vtt"
+	srtContentType       = "srt"
+	jsonContentType      = "json"
+	htmlContentType      = "html"
 )
 
 // EpisodeRef identifies a single podcast episode.
@@ -104,9 +108,8 @@ func (p *RssTranscriptProvider) Fetch(ctx context.Context, ep *EpisodeRef) (*Tra
 		return nil, fmt.Errorf("fetch transcript URL: %w", err)
 	}
 
-	content := string(data)
-	contentType := coerceContentType(best.Type)
-	normalized := normalizeTranscriptContent(content, contentType)
+	contentType := detectTranscriptContentType(best.URL, best.Type, data)
+	normalized := normalizeTranscriptContent(string(data), contentType)
 
 	return &TranscriptResult{
 		Content:     normalized,
@@ -122,6 +125,7 @@ func pickBestTranscriptLink(links []TranscriptLink) *TranscriptLink {
 
 	rank := map[string]int{
 		"text/plain": 4, "text/vtt": 3, "text/srt": 2,
+		"application/srt": 2, "application/x-subrip": 2,
 		"application/json": 1, "text/html": 0,
 	}
 
@@ -138,7 +142,7 @@ func pickBestTranscriptLink(links []TranscriptLink) *TranscriptLink {
 }
 
 func getLinkScore(link *TranscriptLink, rank map[string]int) int {
-	base := rank[strings.ToLower(link.Type)]
+	base := rank[normalizeMediaType(link.Type)]
 	// Prefer URLs that don't need further redirection
 	if strings.Contains(strings.ToLower(link.URL), "transcript") {
 		base += 1
@@ -190,9 +194,8 @@ func (p *DescriptionLinkProvider) Fetch(ctx context.Context, ep *EpisodeRef) (*T
 		return nil, fmt.Errorf("fetch description link: %w", err)
 	}
 
-	content := string(data)
-	contentType := detectContentTypeFromURL(links[0])
-	normalized := normalizeTranscriptContent(content, contentType)
+	contentType := detectTranscriptContentType(links[0], "", data)
+	normalized := normalizeTranscriptContent(string(data), contentType)
 
 	return &TranscriptResult{
 		Content:     normalized,
@@ -282,33 +285,12 @@ func isTranscriptURL(rawURL string) bool {
 	if strings.Contains(lower, "transcript") {
 		return true
 	}
-	// Check file extensions
-	for _, ext := range []string{".json", ".srt", ".txt", ".vtt"} {
-		if strings.Contains(lower, ext) {
-			// Verify it's a file extension (not just part of a word)
-			idx := strings.Index(lower, ext)
-			if idx > 0 && (idx+len(ext) >= len(lower) || lower[idx+len(ext)] == '?' || lower[idx+len(ext)] == '#') {
-				return true
-			}
-		}
-	}
 
-	return false
-}
-
-func detectContentTypeFromURL(rawURL string) string {
-	lower := strings.ToLower(rawURL)
-	switch {
-	case strings.Contains(lower, ".vtt"):
-		return vttContentType
-	case strings.Contains(lower, ".srt"):
-		return srtContentType
-	case strings.Contains(lower, ".json"):
-		return jsonContentType
-	case strings.Contains(lower, ".txt"):
-		return plaintextContentType
+	switch urlExtension(lower) {
+	case ".json", ".srt", ".txt", ".vtt":
+		return true
 	default:
-		return plaintextContentType
+		return false
 	}
 }
 
@@ -399,6 +381,13 @@ func normalizeTranscriptContent(content, contentType string) string {
 		return cleanSubtitle(content, contentType)
 	case "json":
 		return content // Pass through JSON as-is
+	case "html":
+		markdown, err := htmlutil.ToMarkdown(content)
+		if err == nil && strings.TrimSpace(markdown) != "" {
+			return markdown
+		}
+
+		return strings.TrimSpace(content)
 	default:
 		return strings.TrimSpace(content)
 	}
@@ -451,30 +440,97 @@ func fallbackCleanSubtitle(content string) string {
 }
 
 var contentTypeMap = map[string]string{
-	"text/plain": plaintextContentType,
-	"text/vtt":   "vtt",
-	"text/srt":   srtContentType,
-	"application/json": jsonContentType,
-	"text/html":  htmlContentType,
+	"application/json":     jsonContentType,
+	"application/srt":      srtContentType,
+	"application/x-subrip": srtContentType,
+	"text/html":            htmlContentType,
+	"text/plain":           plaintextContentType,
+	"text/srt":             srtContentType,
+	"text/vtt":             vttContentType,
 }
 
-func coerceContentType(t string) string {
-	if v, ok := contentTypeMap[t]; ok {
-		return v
+func detectTranscriptContentType(rawURL, declaredType string, data []byte) string {
+	if contentType, ok := contentTypeFromMediaType(declaredType); ok {
+		return contentType
 	}
-	// Fallback: check by substring
-	switch {
-	case strings.Contains(t, "plain"):
-		return plaintextContentType
-	case strings.Contains(t, "vtt"):
-		return vttContentType
-	case strings.Contains(t, "srt"):
-		return srtContentType
-	case strings.Contains(t, "json"):
-		return jsonContentType
-	case strings.Contains(t, "html"):
-		return htmlContentType
+	if contentType, ok := contentTypeFromURL(rawURL); ok {
+		return contentType
+	}
+	if contentType, ok := contentTypeFromData(data); ok {
+		return contentType
 	}
 
 	return plaintextContentType
+}
+
+func contentTypeFromMediaType(t string) (string, bool) {
+	mediaType := normalizeMediaType(t)
+	if mediaType == "" {
+		return "", false
+	}
+	if v, ok := contentTypeMap[mediaType]; ok {
+		return v, true
+	}
+
+	// Fallback: check by substring
+	switch {
+	case strings.Contains(mediaType, "plain"):
+		return plaintextContentType, true
+	case strings.Contains(mediaType, "vtt"):
+		return vttContentType, true
+	case strings.Contains(mediaType, "srt") || strings.Contains(mediaType, "subrip"):
+		return srtContentType, true
+	case strings.Contains(mediaType, "json"):
+		return jsonContentType, true
+	case strings.Contains(mediaType, "html"):
+		return htmlContentType, true
+	}
+
+	return "", false
+}
+
+func normalizeMediaType(t string) string {
+	t = strings.TrimSpace(strings.ToLower(t))
+	if t == "" {
+		return ""
+	}
+
+	mediaType, _, err := mime.ParseMediaType(t)
+	if err == nil {
+		return mediaType
+	}
+
+	return t
+}
+
+func contentTypeFromURL(rawURL string) (string, bool) {
+	switch urlExtension(rawURL) {
+	case ".vtt":
+		return vttContentType, true
+	case ".srt":
+		return srtContentType, true
+	case ".json":
+		return jsonContentType, true
+	case ".html", ".htm":
+		return htmlContentType, true
+	case ".txt":
+		return plaintextContentType, true
+	default:
+		return "", false
+	}
+}
+
+func urlExtension(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err == nil {
+		return strings.ToLower(path.Ext(parsed.Path))
+	}
+
+	return strings.ToLower(path.Ext(rawURL))
+}
+
+func contentTypeFromData(data []byte) (string, bool) {
+	mediaType := mimetype.Detect(data).String()
+
+	return contentTypeFromMediaType(mediaType)
 }

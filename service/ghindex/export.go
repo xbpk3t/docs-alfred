@@ -1,4 +1,4 @@
-package gh
+package ghindex
 
 import (
 	"errors"
@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	yaml "github.com/goccy/go-yaml"
-	rootpkg "github.com/xbpk3t/docs-alfred/pkg"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
@@ -40,7 +39,7 @@ func LoadConfigReposFromDir(src string) (ConfigRepos, error) {
 }
 
 func loadConfigReposFromTagDir(tag, dir string) (ConfigRepos, error) {
-	data, err := rootpkg.ReadAndMergeFilesRecursively(dir, nil)
+	data, err := fileutil.ReadAndMergeYAMLFilesRecursive(dir, nil)
 	if err != nil {
 		return nil, fmt.Errorf("read gh subdir %s error: %w", tag, err)
 	}

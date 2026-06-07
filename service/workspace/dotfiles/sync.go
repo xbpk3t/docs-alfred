@@ -15,7 +15,7 @@ type SyncRecordOptions struct {
 	DotfilesPath string
 }
 
-// ChangeFile represents a changed file in the sync record plan.
+// ChangeFile represents a changed file in the sync record output.
 type ChangeFile struct {
 	Gh     *GhMap `json:"gh,omitempty"`
 	Path   string `json:"path"`
@@ -42,7 +42,7 @@ const (
 	ghDataPrefix   = "data/gh"
 )
 
-// RunSyncRecord plans dotfiles record synchronization based on git changes.
+// RunSyncRecord inspects dotfiles changes for record synchronization.
 func RunSyncRecord(opts SyncRecordOptions) *SyncRecordResult {
 	dotfilesPath := opts.DotfilesPath
 

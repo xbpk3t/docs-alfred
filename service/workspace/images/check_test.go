@@ -108,6 +108,45 @@ func TestCollectExistingFilesAndDirsSkipsHiddenEntries(t *testing.T) {
 	assert.NotContains(t, files, ".root-hidden.txt")
 }
 
+func TestCollectExpectedImageDirsFromTypedGhData(t *testing.T) {
+	dataDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "algo"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: go
+  topics:
+    - topic: root
+      hasPic: true
+      sub:
+        - topic: child
+          meta:
+            slug: child-slug
+            hasPic: true
+    - topic: no-pic
+  using:
+    url: https://github.com/acme/tool
+    topics:
+      - topic: using-topic
+        hasPic: true
+  repo:
+    - url: https://github.com/acme/repo
+      topics:
+        - topic: repo-topic
+          meta:
+            slug: repo-slug
+            hasPic: true
+  record: []
+`), 0644))
+
+	dirs, err := collectExpectedImageDirs(dataDir)
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{
+		"algo/go/root",
+		"algo/go/root/child-slug",
+		"algo/go/using-topic",
+		"algo/go/repo/repo-slug",
+	}, dirs)
+}
+
 func TestHideExtraDirs(t *testing.T) {
 	dir := t.TempDir()
 

@@ -1,10 +1,11 @@
-package gh
+package presenter
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/service/ghindex"
 )
 
 func TestBuildDocURL(t *testing.T) {
@@ -14,7 +15,7 @@ func TestBuildDocURL(t *testing.T) {
 }
 
 func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
-	repos := Repos{
+	repos := ghindex.Repos{
 		{
 			URL: "https://github.com/acme/tool",
 			Des: "Tooling",

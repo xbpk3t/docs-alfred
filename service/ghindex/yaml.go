@@ -1,4 +1,4 @@
-package gh
+package ghindex
 
 import (
 	"path"
@@ -8,6 +8,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 	"github.com/xbpk3t/docs-alfred/service"
+	"github.com/xbpk3t/docs-alfred/service/content"
 )
 
 type GithubYAMLRender struct {
@@ -85,13 +86,13 @@ func normalizeRepoTopics(repo *Repository, base string, useBase bool) {
 	normalizeTopics(repo.Topics, topicBase)
 }
 
-func normalizeTopics(topics Topics, base string) {
+func normalizeTopics(topics content.Topics, base string) {
 	for i := range topics {
 		normalizeTopic(&topics[i], base)
 	}
 }
 
-func normalizeTopic(topic *Topic, base string) {
+func normalizeTopic(topic *content.Topic, base string) {
 	if topic.Meta != nil {
 		if topic.Meta.HasPic {
 			topic.HasPic = true
@@ -120,7 +121,7 @@ func topicBase(tag, typeName string) string {
 	return joinPath(tag, typeName)
 }
 
-func topicDirName(topic *Topic) string {
+func topicDirName(topic *content.Topic) string {
 	if topic == nil {
 		return ""
 	}

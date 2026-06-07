@@ -1,4 +1,4 @@
-package gh
+package ghindex
 
 import "github.com/xbpk3t/docs-alfred/pkg/urlutil"
 

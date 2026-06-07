@@ -17,8 +17,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
-	"github.com/xbpk3t/docs-alfred/pkg/rss"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
+	"github.com/xbpk3t/docs-alfred/service/rss"
 )
 
 // -- Types (matching TS schema) --

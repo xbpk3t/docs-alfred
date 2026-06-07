@@ -7,7 +7,7 @@ import (
 	"github.com/mmcdole/gofeed"
 	gofeedext "github.com/mmcdole/gofeed/extensions"
 	"github.com/stretchr/testify/assert"
-	"github.com/xbpk3t/docs-alfred/pkg/rss"
+	"github.com/xbpk3t/docs-alfred/service/rss"
 )
 
 func TestGetItemTitle(t *testing.T) {

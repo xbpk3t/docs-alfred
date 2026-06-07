@@ -5,9 +5,10 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/gh-alfred/internal/presenter"
 	"github.com/xbpk3t/docs-alfred/gh-alfred/internal/usecase"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
-	gh "github.com/xbpk3t/docs-alfred/service/gh"
+	"github.com/xbpk3t/docs-alfred/service/ghindex"
 )
 
 // Execute is the entry point for the gh-alfred binary.
@@ -55,7 +56,7 @@ func newSearchCmd() *cobra.Command {
 					Title:    "Alfred index unavailable",
 					Subtitle: err.Error(),
 					Valid:    false,
-					Icon:     &wf.AlfredIcon{Path: gh.IconError},
+					Icon:     &wf.AlfredIcon{Path: presenter.IconError},
 				}})
 			}
 
@@ -63,8 +64,8 @@ func newSearchCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&configURL, "url", gh.DefaultConfigURL, "Remote gh.yml URL")
-	cmd.Flags().StringVar(&cachePath, "cache", gh.DefaultConfigPath, "Local cache path")
+	cmd.Flags().StringVar(&configURL, "url", ghindex.DefaultConfigURL, "Remote gh.yml URL")
+	cmd.Flags().StringVar(&cachePath, "cache", ghindex.DefaultConfigPath, "Local cache path")
 	cmd.Flags().StringVar(&docsURL, "docs-url", "https://docs.lucc.dev", "Docs base URL")
 	cmd.Flags().StringVar(&maxAge, "max-age", "24h", "Cache TTL")
 
@@ -91,8 +92,8 @@ func newSyncCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&configURL, "url", gh.DefaultConfigURL, "Remote gh.yml URL")
-	cmd.Flags().StringVar(&cachePath, "cache", gh.DefaultConfigPath, "Cache write path")
+	cmd.Flags().StringVar(&configURL, "url", ghindex.DefaultConfigURL, "Remote gh.yml URL")
+	cmd.Flags().StringVar(&cachePath, "cache", ghindex.DefaultConfigPath, "Cache write path")
 
 	return cmd
 }
@@ -156,8 +157,8 @@ func writeOutput(s string) error {
 	return err
 }
 
-func runSearchOutput(repos gh.Repos, docsURL string) error {
-	items := gh.FormatAlfredItems(repos, docsURL)
+func runSearchOutput(repos ghindex.Repos, docsURL string) error {
+	items := presenter.FormatAlfredItems(repos, docsURL)
 
 	return writeFormatterOutput("alfred", items)
 }

@@ -1,4 +1,4 @@
-package gh
+package ghdata
 
 import (
 	"errors"
@@ -24,15 +24,15 @@ const (
 
 // WalkerEvent types for the gh YAML walker.
 type WalkerEvent struct {
-	Section      map[string]any
-	Repo         map[string]any
+	Type         string
 	Error        string
 	Relation     string
 	FilenameStem string
 	File         string
-	Type         string
 	Content      string
 	Errors       []string
+	Repo         Repo
+	Section      Section
 	DocIndex     int
 	SectionIndex int
 	RepoIndex    int
@@ -145,7 +145,7 @@ func emitSectionEvent(fn func(WalkerEvent) error, relPath, filenameStem string, 
 		File:         relPath,
 		FilenameStem: filenameStem,
 		SectionIndex: sectionIdx,
-		Section:      section,
+		Section:      sectionFromMap(section),
 	})
 }
 
@@ -162,8 +162,8 @@ func emitRepoEvents(fn func(WalkerEvent) error, relPath, filenameStem string, se
 					SectionIndex: sectionIdx,
 					RepoIndex:    repoIdx,
 					Relation:     evTypeRepo,
-					Repo:         repo,
-					Section:      section,
+					Repo:         repoFromMap(repo),
+					Section:      sectionFromMap(section),
 				}); err2 != nil {
 					return err2
 				}
@@ -180,8 +180,8 @@ func emitRepoEvents(fn func(WalkerEvent) error, relPath, filenameStem string, se
 			SectionIndex: sectionIdx,
 			RepoIndex:    0,
 			Relation:     "using",
-			Repo:         using,
-			Section:      section,
+			Repo:         repoFromMap(using),
+			Section:      sectionFromMap(section),
 		}); err2 != nil {
 			return err2
 		}

@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/pkg/blog"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
-	pkgdata "github.com/xbpk3t/docs-alfred/pkg/data"
-	"github.com/xbpk3t/docs-alfred/pkg/dotfiles"
-	"github.com/xbpk3t/docs-alfred/pkg/images"
+	"github.com/xbpk3t/docs-alfred/service/data"
+	"github.com/xbpk3t/docs-alfred/service/workspace/blog"
+	"github.com/xbpk3t/docs-alfred/service/workspace/dotfiles"
+	"github.com/xbpk3t/docs-alfred/service/workspace/images"
 )
 
 // ImagesCheckInput holds input for images check.
@@ -183,7 +183,7 @@ func (r *DotfilesCheckResult) Summary() map[string]any {
 func RunDotfilesCheck(input DotfilesCheckInput) (*DotfilesCheckResult, error) {
 	dataDir := input.DataDir
 	if dataDir == "" {
-		dataDir = pkgdata.DefaultPathForDomain(pkgdata.DomainGH)
+		dataDir = data.DefaultPathForDomain(data.DomainGH)
 	}
 
 	result, err := dotfiles.RunCheck(input.DotfilesPath, dataDir)
@@ -212,7 +212,7 @@ type DotfilesSyncRecordResult struct {
 	OK           bool                  `json:"ok"`
 }
 
-// RunDotfilesSyncRecord plans dotfiles record synchronization.
+// RunDotfilesSyncRecord inspects dotfiles changes for record synchronization.
 func RunDotfilesSyncRecord(input DotfilesSyncRecordInput) *DotfilesSyncRecordResult {
 	result := dotfiles.RunSyncRecord(dotfiles.SyncRecordOptions{
 		DotfilesPath: input.DotfilesPath,
