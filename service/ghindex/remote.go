@@ -3,6 +3,8 @@ package ghindex
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	yaml "github.com/goccy/go-yaml"
@@ -15,7 +17,10 @@ const (
 	DefaultMaxAge    = 24 * time.Hour
 )
 
-var DefaultConfigPath = fileutil.CachePath("gh-alfred-gh.yml")
+var (
+	DefaultConfigPath     = fileutil.CachePath("gh-alfred-gh.yml")
+	backgroundSyncStarter = startBackgroundSyncProcess
+)
 
 // Manager handles remote repository configuration fetching and caching.
 type Manager struct {
@@ -33,12 +38,21 @@ func NewManager(configPath, configURL string) *Manager {
 	if configURL == "" {
 		configURL = DefaultConfigURL
 	}
+	configURL = normalizeConfigURL(configURL)
 
 	return &Manager{
 		configPath: configPath,
 		configURL:  configURL,
 		maxAge:     DefaultMaxAge,
 	}
+}
+
+func normalizeConfigURL(configURL string) string {
+	if strings.HasSuffix(configURL, "/") {
+		return configURL + "gh.yml"
+	}
+
+	return configURL
 }
 
 // SetTTL overrides the default cache max-age.
@@ -119,6 +133,64 @@ func (m *Manager) LoadWithCacheTTL() error {
 	}
 
 	return nil
+}
+
+// LoadWithBackgroundSync loads config from cache immediately.
+// If the cache is stale, it triggers a background sync process (non-blocking).
+// If no cache exists, it falls back to blocking LoadWithCacheTTL.
+func (m *Manager) LoadWithBackgroundSync() error {
+	info, err := os.Stat(m.configPath)
+	if os.IsNotExist(err) {
+		return m.LoadWithCacheTTL()
+	}
+
+	if time.Since(info.ModTime()) > m.maxAge {
+		if err := backgroundSyncStarter(m); err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: background sync unavailable, using cached config: %v\n", err)
+		}
+	}
+
+	return m.loadFromFile()
+}
+
+func startBackgroundSyncProcess(m *Manager) error {
+	binaryPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("find current executable: %w", err)
+	}
+
+	cmd := exec.Command(binaryPath, "sync", "--url", m.configURL, "--cache", m.configPath)
+	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", os.DevNull, err)
+	}
+
+	cmd.Stdin = devNull
+	cmd.Stdout = devNull
+	cmd.Stderr = devNull
+
+	if err := cmd.Start(); err != nil {
+		_ = devNull.Close()
+
+		return fmt.Errorf("start background sync: %w", err)
+	}
+	if err := cmd.Process.Release(); err != nil {
+		_ = devNull.Close()
+
+		return fmt.Errorf("release background sync process: %w", err)
+	}
+	if err := devNull.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", os.DevNull, err)
+	}
+
+	return nil
+}
+
+// IsBackgroundSyncAvailable checks if the binary can run background sync.
+func IsBackgroundSyncAvailable(binaryPath string) bool {
+	_, err := exec.LookPath(binaryPath)
+
+	return err == nil
 }
 
 func (m *Manager) loadFromFile() error {

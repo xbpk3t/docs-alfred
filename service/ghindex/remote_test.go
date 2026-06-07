@@ -1,6 +1,7 @@
 package ghindex
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,6 +27,12 @@ func TestNewManager_CustomPaths(t *testing.T) {
 	require.NotNil(t, m)
 	assert.Equal(t, "/custom/path.yml", m.configPath)
 	assert.Equal(t, "https://custom.url/config.yml", m.configURL)
+}
+
+func TestNewManager_AppendsGhYMLToBaseURL(t *testing.T) {
+	m := NewManager("", "https://cdn.lucc.dev/")
+	require.NotNil(t, m)
+	assert.Equal(t, "https://cdn.lucc.dev/gh.yml", m.configURL)
 }
 
 func TestSetTTL(t *testing.T) {
@@ -156,6 +163,57 @@ func TestLoadWithCacheTTLUsesValidatedStaleCacheWhenRemoteFails(t *testing.T) {
 	result := m.Filter("stale")
 	require.Len(t, result, 1)
 	assert.Equal(t, "https://github.com/acme/stale", result[0].URL)
+}
+
+func TestLoadWithBackgroundSyncStartsProcessForStaleCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "gh.yml")
+	require.NoError(t, os.WriteFile(configPath, validRemoteConfigYAML("cached"), 0644))
+	old := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(configPath, old, old))
+
+	previousStarter := backgroundSyncStarter
+	t.Cleanup(func() { backgroundSyncStarter = previousStarter })
+
+	var called bool
+	backgroundSyncStarter = func(m *Manager) error {
+		called = true
+		assert.Equal(t, configPath, m.configPath)
+		assert.Equal(t, "https://example.com/gh.yml", m.configURL)
+
+		return nil
+	}
+
+	m := NewManager(configPath, "https://example.com/gh.yml")
+	m.SetTTL(time.Hour)
+	require.NoError(t, m.LoadWithBackgroundSync())
+	assert.True(t, called)
+
+	result := m.Filter("cached")
+	require.Len(t, result, 1)
+	assert.Equal(t, "https://github.com/acme/cached", result[0].URL)
+}
+
+func TestLoadWithBackgroundSyncUsesCacheWhenStarterFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "gh.yml")
+	require.NoError(t, os.WriteFile(configPath, validRemoteConfigYAML("cached"), 0644))
+	old := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(configPath, old, old))
+
+	previousStarter := backgroundSyncStarter
+	t.Cleanup(func() { backgroundSyncStarter = previousStarter })
+	backgroundSyncStarter = func(m *Manager) error {
+		return errors.New("starter unavailable")
+	}
+
+	m := NewManager(configPath, "https://example.com/gh.yml")
+	m.SetTTL(time.Hour)
+	require.NoError(t, m.LoadWithBackgroundSync())
+
+	result := m.Filter("cached")
+	require.Len(t, result, 1)
+	assert.Equal(t, "https://github.com/acme/cached", result[0].URL)
 }
 
 func validRemoteConfigYAML(name string) []byte {

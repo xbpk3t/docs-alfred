@@ -75,6 +75,10 @@ query UpdatedIssuesWithDetails($filter: IssueFilter!, $first: Int, $commentsFirs
           name
           key
         }
+        parent {
+          id
+          identifier
+        }
         comments(first: $commentsFirst) {
           nodes {
             body

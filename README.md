@@ -53,6 +53,12 @@ go install github.com/xbpk3t/docs-alfred/linear2nl@main
 
 ```
 
+---
+
+```shell
+linear2nl export --days 2 --format md
+mv linear2nl_*.md /tmp/
+```
 
 
 

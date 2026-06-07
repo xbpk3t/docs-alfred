@@ -52,15 +52,18 @@ func newSearchCmd() *cobra.Command {
 				MaxAge:    maxAge,
 			})
 			if err != nil {
-				return writeFormatterOutput("alfred", []wf.AlfredItem{{
-					Title:    "Alfred index unavailable",
-					Subtitle: err.Error(),
-					Valid:    false,
-					Icon:     &wf.AlfredIcon{Path: presenter.IconError},
-				}})
+				return writeFormatterOutput("alfred", wf.AlfredOutput{
+					Variables: map[string]string{"error": err.Error()},
+					Items: []wf.AlfredItem{{
+						Title:    "Alfred index unavailable",
+						Subtitle: err.Error(),
+						Valid:    false,
+						Icon:     &wf.AlfredIcon{Path: presenter.IconError},
+					}},
+				})
 			}
 
-			return runSearchOutput(result.Repos, docsURL)
+			return runSearchOutput(result.Repos, docsURL, query)
 		},
 	}
 
@@ -157,8 +160,8 @@ func writeOutput(s string) error {
 	return err
 }
 
-func runSearchOutput(repos ghindex.Repos, docsURL string) error {
-	items := presenter.FormatAlfredItems(repos, docsURL)
+func runSearchOutput(repos ghindex.Repos, docsURL, query string) error {
+	items := presenter.FormatAlfredItems(repos, docsURL, query)
 
 	return writeFormatterOutput("alfred", items)
 }

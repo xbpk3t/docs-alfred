@@ -4,6 +4,9 @@ includes:
   r2n:
     taskfile: ./rss2nl/Taskfile.yml
     dir: rss2nl
+  alfred:
+    taskfile: ./gh-alfred/Taskfile.yml
+    dir: gh-alfred
 
 tasks:
   pre-commit:

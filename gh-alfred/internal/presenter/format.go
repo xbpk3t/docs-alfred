@@ -2,6 +2,7 @@ package presenter
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
@@ -9,7 +10,8 @@ import (
 )
 
 // FormatAlfredItems builds Alfred items for the given repos.
-func FormatAlfredItems(repos ghindex.Repos, docsURL string) []wf.AlfredItem {
+// When query is non-empty and no repos match, a "Search GitHub" fallback item is appended.
+func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredItem {
 	var items []wf.AlfredItem
 
 	for _, repo := range repos {
@@ -19,33 +21,40 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL string) []wf.AlfredItem {
 			Subtitle:     formatRepoSubtitle(repo),
 			Arg:          repo.GetURL(),
 			Autocomplete: fullName,
+			QuicklookURL: repo.GetURL(),
 			Text:         &wf.AlfredText{Copy: repo.GetURL(), Largetype: fullName},
 			Valid:        true,
 		}
 
-		switch {
-		case repo.HasQs() && repo.Doc != "":
-			item.Icon = &wf.AlfredIcon{Path: IconQsDoc}
-		case repo.HasQs():
-			item.Icon = &wf.AlfredIcon{Path: IconQs}
-		case repo.Doc != "":
-			item.Icon = &wf.AlfredIcon{Path: IconDoc}
-		default:
-			item.Icon = &wf.AlfredIcon{Path: IconSearch}
-		}
+		item.Icon = &wf.AlfredIcon{Path: determineRepoIcon(repo)}
 
 		item.Mods = make(map[string]*wf.AlfredMod)
+
+		// alt: copy repo URL (plist alt -> clipboard)
+		item.Mods["alt"] = &wf.AlfredMod{
+			Valid:    true,
+			Arg:      repo.GetURL(),
+			Subtitle: "复制URL: " + repo.GetURL(),
+		}
+
 		if repo.Doc != "" {
 			docURL := BuildDocURL(docsURL, repo.Doc)
 			item.Mods["cmd"] = &wf.AlfredMod{
 				Valid:    true,
 				Arg:      docURL,
-				Subtitle: "Open documentation",
+				Subtitle: "打开文档: " + docURL,
+			}
+			item.Mods["shift"] = &wf.AlfredMod{
+				Valid:    true,
+				Arg:      docURL,
+				Subtitle: "打开文档: " + docURL,
 			}
 		}
 
 		items = append(items, item)
 	}
+
+	items = appendGitHubSearchFallback(items, query)
 
 	return items
 }
@@ -68,20 +77,65 @@ func BuildDocURL(docsURL, doc string) string {
 	return fmt.Sprintf("%s/#/%s", strings.TrimRight(docsURL, "/"), strings.TrimLeft(doc, "/"))
 }
 
+func appendGitHubSearchFallback(items []wf.AlfredItem, query string) []wf.AlfredItem {
+	if query == "" {
+		return items
+	}
+	searchURL := fmt.Sprintf(GithubSearchURL, url.QueryEscape(query))
+
+	return append(items, wf.AlfredItem{
+		Title:    "Search GitHub: " + query,
+		Subtitle: searchURL,
+		Arg:      searchURL,
+		Valid:    true,
+		Icon:     &wf.AlfredIcon{Path: IconSearch},
+	})
+}
+
 func formatRepoSubtitle(repo *ghindex.Repository) string {
-	parts := make([]string, 0, 2)
-	if repo != nil && repo.Type != "" {
+	parts := make([]string, 0, 4)
+	if repo == nil {
+		return ""
+	}
+
+	if repo.IsSubRepo {
+		parts = append(parts, fmt.Sprintf("[SUB#%s]", repo.MainRepo))
+	}
+	if repo.IsReplacedRepo {
+		parts = append(parts, fmt.Sprintf("[REP#%s]", repo.MainRepo))
+	}
+	if repo.IsRelatedRepo {
+		parts = append(parts, fmt.Sprintf("[REL#%s]", repo.MainRepo))
+	}
+
+	if repo.Type != "" {
 		if repo.Tag != "" {
 			parts = append(parts, fmt.Sprintf("[%s#%s]", repo.Tag, repo.Type))
 		} else {
 			parts = append(parts, fmt.Sprintf("[%s]", repo.Type))
 		}
 	}
-	if repo != nil && repo.GetDes() != "" {
+	if repo.GetDes() != "" {
 		parts = append(parts, repo.GetDes())
 	}
 
 	return strings.Join(parts, " ")
+}
+
+func determineRepoIcon(repo *ghindex.Repository) string {
+	if repo == nil {
+		return IconGh
+	}
+	switch {
+	case repo.HasQs() && repo.Doc != "":
+		return IconQsDoc
+	case repo.HasQs():
+		return IconQs
+	case repo.Doc != "":
+		return IconDoc
+	default:
+		return IconGh
+	}
 }
 
 // FormatPlain returns plain-text output of repos with labels.

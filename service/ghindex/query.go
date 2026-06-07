@@ -5,25 +5,112 @@ import (
 	"strings"
 
 	"github.com/samber/lo"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
+
+type repoMatch struct {
+	repo  *Repository
+	score int
+	index int
+}
 
 // Filter filters repositories by query string.
 func (r Repos) Filter(query string) Repos {
 	if len(r) == 0 {
 		return nil
 	}
+	query = normalizeSearchQuery(query)
 	if query == "" {
 		return r
 	}
 
-	query = strings.ToLower(query)
+	matches := make([]repoMatch, 0, len(r))
+	for i, repo := range r {
+		if score, ok := matchRepo(repo, query); ok {
+			matches = append(matches, repoMatch{repo: repo, score: score, index: i})
+		}
+	}
+	slices.SortStableFunc(matches, func(a, b repoMatch) int {
+		if a.score < b.score {
+			return -1
+		}
+		if a.score > b.score {
+			return 1
+		}
+		if a.index < b.index {
+			return -1
+		}
+		if a.index > b.index {
+			return 1
+		}
 
-	return lo.Filter(r, func(repo *Repository, _ int) bool {
-		return strings.Contains(strings.ToLower(repo.URL), query) ||
-			strings.Contains(strings.ToLower(repo.Des), query) ||
-			strings.Contains(strings.ToLower(repo.Type), query) ||
-			strings.Contains(strings.ToLower(repo.Tag), query)
+		return 0
 	})
+
+	return lo.Map(matches, func(match repoMatch, _ int) *Repository {
+		return match.repo
+	})
+}
+
+func normalizeSearchQuery(query string) string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return ""
+	}
+	if repo, ok := urlutil.GitHubOwnerRepo(query); ok {
+		return strings.ToLower(repo.Owner + "/" + repo.Name)
+	}
+	if repo, ok := urlutil.GitHubOwnerRepo("https://" + query); ok {
+		return strings.ToLower(repo.Owner + "/" + repo.Name)
+	}
+
+	return strings.TrimSuffix(query, ".git")
+}
+
+func matchRepo(repo *Repository, query string) (int, bool) {
+	if repo == nil {
+		return 0, false
+	}
+	fullName := strings.ToLower(repo.FullName())
+	name := repoNameFromFullName(fullName)
+
+	switch {
+	case fullName == query:
+		return 0, true
+	case name == query:
+		return 1, true
+	case strings.HasSuffix(fullName, query):
+		return 2, true
+	case strings.Contains(fullName, query):
+		return 3, true
+	}
+
+	// Slash queries are path-oriented, matching old Alfred item-title filtering.
+	// Do not match metadata for queries like /git, otherwise github.com-style URL
+	// prefixes and prose descriptions drown out the intended repo-path matches.
+	if strings.Contains(query, "/") {
+		return 0, false
+	}
+
+	switch {
+	case strings.Contains(strings.ToLower(repo.Tag), query):
+		return 4, true
+	case strings.Contains(strings.ToLower(repo.Type), query):
+		return 4, true
+	case strings.Contains(strings.ToLower(repo.Des), query):
+		return 5, true
+	}
+
+	return 0, false
+}
+
+func repoNameFromFullName(fullName string) string {
+	_, name, found := strings.Cut(fullName, "/")
+	if !found {
+		return fullName
+	}
+
+	return name
 }
 
 // ExtractTags extracts unique tags from repositories.

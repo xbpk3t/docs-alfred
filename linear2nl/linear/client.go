@@ -139,7 +139,7 @@ func (c *Client) GetUpdatedIssuesWithDetails(ctx context.Context, since time.Tim
 	}
 	c.applyTeamFilter(filter)
 
-	resp, err := UpdatedIssuesWithDetails(ctx, c.graphQLClient(), filter, 50, 10)
+	resp, err := UpdatedIssuesWithDetails(ctx, c.graphQLClient(), filter, 50, 100)
 	if err != nil {
 		return nil, fmt.Errorf("query updated issues with details: %w", err)
 	}
@@ -148,18 +148,19 @@ func (c *Client) GetUpdatedIssuesWithDetails(ctx context.Context, since time.Tim
 	for i := range resp.Viewer.AssignedIssues.Nodes {
 		n := &resp.Viewer.AssignedIssues.Nodes[i]
 		d := IssueDetail{
-			Identifier:  n.Identifier,
-			Title:       n.Title,
-			Description: n.Description,
-			Priority:    n.Priority,
-			StateName:   n.State.Name,
-			StateType:   n.State.Type,
-			TeamName:    n.Team.Name,
-			TeamKey:     n.Team.Key,
-			URL:         n.Url,
-			CompletedAt: n.CompletedAt,
-			UpdatedAt:   n.UpdatedAt,
-			Comments:    make([]Comment, 0, len(n.Comments.Nodes)),
+			Identifier:       n.Identifier,
+			Title:            n.Title,
+			Description:      n.Description,
+			Priority:         n.Priority,
+			StateName:        n.State.Name,
+			StateType:        n.State.Type,
+			TeamName:         n.Team.Name,
+			TeamKey:          n.Team.Key,
+			URL:              n.Url,
+			CompletedAt:      n.CompletedAt,
+			UpdatedAt:        n.UpdatedAt,
+			ParentIdentifier: n.Parent.Identifier,
+			Comments:         make([]Comment, 0, len(n.Comments.Nodes)),
 		}
 		for _, c := range n.Comments.Nodes {
 			d.Comments = append(d.Comments, Comment{

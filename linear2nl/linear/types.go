@@ -30,18 +30,19 @@ type StateChange struct {
 
 // IssueDetail carries full issue data (description + comments) for AI review.
 type IssueDetail struct {
-	Identifier  string
-	Title       string
-	Description string
-	StateName   string
-	StateType   string
-	TeamName    string
-	TeamKey     string
-	URL         string
-	CompletedAt string
-	UpdatedAt   string
-	Comments    []Comment
-	Priority    float64
+	Identifier       string
+	Title            string
+	Description      string
+	StateName        string
+	StateType        string
+	TeamName         string
+	TeamKey          string
+	URL              string
+	CompletedAt      string
+	UpdatedAt        string
+	ParentIdentifier string
+	Comments         []Comment
+	Priority         float64
 }
 
 // Comment is a comment on a Linear issue.

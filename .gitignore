@@ -201,3 +201,8 @@ docs.yml
 /.cache/
 /.claude/
 /.codegraph/
+
+# devenv generated
+.pre-commit-config.yaml
+.devenv/
+/gh-alfred/.workflow/gh-alfred

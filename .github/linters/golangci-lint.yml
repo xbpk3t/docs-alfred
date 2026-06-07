@@ -4,7 +4,7 @@
 # 基于《100 Go Mistakes and How to Avoid Them》的完整配置
 
 # 配置文件版本
-version: "2"
+version: 2
 
 
 #output:
@@ -114,6 +114,7 @@ linters:
           arguments:
             - ["ID", "HTTP", "API", "URL"] # Allowlist for correct initialisms
             - ["Id", "Http", "Url", "VM"] # Blocklist for incorrect initialisms
+          message: "Use Go-style naming conventions (e.g., 'HTTP' for 'Http')"
 
         # 补充的最佳实践规则
         - name: function-length    # 函数长度限制 - 单一职责原则
@@ -197,9 +198,14 @@ linters:
     nestif:
       min-complexity: 4  # 嵌套if的复杂度阈值
 
-    # testpackage: # 测试包检查配置
+    testpackage: # 测试包检查配置
+      skip-imports: ["testing"]
 
-    # wrapcheck: # 错误包装检查配置
+    wrapcheck: # 错误包装检查配置
+      ignoreSigs:
+        - "fmt\\.Errorf"
+        - "errors\\.Wrap"
+        - "errors\\.Wrapf"
 
     errorlint: # 错误处理检查配置
       errorf: true
@@ -237,6 +243,43 @@ linters:
         - const C
         - T any
         - m map[string]int
+
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*_test\\.go$"
+  exclude-dirs:
+    - vendor
+    - node_modules
+  exclude-rules:
+
+    # 只在测试文件中忽略函数长度检查
+    - path: _test\.go
+      linters:
+        - funlen
+        - goconst
+        - gocognit
+        - revive
+
+    - linters:
+        - lll
+      source: "^//go:generate "
+
+    # 只在包含特定注释的代码行忽略常量检查
+    - linters:
+        - goconst
+      source: "^// nolint:"
+
+    # 排除大部分revive的过于严格的规则
+    # 只在错误信息匹配特定模式时忽略
+    - linters:
+        - revive
+      text: "(should have comment or be unexported|exported.*should have comment|package-comments|blank-imports|redefines-builtin-id|stutters|comment on exported.*should be of the form|var-naming)"
 
 
 severity:
