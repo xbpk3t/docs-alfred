@@ -3,6 +3,7 @@ package ghdata
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -53,6 +54,21 @@ func TestGhCheck_InvalidYAML(t *testing.T) {
 	require.Error(t, err, "YAML parse error should be propagated")
 	assert.Contains(t, err.Error(), "yaml")
 	require.NotNil(t, result)
+}
+
+func TestGhCheck_MaxLinesDefaultAndOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := strings.Repeat("# filler\n", defaultMaxLines) + "- type: go\n  record: []\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(content), 0644))
+
+	defaultResult, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	require.True(t, checkutil.HasErrors(defaultResult.Issues))
+	require.Contains(t, defaultResult.Issues[0].Message, "FILE_TOO_LONG: 1002 lines (max 1000)")
+
+	overrideResult, err := RunGhCheckWithOptions(tmpDir, CheckOptions{MaxLines: 1500})
+	require.NoError(t, err)
+	require.False(t, checkutil.HasErrors(overrideResult.Issues))
 }
 
 func TestWalkGhRepos_TypedEvents(t *testing.T) {

@@ -15,6 +15,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
+	"github.com/xbpk3t/docs-alfred/pkg/yamlutil"
 )
 
 const evTypeRepo = "repo"
@@ -217,11 +218,11 @@ func findRecordInSequence(seq *ast.SequenceNode, findURL, topicName string) (*as
 		}
 
 		// Section-level record
-		recVal := findMappingValue(section, "record")
+		recVal := yamlutil.MappingValue(section, "record")
 		if recVal == nil {
 			return nil, errors.New("section has no 'record' field")
 		}
-		recSeq, ok := recVal.(*ast.SequenceNode)
+		recSeq, ok := yamlutil.Sequence(recVal)
 		if !ok {
 			return nil, errors.New("'record' is not a sequence")
 		}
@@ -232,41 +233,30 @@ func findRecordInSequence(seq *ast.SequenceNode, findURL, topicName string) (*as
 	return nil, errURLNotFound
 }
 
-// findMappingValue finds the value node for a given key in a mapping node.
-func findMappingValue(m *ast.MappingNode, key string) ast.Node {
-	for _, v := range m.Values {
-		if k, ok := v.Key.(*ast.StringNode); ok && k.Value == key {
-			return v.Value
-		}
-	}
-
-	return nil
-}
-
 // sectionContainsURL checks if any repo entry in the section has the matching URL.
 func sectionContainsURL(section *ast.MappingNode, findURL string) bool {
-	repoVal := findMappingValue(section, "repo")
+	repoVal := yamlutil.MappingValue(section, "repo")
 	if repoVal == nil {
 		return false
 	}
-	repoSeq, ok := repoVal.(*ast.SequenceNode)
+	repoSeq, ok := yamlutil.Sequence(repoVal)
 	if !ok {
 		return false
 	}
 	for _, repoItem := range repoSeq.Values {
-		repoMap, ok := repoItem.(*ast.MappingNode)
+		repoMap, ok := yamlutil.Mapping(repoItem)
 		if !ok {
 			continue
 		}
-		urlVal := findMappingValue(repoMap, "url")
+		urlVal := yamlutil.MappingValue(repoMap, "url")
 		if urlVal == nil {
 			continue
 		}
-		urlStr, ok := urlVal.(*ast.StringNode)
+		urlStr, ok := yamlutil.String(urlVal)
 		if !ok {
 			continue
 		}
-		if urlutil.Equal(urlStr.Value, findURL) {
+		if urlutil.Equal(urlStr, findURL) {
 			return true
 		}
 	}
@@ -276,33 +266,33 @@ func sectionContainsURL(section *ast.MappingNode, findURL string) bool {
 
 // findTopicRecord finds the record sequence within a matching topic entry.
 func findTopicRecord(section *ast.MappingNode, topicName string) (*ast.SequenceNode, error) {
-	topicsVal := findMappingValue(section, "topics")
+	topicsVal := yamlutil.MappingValue(section, "topics")
 	if topicsVal == nil {
 		return nil, errors.New("section has no 'topics' field")
 	}
-	topicsSeq, ok := topicsVal.(*ast.SequenceNode)
+	topicsSeq, ok := yamlutil.Sequence(topicsVal)
 	if !ok {
 		return nil, errors.New("'topics' is not a sequence")
 	}
 	for _, topicItem := range topicsSeq.Values {
-		topicMap, ok := topicItem.(*ast.MappingNode)
+		topicMap, ok := yamlutil.Mapping(topicItem)
 		if !ok {
 			continue
 		}
-		topicStrVal := findMappingValue(topicMap, "topic")
+		topicStrVal := yamlutil.MappingValue(topicMap, "topic")
 		if topicStrVal == nil {
 			continue
 		}
-		topicStr, ok := topicStrVal.(*ast.StringNode)
+		topicStr, ok := yamlutil.String(topicStrVal)
 		if !ok {
 			continue
 		}
-		if topicStr.Value == topicName {
-			recVal := findMappingValue(topicMap, "record")
+		if topicStr == topicName {
+			recVal := yamlutil.MappingValue(topicMap, "record")
 			if recVal == nil {
 				return nil, fmt.Errorf("topic %q has no 'record' field", topicName)
 			}
-			recSeq, ok := recVal.(*ast.SequenceNode)
+			recSeq, ok := yamlutil.Sequence(recVal)
 			if !ok {
 				return nil, fmt.Errorf("topic %q 'record' is not a sequence", topicName)
 			}

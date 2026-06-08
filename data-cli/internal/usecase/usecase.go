@@ -14,9 +14,10 @@ import (
 
 // DomainCheckInput holds input for domain data check.
 type DomainCheckInput struct {
-	Domain    data.DataDomain
-	Path      string // empty = default for domain
-	RuleScope string // empty = default for domain
+	Domain     data.DataDomain
+	Path       string // empty = default for domain
+	RuleScope  string // empty = default for domain
+	GhMaxLines int    // <= 0 = default for gh checks
 }
 
 // DomainCheckResult holds the result of a domain data check.
@@ -37,9 +38,10 @@ func RunDomainCheck(input DomainCheckInput) (*DomainCheckResult, error) {
 }
 
 type domainCheckOptions struct {
-	path  string
-	scope string
-	spec  data.DomainSpec
+	path       string
+	scope      string
+	spec       data.DomainSpec
+	ghMaxLines int
 }
 
 func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, error) {
@@ -60,12 +62,12 @@ func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, erro
 		}
 	}
 
-	return domainCheckOptions{spec: spec, path: path, scope: scope}, nil
+	return domainCheckOptions{spec: spec, path: path, scope: scope, ghMaxLines: input.GhMaxLines}, nil
 }
 
 func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions) (*DomainCheckResult, error) {
 	if domain == data.DomainGH {
-		result, err := ghdata.RunGhCheck(opts.path)
+		result, err := ghdata.RunGhCheckWithOptions(opts.path, ghdata.CheckOptions{MaxLines: opts.ghMaxLines})
 		if err != nil {
 			return nil, err
 		}

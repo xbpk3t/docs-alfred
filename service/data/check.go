@@ -11,6 +11,7 @@ import (
 	yamlparser "github.com/goccy/go-yaml/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/yamlutil"
 )
 
 const (
@@ -86,7 +87,7 @@ func checkFile(file, scope string) []checkutil.Issue {
 		seq, ok := doc.Body.(*ast.SequenceNode)
 		if !ok {
 			issues = append(issues, checkutil.Issue{
-				File: file, Line: nodeLine(doc.Body),
+				File: file, Line: yamlutil.NodeLine(doc.Body),
 				Severity: checkutil.SeverityError, Message: "顶层必须是列表",
 			})
 
@@ -101,26 +102,13 @@ func checkFile(file, scope string) []checkutil.Issue {
 
 // ---- AST-based checking (with line/col) ----
 
-// nodeLine safely extracts the line number from an AST node.
-func nodeLine(n ast.Node) int {
-	if n == nil {
-		return 0
-	}
-	tk := n.GetToken()
-	if tk == nil {
-		return 0
-	}
-
-	return tk.Position.Line
-}
-
 func checkItemsAST(file string, seq *ast.SequenceNode, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
 	var issues []checkutil.Issue
 	for i, item := range seq.Values {
 		mapping, ok := item.(*ast.MappingNode)
 		if !ok {
 			issues = append(issues, checkutil.Issue{
-				File: file, Line: nodeLine(item),
+				File: file, Line: yamlutil.NodeLine(item),
 				Severity: checkutil.SeverityError,
 				Message:  fmt.Sprintf("第 %d 项必须是对象", i+1),
 			})
@@ -141,7 +129,7 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 		if kv == nil {
 			continue
 		}
-		key := keyString(kv.Key)
+		key := yamlutil.KeyString(kv.Key)
 		if key == "" {
 			continue
 		}
@@ -155,7 +143,7 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 	if scope != ScopeDiary && scope != ScopeJav {
 		if !hasName {
 			issues = append(issues, checkutil.Issue{
-				File: file, Line: nodeLine(mapping),
+				File: file, Line: yamlutil.NodeLine(mapping),
 				Severity: checkutil.SeverityError,
 				Message:  fmt.Sprintf("缺少必填字段 name (%s)", path),
 			})
@@ -164,26 +152,6 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 
 	return issues
 }
-
-// keyString extracts the string value from a MapKeyNode.
-func keyString(n ast.MapKeyNode) string {
-	if n == nil {
-		return ""
-	}
-	switch v := n.(type) {
-	case *ast.StringNode:
-		return v.Value
-	case *ast.IntegerNode:
-		if val, ok := v.Value.(int64); ok {
-			return strconv.FormatInt(val, 10)
-		}
-
-		return fmt.Sprintf("%v", v.Value)
-	}
-
-	return n.String()
-}
-
 func checkKeyValueAST(file, key string, kv *ast.MappingValueNode, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
 	var issues []checkutil.Issue
 
@@ -198,7 +166,7 @@ func checkKeyValueAST(file, key string, kv *ast.MappingValueNode, allowedFields 
 	val := kv.Value
 
 	// Check null/empty values
-	if isNullValue(val) && key != fieldDes {
+	if yamlutil.IsNullOrEmptyString(val) && key != fieldDes {
 		issues = append(issues, warnIssue(file, val, fmt.Sprintf("字段 %s 为空，建议省略", key)))
 	}
 
@@ -207,24 +175,6 @@ func checkKeyValueAST(file, key string, kv *ast.MappingValueNode, allowedFields 
 
 	return issues
 }
-
-// isNullValue checks if an AST node represents a null/empty value.
-func isNullValue(n ast.Node) bool {
-	if n == nil {
-		return true
-	}
-	// Check if it's a null node
-	if _, ok := n.(*ast.NullNode); ok {
-		return true
-	}
-	// Check if it's an empty string
-	if s, ok := n.(*ast.StringNode); ok && strings.TrimSpace(s.Value) == "" {
-		return true
-	}
-
-	return false
-}
-
 func checkFieldValueAST(file, key string, val ast.Node, scope RuleScope) []checkutil.Issue {
 	switch key {
 	case fieldScore:
@@ -371,9 +321,9 @@ func checkSubFieldAST(file string, val ast.Node, scope RuleScope) []checkutil.Is
 // ---- Issue helpers ----
 
 func errIssue(file string, n ast.Node, msg string) checkutil.Issue {
-	return checkutil.Issue{File: file, Line: nodeLine(n), Severity: checkutil.SeverityError, Message: msg}
+	return checkutil.Issue{File: file, Line: yamlutil.NodeLine(n), Severity: checkutil.SeverityError, Message: msg}
 }
 
 func warnIssue(file string, n ast.Node, msg string) checkutil.Issue {
-	return checkutil.Issue{File: file, Line: nodeLine(n), Severity: checkutil.SeverityWarn, Message: msg}
+	return checkutil.Issue{File: file, Line: yamlutil.NodeLine(n), Severity: checkutil.SeverityWarn, Message: msg}
 }

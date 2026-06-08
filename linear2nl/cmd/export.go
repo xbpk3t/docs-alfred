@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 func newExportCmd() *cobra.Command {
@@ -120,7 +120,7 @@ func exportJSON(details []linear.IssueDetail, output, dateStr string) error {
 		})
 	}
 
-	data, err := json.MarshalIndent(payload, "", "  ")
+	data, err := fileutil.MarshalJSON(payload)
 	if err != nil {
 		return fmt.Errorf("marshal json: %w", err)
 	}

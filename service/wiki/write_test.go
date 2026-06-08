@@ -1,6 +1,8 @@
 package wiki
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -56,4 +58,37 @@ title: demo
 `
 
 	assert.Nil(t, parseSummaryFrontmatter(raw))
+}
+
+func TestWriteSummaryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
+	root := t.TempDir()
+	item := &ClassifyItem{
+		URL:       "https://example.com/a",
+		Title:     "A",
+		TopicPath: "topic/path",
+		Type:      TypeDeepDive,
+		Summary:   "summary",
+	}
+
+	path, err := WriteSummary(item, &WriteOptions{WikiRoot: root, DryRun: true})
+
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(root, "topic", "path", "summary.md"), path)
+	_, err = os.Stat(filepath.Join(root, "topic"))
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestWriteFailureEntryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
+	root := t.TempDir()
+	item := &ClassifyItem{
+		URL:   "https://example.com/a",
+		Title: "A",
+	}
+
+	path, err := WriteFailureEntry(item, FailureFetch, "fetch failed", &WriteOptions{WikiRoot: root, DryRun: true})
+
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(root, "failed", "fetch-failed.md"), path)
+	_, err = os.Stat(filepath.Join(root, "failed"))
+	assert.True(t, os.IsNotExist(err))
 }

@@ -3,11 +3,9 @@ package rss //nolint:revive
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/creasty/defaults"
 	"github.com/go-playground/validator/v10"
-	"github.com/knadh/koanf/v2"
 
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
@@ -169,29 +167,38 @@ func (c *Config) AiBaseURLForWiki() string {
 
 // NewConfig 加载配置文件.
 func NewConfig(configFile string) (*Config, error) {
-	data, err := os.ReadFile(configFile)
+	config, err := configutil.LoadYAMLConfig(configutil.LoadYAMLConfigOptions[Config]{
+		Path: configFile,
+		AfterUnmarshal: func(config *Config) error {
+			config.applyDefaults()
+
+			return nil
+		},
+		Validate: func(config *Config) error {
+			return config.Validate()
+		},
+	})
 	if err != nil {
-		return nil, errcode.WithError(errcode.ErrReadConfig, err)
-	}
-
-	k, err := configutil.LoadYAMLBytes(data)
-	if err != nil {
-		return nil, errcode.WithError(errcode.ErrUnmarshalConfig, err)
-	}
-
-	var config Config
-	if err := k.UnmarshalWithConf("", &config, koanf.UnmarshalConf{Tag: "yaml"}); err != nil {
-		return nil, errcode.WithError(errcode.ErrUnmarshalConfig, err)
-	}
-
-	// Apply defaults
-	config.applyDefaults()
-
-	if err := config.Validate(); err != nil {
-		return nil, errcode.WithError(errcode.ErrValidateConfig, err)
+		return nil, wrapConfigLoadError(err)
 	}
 
 	return &config, nil
+}
+
+func wrapConfigLoadError(err error) error {
+	var loadErr *configutil.LoadError
+	if !errors.As(err, &loadErr) {
+		return err
+	}
+
+	switch loadErr.Stage {
+	case configutil.StageRead:
+		return errcode.WithError(errcode.ErrReadConfig, loadErr.Err)
+	case configutil.StageValidate:
+		return errcode.WithError(errcode.ErrValidateConfig, loadErr.Err)
+	default:
+		return errcode.WithError(errcode.ErrUnmarshalConfig, loadErr.Err)
+	}
 }
 
 func (c *Config) applyDefaults() {

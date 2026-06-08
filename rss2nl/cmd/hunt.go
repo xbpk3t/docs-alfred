@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -777,12 +776,8 @@ func isBlocked(domain string, blockedSet map[string]bool) bool {
 // -- State persistence --
 
 func loadHuntState(path string) *huntState {
-	data, err := os.ReadFile(path)
+	state, err := fileutil.ReadJSONFile[huntState](path)
 	if err != nil {
-		return &huntState{Seen: make(map[string]huntSeenRecord)}
-	}
-	var state huntState
-	if err := json.Unmarshal(data, &state); err != nil {
 		return &huntState{Seen: make(map[string]huntSeenRecord)}
 	}
 	if state.Seen == nil {
@@ -796,17 +791,13 @@ func loadHuntState(path string) *huntState {
 }
 
 func saveHuntState(path string, state *huntState) {
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return
-	}
-	_ = fileutil.AtomicWriteFile(path, data, fileutil.FilePermPrivate)
+	_ = fileutil.AtomicWriteJSONFile(path, state, fileutil.FilePermPrivate)
 }
 
 // -- Report generation --
 
 func writeHuntReports(report *huntReport, mdPath, htmlPath, jsonPath string) {
-	jsonData, err := json.MarshalIndent(report, "", "  ")
+	jsonData, err := fileutil.MarshalJSON(report)
 	if err != nil {
 		slog.Warn("Failed to marshal JSON report", "error", err)
 

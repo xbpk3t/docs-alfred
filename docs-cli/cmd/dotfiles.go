@@ -110,7 +110,19 @@ func writeDotfilesSyncRecordResult(result *workspaceuc.DotfilesSyncRecordResult,
 		return err
 	}
 	if format == outputFormatJSON {
-		return writeJSONOutput(result)
+		summary := map[string]any{
+			"changedFiles": len(result.ChangedFiles),
+		}
+		if result.Error != "" {
+			summary["error"] = result.Error
+		}
+
+		return writeCommandOutput(format, &CommandOutput{
+			Name:    "dotfiles sync-record",
+			OK:      result.OK,
+			Summary: summary,
+			Results: result.ChangedFiles,
+		}, "")
 	}
 
 	if !result.OK {
