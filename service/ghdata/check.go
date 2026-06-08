@@ -7,7 +7,13 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
-const maxLines = 1000
+const defaultMaxLines = 1000
+
+// CheckOptions controls data/gh validation behavior.
+type CheckOptions struct {
+	// MaxLines is the maximum allowed lines per YAML file. Values <= 0 use the default.
+	MaxLines int
+}
 
 // CheckResult holds the gh check results.
 type CheckResult struct {
@@ -17,9 +23,15 @@ type CheckResult struct {
 	TotalRecords int
 }
 
-// RunGhCheck validates all data/gh YAML entries.
+// RunGhCheck validates all data/gh YAML entries using default options.
 func RunGhCheck(ghRoot string) (*CheckResult, error) {
+	return RunGhCheckWithOptions(ghRoot, CheckOptions{})
+}
+
+// RunGhCheckWithOptions validates all data/gh YAML entries.
+func RunGhCheckWithOptions(ghRoot string, opts CheckOptions) (*CheckResult, error) {
 	result := &CheckResult{}
+	maxLines := opts.effectiveMaxLines()
 
 	err := WalkGhRepos(ghRoot, func(ev WalkerEvent) error {
 		switch ev.Type {
@@ -28,7 +40,7 @@ func RunGhCheck(ghRoot string) (*CheckResult, error) {
 		case evEmpty:
 			result.addIssue(ev.File, "error", "EMPTY_FILE")
 		case evFile:
-			handleFileEvent(result, &ev)
+			handleFileEvent(result, &ev, maxLines)
 		case evNotArray:
 			result.addIssue(ev.File, "error",
 				fmt.Sprintf("doc[%d]: expected array at root", ev.DocIndex))
@@ -44,8 +56,16 @@ func RunGhCheck(ghRoot string) (*CheckResult, error) {
 	return result, err
 }
 
+func (o CheckOptions) effectiveMaxLines() int {
+	if o.MaxLines <= 0 {
+		return defaultMaxLines
+	}
+
+	return o.MaxLines
+}
+
 // handleFileEvent processes a file event, checking line count limits.
-func handleFileEvent(result *CheckResult, ev *WalkerEvent) {
+func handleFileEvent(result *CheckResult, ev *WalkerEvent, maxLines int) {
 	if ev.LineCount > maxLines {
 		result.addIssue(ev.File, "error",
 			fmt.Sprintf("FILE_TOO_LONG: %d lines (max %d)", ev.LineCount, maxLines))

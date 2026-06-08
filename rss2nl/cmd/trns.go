@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -138,7 +137,7 @@ func runTrns(source string, flags *trnsFlags) error {
 
 	// Write index
 	indexPath := cache.IndexFilePath()
-	idxData, err := json.MarshalIndent(entries, "", "  ")
+	idxData, err := fileutil.MarshalJSON(entries)
 	if err != nil {
 		return fmt.Errorf("marshal index: %w", err)
 	}

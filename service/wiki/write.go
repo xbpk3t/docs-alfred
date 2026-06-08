@@ -43,11 +43,16 @@ type WriteOptions struct {
 // Follows TS writer.ts: appendToSummaryFile.
 func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 	topicDir := resolveTopicDir(item, opts)
+	summaryPath := filepath.Join(topicDir, "summary.md")
+	if opts.DryRun {
+		slog.Info("[DRY RUN] Would write summary", "path", summaryPath)
+
+		return summaryPath, nil
+	}
 	if err := fileutil.EnsureDir(topicDir); err != nil {
 		return "", fmt.Errorf("create topic dir: %w", err)
 	}
 
-	summaryPath := filepath.Join(topicDir, "summary.md")
 	today := time.Now().Format("2006-01-02")
 	dateHeading := "## " + today
 
@@ -68,12 +73,6 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 	newBody := appendEntryBody(existingBody, dateHeading, entry)
 
 	content := renderContent(fm, newBody)
-
-	if opts.DryRun {
-		slog.Info("[DRY RUN] Would write summary", "path", summaryPath)
-
-		return summaryPath, nil
-	}
 
 	if err := fileutil.AtomicWriteFile(summaryPath, []byte(content), fileutil.FilePermPrivate); err != nil {
 		return "", fmt.Errorf("write summary: %w", err)
@@ -166,17 +165,17 @@ func WriteFailureEntry(item *ClassifyItem, failureType, extraInfo string, opts *
 	failedDir := filepath.Join(opts.WikiRoot, "failed")
 	path := filepath.Join(failedDir, filename)
 
-	if err := fileutil.EnsureDir(failedDir); err != nil {
-		return "", fmt.Errorf("create failed dir: %w", err)
-	}
-
-	entry := buildFailureEntry(item, extraInfo)
-
 	if opts.DryRun {
 		slog.Info("[DRY RUN] Would write failure entry", "path", path, "type", failureType)
 
 		return path, nil
 	}
+
+	if err := fileutil.EnsureDir(failedDir); err != nil {
+		return "", fmt.Errorf("create failed dir: %w", err)
+	}
+
+	entry := buildFailureEntry(item, extraInfo)
 
 	if err := appendToFile(path, entry); err != nil {
 		return "", err

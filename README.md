@@ -14,7 +14,10 @@ docs-cli images fix
 docs-cli blog check
 docs-cli dotfiles check
 docs-cli dotfiles sync-record
-docs-cli wiki
+# Classify and summarize explicit URLs into wiki
+docs-cli wiki add <url> [url...]
+# Process wiki/inbox.md and flush handled lines
+docs-cli wiki inbox process
 ```
 
 

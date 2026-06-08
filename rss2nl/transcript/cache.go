@@ -3,7 +3,6 @@ package transcript
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -79,17 +78,12 @@ func (c *Cache) IndexFilePath() string {
 // Returns nil if the cache doesn't exist or is empty.
 func (c *Cache) Get(key string) (*CacheEntry, error) {
 	metaPath := c.MetaFilePath(key)
-	data, err := os.ReadFile(metaPath)
+	entry, err := fileutil.ReadJSONFile[CacheEntry](metaPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrCacheMiss
 		}
 
-		return nil, err
-	}
-
-	var entry CacheEntry
-	if err := json.Unmarshal(data, &entry); err != nil {
 		return nil, err
 	}
 
@@ -123,7 +117,7 @@ func (c *Cache) Set(key string, entry *CacheEntry, content string) error {
 	// Write metadata
 	entry.FetchedAt = time.Now()
 	metaPath := c.MetaFilePath(key)
-	metaData, err := json.MarshalIndent(entry, "", "  ")
+	metaData, err := fileutil.MarshalJSON(entry)
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}

@@ -1,7 +1,6 @@
 package data
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -30,9 +29,9 @@ func ExtractTopics(outPath string) error {
 		return fmt.Errorf("read %s: %w", renderedPath, err)
 	}
 
-	var entries []map[string]any
-	if err2 := json.Unmarshal(data, &entries); err2 != nil {
-		return fmt.Errorf("parse %s: %w", renderedPath, err2)
+	entries, err := fileutil.UnmarshalJSON[[]map[string]any](data)
+	if err != nil {
+		return fmt.Errorf("parse %s: %w", renderedPath, err)
 	}
 
 	var backbone []backboneEntry
@@ -54,7 +53,7 @@ func ExtractTopics(outPath string) error {
 		}
 	}
 
-	outData, err := json.MarshalIndent(backbone, "", "  ")
+	outData, err := fileutil.MarshalJSON(backbone)
 	if err != nil {
 		return fmt.Errorf("marshal backbone: %w", err)
 	}

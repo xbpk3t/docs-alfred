@@ -11,7 +11,7 @@ func TestRootCommandOwnsWorkspaceResources(t *testing.T) {
 	root := newRootCmd()
 
 	require.Equal(t, "docs-cli", root.Name())
-	requireCommandNames(t, root.Commands(), []string{"blog", "dotfiles", "images", "wiki"})
+	requireCommandNames(t, root.Commands(), []string{"blog", "dotfiles", "images", wikiCommandName})
 	requireNoCommand(t, root, cmdCheck)
 	requireNoCommand(t, root, "sync-record")
 	requireNoCommand(t, root, "alfred")
@@ -40,19 +40,50 @@ func TestDotfilesCommandOwnsDotfilesActions(t *testing.T) {
 	requireCommandNames(t, dotfilesCmd.Commands(), []string{cmdCheck, "sync-record"})
 }
 
-func TestWikiCommandFlags(t *testing.T) {
-	wikiCmd, _, err := newRootCmd().Find([]string{"wiki"})
+func TestWikiCommandOwnsWikiActions(t *testing.T) {
+	wikiCmd, _, err := newRootCmd().Find([]string{wikiCommandName})
 	require.NoError(t, err)
 
-	require.Equal(t, "wiki", wikiCmd.Name())
-	require.True(t, wikiCmd.HasAvailableFlags())
-	require.True(t, wikiCmd.Flags().HasFlags())
+	require.Equal(t, wikiCommandName, wikiCmd.Name())
+	require.False(t, wikiCmd.HasAvailableFlags())
+	requireCommandNames(t, wikiCmd.Commands(), []string{"add", wikiInboxCommandName})
+	require.Nil(t, wikiCmd.Flags().Lookup(wikiInboxCommandName))
+}
 
-	// Verify expected flags exist
-	f := wikiCmd.Flags()
-	require.NotNil(t, f.Lookup("inbox"))
+func TestWikiAddCommandFlags(t *testing.T) {
+	wikiAddCmd, _, err := newRootCmd().Find([]string{wikiCommandName, "add"})
+	require.NoError(t, err)
+
+	require.Equal(t, "add", wikiAddCmd.Name())
+	require.True(t, wikiAddCmd.HasAvailableFlags())
+
+	f := wikiAddCmd.Flags()
 	require.NotNil(t, f.Lookup("config"))
 	require.NotNil(t, f.Lookup("wiki-root"))
+	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, f.Lookup("dry-run"))
+}
+
+func TestWikiInboxCommandOwnsProcessAction(t *testing.T) {
+	wikiInboxCmd, _, err := newRootCmd().Find([]string{wikiCommandName, wikiInboxCommandName})
+	require.NoError(t, err)
+
+	require.Equal(t, wikiInboxCommandName, wikiInboxCmd.Name())
+	requireCommandNames(t, wikiInboxCmd.Commands(), []string{"process"})
+}
+
+func TestWikiInboxProcessCommandFlags(t *testing.T) {
+	wikiInboxProcessCmd, _, err := newRootCmd().Find([]string{wikiCommandName, wikiInboxCommandName, "process"})
+	require.NoError(t, err)
+
+	require.Equal(t, "process", wikiInboxProcessCmd.Name())
+	require.True(t, wikiInboxProcessCmd.HasAvailableFlags())
+
+	f := wikiInboxProcessCmd.Flags()
+	require.NotNil(t, f.Lookup("config"))
+	require.NotNil(t, f.Lookup("wiki-root"))
+	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, f.Lookup("dry-run"))
 }
 
 func requireCommandNames(t *testing.T, commands []*cobra.Command, want []string) {

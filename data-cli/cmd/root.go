@@ -19,6 +19,8 @@ type renderFlags struct {
 	out     string
 }
 
+const ghCommandName = "gh"
+
 // Execute is the entry point for the data-cli binary.
 func Execute() error {
 	return newRootCmd().Execute()
@@ -65,6 +67,7 @@ func newRenderCmd() *cobra.Command {
 
 func newCheckCmd() *cobra.Command {
 	var dataPath, ruleScope string
+	var ghMaxLines int
 
 	cmd := &cobra.Command{
 		Use:   "check <domain>",
@@ -76,22 +79,28 @@ func newCheckCmd() *cobra.Command {
 				return err
 			}
 
-			return runDomainCheck(domain, dataPath, ruleScope)
+			return runDomainCheck(domain, dataPath, ruleScope, ghMaxLines)
 		},
 	}
 
 	cmd.Flags().StringVar(&dataPath, "path", "", "Override data directory")
+	cmd.Flags().IntVar(&ghMaxLines, "max-lines", 0, "Override data/gh maximum YAML file line count for gh checks")
 	cmd.Flags().StringVar(&ruleScope, "rule-scope", "", "Override structured data check rule scope")
 	_ = cmd.Flags().MarkHidden("rule-scope")
 
 	return cmd
 }
 
-func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string) error {
+func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string, ghMaxLines int) error {
+	if ghMaxLines < 0 {
+		return errors.New("--max-lines must be greater than or equal to 0")
+	}
+
 	result, err := usecase.RunDomainCheck(usecase.DomainCheckInput{
-		Domain:    domain,
-		Path:      dataPath,
-		RuleScope: ruleScope,
+		Domain:     domain,
+		Path:       dataPath,
+		RuleScope:  ruleScope,
+		GhMaxLines: ghMaxLines,
 	})
 	if err != nil {
 		return err
@@ -163,7 +172,7 @@ func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
 
 func newGhCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "gh",
+		Use:   ghCommandName,
 		Short: "GitHub data entry operations",
 	}
 
