@@ -3,14 +3,21 @@ package wiki
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/adrg/frontmatter"
 	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/textutil"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 	"mvdan.cc/xurls/v2"
 )
 
@@ -29,6 +36,7 @@ type SummaryFrontmatter struct {
 const (
 	FailureFetch    = "fetch"
 	FailureResolve  = "resolve"
+	FailureExtract  = "extract"
 	FailureClassify = "classify"
 )
 
@@ -37,6 +45,30 @@ type WriteOptions struct {
 	WikiRoot string
 	BatchID  string
 	DryRun   bool
+}
+
+var pathLocks = struct {
+	locks map[string]*sync.Mutex
+	mu    sync.Mutex
+}{locks: make(map[string]*sync.Mutex)}
+
+func lockPath(path string) func() {
+	key, err := filepath.Abs(path)
+	if err != nil {
+		key = filepath.Clean(path)
+	}
+
+	pathLocks.mu.Lock()
+	mu := pathLocks.locks[key]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		pathLocks.locks[key] = mu
+	}
+	pathLocks.mu.Unlock()
+
+	mu.Lock()
+
+	return mu.Unlock
 }
 
 // WriteSummary writes a structured summary.md entry with YAML frontmatter.
@@ -49,6 +81,9 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 
 		return summaryPath, nil
 	}
+	unlock := lockPath(summaryPath)
+	defer unlock()
+
 	if err := fileutil.EnsureDir(topicDir); err != nil {
 		return "", fmt.Errorf("create topic dir: %w", err)
 	}
@@ -124,7 +159,7 @@ func loadFrontmatter(summaryPath string, item *ClassifyItem, today, batchID stri
 
 func appendEntryBody(existingBody, dateHeading, entry string) string {
 	if strings.Contains(existingBody, dateHeading) {
-		return strings.Replace(existingBody, dateHeading, fmt.Sprintf("%s\n\n%s", dateHeading, entry), 1)
+		return appendEntryToExistingDateSection(existingBody, dateHeading, entry)
 	}
 	insertPos := strings.Index(existingBody, "\n## ")
 	if insertPos >= 0 {
@@ -132,6 +167,27 @@ func appendEntryBody(existingBody, dateHeading, entry string) string {
 	}
 
 	return fmt.Sprintf("%s%s\n\n%s\n", existingBody, dateHeading, entry)
+}
+
+func appendEntryToExistingDateSection(existingBody, dateHeading, entry string) string {
+	dateStart := strings.Index(existingBody, dateHeading)
+	if dateStart < 0 {
+		return existingBody
+	}
+	sectionStart := dateStart + len(dateHeading)
+	nextHeadingRel := strings.Index(existingBody[sectionStart:], "\n## ")
+	insertPos := len(existingBody)
+	if nextHeadingRel >= 0 {
+		insertPos = sectionStart + nextHeadingRel
+	}
+
+	prefix := strings.TrimRight(existingBody[:insertPos], "\n")
+	suffix := existingBody[insertPos:]
+	if strings.TrimSpace(suffix) == "" {
+		return fmt.Sprintf("%s\n\n%s\n", prefix, entry)
+	}
+
+	return fmt.Sprintf("%s\n\n%s\n%s", prefix, entry, suffix)
 }
 
 func renderContent(fm *SummaryFrontmatter, body string) string {
@@ -146,6 +202,7 @@ func renderContent(fm *SummaryFrontmatter, body string) string {
 var failureFilenames = map[string]string{
 	FailureFetch:    "fetch-failed.md",
 	FailureResolve:  "resolve-failed.md",
+	FailureExtract:  "extract-failed.md",
 	FailureClassify: "group-failed.md",
 }
 
@@ -153,6 +210,7 @@ var failureFilenames = map[string]string{
 // under <wikiRoot>/failed/<failureType>-failed.md. Each file collects one type:
 //   - fetch:     network-level errors (DNS, timeout) with no opencli fallback
 //   - resolve:   HTTP-level errors (403 anti-bot) where opencli also failed
+//   - extract:   URL fetched but usable article/media content could not be extracted
 //   - classify:  content fetched but AI couldn't assign a topic
 //
 // Format is a structured markdown entry with title, failure reason, and content snippet.
@@ -170,6 +228,8 @@ func WriteFailureEntry(item *ClassifyItem, failureType, extraInfo string, opts *
 
 		return path, nil
 	}
+	unlock := lockPath(path)
+	defer unlock()
 
 	if err := fileutil.EnsureDir(failedDir); err != nil {
 		return "", fmt.Errorf("create failed dir: %w", err)
@@ -196,9 +256,7 @@ func buildFailureEntry(item *ClassifyItem, extraInfo string) string {
 	if bodySnippet == "" {
 		bodySnippet = "(无内容)"
 	}
-	if len(bodySnippet) > 500 {
-		bodySnippet = bodySnippet[:500] + "..."
-	}
+	bodySnippet = textutil.TruncateUTF8(bodySnippet, 500)
 
 	return fmt.Sprintf(`---
 
@@ -248,9 +306,10 @@ func parseSummaryFrontmatter(raw string) *parseResult {
 	return &parseResult{fm: &fm, body: string(body)}
 }
 
-// urlRegex extracts URLs with schemes (http, https, ftp, etc.) from plain text.
-// Handles both markdown [text](url) and bare URLs in a single pass.
+// urlRegex extracts bare URLs after Markdown link destinations are masked.
 var urlRegex = xurls.Strict()
+
+var markdownLinkRegex = regexp.MustCompile(`\[[^\]]+\]\((https?://[^)\s]+)(?:\s+"[^"]*")?\)`)
 
 // ParseInbox parses inbox.md and returns a list of URL entries.
 func ParseInbox(filePath string) ([]InboxEntry, error) {
@@ -264,18 +323,171 @@ func ParseInbox(filePath string) ([]InboxEntry, error) {
 	seen := make(map[string]bool)
 
 	for i, line := range lines {
-		for _, u := range urlRegex.FindAllString(line, -1) {
-			if !strings.HasPrefix(u, "http") {
-				continue
-			}
-			if !seen[u] {
-				seen[u] = true
-				entries = append(entries, InboxEntry{URL: u, LineIndex: i})
-			}
+		for _, u := range extractInboxLineURLs(line) {
+			entries = appendInboxEntry(entries, seen, u, i)
 		}
 	}
 
 	return entries, nil
+}
+
+func extractInboxLineURLs(line string) []string {
+	refs := extractInboxLineURLRefs(line)
+	urls := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		urls = append(urls, ref.URL)
+	}
+
+	return urls
+}
+
+type inboxURLRef struct {
+	URL        string
+	Normalized string
+	Start      int
+	End        int
+}
+
+func extractInboxLineURLRefs(line string) []inboxURLRef {
+	if lineHasRawMalformedURL(line) {
+		return nil
+	}
+
+	var refs []inboxURLRef
+	refs = append(refs, extractMarkdownLinkRefs(line)...)
+
+	bareLine := maskRanges(line, refs)
+	for _, match := range urlRegex.FindAllString(bareLine, -1) {
+		start := strings.Index(bareLine, match)
+		if start < 0 {
+			continue
+		}
+		cleaned := cleanInboxURLWithTrim(match)
+		if cleaned.url == "" {
+			continue
+		}
+		refs = append(refs, inboxURLRef{
+			URL:        cleaned.url,
+			Normalized: urlutil.Normalize(cleaned.url),
+			Start:      start + cleaned.leftTrim,
+			End:        start + len(match) - cleaned.rightTrim,
+		})
+		bareLine = replaceRangeWithSpaces(bareLine, start, start+len(match))
+	}
+	sort.SliceStable(refs, func(i, j int) bool { return refs[i].Start < refs[j].Start })
+
+	return refs
+}
+
+func extractMarkdownLinkRefs(line string) []inboxURLRef {
+	matches := markdownLinkRegex.FindAllStringSubmatchIndex(line, -1)
+	refs := make([]inboxURLRef, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 4 || match[2] < 0 || match[3] < match[2] {
+			continue
+		}
+		cleaned := cleanInboxURL(line[match[2]:match[3]])
+		if cleaned == "" {
+			continue
+		}
+		refs = append(refs, inboxURLRef{
+			URL:        cleaned,
+			Normalized: urlutil.Normalize(cleaned),
+			Start:      match[0],
+			End:        match[1],
+		})
+	}
+
+	return refs
+}
+
+func maskRanges(line string, refs []inboxURLRef) string {
+	masked := line
+	for _, ref := range refs {
+		masked = replaceRangeWithSpaces(masked, ref.Start, ref.End)
+	}
+
+	return masked
+}
+
+func replaceRangeWithSpaces(s string, start, end int) string {
+	if start < 0 || end < start || start > len(s) || end > len(s) {
+		return s
+	}
+
+	return s[:start] + strings.Repeat(" ", end-start) + s[end:]
+}
+
+func appendInboxEntry(entries []InboxEntry, seen map[string]bool, raw string, lineIndex int) []InboxEntry {
+	cleaned := cleanInboxURL(raw)
+	if cleaned == "" {
+		return entries
+	}
+	key := urlutil.Normalize(cleaned)
+	if seen[key] {
+		return entries
+	}
+	seen[key] = true
+
+	return append(entries, InboxEntry{URL: cleaned, LineIndex: lineIndex})
+}
+
+func cleanInboxURL(raw string) string {
+	cleaned := cleanInboxURLWithTrim(raw)
+
+	return cleaned.url
+}
+
+type inboxURLWithTrim struct {
+	url       string
+	leftTrim  int
+	rightTrim int
+}
+
+type inboxTrimBounds struct {
+	left  int
+	right int
+}
+
+func cleanInboxURLWithTrim(raw string) inboxURLWithTrim {
+	raw = strings.TrimSpace(raw)
+	trim := inboxURLTrimBounds(raw)
+	candidate := raw[trim.left : len(raw)-trim.right]
+	cleaned := parseInboxHTTPURL(candidate)
+
+	return inboxURLWithTrim{url: cleaned, leftTrim: trim.left, rightTrim: trim.right}
+}
+
+func inboxURLTrimBounds(raw string) inboxTrimBounds {
+	leftTrim := 0
+	for leftTrim < len(raw) && raw[leftTrim] == '<' {
+		leftTrim++
+	}
+	rightTrim := 0
+	for len(raw)-rightTrim > leftTrim {
+		ch := raw[len(raw)-rightTrim-1]
+		if !strings.ContainsRune("'\".,;:!?)\\]>", rune(ch)) {
+			break
+		}
+		rightTrim++
+	}
+
+	return inboxTrimBounds{left: leftTrim, right: rightTrim}
+}
+
+func parseInboxHTTPURL(candidate string) string {
+	if candidate == "" || strings.Contains(candidate, "](") {
+		return ""
+	}
+	parsed, err := url.Parse(candidate)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ""
+	}
+
+	return parsed.String()
 }
 
 // InboxEntry represents a URL found in inbox.md.
@@ -284,8 +496,9 @@ type InboxEntry struct {
 	LineIndex int    `json:"lineIndex"`
 }
 
-// FlushInbox removes processed lines from inbox.md.
-func FlushInbox(filePath string, processedLineIndices map[int]bool) error {
+// FlushInbox removes handled URLs from inbox.md without dropping unhandled URLs
+// that share the same line.
+func FlushInbox(filePath string, handledURLsByLine map[int][]string) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
@@ -294,8 +507,16 @@ func FlushInbox(filePath string, processedLineIndices map[int]bool) error {
 	lines := strings.Split(string(data), "\n")
 	var remaining []string
 	for i, line := range lines {
-		if !processedLineIndices[i] {
+		handled := normalizedURLSet(handledURLsByLine[i])
+		if len(handled) == 0 {
 			remaining = append(remaining, line)
+
+			continue
+		}
+
+		flushedLine := flushInboxLine(line, handled)
+		if strings.TrimSpace(flushedLine) != "" {
+			remaining = append(remaining, flushedLine)
 		}
 	}
 
@@ -311,4 +532,57 @@ func FlushInbox(filePath string, processedLineIndices map[int]bool) error {
 	}
 
 	return fileutil.AtomicWriteFile(filePath, []byte(strings.Join(cleaned, "\n")), fileutil.FilePermPrivate) // #nosec G703
+}
+
+func normalizedURLSet(urls []string) map[string]bool {
+	set := make(map[string]bool, len(urls))
+	for _, raw := range urls {
+		cleaned := cleanInboxURL(raw)
+		if cleaned == "" {
+			continue
+		}
+		set[urlutil.Normalize(cleaned)] = true
+	}
+
+	return set
+}
+
+func flushInboxLine(line string, handled map[string]bool) string {
+	refs := extractInboxLineURLRefs(line)
+	if len(refs) == 0 {
+		return line
+	}
+	var unhandled int
+	flushed := false
+	for _, v := range slices.Backward(refs) {
+		ref := v
+		if !handled[ref.Normalized] {
+			unhandled++
+
+			continue
+		}
+		line = line[:ref.Start] + line[ref.End:]
+		flushed = true
+	}
+	if !flushed {
+		return line
+	}
+	if unhandled == 0 {
+		return ""
+	}
+
+	return cleanFlushedInboxLine(line)
+}
+
+func cleanFlushedInboxLine(line string) string {
+	line = strings.TrimSpace(line)
+	for strings.Contains(line, "  ") {
+		line = strings.ReplaceAll(line, "  ", " ")
+	}
+	line = strings.ReplaceAll(line, "- ,", "-")
+	line = strings.ReplaceAll(line, "- .", "-")
+	line = strings.ReplaceAll(line, "- ;", "-")
+	line = strings.ReplaceAll(line, "- :", "-")
+
+	return strings.TrimSpace(line)
 }

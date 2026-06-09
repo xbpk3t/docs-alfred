@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
+	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 )
 
 // Summarizer generates AI summaries of transcripts.
@@ -65,11 +66,11 @@ func (s *Summarizer) GenerateSummary(ctx context.Context, episodeTitle, transcri
 }
 
 func truncateTranscript(content string, maxChars int) string {
-	if len(content) <= maxChars {
-		return content
+	truncated := textutil.TruncateUTF8(content, maxChars)
+	if !strings.HasSuffix(truncated, "...") {
+		return truncated
 	}
-
-	truncated := content[:maxChars]
+	truncated = strings.TrimSuffix(truncated, "...")
 	if idx := strings.LastIndex(truncated, " "); idx > 0 {
 		truncated = truncated[:idx]
 	}

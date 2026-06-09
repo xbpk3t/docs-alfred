@@ -11,15 +11,18 @@ import (
 )
 
 type wikiFlags struct {
-	config   string
-	wikiRoot string
-	format   string
-	dryRun   bool
+	config      string
+	wikiRoot    string
+	format      string
+	auditPaths  []string
+	dryRun      bool
+	changedOnly bool
 }
 
 const (
 	wikiCommandName      = "wiki"
 	wikiInboxCommandName = "inbox"
+	wikiAuditCommandName = "audit"
 )
 
 func newWikiCmd() *cobra.Command {
@@ -41,6 +44,7 @@ and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 
 	cmd.AddCommand(newWikiAddCmd())
 	cmd.AddCommand(newWikiInboxCmd())
+	cmd.AddCommand(newWikiAuditCmd())
 
 	return cmd
 }
@@ -112,6 +116,39 @@ func newWikiInboxProcessCmd() *cobra.Command {
 	return cmd
 }
 
+func newWikiAuditCmd() *cobra.Command {
+	var flags wikiFlags
+	cmd := &cobra.Command{
+		Use:   wikiAuditCommandName,
+		Short: "Audit wiki entries for extraction and URL issues",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+
+			result, err := wikiuc.RunAudit(context.Background(), wikiuc.AuditInput{
+				Config:      cfg,
+				ChangedOnly: flags.changedOnly,
+				Paths:       flags.auditPaths,
+			})
+			if err != nil {
+				return err
+			}
+
+			return writeWikiAuditResult(result, flags.format)
+		},
+	}
+	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path")
+	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
+	cmd.Flags().BoolVar(&flags.changedOnly, "changed-only", false, "Audit changed wiki markdown files only")
+	cmd.Flags().StringSliceVar(&flags.auditPaths, "paths", nil, "Audit only these wiki files or directories")
+	addFormatFlag(cmd, &flags.format)
+
+	return cmd
+}
+
 func addWikiFlags(cmd *cobra.Command, flags *wikiFlags) {
 	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
@@ -129,6 +166,21 @@ func writeWikiResult(result *wikiuc.Result, format string) error {
 	}
 
 	if err := writeCommandOutput(format, output, formatWikiTextResult(result)); err != nil {
+		return err
+	}
+	if !result.OK() {
+		return fmt.Errorf("%s failed", result.Name)
+	}
+
+	return nil
+}
+
+func writeWikiAuditResult(result *wikiuc.AuditResult, format string) error {
+	if err := writeCheckCommandOutput(format, &checkCommandOutput{
+		Name:    result.Name,
+		Issues:  result.Issues,
+		Summary: result.Summary(),
+	}, formatWikiAuditTextResult(result)); err != nil {
 		return err
 	}
 	if !result.OK() {
@@ -170,4 +222,15 @@ func formatWikiTextResult(result *wikiuc.Result) string {
 	}
 
 	return out.String()
+}
+
+func formatWikiAuditTextResult(result *wikiuc.AuditResult) string {
+	summary := result.Summary()
+	status := "passed"
+	if !result.OK() {
+		status = "failed"
+	}
+
+	return fmt.Sprintf("%s %s\nsummary: issues=%v errors=%v warnings=%v\n",
+		result.Name, status, summary["issues"], summary["errors"], summary["warnings"])
 }

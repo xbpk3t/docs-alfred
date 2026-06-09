@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,7 +18,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
+	"github.com/xbpk3t/docs-alfred/service/ghindex"
 	wikisvc "github.com/xbpk3t/docs-alfred/service/wiki"
 )
 
@@ -41,11 +44,30 @@ type Config struct {
 
 // WikiConfig contains wiki-specific workflow settings.
 type WikiConfig struct {
-	WikiRoot      string `default:"wiki"                         validate:"required"     yaml:"wikiRoot"`
-	GhTopicsURL   string `default:"https://docs.lucc.dev/gh.yml" validate:"required,url" yaml:"ghTopicsURL"`
-	Concurrency   int    `default:"5"                            validate:"gte=1"        yaml:"concurrency"`
-	PerURLTimeout int    `default:"180"                          validate:"gte=1"        yaml:"perURLTimeout"`
-	MaxRetries    int    `default:"3"                            validate:"gte=0"        yaml:"maxRetries"`
+	WikiRoot          string          `default:"wiki"                        validate:"required"     yaml:"wikiRoot"`
+	GhTopicsURL       string          `default:"https://cdn.lucc.dev/gh.yml" validate:"required,url" yaml:"ghTopicsURL"`
+	GhTopicsCachePath string          `yaml:"ghTopicsCachePath"`
+	GhTopicsMaxAge    string          `default:"24h"                         validate:"required"     yaml:"ghTopicsMaxAge"`
+	Media             wikiMediaConfig `yaml:"media"`
+	Concurrency       int             `default:"5"                           validate:"gte=1"        yaml:"concurrency"`
+	PerURLTimeout     int             `default:"180"                         validate:"gte=1"        yaml:"perURLTimeout"`
+	MaxRetries        int             `default:"3"                           validate:"gte=0"        yaml:"maxRetries"`
+	OpenCLIFallback   bool            `default:"true"                        yaml:"opencliFallback"`
+}
+
+// wikiMediaConfig contains media transcript extraction settings.
+type wikiMediaConfig struct {
+	ASR             wikiASRConfig `yaml:"asr"`
+	SubtitleCLIPath string        `default:"yt-dlp"     yaml:"subtitleCLIPath"`
+	SubtitleLangs   []string      `yaml:"subtitleLangs"`
+	Enabled         bool          `default:"true"       yaml:"enabled"`
+}
+
+// wikiASRConfig is reserved for a future audio transcription fallback.
+type wikiASRConfig struct {
+	CLIPath  string `yaml:"cliPath"`
+	Language string `yaml:"language"`
+	Enabled  bool   `yaml:"enabled"`
 }
 
 // AIConfig contains AI model settings.
@@ -67,7 +89,14 @@ func LoadConfig(configPath, wikiRootOverride string) (*Config, error) {
 			return nil
 		},
 		Validate: func(cfg *Config) error {
-			return validator.New().Struct(cfg)
+			if err := validator.New().Struct(cfg); err != nil {
+				return err
+			}
+			if _, err := parseGHTopicsMaxAge(cfg); err != nil {
+				return err
+			}
+
+			return nil
 		},
 	})
 	if err != nil {
@@ -117,6 +146,44 @@ type InboxInput struct {
 	Config *Config
 	deps   *dependencies
 	DryRun bool
+}
+
+// AuditInput contains inputs for read-only wiki auditing.
+type AuditInput struct {
+	Config      *Config
+	Paths       []string
+	ChangedOnly bool
+}
+
+// AuditResult is the structured outcome for wiki audit.
+type AuditResult struct {
+	Name     string            `json:"-"`
+	WikiRoot string            `json:"wikiRoot"`
+	Issues   []checkutil.Issue `json:"issues"`
+}
+
+// Summary returns count-oriented audit details.
+func (r *AuditResult) Summary() map[string]any {
+	var errorCount, warnings int
+	for _, issue := range r.Issues {
+		switch issue.Severity {
+		case checkutil.SeverityError:
+			errorCount++
+		case checkutil.SeverityWarn:
+			warnings++
+		}
+	}
+
+	return map[string]any{
+		"issues":   len(r.Issues),
+		"errors":   errorCount,
+		"warnings": warnings,
+	}
+}
+
+// OK reports whether audit found no error-severity issues.
+func (r *AuditResult) OK() bool {
+	return !checkutil.HasErrors(r.Issues)
 }
 
 // Result is the structured outcome for wiki commands.
@@ -225,7 +292,7 @@ type writer interface {
 
 type inboxStore interface {
 	ParseInbox(filePath string) ([]wikisvc.InboxEntry, error)
-	FlushInbox(filePath string, processedLineIndices map[int]bool) error
+	FlushInbox(filePath string, handledURLsByLine map[int][]string) error
 }
 
 // RunAddURLs classifies and writes explicit URLs.
@@ -281,7 +348,7 @@ func RunProcessInbox(ctx context.Context, input InboxInput) (*Result, error) {
 	inboxCfg := resolveInboxConfig(input.Config)
 	result.URLResults = runInboxEntries(ctx, deps, wikiRoot, entries, inboxCfg, input.DryRun)
 
-	processed := handledLineIndices(result.URLResults)
+	processed := handledURLsByLine(result.URLResults)
 	if len(processed) == 0 {
 		return result, nil
 	}
@@ -299,15 +366,149 @@ func RunProcessInbox(ctx context.Context, input InboxInput) (*Result, error) {
 	return result, nil
 }
 
+// RunAudit scans wiki markdown files for known extraction and URL pollution issues.
+func RunAudit(ctx context.Context, input AuditInput) (*AuditResult, error) {
+	if input.Config == nil {
+		return nil, errors.New("wiki config is required")
+	}
+	wikiRoot := resolveWikiRoot(input.Config)
+	if err := requireDir(wikiRoot, "wiki root"); err != nil {
+		return nil, err
+	}
+
+	var auditPaths []string
+	if len(input.Paths) > 0 {
+		auditPaths = input.Paths
+	} else if input.ChangedOnly {
+		changed, err := changedWikiMarkdownPaths(ctx, wikiRoot)
+		if err != nil {
+			return nil, err
+		}
+		auditPaths = changed
+	}
+
+	var issues []checkutil.Issue
+	var err error
+	if len(auditPaths) > 0 || input.ChangedOnly {
+		issues, err = wikisvc.AuditWikiPaths(wikiRoot, auditPaths)
+	} else {
+		issues, err = wikisvc.AuditWiki(wikiRoot)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("audit wiki: %w", err)
+	}
+
+	return &AuditResult{Name: "wiki audit", WikiRoot: wikiRoot, Issues: issues}, nil
+}
+
+func changedWikiMarkdownPaths(ctx context.Context, wikiRoot string) ([]string, error) {
+	roots, err := changedWikiGitRoots(ctx, wikiRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	return changedMarkdownPathsFromGit(ctx, roots.repoRoot, roots.relWikiRoot)
+}
+
+type changedWikiRoots struct {
+	repoRoot    string
+	relWikiRoot string
+}
+
+func changedWikiGitRoots(ctx context.Context, wikiRoot string) (changedWikiRoots, error) {
+	absWikiRoot, err := filepath.Abs(wikiRoot)
+	if err != nil {
+		return changedWikiRoots{}, fmt.Errorf("resolve wiki root: %w", err)
+	}
+	absWikiRoot = evalSymlinksOrOriginal(absWikiRoot)
+	repoRoot, err := gitOutput(ctx, absWikiRoot, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return changedWikiRoots{}, fmt.Errorf("find git worktree for changed-only audit: %w", err)
+	}
+	repoRoot = strings.TrimSpace(repoRoot)
+	if repoRoot == "" {
+		return changedWikiRoots{}, errors.New("find git worktree for changed-only audit: empty git root")
+	}
+	repoRoot = evalSymlinksOrOriginal(repoRoot)
+	relWikiRoot, err := filepath.Rel(repoRoot, absWikiRoot)
+	if err != nil {
+		return changedWikiRoots{}, fmt.Errorf("resolve wiki root relative to git root: %w", err)
+	}
+
+	return changedWikiRoots{repoRoot: repoRoot, relWikiRoot: filepath.ToSlash(relWikiRoot)}, nil
+}
+
+func evalSymlinksOrOriginal(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+
+	return resolved
+}
+
+func changedMarkdownPathsFromGit(ctx context.Context, repoRoot, relWikiRoot string) ([]string, error) {
+	seen := make(map[string]bool)
+	var paths []string
+	for _, args := range [][]string{
+		{"diff", "--name-only", "--cached", "--", relWikiRoot},
+		{"diff", "--name-only", "--", relWikiRoot},
+		{"ls-files", "--others", "--exclude-standard", "--", relWikiRoot},
+	} {
+		out, err := gitOutput(ctx, repoRoot, args...)
+		if err != nil {
+			return nil, fmt.Errorf("list changed wiki files: %w", err)
+		}
+		paths = appendChangedMarkdownPaths(paths, seen, repoRoot, out)
+	}
+
+	return paths, nil
+}
+
+func appendChangedMarkdownPaths(paths []string, seen map[string]bool, repoRoot, output string) []string {
+	for rel := range strings.FieldsSeq(output) {
+		if filepath.Ext(rel) != ".md" {
+			continue
+		}
+		path := filepath.Join(repoRoot, filepath.FromSlash(rel))
+		if seen[path] || !fileExists(path) {
+			continue
+		}
+		seen[path] = true
+		paths = append(paths, path)
+	}
+
+	return paths
+}
+
+func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+
+	return string(out), nil
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+
+	return err == nil && !info.IsDir()
+}
+
 func processAddURL(ctx context.Context, deps *dependencies, wikiRoot, urlStr string, dryRun bool) URLResult {
-	result, err := processURLAttempt(ctx, deps, wikiRoot, urlStr, dryRun)
+	pending, err := prepareURLAttempt(ctx, deps, urlStr)
 	if err == nil {
-		return result
+		return writePendingURL(deps, wikiRoot, &pending, dryRun)
 	}
 
 	var fetchErr *fetchFailureError
 	if errors.As(err, &fetchErr) {
-		return writeFetchFailure(deps, wikiRoot, urlStr, fetchErr.failureType, fetchErr.Error(), dryRun)
+		pending := newPendingFetchFailure(urlStr, fetchErr.failureType, fetchErr.Error())
+
+		return writePendingURL(deps, wikiRoot, &pending, dryRun)
 	}
 
 	return URLResult{URL: urlStr, Status: StatusUnhandledError, Error: err.Error()}
@@ -321,7 +522,7 @@ func runInboxEntries(
 	inboxCfg inboxConfig,
 	dryRun bool,
 ) []URLResult {
-	results := make([]URLResult, len(entries))
+	pending := make([]pendingURLWrite, len(entries))
 	var mu sync.Mutex
 
 	g, groupCtx := errgroup.WithContext(ctx)
@@ -329,11 +530,10 @@ func runInboxEntries(
 
 	for i, entry := range entries {
 		g.Go(func() error {
-			result := processInboxEntry(groupCtx, deps, wikiRoot, entry, inboxCfg, dryRun)
-			result.LineIndex = entry.LineIndex
+			prepared := prepareInboxEntry(groupCtx, deps, entry, inboxCfg)
 
 			mu.Lock()
-			results[i] = result
+			pending[i] = prepared
 			mu.Unlock()
 
 			return nil
@@ -341,24 +541,29 @@ func runInboxEntries(
 	}
 	_ = g.Wait()
 
+	results := make([]URLResult, len(entries))
+	for i, prepared := range pending {
+		result := writePendingURL(deps, wikiRoot, &prepared, dryRun)
+		result.LineIndex = entries[i].LineIndex
+		results[i] = result
+	}
+
 	return results
 }
 
-func processInboxEntry(
+func prepareInboxEntry(
 	ctx context.Context,
 	deps *dependencies,
-	wikiRoot string,
 	entry wikisvc.InboxEntry,
 	inboxCfg inboxConfig,
-	dryRun bool,
-) URLResult {
+) pendingURLWrite {
 	urlCtx, cancel := context.WithTimeout(ctx, inboxCfg.perURLTimeout)
 	defer cancel()
 
-	var result URLResult
+	var result pendingURLWrite
 	err := retry.Do(
 		func() error {
-			attemptResult, attemptErr := processURLAttempt(urlCtx, deps, wikiRoot, entry.URL, dryRun)
+			attemptResult, attemptErr := prepareURLAttempt(urlCtx, deps, entry.URL)
 			if attemptErr == nil {
 				result = attemptResult
 			}
@@ -385,22 +590,40 @@ func processInboxEntry(
 
 	var fetchErr *fetchFailureError
 	if errors.As(err, &fetchErr) {
-		return writeFetchFailure(deps, wikiRoot, entry.URL, fetchErr.failureType, fetchErr.Error(), dryRun)
+		return newPendingFetchFailure(entry.URL, fetchErr.failureType, fetchErr.Error())
 	}
 
-	return URLResult{URL: entry.URL, Status: StatusUnhandledError, Error: err.Error()}
+	return newPendingUnhandled(entry.URL, err.Error())
 }
 
-func processURLAttempt(ctx context.Context, deps *dependencies, wikiRoot, urlStr string, dryRun bool) (URLResult, error) {
+type pendingWriteKind string
+
+const (
+	pendingSummary         pendingWriteKind = "summary"
+	pendingClassifyFailure pendingWriteKind = "classify_failure"
+	pendingFetchFailure    pendingWriteKind = "fetch_failure"
+	pendingUnhandled       pendingWriteKind = "unhandled"
+)
+
+type pendingURLWrite struct {
+	URL         string
+	Kind        pendingWriteKind
+	Item        *wikisvc.ClassifyItem
+	FailureType string
+	ExtraInfo   string
+	Error       string
+}
+
+func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) (pendingURLWrite, error) {
 	slog.Info("Processing wiki URL", "url", urlStr)
 
 	contentType := wikisvc.DetectContentType(urlStr)
 	fetchResult := deps.fetcher.FetchContent(ctx, urlStr, contentType)
 	if fetchResult == nil {
-		return URLResult{}, &fetchFailureError{failureType: wikisvc.FailureFetch, message: "fetch content: empty result"}
+		return pendingURLWrite{}, &fetchFailureError{failureType: wikisvc.FailureFetch, message: "fetch content: empty result"}
 	}
 	if fetchResult.Error != "" {
-		return URLResult{}, &fetchFailureError{
+		return pendingURLWrite{}, &fetchFailureError{
 			failureType: classifyFailureType(fetchResult.Error),
 			message:     "fetch content: " + fetchResult.Error,
 		}
@@ -415,7 +638,7 @@ func processURLAttempt(ctx context.Context, deps *dependencies, wikiRoot, urlStr
 	if classResult == nil {
 		item := &wikisvc.ClassifyItem{URL: urlStr, Title: title, ContentType: contentType}
 
-		return writeClassifyFailure(deps, wikiRoot, item, "classification failed (returned nil)", dryRun), nil
+		return pendingClassifyFailureWrite(item, "classification failed (returned nil)"), nil
 	}
 
 	item := &wikisvc.ClassifyItem{
@@ -427,15 +650,55 @@ func processURLAttempt(ctx context.Context, deps *dependencies, wikiRoot, urlStr
 		Summary:     classResult.Summary,
 	}
 
-	if classResult.TopicPath == unclassifiedTopicPath || classResult.TopicPath == inboxTopicPath {
-		extraInfo := "AI could not classify the content into any topic.\nSummary: " + classResult.Summary
+	if shouldWriteClassifyFailure(classResult) {
+		extraInfo := classifyFailureInfo(classResult)
 
-		return writeClassifyFailure(deps, wikiRoot, item, extraInfo, dryRun), nil
+		return pendingClassifyFailureWrite(item, extraInfo), nil
 	}
 
+	return pendingURLWrite{URL: urlStr, Kind: pendingSummary, Item: item}, nil
+}
+
+func pendingClassifyFailureWrite(item *wikisvc.ClassifyItem, extraInfo string) pendingURLWrite {
+	return pendingURLWrite{
+		URL:         item.URL,
+		Kind:        pendingClassifyFailure,
+		Item:        item,
+		FailureType: wikisvc.FailureClassify,
+		ExtraInfo:   extraInfo,
+	}
+}
+
+func newPendingFetchFailure(urlStr, failureType, extraInfo string) pendingURLWrite {
+	return pendingURLWrite{URL: urlStr, Kind: pendingFetchFailure, FailureType: failureType, ExtraInfo: extraInfo}
+}
+
+func newPendingUnhandled(urlStr, message string) pendingURLWrite {
+	return pendingURLWrite{URL: urlStr, Kind: pendingUnhandled, Error: message}
+}
+
+func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWrite, dryRun bool) URLResult {
+	if pending == nil {
+		return URLResult{Status: StatusUnhandledError, Error: "missing pending wiki write"}
+	}
+	switch pending.Kind {
+	case pendingSummary:
+		return writeSummary(deps, wikiRoot, pending.Item, dryRun)
+	case pendingClassifyFailure:
+		return writeClassifyFailure(deps, wikiRoot, pending.Item, pending.ExtraInfo, dryRun)
+	case pendingFetchFailure:
+		return writeFetchFailure(deps, wikiRoot, pending.URL, pending.FailureType, pending.ExtraInfo, dryRun)
+	case pendingUnhandled:
+		return URLResult{URL: pending.URL, Status: StatusUnhandledError, Error: pending.Error}
+	default:
+		return URLResult{URL: pending.URL, Status: StatusUnhandledError, Error: "missing pending wiki write"}
+	}
+}
+
+func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyItem, dryRun bool) URLResult {
 	path, err := deps.writer.WriteSummary(item, &wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun})
 	if err != nil {
-		return URLResult{URL: urlStr, Status: StatusUnhandledError, Error: fmt.Sprintf("write summary: %v", err)}, nil
+		return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("write summary: %v", err)}
 	}
 
 	status := StatusSummaryWritten
@@ -444,14 +707,52 @@ func processURLAttempt(ctx context.Context, deps *dependencies, wikiRoot, urlStr
 	}
 
 	return URLResult{
-		URL:         urlStr,
+		URL:         item.URL,
 		Status:      status,
 		Handled:     true,
 		OutputPath:  path,
-		TopicPath:   classResult.TopicPath,
-		WikiType:    string(classResult.WikiType),
-		ContentType: classResult.ContentType,
-	}, nil
+		TopicPath:   item.TopicPath,
+		WikiType:    string(item.Type),
+		ContentType: item.ContentType,
+	}
+}
+
+func shouldWriteClassifyFailure(result *wikisvc.ClassifyResult) bool {
+	if result == nil {
+		return true
+	}
+
+	return result.RejectReason != "" || result.NeedsManualReview || result.WikiType == wikisvc.TypeInbox ||
+		result.TopicPath == unclassifiedTopicPath || result.TopicPath == inboxTopicPath
+}
+
+func classifyFailureInfo(result *wikisvc.ClassifyResult) string {
+	if result == nil {
+		return "classification failed (returned nil)"
+	}
+	var lines []string
+	reason := strings.TrimSpace(result.RejectReason)
+	if reason == "" {
+		reason = "AI marked the item as inbox/manual review"
+	}
+	lines = append(lines, reason)
+	if result.TopicPath != "" {
+		lines = append(lines, "Topic: "+result.TopicPath)
+	}
+	if result.WikiType != "" {
+		lines = append(lines, "WikiType: "+string(result.WikiType))
+	}
+	if result.Confidence > 0 {
+		lines = append(lines, fmt.Sprintf("Confidence: %.2f", result.Confidence))
+	}
+	if result.NeedsManualReview {
+		lines = append(lines, "NeedsManualReview: true")
+	}
+	if strings.TrimSpace(result.Summary) != "" {
+		lines = append(lines, "Summary: "+result.Summary)
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func writeClassifyFailure(
@@ -534,11 +835,29 @@ func (e *fetchFailureError) Error() string {
 }
 
 func classifyFailureType(message string) string {
+	if strings.Contains(message, "extract:") {
+		return wikisvc.FailureExtract
+	}
 	if strings.Contains(message, "resolve:") {
 		return wikisvc.FailureResolve
 	}
 
 	return wikisvc.FailureFetch
+}
+
+func parseGHTopicsMaxAge(cfg *Config) (time.Duration, error) {
+	if cfg == nil || strings.TrimSpace(cfg.Wiki.GhTopicsMaxAge) == "" {
+		return ghindex.DefaultMaxAge, nil
+	}
+	duration, err := time.ParseDuration(strings.TrimSpace(cfg.Wiki.GhTopicsMaxAge))
+	if err != nil {
+		return 0, fmt.Errorf("wiki.ghTopicsMaxAge must be a Go duration: %w", err)
+	}
+	if duration <= 0 {
+		return 0, errors.New("wiki.ghTopicsMaxAge must be positive")
+	}
+
+	return duration, nil
 }
 
 type inboxConfig struct {
@@ -566,12 +885,12 @@ func resolveInboxConfig(cfg *Config) inboxConfig {
 	return resolved
 }
 
-func handledLineIndices(results []URLResult) map[int]bool {
-	processed := make(map[int]bool)
+func handledURLsByLine(results []URLResult) map[int][]string {
+	processed := make(map[int][]string)
 	for i := range results {
 		result := &results[i]
 		if result.Handled {
-			processed[result.LineIndex] = true
+			processed[result.LineIndex] = append(processed[result.LineIndex], result.URL)
 		}
 	}
 
@@ -623,10 +942,25 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		deps = &dependencies{}
 	}
 	if deps.fetcher == nil {
-		deps.fetcher = wikisvc.NewFetcher()
+		deps.fetcher = wikisvc.NewFetcher(
+			wikisvc.WithOpenCLIFallback(cfg.Wiki.OpenCLIFallback),
+			wikisvc.WithMediaEnabled(cfg.Wiki.Media.Enabled),
+			wikisvc.WithSubtitleCLIPath(cfg.Wiki.Media.SubtitleCLIPath),
+			wikisvc.WithSubtitleLangs(cfg.Wiki.Media.SubtitleLangs),
+		)
 	}
 	if deps.classifier == nil {
-		deps.classifier = wikisvc.NewClassifier(newAIConfig(cfg), resolveWikiRoot(cfg), cfg.Wiki.GhTopicsURL)
+		maxAge, err := parseGHTopicsMaxAge(cfg)
+		if err != nil {
+			maxAge = ghindex.DefaultMaxAge
+		}
+		deps.classifier = wikisvc.NewClassifier(
+			newAIConfig(cfg),
+			resolveWikiRoot(cfg),
+			cfg.Wiki.GhTopicsURL,
+			wikisvc.WithGHTopicsCachePath(cfg.Wiki.GhTopicsCachePath),
+			wikisvc.WithGHTopicsMaxAge(maxAge),
+		)
 	}
 	if deps.writer == nil {
 		deps.writer = serviceWriter{}
@@ -672,6 +1006,6 @@ func (serviceInboxStore) ParseInbox(filePath string) ([]wikisvc.InboxEntry, erro
 	return wikisvc.ParseInbox(filePath)
 }
 
-func (serviceInboxStore) FlushInbox(filePath string, processedLineIndices map[int]bool) error {
-	return wikisvc.FlushInbox(filePath, processedLineIndices)
+func (serviceInboxStore) FlushInbox(filePath string, handledURLsByLine map[int][]string) error {
+	return wikisvc.FlushInbox(filePath, handledURLsByLine)
 }

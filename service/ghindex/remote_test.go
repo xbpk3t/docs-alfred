@@ -103,6 +103,8 @@ func TestLoadWithCacheTTLRefreshesInvalidFreshCache(t *testing.T) {
 	result := m.Filter("refreshed")
 	require.Len(t, result, 1)
 	assert.Equal(t, "https://github.com/acme/refreshed", result[0].URL)
+	require.Len(t, m.ConfigRepos(), 1)
+	assert.Equal(t, "test", m.ConfigRepos()[0].Tag)
 }
 
 func TestSyncRejectsInvalidRemoteWithoutOverwritingCache(t *testing.T) {

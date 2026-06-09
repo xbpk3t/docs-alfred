@@ -4,18 +4,21 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
-	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
-	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/xbpk3t/docs-alfred/pkg/textutil"
+	"github.com/xbpk3t/docs-alfred/service/ghindex"
 )
 
 //go:embed prompts/*.txt
@@ -51,33 +54,76 @@ type ClassifyItem struct {
 
 // ClassifyResult is the structured output from classifyItem.
 type ClassifyResult struct {
-	TopicPath   string       `json:"topicPath"`
-	WikiType    ClassifyType `json:"wikiType"`
-	ContentType string       `json:"contentType"`
-	Summary     string       `json:"summary"`
+	TopicPath         string       `json:"topicPath"`
+	WikiType          ClassifyType `json:"wikiType"`
+	ContentType       string       `json:"contentType"`
+	Summary           string       `json:"summary"`
+	RejectReason      string       `json:"rejectReason,omitempty"`
+	Confidence        float64      `json:"confidence,omitempty"`
+	NeedsManualReview bool         `json:"needsManualReview,omitempty"`
 }
 
 // Classifier handles AI-powered classification of URLs.
 type Classifier struct {
-	AIConfig    *ai.ClientConfig
-	WikiRoot    string
-	GhTopicsURL string
+	catalogErr        error
+	AIConfig          *ai.ClientConfig
+	loadGHTopics      func() ([]ghindex.TopicCandidate, error)
+	WikiRoot          string
+	GhTopicsURL       string
+	GhTopicsCachePath string
+	catalog           []ghindex.TopicCandidate
+	GhTopicsMaxAge    time.Duration
+	CandidateLimit    int
+	MinConfidence     float64
+	catalogMu         sync.Mutex
+	catalogLoaded     bool
+}
+
+// ClassifierOption customizes a classifier.
+type ClassifierOption func(*Classifier)
+
+// WithGHTopicsCachePath sets the cache path for remote gh.yml.
+func WithGHTopicsCachePath(path string) ClassifierOption {
+	return func(c *Classifier) { c.GhTopicsCachePath = path }
+}
+
+// WithGHTopicsMaxAge sets the remote gh.yml cache TTL.
+func WithGHTopicsMaxAge(maxAge time.Duration) ClassifierOption {
+	return func(c *Classifier) { c.GhTopicsMaxAge = maxAge }
+}
+
+// WithCandidateLimit sets the maximum remote topic candidates sent to AI.
+func WithCandidateLimit(limit int) ClassifierOption {
+	return func(c *Classifier) { c.CandidateLimit = limit }
 }
 
 // NewClassifier creates a new Classifier.
-func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string) *Classifier {
-	return &Classifier{
-		AIConfig:    aiCfg,
-		WikiRoot:    wikiRoot,
-		GhTopicsURL: ghTopicsURL,
+func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string, opts ...ClassifierOption) *Classifier {
+	c := &Classifier{
+		AIConfig:       aiCfg,
+		WikiRoot:       wikiRoot,
+		GhTopicsURL:    ghTopicsURL,
+		GhTopicsMaxAge: ghindex.DefaultMaxAge,
+		CandidateLimit: 120,
+		MinConfidence:  0.45,
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	if c.CandidateLimit <= 0 {
+		c.CandidateLimit = 120
+	}
+	if c.MinConfidence <= 0 {
+		c.MinConfidence = 0.45
+	}
+
+	return c
 }
 
 // DetectContentType determines the content type from a URL.
 func DetectContentType(urlLower string) string {
-	if strings.Contains(urlLower, "bilibili.com") ||
-		strings.Contains(urlLower, "youtube.com") ||
-		strings.Contains(urlLower, "youtu.be") {
+	urlLower = strings.ToLower(strings.TrimSpace(urlLower))
+	if isVideoURL(urlLower) {
 		return ContentVideo
 	}
 	if strings.Contains(urlLower, "xiaoyuzhou") ||
@@ -93,155 +139,68 @@ func DetectContentType(urlLower string) string {
 // Returns nil, nil if classification is unavailable (graceful degradation).
 func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content string) *ClassifyResult {
 	contentType := DetectContentType(strings.ToLower(urlStr))
-
-	// Run topic + type classification in parallel
-	type topicResult struct {
-		err  error
-		path string
-	}
-	type typeResult struct {
-		err error
-		typ ClassifyType
-	}
-
-	topicCh := make(chan topicResult, 1)
-	typeCh := make(chan typeResult, 1)
-
-	go func() {
-		path, err := c.classifyTopic(ctx, urlStr, title, content)
-		topicCh <- topicResult{err, path}
-	}()
-	go func() {
-		typ, err := c.classifyType(ctx, urlStr, title, content)
-		typeCh <- typeResult{err, typ}
-	}()
-
-	tRes := <-topicCh
-	tyRes := <-typeCh
-
-	if tRes.err != nil {
-		slog.Warn("Topic classification failed", "url", urlStr, "error", tRes.err)
+	if strings.TrimSpace(content) == "" {
+		slog.Warn("Classification skipped for empty content", "url", urlStr)
 
 		return nil
 	}
-	if tyRes.err != nil {
-		slog.Warn("Type classification failed", "url", urlStr, "error", tyRes.err)
-		tyRes.typ = TypeInbox
+
+	candidates, err := c.classificationCandidates(ctx, urlStr, title, content)
+	if err != nil {
+		slog.Warn("Classification candidates unavailable", "url", urlStr, "error", err)
+	}
+	if len(candidates) == 0 {
+		slog.Warn("Classification skipped with no topic candidates", "url", urlStr)
+
+		return nil
 	}
 
-	// Validate topic path
-	if err := ValidateRelativeWikiPath(c.WikiRoot, tRes.path); err != nil {
-		slog.Warn("Invalid topic path, falling back to inbox", "path", tRes.path, "error", err)
-
-		return &ClassifyResult{
-			TopicPath:   "inbox",
-			WikiType:    TypeInbox,
-			ContentType: contentType,
-		}
-	}
-
-	// Generate structured summary (non-fatal if it fails)
-	summary, _ := c.summarizeText(ctx, urlStr, title, content, string(tyRes.typ))
-	if summary == "" {
-		slog.Warn("No summary generated", "url", urlStr)
-	}
-
-	return &ClassifyResult{
-		TopicPath:   tRes.path,
-		WikiType:    tyRes.typ,
-		ContentType: contentType,
-		Summary:     summary,
-	}
-}
-
-func (c *Classifier) classifyTopic(ctx context.Context, urlStr, title, content string) (string, error) {
-	dirTree := scanWikiDirs(c.WikiRoot)
-	ghTopicTree := fetchGHTopicsYAML(ctx, c.GhTopicsURL)
-
-	prompt, err := renderPrompt("classify-topic.txt", &promptData{
-		DirTree:     dirTree,
-		GHTopicTree: ghTopicTree,
-		Title:       truncate(title, 200),
-		URL:         urlStr,
-		Content:     truncate(content, 3000),
+	prompt, err := renderPrompt("classify-json.txt", &promptData{
+		CandidateTree: formatTopicCandidates(candidates),
+		Title:         truncate(title, 200),
+		URL:           urlStr,
+		ContentType:   contentType,
+		Content:       truncate(content, 8000),
 	})
 	if err != nil {
-		return "", err
+		slog.Warn("Classification prompt failed", "url", urlStr, "error", err)
+
+		return nil
 	}
 
 	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
-		return "", err
+		slog.Warn("AI classification failed", "url", urlStr, "error", err)
+
+		return nil
 	}
 
-	rawPath := strings.TrimSpace(result)
-	rawPath = strings.Trim(rawPath, "\"'")
-
-	// AI explicitly says nothing matches
-	if rawPath == noneVal || rawPath == "" {
-		return noneVal, nil
-	}
-
-	return rawPath, nil
-}
-
-func (c *Classifier) classifyType(ctx context.Context, urlStr, title, content string) (ClassifyType, error) {
-	prompt, err := renderPrompt("classify-type.txt", &promptData{
-		Title:   truncate(title, 200),
-		URL:     urlStr,
-		Content: truncate(content, 3000),
-	})
+	parsed, err := parseAIClassification(result)
 	if err != nil {
-		return TypeInbox, err
+		slog.Warn("AI classification JSON invalid", "url", urlStr, "error", err, "result", result)
+
+		return nil
 	}
 
-	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
+	validated, err := c.validateAIClassification(parsed, candidates, contentType)
 	if err != nil {
-		return TypeInbox, err
+		slog.Warn("AI classification rejected", "url", urlStr, "error", err)
+
+		return rejectedClassifyResult(parsed, contentType, err)
 	}
 
-	result = strings.TrimSpace(strings.ToLower(result))
-	switch result {
-	case "repo_eval":
-		return TypeRepoEval, nil
-	case "deep_dive":
-		return TypeDeepDive, nil
-	default:
-		return TypeInbox, nil
-	}
-}
-
-// summarizeText generates a structured Chinese summary of the article content.
-func (c *Classifier) summarizeText(ctx context.Context, urlStr, title, content, wikiType string) (string, error) {
-	if content == "" {
-		return "", errors.New("empty content, skipping summary")
-	}
-
-	prompt, err := renderPrompt("summarize-text.txt", &promptData{
-		Title:   truncate(title, 200),
-		URL:     urlStr,
-		Type:    wikiType,
-		Content: truncate(content, 5000),
-	})
-	if err != nil {
-		return "", err
-	}
-
-	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
-	if err != nil {
-		return "", fmt.Errorf("summarize: %w", err)
-	}
-
-	return strings.TrimSpace(result), nil
+	return validated
 }
 
 type promptData struct {
-	DirTree     string
-	GHTopicTree string
-	Title       string
-	URL         string
-	Type        string
-	Content     string
+	DirTree       string
+	GHTopicTree   string
+	CandidateTree string
+	Title         string
+	URL           string
+	Type          string
+	ContentType   string
+	Content       string
 }
 
 func renderPrompt(name string, data *promptData) (string, error) {
@@ -260,109 +219,538 @@ func renderPrompt(name string, data *promptData) (string, error) {
 	return buf.String(), nil
 }
 
-// scanWikiDirs scans wikiRoot for existing topic directories.
-// Returns indented tree matching TS format: "  folder/type/topic".
-func scanWikiDirs(wikiRoot string) string {
-	entries, err := os.ReadDir(wikiRoot)
+func (c *Classifier) classificationCandidates(
+	_ context.Context,
+	urlStr,
+	title,
+	content string,
+) ([]ghindex.TopicCandidate, error) {
+	seen := make(map[string]bool)
+	candidates := appendUniqueTopicCandidates(nil, seen, scanWikiCandidates(c.WikiRoot))
+
+	remote, err := c.ghTopicCatalog()
 	if err != nil {
-		return ""
+		return candidates, err
 	}
+	ranked := rankTopicCandidates(remote, title+"\n"+urlStr+"\n"+truncate(content, 3000), c.CandidateLimit)
+	candidates = appendUniqueTopicCandidates(candidates, seen, ranked)
 
-	var lines []string
-	for _, top := range entries {
-		lines = scanTopLevelDir(wikiRoot, top, lines)
-	}
-
-	return strings.Join(lines, "\n")
+	return candidates, nil
 }
 
-func scanTopLevelDir(wikiRoot string, top os.DirEntry, lines []string) []string {
-	if !top.IsDir() || strings.HasPrefix(top.Name(), ".") || top.Name() == "wiki-prototype" {
-		return lines
+func (c *Classifier) ghTopicCatalog() ([]ghindex.TopicCandidate, error) {
+	c.catalogMu.Lock()
+	defer c.catalogMu.Unlock()
+
+	if c.catalogLoaded && c.catalogErr == nil {
+		return c.catalog, nil
+	}
+
+	loader := c.loadGHTopics
+	if loader == nil {
+		loader = c.defaultGHTopicsLoader
+	}
+	catalog, err := loader()
+	if err != nil {
+		c.catalogErr = err
+		slog.Warn("Remote wiki topic catalog unavailable; using local candidates only", "error", err)
+
+		return nil, err
+	}
+
+	c.catalog = catalog
+	c.catalogErr = nil
+	c.catalogLoaded = true
+
+	return c.catalog, nil
+}
+
+func (c *Classifier) defaultGHTopicsLoader() ([]ghindex.TopicCandidate, error) {
+	manager := ghindex.NewManager(c.GhTopicsCachePath, c.GhTopicsURL)
+	if c.GhTopicsMaxAge > 0 {
+		manager.SetTTL(c.GhTopicsMaxAge)
+	}
+	if err := manager.LoadWithCacheTTL(); err != nil {
+		return nil, err
+	}
+
+	return manager.ConfigRepos().TopicCatalog(), nil
+}
+
+func scanWikiCandidates(wikiRoot string) []ghindex.TopicCandidate {
+	entries, err := os.ReadDir(wikiRoot)
+	if err != nil {
+		return nil
+	}
+
+	var candidates []ghindex.TopicCandidate
+	for _, top := range entries {
+		candidates = scanTopLevelCandidates(wikiRoot, top, candidates)
+	}
+
+	return candidates
+}
+
+func scanTopLevelCandidates(
+	wikiRoot string,
+	top os.DirEntry,
+	candidates []ghindex.TopicCandidate,
+) []ghindex.TopicCandidate {
+	if !top.IsDir() || strings.HasPrefix(top.Name(), ".") || top.Name() == "wiki-prototype" || top.Name() == "failed" {
+		return candidates
 	}
 	topPath := filepath.Join(wikiRoot, top.Name())
 	types, err := os.ReadDir(topPath)
 	if err != nil {
-		return lines
+		return candidates
 	}
 	for _, typ := range types {
-		lines = scanTypeDir(topPath, top.Name(), typ, lines)
+		candidates = scanTypeCandidates(topPath, top.Name(), typ, candidates)
 	}
 
-	return lines
+	return candidates
 }
 
-func scanTypeDir(topPath, topName string, typ os.DirEntry, lines []string) []string {
+func scanTypeCandidates(
+	topPath,
+	topName string,
+	typ os.DirEntry,
+	candidates []ghindex.TopicCandidate,
+) []ghindex.TopicCandidate {
 	if !typ.IsDir() || strings.HasPrefix(typ.Name(), ".") {
-		return lines
+		return candidates
 	}
 	typePath := filepath.Join(topPath, typ.Name())
 	topics, err := os.ReadDir(typePath)
 	if err != nil {
-		return lines
+		return candidates
 	}
 	for _, topic := range topics {
 		if !topic.IsDir() || strings.HasPrefix(topic.Name(), ".") {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("  %s/%s/%s", topName, typ.Name(), topic.Name()))
+		path := strings.Join([]string{topName, typ.Name(), topic.Name()}, "/")
+		candidates = append(candidates, ghindex.TopicCandidate{Path: path, Display: topic.Name(), Source: "wiki"})
 	}
 
-	return lines
+	return candidates
 }
 
-// fetchGHTopicsYAML fetches gh.yml from a URL and returns a formatted topic tree.
-// The YAML structure is: [{tag, type, topics: [{topic}]}].
-// Returns an empty string if the URL is empty or if any step fails (non-blocking).
-func fetchGHTopicsYAML(ctx context.Context, url string) string {
-	if url == "" {
-		return ""
-	}
-
-	data, err := httputil.GetBytes(ctx, url, httputil.RequestOptions{Timeout: 10 * time.Second})
-	if err != nil {
-		slog.Warn("Failed to fetch gh topics YAML", "url", url, "error", err)
-
-		return ""
-	}
-
-	var entries []struct {
-		Tag    string `yaml:"tag"`
-		Type   string `yaml:"type"`
-		Topics []struct {
-			Topic string `yaml:"topic"`
-		} `yaml:"topics"`
-	}
-	if err := yaml.Unmarshal(data, &entries); err != nil {
-		slog.Warn("Failed to parse gh topics YAML", "error", err)
-
-		return ""
-	}
-
-	var lines []string
-	for _, entry := range entries {
-		for _, t := range entry.Topics {
-			lines = append(lines, fmt.Sprintf("  %s/%s/%s", entry.Tag, entry.Type, t.Topic))
+func appendUniqueTopicCandidates(
+	candidates []ghindex.TopicCandidate,
+	seen map[string]bool,
+	items []ghindex.TopicCandidate,
+) []ghindex.TopicCandidate {
+	for _, item := range items {
+		item.Path = strings.TrimSpace(item.Path)
+		if item.Path == "" || seen[item.Path] {
+			continue
 		}
+		if err := ValidateRelativeWikiPath(string(filepath.Separator), item.Path); err != nil {
+			continue
+		}
+		seen[item.Path] = true
+		candidates = append(candidates, item)
+	}
+
+	return candidates
+}
+
+type candidateRank struct {
+	candidate ghindex.TopicCandidate
+	score     int
+	index     int
+}
+
+func rankTopicCandidates(
+	candidates []ghindex.TopicCandidate,
+	query string,
+	limit int,
+) []ghindex.TopicCandidate {
+	if limit <= 0 || len(candidates) <= limit {
+		return candidates
+	}
+	query = strings.ToLower(query)
+	ranks := make([]candidateRank, 0, len(candidates))
+	for i, candidate := range candidates {
+		score := scoreTopicCandidate(candidate, query)
+		ranks = append(ranks, candidateRank{candidate: candidate, score: score, index: i})
+	}
+	sort.SliceStable(ranks, func(i, j int) bool {
+		if ranks[i].score != ranks[j].score {
+			return ranks[i].score > ranks[j].score
+		}
+
+		return ranks[i].index < ranks[j].index
+	})
+
+	if ranks[0].score <= 0 && limit > 40 {
+		limit = 40
+	}
+	if len(ranks) < limit {
+		limit = len(ranks)
+	}
+
+	result := make([]ghindex.TopicCandidate, 0, limit)
+	for i := range limit {
+		result = append(result, ranks[i].candidate)
+	}
+
+	return result
+}
+
+func scoreTopicCandidate(candidate ghindex.TopicCandidate, query string) int {
+	target := strings.ToLower(candidate.Path + " " + candidate.Display)
+	var score int
+	for _, token := range topicTokens(target) {
+		if len(token) < 2 {
+			continue
+		}
+		if strings.Contains(query, token) {
+			score += len(token)
+		}
+	}
+	for _, token := range topicTokens(query) {
+		if len(token) < 3 {
+			continue
+		}
+		if strings.Contains(target, token) {
+			score += len(token)
+		}
+	}
+
+	return score
+}
+
+func topicTokens(s string) []string {
+	return strings.FieldsFunc(s, func(r rune) bool {
+		switch r {
+		case '/', '-', '_', '.', ',', ':', ';', '(', ')', '[', ']', '{', '}', ' ', '\t', '\n', '\r':
+			return true
+		default:
+			return false
+		}
+	})
+}
+
+func formatTopicCandidates(candidates []ghindex.TopicCandidate) string {
+	var lines []string
+	for _, candidate := range candidates {
+		display := strings.TrimSpace(candidate.Display)
+		if display != "" && display != candidate.Path {
+			lines = append(lines, fmt.Sprintf("- path: %s | title: %s | source: %s", candidate.Path, display, candidate.Source))
+
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- path: %s | source: %s", candidate.Path, candidate.Source))
 	}
 
 	return strings.Join(lines, "\n")
 }
 
+type aiClassification struct {
+	TopicPath         string       `json:"topicPath"`
+	WikiType          ClassifyType `json:"wikiType"`
+	ContentType       string       `json:"contentType"`
+	Summary           string       `json:"summary"`
+	Confidence        float64      `json:"confidence"`
+	NeedsManualReview bool         `json:"needsManualReview"`
+}
+
+func parseAIClassification(raw string) (*aiClassification, error) {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "```json")
+	raw = strings.TrimPrefix(raw, "```")
+	raw = strings.TrimSuffix(raw, "```")
+	start := strings.Index(raw, "{")
+	end := strings.LastIndex(raw, "}")
+	if start < 0 || end < start {
+		return nil, errors.New("no JSON object found")
+	}
+
+	var result aiClassification
+	payload := raw[start : end+1]
+	if err := json.Unmarshal([]byte(payload), &result); err != nil {
+		repaired := repairInvalidJSONStringEscapes(payload)
+		if repaired == payload {
+			return nil, err
+		}
+		if retryErr := json.Unmarshal([]byte(repaired), &result); retryErr != nil {
+			return nil, fmt.Errorf("%w; repaired JSON parse failed: %w", err, retryErr)
+		}
+	}
+
+	return &result, nil
+}
+
+func repairInvalidJSONStringEscapes(raw string) string {
+	repairer := jsonStringEscapeRepairer{raw: raw}
+
+	return repairer.repair()
+}
+
+type jsonStringEscapeRepairer struct {
+	raw      string
+	b        strings.Builder
+	inString bool
+}
+
+func (r *jsonStringEscapeRepairer) repair() string {
+	r.b.Grow(len(r.raw))
+	for i := 0; i < len(r.raw); i++ {
+		i = r.writeByte(i)
+	}
+
+	return r.b.String()
+}
+
+func (r *jsonStringEscapeRepairer) writeByte(i int) int {
+	ch := r.raw[i]
+	if !r.inString {
+		r.writeOutsideString(ch)
+
+		return i
+	}
+
+	return r.writeInsideString(i, ch)
+}
+
+func (r *jsonStringEscapeRepairer) writeOutsideString(ch byte) {
+	r.b.WriteByte(ch)
+	if ch == '"' {
+		r.inString = true
+	}
+}
+
+func (r *jsonStringEscapeRepairer) writeInsideString(i int, ch byte) int {
+	switch ch {
+	case '"':
+		r.b.WriteByte(ch)
+		r.inString = false
+	case '\\':
+		return r.writeBackslashEscape(i)
+	case '\n':
+		r.b.WriteString(`\n`)
+	case '\r':
+		r.b.WriteString(`\r`)
+	case '\t':
+		r.b.WriteString(`\t`)
+	default:
+		r.writeStringByte(ch)
+	}
+
+	return i
+}
+
+func (r *jsonStringEscapeRepairer) writeBackslashEscape(i int) int {
+	if i+1 >= len(r.raw) {
+		r.b.WriteString(`\\`)
+
+		return i
+	}
+	next := r.raw[i+1]
+	if isValidSimpleJSONEscape(next) {
+		r.b.WriteByte('\\')
+		r.b.WriteByte(next)
+
+		return i + 1
+	}
+	if next == 'u' && i+5 < len(r.raw) && isHex4(r.raw[i+2:i+6]) {
+		r.b.WriteString(r.raw[i : i+6])
+
+		return i + 5
+	}
+	r.b.WriteString(`\\`)
+
+	return i
+}
+
+func (r *jsonStringEscapeRepairer) writeStringByte(ch byte) {
+	if ch < 0x20 {
+		fmt.Fprintf(&r.b, `\u%04x`, ch)
+
+		return
+	}
+	r.b.WriteByte(ch)
+}
+
+func isValidSimpleJSONEscape(ch byte) bool {
+	switch ch {
+	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+		return true
+	default:
+		return false
+	}
+}
+
+func isHex4(s string) bool {
+	if len(s) != 4 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F') {
+			continue
+		}
+
+		return false
+	}
+
+	return true
+}
+
+func (c *Classifier) validateAIClassification(
+	result *aiClassification,
+	candidates []ghindex.TopicCandidate,
+	detectedContentType string,
+) (*ClassifyResult, error) {
+	if err := c.validateAIClassificationBasics(result); err != nil {
+		return nil, err
+	}
+	topicPath, err := c.validateAIClassificationTopic(result, candidates)
+	if err != nil {
+		return nil, err
+	}
+	summary, err := validateAIClassificationSummary(result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ClassifyResult{
+		TopicPath:         topicPath,
+		WikiType:          result.WikiType,
+		ContentType:       detectedContentType,
+		Summary:           summary,
+		Confidence:        result.Confidence,
+		NeedsManualReview: result.NeedsManualReview,
+	}, nil
+}
+
+func (c *Classifier) validateAIClassificationBasics(result *aiClassification) error {
+	if result == nil {
+		return errors.New("classification result is nil")
+	}
+	if result.NeedsManualReview {
+		return errors.New("AI marked result for manual review")
+	}
+	if result.Confidence < c.MinConfidence {
+		return fmt.Errorf("confidence %.2f below %.2f", result.Confidence, c.MinConfidence)
+	}
+	if !isValidClassifyType(result.WikiType) {
+		return fmt.Errorf("invalid wiki type: %s", result.WikiType)
+	}
+	if result.ContentType != "" && !isValidContentType(result.ContentType) {
+		return fmt.Errorf("invalid content type: %s", result.ContentType)
+	}
+
+	return nil
+}
+
+func (c *Classifier) validateAIClassificationTopic(
+	result *aiClassification,
+	candidates []ghindex.TopicCandidate,
+) (string, error) {
+	topicPath := strings.TrimSpace(result.TopicPath)
+	if topicPath == "" || topicPath == noneVal || topicPath == "inbox" {
+		return "", errors.New("AI did not select a topic")
+	}
+	if err := ValidateRelativeWikiPath(c.WikiRoot, topicPath); err != nil {
+		return "", err
+	}
+	if !candidatePathSet(candidates)[topicPath] {
+		return "", fmt.Errorf("topic path not in candidates: %s", topicPath)
+	}
+
+	return topicPath, nil
+}
+
+func validateAIClassificationSummary(result *aiClassification) (string, error) {
+	summary := strings.TrimSpace(result.Summary)
+	if summary == "" {
+		return "", errors.New("empty summary")
+	}
+
+	return summary, nil
+}
+
+func rejectedClassifyResult(result *aiClassification, detectedContentType string, rejectErr error) *ClassifyResult {
+	if result == nil {
+		return nil
+	}
+	reason := "classification rejected"
+	if rejectErr != nil {
+		reason = rejectErr.Error()
+	}
+	contentType := detectedContentType
+	if contentType == "" {
+		contentType = result.ContentType
+	}
+
+	return &ClassifyResult{
+		TopicPath:         strings.TrimSpace(result.TopicPath),
+		WikiType:          result.WikiType,
+		ContentType:       contentType,
+		Summary:           strings.TrimSpace(result.Summary),
+		Confidence:        result.Confidence,
+		NeedsManualReview: result.NeedsManualReview,
+		RejectReason:      reason,
+	}
+}
+
+func candidatePathSet(candidates []ghindex.TopicCandidate) map[string]bool {
+	set := make(map[string]bool, len(candidates))
+	for _, candidate := range candidates {
+		set[candidate.Path] = true
+	}
+
+	return set
+}
+
+func isValidClassifyType(typ ClassifyType) bool {
+	switch typ {
+	case TypeRepoEval, TypeDeepDive, TypeInbox:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidContentType(contentType string) bool {
+	switch contentType {
+	case ContentText, ContentVideo, ContentAudio:
+		return true
+	default:
+		return false
+	}
+}
+
 // ValidateRelativeWikiPath ensures a relative path doesn't escape wikiRoot.
 func ValidateRelativeWikiPath(wikiRoot, relativePath string) error {
+	if err := validateWikiPathInput(wikiRoot, relativePath); err != nil {
+		return err
+	}
+	if err := validateWikiPathSegments(relativePath); err != nil {
+		return err
+	}
+
+	return ensureWithinWikiRoot(wikiRoot, relativePath)
+}
+
+func validateWikiPathInput(wikiRoot, relativePath string) error {
 	if wikiRoot == "" {
 		return errors.New("wiki root is empty")
 	}
 	if relativePath == "" {
 		return errors.New("relative path is empty")
 	}
-
 	if filepath.IsAbs(relativePath) {
 		return fmt.Errorf("absolute path not allowed: %s", relativePath)
 	}
 
-	// Check for path traversal segments
+	return nil
+}
+
+func validateWikiPathSegments(relativePath string) error {
 	segments := strings.SplitSeq(relativePath, "/")
 	for seg := range segments {
 		if seg == "" || seg == "." || seg == ".." {
@@ -373,9 +761,17 @@ func ValidateRelativeWikiPath(wikiRoot, relativePath string) error {
 		}
 	}
 
-	// Resolve and check not escaping root
-	resolved := filepath.Clean(filepath.Join(wikiRoot, relativePath))
-	if !strings.HasPrefix(resolved, filepath.Clean(wikiRoot)) {
+	return nil
+}
+
+func ensureWithinWikiRoot(wikiRoot, relativePath string) error {
+	root := filepath.Clean(wikiRoot)
+	resolved := filepath.Clean(filepath.Join(root, relativePath))
+	rel, err := filepath.Rel(root, resolved)
+	if err != nil {
+		return fmt.Errorf("resolve relative path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return fmt.Errorf("path traversal detected: %s escapes %s", relativePath, wikiRoot)
 	}
 
@@ -386,9 +782,5 @@ func ValidateRelativeWikiPath(wikiRoot, relativePath string) error {
 var ErrClassificationUnavailable = errors.New("classification unavailable")
 
 func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-
-	return s[:maxLen] + "..."
+	return textutil.TruncateUTF8(s, maxLen)
 }
