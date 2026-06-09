@@ -1,6 +1,8 @@
 package ghindex
 
 import (
+	"strings"
+
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 	"github.com/xbpk3t/docs-alfred/service/content"
 )
@@ -12,6 +14,7 @@ type Repository struct {
 	Doc            string         `yaml:"doc,omitempty"`
 	Des            string         `yaml:"des,omitempty"`
 	URL            string         `yaml:"url"`
+	NixURL         string         `yaml:"nix,omitempty"`
 	Tag            string         `yaml:"tag,omitempty"`
 	Type           string         `yaml:"type"`
 	MainRepo       string         `yaml:"-"` // If it's a sub/replaced/related repo
@@ -70,6 +73,10 @@ func (r *Repository) GetURL() string {
 
 func (r *Repository) HasQs() bool {
 	return len(r.Topics) > 0
+}
+
+func (r *Repository) HasNix() bool {
+	return strings.TrimSpace(r.NixURL) != ""
 }
 
 func (r *Repository) HasSubRepos() bool {
