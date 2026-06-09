@@ -3,12 +3,9 @@ package wiki
 import (
 	"fmt"
 	"log/slog"
-	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +15,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
-	"mvdan.cc/xurls/v2"
 )
 
 // SummaryFrontmatter is the YAML frontmatter for summary.md files.
@@ -306,11 +302,6 @@ func parseSummaryFrontmatter(raw string) *parseResult {
 	return &parseResult{fm: &fm, body: string(body)}
 }
 
-// urlRegex extracts bare URLs after Markdown link destinations are masked.
-var urlRegex = xurls.Strict()
-
-var markdownLinkRegex = regexp.MustCompile(`\[[^\]]+\]\((https?://[^)\s]+)(?:\s+"[^"]*")?\)`)
-
 // ParseInbox parses inbox.md and returns a list of URL entries.
 func ParseInbox(filePath string) ([]InboxEntry, error) {
 	data, err := os.ReadFile(filePath)
@@ -341,81 +332,18 @@ func extractInboxLineURLs(line string) []string {
 	return urls
 }
 
-type inboxURLRef struct {
-	URL        string
-	Normalized string
-	Start      int
-	End        int
-}
-
-func extractInboxLineURLRefs(line string) []inboxURLRef {
+func extractInboxLineURLRefs(line string) []urlutil.URLRef {
 	if lineHasRawMalformedURL(line) {
 		return nil
 	}
 
-	var refs []inboxURLRef
-	refs = append(refs, extractMarkdownLinkRefs(line)...)
-
-	bareLine := maskRanges(line, refs)
-	for _, match := range urlRegex.FindAllString(bareLine, -1) {
-		start := strings.Index(bareLine, match)
-		if start < 0 {
-			continue
-		}
-		cleaned := cleanInboxURLWithTrim(match)
-		if cleaned.url == "" {
-			continue
-		}
-		refs = append(refs, inboxURLRef{
-			URL:        cleaned.url,
-			Normalized: urlutil.Normalize(cleaned.url),
-			Start:      start + cleaned.leftTrim,
-			End:        start + len(match) - cleaned.rightTrim,
-		})
-		bareLine = replaceRangeWithSpaces(bareLine, start, start+len(match))
-	}
-	sort.SliceStable(refs, func(i, j int) bool { return refs[i].Start < refs[j].Start })
-
-	return refs
-}
-
-func extractMarkdownLinkRefs(line string) []inboxURLRef {
-	matches := markdownLinkRegex.FindAllStringSubmatchIndex(line, -1)
-	refs := make([]inboxURLRef, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 4 || match[2] < 0 || match[3] < match[2] {
-			continue
-		}
-		cleaned := cleanInboxURL(line[match[2]:match[3]])
-		if cleaned == "" {
-			continue
-		}
-		refs = append(refs, inboxURLRef{
-			URL:        cleaned,
-			Normalized: urlutil.Normalize(cleaned),
-			Start:      match[0],
-			End:        match[1],
-		})
-	}
-
-	return refs
-}
-
-func maskRanges(line string, refs []inboxURLRef) string {
-	masked := line
-	for _, ref := range refs {
-		masked = replaceRangeWithSpaces(masked, ref.Start, ref.End)
-	}
-
-	return masked
-}
-
-func replaceRangeWithSpaces(s string, start, end int) string {
-	if start < 0 || end < start || start > len(s) || end > len(s) {
-		return s
-	}
-
-	return s[:start] + strings.Repeat(" ", end-start) + s[end:]
+	return urlutil.ExtractURLRefs(line, urlutil.ExtractOptions{
+		Markdown:    true,
+		BareURLs:    true,
+		HTTPOnly:    true,
+		Normalize:   true,
+		Deduplicate: false,
+	})
 }
 
 func appendInboxEntry(entries []InboxEntry, seen map[string]bool, raw string, lineIndex int) []InboxEntry {
@@ -433,61 +361,7 @@ func appendInboxEntry(entries []InboxEntry, seen map[string]bool, raw string, li
 }
 
 func cleanInboxURL(raw string) string {
-	cleaned := cleanInboxURLWithTrim(raw)
-
-	return cleaned.url
-}
-
-type inboxURLWithTrim struct {
-	url       string
-	leftTrim  int
-	rightTrim int
-}
-
-type inboxTrimBounds struct {
-	left  int
-	right int
-}
-
-func cleanInboxURLWithTrim(raw string) inboxURLWithTrim {
-	raw = strings.TrimSpace(raw)
-	trim := inboxURLTrimBounds(raw)
-	candidate := raw[trim.left : len(raw)-trim.right]
-	cleaned := parseInboxHTTPURL(candidate)
-
-	return inboxURLWithTrim{url: cleaned, leftTrim: trim.left, rightTrim: trim.right}
-}
-
-func inboxURLTrimBounds(raw string) inboxTrimBounds {
-	leftTrim := 0
-	for leftTrim < len(raw) && raw[leftTrim] == '<' {
-		leftTrim++
-	}
-	rightTrim := 0
-	for len(raw)-rightTrim > leftTrim {
-		ch := raw[len(raw)-rightTrim-1]
-		if !strings.ContainsRune("'\".,;:!?)\\]>", rune(ch)) {
-			break
-		}
-		rightTrim++
-	}
-
-	return inboxTrimBounds{left: leftTrim, right: rightTrim}
-}
-
-func parseInboxHTTPURL(candidate string) string {
-	if candidate == "" || strings.Contains(candidate, "](") {
-		return ""
-	}
-	parsed, err := url.Parse(candidate)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return ""
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return ""
-	}
-
-	return parsed.String()
+	return urlutil.CleanHTTPURL(raw)
 }
 
 // InboxEntry represents a URL found in inbox.md.
@@ -535,16 +409,7 @@ func FlushInbox(filePath string, handledURLsByLine map[int][]string) error {
 }
 
 func normalizedURLSet(urls []string) map[string]bool {
-	set := make(map[string]bool, len(urls))
-	for _, raw := range urls {
-		cleaned := cleanInboxURL(raw)
-		if cleaned == "" {
-			continue
-		}
-		set[urlutil.Normalize(cleaned)] = true
-	}
-
-	return set
+	return urlutil.NormalizeSet(urls)
 }
 
 func flushInboxLine(line string, handled map[string]bool) string {

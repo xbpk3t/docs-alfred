@@ -150,6 +150,31 @@ func TestGhCheck_TypedRecordValidation(t *testing.T) {
 	assert.False(t, checkutil.HasErrors(result.Issues))
 }
 
+func TestGhCheck_MalformedRecordFieldsRemainDetectable(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - url: https://github.com/acme/repo
+      record: invalid
+      topics:
+        - topic: repo-topic
+          record: invalid
+  record: invalid
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	messages := make([]string, 0, len(result.Issues))
+	for _, issue := range result.Issues {
+		messages = append(messages, issue.Message)
+	}
+	assert.Contains(t, messages, "section[0]: 'record' must be an array")
+	assert.Contains(t, messages, "repo[0]: 'record' must be an array")
+	assert.Contains(t, messages, "repo[0].topics[0]: 'record' must be an array")
+}
+
 func TestCheckResult_ReportResult(t *testing.T) {
 	r := &CheckResult{}
 	r.addIssue("file.yml", "warn", "test warning")

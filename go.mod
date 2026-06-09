@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.1
+	github.com/BurntSushi/toml v0.3.1
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/Khan/genqlient v0.8.1
 	github.com/PuerkitoBio/goquery v1.10.3
@@ -13,6 +14,7 @@ require (
 	github.com/asticode/go-astisub v0.40.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
+	github.com/cloudflare/cloudflare-go/v7 v7.4.0
 	github.com/creasty/defaults v1.8.0
 	github.com/dop251/goja v0.0.0-20251008123653-cf18d89f3cf6
 	github.com/dromara/carbon/v2 v2.6.13
@@ -36,19 +38,19 @@ require (
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	github.com/tmc/langchaingo v0.1.14
+	github.com/xuri/excelize/v2 v2.10.1
 	github.com/yuin/goldmark v1.7.1
 	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
+	golang.org/x/text v0.37.0
 	mvdan.cc/xurls/v2 v2.6.0
 )
 
 require (
-	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/asticode/go-astikit v0.20.0 // indirect
 	github.com/asticode/go-astits v1.8.0 // indirect
-	github.com/cloudflare/cloudflare-go/v7 v7.4.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -83,11 +85,9 @@ require (
 	github.com/tiendc/go-deepcopy v1.7.2 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.19 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
-	github.com/xuri/excelize/v2 v2.10.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

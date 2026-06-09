@@ -1,53 +1,73 @@
 package ghdata
 
+import "github.com/go-viper/mapstructure/v2"
+
 // Section is a typed representation of a data/gh YAML section.
 type Section struct {
-	Using       *Repo
-	Type        string
-	Repos       []Repo
-	Topics      []Topic
-	Record      []Record
-	HasRecord   bool
-	RecordValid bool
+	Using       *Repo    `yaml:"using"`
+	Type        string   `yaml:"type"`
+	Repos       []Repo   `yaml:"repo"`
+	Topics      []Topic  `yaml:"topics"`
+	Record      []Record `yaml:"record"`
+	HasRecord   bool     `yaml:"-"`
+	RecordValid bool     `yaml:"-"`
 }
 
 // Repo is a typed representation of a repository entry in data/gh YAML.
 type Repo struct {
-	URL         string
-	Des         string
-	Zk          string
-	Topics      []Topic
-	Record      []Record
-	HasRecord   bool
-	RecordValid bool
+	URL         string   `yaml:"url"`
+	Des         string   `yaml:"des"`
+	Zk          string   `yaml:"zk"`
+	Topics      []Topic  `yaml:"topics"`
+	Record      []Record `yaml:"record"`
+	HasRecord   bool     `yaml:"-"`
+	RecordValid bool     `yaml:"-"`
 }
 
 // Topic is a typed representation of a topic entry in data/gh YAML.
 type Topic struct {
-	Meta        TopicMeta
-	Topic       string
-	Sub         []Topic
-	Record      []Record
-	HasPic      bool
-	HasRecord   bool
-	RecordValid bool
+	Meta        TopicMeta `yaml:"meta"`
+	Topic       string    `yaml:"topic"`
+	Sub         []Topic   `yaml:"sub"`
+	Record      []Record  `yaml:"record"`
+	HasPic      bool      `yaml:"hasPic"`
+	HasRecord   bool      `yaml:"-"`
+	RecordValid bool      `yaml:"-"`
 }
 
 // TopicMeta holds topic metadata used by images checks.
 type TopicMeta struct {
-	Slug   string
-	HasPic bool
+	Slug   string `yaml:"slug"`
+	HasPic bool   `yaml:"hasPic"`
 }
 
 // Record is a dated note attached to a repo or topic.
 type Record struct {
-	Date string
-	Des  string
+	Date string `yaml:"date"`
+	Des  string `yaml:"des"`
+}
+
+type sectionFields struct {
+	Type string `yaml:"type"`
+}
+
+type repoFields struct {
+	URL string `yaml:"url"`
+	Des string `yaml:"des"`
+	Zk  string `yaml:"zk"`
+}
+
+type topicFields struct {
+	Topic  string    `yaml:"topic"`
+	Meta   TopicMeta `yaml:"meta"`
+	HasPic bool      `yaml:"hasPic"`
 }
 
 func sectionFromMap(m map[string]any) Section {
 	section := Section{RecordValid: true}
-	section.Type, _ = m["type"].(string)
+	var fields sectionFields
+	decodeYAMLMap(m, &fields)
+	section.Type = fields.Type
 	section.Topics = topicsFromAny(m["topics"])
 
 	if using, ok := m["using"].(map[string]any); ok {
@@ -74,9 +94,11 @@ func sectionFromMap(m map[string]any) Section {
 
 func repoFromMap(m map[string]any) Repo {
 	repo := Repo{RecordValid: true}
-	repo.URL, _ = m["url"].(string)
-	repo.Des, _ = m["des"].(string)
-	repo.Zk, _ = m["zk"].(string)
+	var fields repoFields
+	decodeYAMLMap(m, &fields)
+	repo.URL = fields.URL
+	repo.Des = fields.Des
+	repo.Zk = fields.Zk
 	repo.Topics = topicsFromAny(m["topics"])
 
 	if record, ok := m["record"]; ok {
@@ -105,14 +127,12 @@ func topicsFromAny(v any) []Topic {
 
 func topicFromMap(m map[string]any) Topic {
 	topic := Topic{RecordValid: true}
-	topic.Topic, _ = m["topic"].(string)
-	topic.HasPic, _ = m["hasPic"].(bool)
+	var fields topicFields
+	decodeYAMLMap(m, &fields)
+	topic.Topic = fields.Topic
+	topic.Meta = fields.Meta
+	topic.HasPic = fields.HasPic
 	topic.Sub = topicsFromAny(m["sub"])
-
-	if metaMap, ok := m["meta"].(map[string]any); ok {
-		topic.Meta.Slug, _ = metaMap["slug"].(string)
-		topic.Meta.HasPic, _ = metaMap["hasPic"].(bool)
-	}
 
 	if record, ok := m["record"]; ok {
 		topic.HasRecord = true
@@ -132,13 +152,23 @@ func recordsFromAny(v any) ([]Record, bool) {
 	for _, item := range items {
 		if recordMap, ok := item.(map[string]any); ok {
 			record := Record{}
-			record.Date, _ = recordMap["date"].(string)
-			record.Des, _ = recordMap["des"].(string)
+			decodeYAMLMap(recordMap, &record)
 			records = append(records, record)
 		}
 	}
 
 	return records, true
+}
+
+func decodeYAMLMap(input, output any) {
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:  output,
+		TagName: "yaml",
+	})
+	if err != nil {
+		return
+	}
+	_ = decoder.Decode(input)
 }
 
 // DirName returns the directory name implied by a topic.

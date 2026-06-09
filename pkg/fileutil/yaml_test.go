@@ -3,6 +3,7 @@ package fileutil
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -44,9 +45,41 @@ func TestListYAMLFilesRecursive(t *testing.T) {
 	assertStringSlicesEqual(t, files, want)
 }
 
+func TestReadAndMergeYAMLFilesRecursiveUsesVisibleSortedYAMLFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeContent(t, filepath.Join(dir, "b.yaml"), "b: true\n")
+	writeContent(t, filepath.Join(dir, ".hidden.yml"), "hidden: true\n")
+	writeContent(t, filepath.Join(dir, "note.txt"), "note: true\n")
+	if err := os.Mkdir(filepath.Join(dir, "subdir"), DirPerm); err != nil {
+		t.Fatal(err)
+	}
+	writeContent(t, filepath.Join(dir, "subdir", "a.yml"), "a: true\n")
+
+	var seen []string
+	data, err := ReadAndMergeYAMLFilesRecursive(dir, func(filename string) {
+		seen = append(seen, filename)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := string(data); got != "b: true\na: true\n" {
+		t.Fatalf("merged data = %q", got)
+	}
+	assertStringSlicesEqual(t, seen, []string{"b.yaml", "a.yml"})
+	if strings.Contains(string(data), "hidden") || strings.Contains(string(data), "note") {
+		t.Fatalf("merged unexpected file content: %q", string(data))
+	}
+}
+
 func writeTestFile(t *testing.T, path string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte("key: value\n"), FilePermPrivate); err != nil {
+	writeContent(t, path, "key: value\n")
+}
+
+func writeContent(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), FilePermPrivate); err != nil {
 		t.Fatal(err)
 	}
 }
