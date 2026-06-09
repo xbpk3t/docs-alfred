@@ -1,0 +1,44 @@
+version: 1
+
+defaults:
+  category: 未分类
+  budgetIncluded: true
+
+categories:
+  - name: 餐饮
+    match:
+      any:
+        - field: counterparty
+          contains: 麦当劳
+        - field: itemName
+          contains: 午餐
+        - field: transactionType
+          contains: 餐饮
+
+  - name: 工资
+    match:
+      any:
+        - field: counterparty
+          contains: 工资
+
+budgetRules:
+  - name: exclude-income
+    budgetIncluded: false
+    match:
+      any:
+        - field: inOut
+          equals: 收入
+
+  - name: exclude-transfers
+    budgetIncluded: false
+    match:
+      any:
+        - field: transactionType
+          contains: 转账
+
+  - name: include-normal-expense
+    budgetIncluded: true
+    match:
+      all:
+        - field: inOut
+          equals: 支出

@@ -21,8 +21,9 @@ import (
 type fileType string
 
 const (
-	fileTypeJSON fileType = "json"
-	fileTypeYAML fileType = "yml"
+	fileTypeJSON  fileType = "json"
+	fileTypeYAML  fileType = "yml"
+	commandGithub          = "gh"
 )
 
 type docProcessor struct {
@@ -247,7 +248,7 @@ func (dc *docsConfig) processAll(processors map[fileType]*docProcessor) error {
 }
 
 func (dc *docsConfig) processSingle(fileType fileType, processor *docProcessor) error {
-	if dc.Cmd == "gh" && dc.IsDir {
+	if dc.Cmd == commandGithub && dc.IsDir {
 		return dc.processGithubDir(fileType, processor)
 	}
 
@@ -308,7 +309,7 @@ func (dc *docsConfig) createRenderer() (render.Renderer, error) {
 	switch dc.Cmd {
 	case "task":
 		renderer = task.NewTaskYAMLRender()
-	case "gh":
+	case commandGithub:
 		renderer = ghindex.NewGithubYAMLRender("")
 	case "goods":
 		renderer = goods.NewGoodsYAMLRender()

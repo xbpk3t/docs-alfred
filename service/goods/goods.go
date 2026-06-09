@@ -19,11 +19,13 @@ type Goods struct {
 
 // Item 定义单个商品项.
 type Item struct {
-	Name  string `json:"name"  yaml:"name"`
-	Param string `json:"param" yaml:"param,omitempty"`
-	Price string `json:"price" yaml:"price,omitempty"`
-	Date  string `json:"date"  yaml:"date,omitempty"`
-	Des   string `json:"des"   yaml:"des,omitempty"`
-	URL   string `json:"url"   yaml:"url,omitempty"`
-	Use   bool   `json:"use"   yaml:"use,omitempty"`
+	Name     string `json:"name"     yaml:"name"`
+	Param    string `json:"param"    yaml:"param,omitempty"`
+	Price    string `json:"price"    yaml:"price,omitempty"`
+	Date     string `json:"date"     yaml:"date,omitempty"`
+	EndDate  string `json:"endDate"  yaml:"endDate,omitempty"`
+	EndPrice string `json:"endPrice" yaml:"endPrice,omitempty"`
+	Des      string `json:"des"      yaml:"des,omitempty"`
+	URL      string `json:"url"      yaml:"url,omitempty"`
+	Use      bool   `json:"use"      yaml:"use,omitempty"`
 }

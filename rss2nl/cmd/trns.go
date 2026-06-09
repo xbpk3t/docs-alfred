@@ -19,7 +19,10 @@ import (
 	"github.com/xbpk3t/docs-alfred/service/rss"
 )
 
-const defaultTrnsSource = "podcast"
+const (
+	defaultTrnsSource         = "podcast"
+	defaultTrnsSummaryBaseURL = "https://api.lucc.dev/v1"
+)
 
 const (
 	statusFound  = "found"
@@ -32,6 +35,7 @@ type trnsFlags struct {
 	outDir   string
 	language string
 	limit    int
+	limitSet bool
 	asr      bool
 	publish  bool
 	refresh  bool
@@ -51,6 +55,18 @@ type trnsIndexEntry struct {
 	Message        string `json:"message,omitempty"`
 }
 
+// NewsletterTrnsReport summarizes best-effort trns processing during send.
+type NewsletterTrnsReport struct {
+	Eligible       int
+	Attempted      int
+	Linked         int
+	Failed         int
+	SkippedNoMedia int
+	SkippedByLimit int
+}
+
+type newsletterTrnsProcessor func(item *NewsletterItem) (string, error)
+
 func newTrnsCmd() *cobra.Command {
 	flags := &trnsFlags{}
 
@@ -61,6 +77,7 @@ func newTrnsCmd() *cobra.Command {
 		Args:      cobra.MaximumNArgs(1),
 		ValidArgs: []string{defaultTrnsSource},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			flags.limitSet = cmd.Flags().Changed("limit")
 			source := defaultTrnsSource
 			if len(args) > 0 {
 				source = args[0]
@@ -84,6 +101,7 @@ func newTrnsCmd() *cobra.Command {
 		Args:      cobra.MaximumNArgs(1),
 		ValidArgs: []string{defaultTrnsSource},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			flags.limitSet = cmd.Flags().Changed("limit")
 			source := defaultTrnsSource
 			if len(args) > 0 {
 				source = args[0]
@@ -170,12 +188,24 @@ func setupSummarizer(cfg *rss.Config) *transcript.Summarizer {
 	if cfg.TrnsConfig.Summary.Model != "" {
 		aiCfg.Model = cfg.TrnsConfig.Summary.Model
 	}
+	if baseURL := configuredSummaryBaseURL(cfg); baseURL != "" {
+		aiCfg.BaseURL = baseURL
+	}
 	summaryLang := cfg.TrnsConfig.Summary.Language
 	if summaryLang == "" {
 		summaryLang = "en"
 	}
 
 	return transcript.NewSummarizer(aiCfg, summaryLang)
+}
+
+func configuredSummaryBaseURL(cfg *rss.Config) string {
+	baseURL := strings.TrimSpace(cfg.TrnsConfig.Summary.BaseURL)
+	if baseURL == "" || baseURL == defaultTrnsSummaryBaseURL {
+		return ""
+	}
+
+	return baseURL
 }
 
 func setupUploader(cfg *rss.Config, flags *trnsFlags) *transcript.LitterboxUploader {
@@ -206,6 +236,26 @@ func computeStats(entries []trnsIndexEntry) (found, cached, failed int) {
 	return
 }
 
+func effectiveTrnsLimit(cfg *rss.Config, flags *trnsFlags) int {
+	if flags != nil && flags.limitSet {
+		return normalizeTrnsLimit(flags.limit)
+	}
+
+	return normalizeTrnsLimit(cfg.TrnsConfig.DefaultLimit)
+}
+
+func normalizeTrnsLimit(limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+
+	return limit
+}
+
+func trnsLimitReached(processed, limit int) bool {
+	return limit > 0 && processed >= limit
+}
+
 func buildPipeline(flags *trnsFlags) *transcript.Pipeline {
 	providers := []transcript.Provider{
 		transcript.NewRssTranscriptProvider(),
@@ -224,10 +274,7 @@ func runTrnsCheck(source string, flags *trnsFlags) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	limit := flags.limit
-	if limit <= 0 {
-		limit = 10
-	}
+	limit := effectiveTrnsLimit(cfg, flags)
 
 	failedFeeds := 0
 	totalEpisodes := 0
@@ -273,8 +320,8 @@ func runTrnsCheck(source string, flags *trnsFlags) error {
 
 //nolint:nonamedreturns // named returns for readability
 func inspectFeedItems(parsed *gofeed.Feed, limit int) (rssCount, audioCount, episodeCount int) {
-	for i, item := range parsed.Items {
-		if i >= limit {
+	for _, item := range parsed.Items {
+		if trnsLimitReached(episodeCount, limit) {
 			break
 		}
 		episodeCount++
@@ -308,10 +355,7 @@ func processPodcastFeeds(
 	summarizer *transcript.Summarizer,
 	uploader *transcript.LitterboxUploader,
 ) []trnsIndexEntry {
-	limit := flags.limit
-	if limit <= 0 {
-		limit = 10
-	}
+	limit := effectiveTrnsLimit(cfg, flags)
 
 	var entries []trnsIndexEntry
 
@@ -351,8 +395,8 @@ func processFeedURL(
 	}
 
 	var entries []trnsIndexEntry
-	for i, item := range parsed.Items {
-		if i >= limit {
+	for _, item := range parsed.Items {
+		if trnsLimitReached(len(entries), limit) {
 			break
 		}
 
@@ -394,6 +438,10 @@ func processEpisode(
 	ctx := context.Background()
 	result, source, err := pipeline.Fetch(ctx, &epRef)
 	if err != nil || result == nil || result.Content == "" {
+		message := "no transcript found"
+		if err != nil {
+			message += ": " + err.Error()
+		}
 		slog.Debug("No transcript found",
 			"episode", item.Title,
 			"error", err,
@@ -405,7 +453,7 @@ func processEpisode(
 			FeedURL:      feedURL,
 			Key:          key,
 			Status:       statusFailed,
-			Message:      "no transcript found: " + err.Error(),
+			Message:      message,
 		}
 	}
 
@@ -554,38 +602,64 @@ func renderTrnsPage(view *trnsPageView) string {
 // -- Newsletter trns integration --
 
 // ProcessNewsletterTrns fetches transcripts for podcast newsletter items,
-// renders HTML pages, uploads to Litterbox, and sets TrnsURL on items.
-func ProcessNewsletterTrns(items []NewsletterItem, cfg *rss.Config, outDir string) {
+// renders HTML pages, uploads to Litterbox, sets TrnsURL on items, and returns a best-effort report.
+func ProcessNewsletterTrns(items []NewsletterItem, cfg *rss.Config, outDir string) NewsletterTrnsReport {
 	if !cfg.TrnsConfig.Enabled {
-		return
+		return NewsletterTrnsReport{}
 	}
 
 	expiration := cfg.TrnsConfig.TemporaryUpload.ExpirationDuration
 	if !cfg.TrnsConfig.TemporaryUpload.Enabled && expiration == "" {
-		return
+		return NewsletterTrnsReport{}
 	}
 
 	cache := transcript.NewCache(outDir)
 	pipeline := buildPipeline(&trnsFlags{asr: cfg.TrnsConfig.Asr.Enabled, language: cfg.TrnsConfig.Asr.Language})
 	summarizer := setupSummarizer(cfg)
 	uploader := transcript.NewLitterboxUploader(expiration)
+	processor := func(item *NewsletterItem) (string, error) {
+		return processItemTrns(item, cfg, cache, pipeline, summarizer, uploader, outDir)
+	}
 
+	return processNewsletterTrnsItems(items, cfg.TrnsConfig.DefaultLimit, processor)
+}
+
+func processNewsletterTrnsItems(items []NewsletterItem, limit int, process newsletterTrnsProcessor) NewsletterTrnsReport {
+	report := NewsletterTrnsReport{}
+	limit = normalizeTrnsLimit(limit)
 	for i := range items {
 		item := &items[i]
-		if item.EnclosureURL == "" && len(item.PodcastTranscripts) == 0 {
+		if !newsletterItemHasTrnsInput(item) {
+			report.SkippedNoMedia++
+
 			continue
 		}
+		report.Eligible++
+		if trnsLimitReached(report.Attempted, limit) {
+			report.SkippedByLimit++
 
-		trnsURL, err := processItemTrns(item, cfg, cache, pipeline, summarizer, uploader, outDir)
+			continue
+		}
+		report.Attempted++
+
+		trnsURL, err := process(item)
 		if err != nil {
-			slog.Debug("Trns for newsletter item failed", "title", item.Title, "error", err)
+			report.Failed++
+			slog.Warn("Trns for newsletter item failed", "title", item.Title, "link", item.Link, "error", err)
 
 			continue
 		}
 		if trnsURL != "" {
 			item.TrnsURL = trnsURL
+			report.Linked++
 		}
 	}
+
+	return report
+}
+
+func newsletterItemHasTrnsInput(item *NewsletterItem) bool {
+	return item != nil && (item.EnclosureURL != "" || len(item.PodcastTranscripts) > 0)
 }
 
 func processItemTrns(
@@ -597,7 +671,7 @@ func processItemTrns(
 	uploader *transcript.LitterboxUploader,
 	outDir string,
 ) (string, error) {
-	feedTitle := item.SourceLink
+	feedTitle := item.FeedTitle
 	key := cache.Key(feedTitle, item.ItemHash, item.Link, item.Title)
 
 	trns, err := getNewsletterItemTrns(item, feedTitle, key, cache, pipeline)
@@ -652,6 +726,7 @@ func fetchAndCacheItemTrns(
 	if item.EnclosureURL != "" {
 		epRef.EnclosureURL = item.EnclosureURL
 	}
+	epRef.TranscriptLinks = toTranscriptLinks(item.PodcastTranscripts)
 
 	result, source, fetchErr := pipeline.Fetch(context.Background(), &epRef)
 	if fetchErr != nil || result == nil || result.Content == "" {
@@ -673,6 +748,21 @@ func fetchAndCacheItemTrns(
 		Content: result.Content,
 		Source:  source,
 	}, nil
+}
+
+func toTranscriptLinks(refs []PodcastTranscriptRef) []transcript.TranscriptLink {
+	links := make([]transcript.TranscriptLink, 0, len(refs))
+	for _, ref := range refs {
+		if ref.URL == "" {
+			continue
+		}
+		links = append(links, transcript.TranscriptLink{
+			URL:  ref.URL,
+			Type: ref.Type,
+		})
+	}
+
+	return links
 }
 
 func summarizeItemTrns(summarizer *transcript.Summarizer, title, content string) itemTrnsSummary {
