@@ -46,7 +46,7 @@ func TestWikiCommandOwnsWikiActions(t *testing.T) {
 
 	require.Equal(t, wikiCommandName, wikiCmd.Name())
 	require.False(t, wikiCmd.HasAvailableFlags())
-	requireCommandNames(t, wikiCmd.Commands(), []string{"add", wikiInboxCommandName})
+	requireCommandNames(t, wikiCmd.Commands(), []string{"add", wikiInboxCommandName, wikiAuditCommandName})
 	require.Nil(t, wikiCmd.Flags().Lookup(wikiInboxCommandName))
 }
 
@@ -84,6 +84,22 @@ func TestWikiInboxProcessCommandFlags(t *testing.T) {
 	require.NotNil(t, f.Lookup("wiki-root"))
 	require.NotNil(t, f.Lookup("format"))
 	require.NotNil(t, f.Lookup("dry-run"))
+}
+
+func TestWikiAuditCommandFlags(t *testing.T) {
+	wikiAuditCmd, _, err := newRootCmd().Find([]string{wikiCommandName, wikiAuditCommandName})
+	require.NoError(t, err)
+
+	require.Equal(t, wikiAuditCommandName, wikiAuditCmd.Name())
+	require.True(t, wikiAuditCmd.HasAvailableFlags())
+
+	f := wikiAuditCmd.Flags()
+	require.NotNil(t, f.Lookup("config"))
+	require.NotNil(t, f.Lookup("wiki-root"))
+	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, f.Lookup("changed-only"))
+	require.NotNil(t, f.Lookup("paths"))
+	require.Nil(t, f.Lookup("dry-run"))
 }
 
 func requireCommandNames(t *testing.T, commands []*cobra.Command, want []string) {

@@ -24,10 +24,11 @@ var (
 
 // Manager handles remote repository configuration fetching and caching.
 type Manager struct {
-	configPath string
-	configURL  string
-	repos      Repos
-	maxAge     time.Duration
+	configPath  string
+	configURL   string
+	configRepos ConfigRepos
+	repos       Repos
+	maxAge      time.Duration
 }
 
 // NewManager creates a new repository manager.
@@ -207,9 +208,15 @@ func (m *Manager) loadFromFile() error {
 		return fmt.Errorf("failed to parse config: %w", err)
 	}
 
+	m.configRepos = configRepos
 	m.repos = configRepos.ToRepos()
 
 	return nil
+}
+
+// ConfigRepos returns the loaded remote configuration records.
+func (m *Manager) ConfigRepos() ConfigRepos {
+	return m.configRepos
 }
 
 // Filter filters repositories by query.

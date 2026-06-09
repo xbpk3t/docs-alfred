@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,7 +21,13 @@ func TestLoadConfigPreservesDefaultsWithPartialFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, cfg.Wiki.Concurrency)
 	require.Equal(t, "wiki", cfg.Wiki.WikiRoot)
-	require.Equal(t, "https://docs.lucc.dev/gh.yml", cfg.Wiki.GhTopicsURL)
+	require.Equal(t, "https://cdn.lucc.dev/gh.yml", cfg.Wiki.GhTopicsURL)
+	require.Equal(t, "24h", cfg.Wiki.GhTopicsMaxAge)
+	require.True(t, cfg.Wiki.OpenCLIFallback)
+	require.True(t, cfg.Wiki.Media.Enabled)
+	require.Equal(t, "yt-dlp", cfg.Wiki.Media.SubtitleCLIPath)
+	require.False(t, cfg.Wiki.Media.ASR.Enabled)
+	require.Empty(t, cfg.Wiki.Media.ASR.CLIPath)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
 }
 
@@ -74,6 +82,36 @@ func TestRunAddURLsWritesClassifyFailure(t *testing.T) {
 	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
 	require.Equal(t, wikisvc.FailureClassify, result.URLResults[0].FailureType)
 	require.Len(t, deps.writer.failures, 1)
+	require.Contains(t, deps.writer.failures[0].extraInfo, "Summary: summary")
+}
+
+func TestRunAddURLsTreatsInboxWikiTypeAsClassifyFailure(t *testing.T) {
+	deps := newFakeDeps()
+	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+		TopicPath:         "topic/path",
+		WikiType:          wikisvc.TypeInbox,
+		ContentType:       wikisvc.ContentText,
+		Summary:           "needs review summary",
+		Confidence:        0.88,
+		NeedsManualReview: true,
+		RejectReason:      "AI marked result for manual review",
+	}
+
+	result, err := RunAddURLs(context.Background(), AddInput{
+		Config: testConfig(t),
+		URLs:   []string{"https://example.com/a"},
+		deps:   deps.dependencies(),
+	})
+
+	require.NoError(t, err)
+	require.True(t, result.OK())
+	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
+	require.Equal(t, wikisvc.FailureClassify, result.URLResults[0].FailureType)
+	require.Empty(t, deps.writer.summaries)
+	require.Len(t, deps.writer.failures, 1)
+	require.Contains(t, deps.writer.failures[0].extraInfo, "AI marked result for manual review")
+	require.Contains(t, deps.writer.failures[0].extraInfo, "NeedsManualReview: true")
 }
 
 func TestRunAddURLsWritesFetchFailure(t *testing.T) {
@@ -90,6 +128,23 @@ func TestRunAddURLsWritesFetchFailure(t *testing.T) {
 	require.True(t, result.OK())
 	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
 	require.Equal(t, wikisvc.FailureResolve, result.URLResults[0].FailureType)
+	require.Len(t, deps.writer.failures, 1)
+}
+
+func TestRunAddURLsWritesExtractFailure(t *testing.T) {
+	deps := newFakeDeps()
+	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Error: "extract: low quality HTTP content"}
+
+	result, err := RunAddURLs(context.Background(), AddInput{
+		Config: testConfig(t),
+		URLs:   []string{"https://example.com/a"},
+		deps:   deps.dependencies(),
+	})
+
+	require.NoError(t, err)
+	require.True(t, result.OK())
+	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
+	require.Equal(t, wikisvc.FailureExtract, result.URLResults[0].FailureType)
 	require.Len(t, deps.writer.failures, 1)
 }
 
@@ -137,7 +192,69 @@ func TestRunProcessInboxFlushesHandledLines(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.OK())
 	require.Equal(t, 1, result.Flushed)
-	require.True(t, deps.inbox.flushed[1])
+	require.Equal(t, []string{"https://example.com/a"}, deps.inbox.flushed[1])
+}
+
+func TestRunProcessInboxWritesSameTopicInInboxOrderAfterReverseCompletion(t *testing.T) {
+	urls := []string{"https://example.com/a", "https://example.com/b", "https://example.com/c"}
+	blocks := map[string]chan struct{}{
+		urls[0]: make(chan struct{}),
+		urls[1]: make(chan struct{}),
+	}
+	started := map[string]chan struct{}{
+		urls[0]: make(chan struct{}),
+		urls[1]: make(chan struct{}),
+	}
+	fetcher := &fakeFetcher{results: map[string]*wikisvc.ContentFetchResult{}, blocks: blocks, started: started}
+	classifier := &fakeClassifier{results: map[string]*wikisvc.ClassifyResult{}}
+	entries := make([]wikisvc.InboxEntry, 0, len(urls))
+	for i, url := range urls {
+		fetcher.results[url] = &wikisvc.ContentFetchResult{Title: "Title " + string(rune('A'+i)), Body: "body"}
+		classifier.results[url] = &wikisvc.ClassifyResult{
+			TopicPath:   "topic/path",
+			WikiType:    wikisvc.TypeDeepDive,
+			ContentType: wikisvc.ContentText,
+			Summary:     "summary " + url,
+		}
+		entries = append(entries, wikisvc.InboxEntry{URL: url, LineIndex: i})
+	}
+
+	cfg := testConfig(t)
+	cfg.Wiki.Concurrency = 3
+	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("inbox\n"), 0o600))
+	deps := &dependencies{
+		fetcher:    fetcher,
+		classifier: classifier,
+		writer:     serviceWriter{},
+		inbox:      &fakeInbox{entries: entries},
+	}
+
+	type runResult struct {
+		result *Result
+		err    error
+	}
+	done := make(chan runResult, 1)
+	go func() {
+		result, err := RunProcessInbox(context.Background(), InboxInput{Config: cfg, deps: deps})
+		done <- runResult{result: result, err: err}
+	}()
+
+	<-started[urls[0]]
+	<-started[urls[1]]
+	close(blocks[urls[1]])
+	close(blocks[urls[0]])
+
+	outcome := <-done
+	require.NoError(t, outcome.err)
+	require.True(t, outcome.result.OK())
+
+	data, err := os.ReadFile(filepath.Join(cfg.Wiki.WikiRoot, "topic", "path", "summary.md"))
+	require.NoError(t, err)
+	content := string(data)
+	require.Contains(t, content, "total_urls: 3")
+	require.Contains(t, content, "succeeded: 3")
+	require.Less(t, strings.Index(content, urls[0]), strings.Index(content, urls[1]))
+	require.Less(t, strings.Index(content, urls[1]), strings.Index(content, urls[2]))
 }
 
 func TestRunProcessInboxDryRunDoesNotWriteOrFlush(t *testing.T) {
@@ -166,6 +283,102 @@ func TestRunProcessInboxDryRunDoesNotWriteOrFlush(t *testing.T) {
 	require.Empty(t, deps.inbox.flushed)
 	require.Equal(t, StatusDryRunSummary, result.URLResults[0].Status)
 	require.True(t, deps.writer.summaries[0].dryRun)
+}
+
+func TestRunAuditReportsIssues(t *testing.T) {
+	cfg := testConfig(t)
+	topicDir := filepath.Join(cfg.Wiki.WikiRoot, "topic", "path")
+	require.NoError(t, os.MkdirAll(topicDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(topicDir, "summary.md"), []byte(`### Bad
+
+- URL: https://t.co/a](https://x.com/a)
+- Type: deep_dive
+
+This page requires JavaScript.
+`), 0o600))
+
+	result, err := RunAudit(context.Background(), AuditInput{Config: cfg})
+
+	require.NoError(t, err)
+	require.False(t, result.OK())
+	require.NotEmpty(t, result.Issues)
+	require.Equal(t, "wiki audit", result.Name)
+}
+
+func TestRunAuditPathScopeIgnoresUnrelatedPollution(t *testing.T) {
+	cfg := testConfig(t)
+	pollutedDir := filepath.Join(cfg.Wiki.WikiRoot, "old", "polluted")
+	cleanDir := filepath.Join(cfg.Wiki.WikiRoot, "new", "clean")
+	require.NoError(t, os.MkdirAll(pollutedDir, 0o700))
+	require.NoError(t, os.MkdirAll(cleanDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(pollutedDir, "summary.md"), []byte(`### Bad
+
+- URL: https://t.co/a](https://x.com/a)
+- Type: deep_dive
+
+This page requires JavaScript.
+`), 0o600))
+	cleanPath := filepath.Join(cleanDir, "summary.md")
+	require.NoError(t, os.WriteFile(cleanPath, []byte(`### Good
+
+- URL: https://example.com/a
+- Type: deep_dive
+
+This scoped audit entry is long enough and clean enough to pass without looking at old files.
+`), 0o600))
+
+	result, err := RunAudit(context.Background(), AuditInput{Config: cfg, Paths: []string{cleanPath}})
+
+	require.NoError(t, err)
+	require.True(t, result.OK())
+	require.Empty(t, result.Issues)
+}
+
+func TestRunAuditChangedOnlyIgnoresTrackedHistoricalPollution(t *testing.T) {
+	repo := t.TempDir()
+	wikiRoot := filepath.Join(repo, "wiki")
+	pollutedDir := filepath.Join(wikiRoot, "old", "polluted")
+	cleanDir := filepath.Join(wikiRoot, "new", "clean")
+	require.NoError(t, os.MkdirAll(pollutedDir, 0o700))
+	require.NoError(t, os.MkdirAll(cleanDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(pollutedDir, "summary.md"), []byte(`### Bad
+
+- URL: https://t.co/a](https://x.com/a)
+- Type: deep_dive
+
+This page requires JavaScript.
+`), 0o600))
+	runGit(t, repo, "init")
+	runGit(t, repo, "config", "user.email", "test@example.com")
+	runGit(t, repo, "config", "user.name", "Test")
+	runGit(t, repo, "add", "wiki/old/polluted/summary.md")
+	runGit(t, repo, "commit", "-m", "seed")
+	cleanPath := filepath.Join(cleanDir, "summary.md")
+	require.NoError(t, os.WriteFile(cleanPath, []byte(`### Good
+
+- URL: https://example.com/a
+- Type: deep_dive
+
+This changed-only audit entry is clean and long enough to avoid historical pollution blocking the run.
+`), 0o600))
+	cfg := &Config{
+		AI:   AIConfig{Model: "model", BaseURL: "https://example.com/v1"},
+		Wiki: WikiConfig{WikiRoot: wikiRoot, GhTopicsURL: "https://example.com/gh.yml", Concurrency: 1, PerURLTimeout: 1, MaxRetries: 1},
+	}
+
+	result, err := RunAudit(context.Background(), AuditInput{Config: cfg, ChangedOnly: true})
+
+	require.NoError(t, err)
+	require.True(t, result.OK())
+	require.Empty(t, result.Issues)
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
 }
 
 func testConfig(t *testing.T) *Config {
@@ -211,9 +424,17 @@ func (f *fakeDeps) dependencies() *dependencies {
 
 type fakeFetcher struct {
 	results map[string]*wikisvc.ContentFetchResult
+	blocks  map[string]chan struct{}
+	started map[string]chan struct{}
 }
 
 func (f *fakeFetcher) FetchContent(_ context.Context, urlStr, _ string) *wikisvc.ContentFetchResult {
+	if ch, ok := f.started[urlStr]; ok {
+		close(ch)
+	}
+	if ch, ok := f.blocks[urlStr]; ok {
+		<-ch
+	}
 	if result, ok := f.results[urlStr]; ok {
 		return result
 	}
@@ -245,6 +466,7 @@ type failureCall struct {
 	url         string
 	failureType string
 	dryRun      bool
+	extraInfo   string
 }
 
 func (f *fakeWriter) WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.WriteOptions) (string, error) {
@@ -256,11 +478,11 @@ func (f *fakeWriter) WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.Writ
 	return filepath.Join(opts.WikiRoot, item.TopicPath, "summary.md"), nil
 }
 
-func (f *fakeWriter) WriteFailureEntry(item *wikisvc.ClassifyItem, failureType, _ string, opts *wikisvc.WriteOptions) (string, error) {
+func (f *fakeWriter) WriteFailureEntry(item *wikisvc.ClassifyItem, failureType, extraInfo string, opts *wikisvc.WriteOptions) (string, error) {
 	if f.failureErr != nil {
 		return "", f.failureErr
 	}
-	f.failures = append(f.failures, failureCall{url: item.URL, failureType: failureType, dryRun: opts.DryRun})
+	f.failures = append(f.failures, failureCall{url: item.URL, failureType: failureType, dryRun: opts.DryRun, extraInfo: extraInfo})
 
 	return filepath.Join(opts.WikiRoot, "failed", failureType+"-failed.md"), nil
 }
@@ -269,7 +491,7 @@ type fakeInbox struct {
 	parseErr error
 	flushErr error
 	entries  []wikisvc.InboxEntry
-	flushed  map[int]bool
+	flushed  map[int][]string
 }
 
 func (f *fakeInbox) ParseInbox(string) ([]wikisvc.InboxEntry, error) {
@@ -280,7 +502,7 @@ func (f *fakeInbox) ParseInbox(string) ([]wikisvc.InboxEntry, error) {
 	return f.entries, nil
 }
 
-func (f *fakeInbox) FlushInbox(_ string, processedLineIndices map[int]bool) error {
+func (f *fakeInbox) FlushInbox(_ string, processedLineIndices map[int][]string) error {
 	if f.flushErr != nil {
 		return f.flushErr
 	}
