@@ -10,6 +10,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/service/data"
 	"github.com/xbpk3t/docs-alfred/service/ghdata"
+	"github.com/xbpk3t/docs-alfred/service/goods"
 )
 
 // DomainCheckInput holds input for domain data check.
@@ -68,6 +69,15 @@ func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, erro
 func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions) (*DomainCheckResult, error) {
 	if domain == data.DomainGH {
 		result, err := ghdata.RunGhCheckWithOptions(opts.path, ghdata.CheckOptions{MaxLines: opts.ghMaxLines})
+		if err != nil {
+			return nil, err
+		}
+
+		return &DomainCheckResult{Issues: result.Issues}, nil
+	}
+
+	if domain == data.DomainGoods {
+		result, err := goods.RunCheck(opts.path)
 		if err != nil {
 			return nil, err
 		}

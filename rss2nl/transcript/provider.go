@@ -393,6 +393,11 @@ func normalizeTranscriptContent(content, contentType string) string {
 	}
 }
 
+// NormalizeContent normalizes transcript or subtitle content into text/Markdown.
+func NormalizeContent(content, contentType string) string {
+	return normalizeTranscriptContent(content, contentType)
+}
+
 // cleanSubtitle parses VTT/SRT content via go-astisub and extracts plain text.
 // Handles non-standard formats (ASS-style tags, encoding issues) that yt-dlp
 // may produce from sources like Bilibili.
@@ -461,6 +466,11 @@ func detectTranscriptContentType(rawURL, declaredType string, data []byte) strin
 	}
 
 	return plaintextContentType
+}
+
+// DetectContentType detects a transcript/subtitle content type.
+func DetectContentType(rawURL, declaredType string, data []byte) string {
+	return detectTranscriptContentType(rawURL, declaredType, data)
 }
 
 func contentTypeFromMediaType(t string) (string, bool) {

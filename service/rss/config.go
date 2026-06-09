@@ -72,7 +72,6 @@ type Feeds struct {
 
 // TrnsConfig 转写（transcript）主配置.
 type TrnsConfig struct {
-	DefaultOutDir   string                    `yaml:"defaultOutDir,omitempty"`
 	Summary         TrnsSummaryConfig         `yaml:"summary,omitempty"`
 	Asr             TrnsAsrConfig             `yaml:"asr,omitempty"`
 	TemporaryUpload TrnsTemporaryUploadConfig `yaml:"temporaryUpload,omitempty"`
@@ -80,19 +79,9 @@ type TrnsConfig struct {
 	Enabled         bool                      `yaml:"enabled,omitempty"`
 }
 
-// PodcastTrnsSourceConfig 播客转写源配置.
-type PodcastTrnsSourceConfig struct {
-	FeedURL     string `yaml:"feedUrl"`
-	ASROverride *bool  `yaml:"asr,omitempty"`
-	Language    string `yaml:"language,omitempty"`
-	MaxEpisodes int    `yaml:"maxEpisodes,omitempty"`
-	MaxAgeDays  int    `yaml:"maxAgeDays,omitempty"`
-}
-
 // TrnsAsrConfig ASR（自动语音识别）配置.
 type TrnsAsrConfig struct {
 	Language string `yaml:"language,omitempty"`
-	CLIPath  string `yaml:"cliPath,omitempty"`
 	Enabled  bool   `yaml:"enabled,omitempty"`
 }
 
@@ -100,7 +89,6 @@ type TrnsAsrConfig struct {
 type TrnsSummaryConfig struct {
 	Model    string `default:"deepseek-v4-flash"       yaml:"model,omitempty"`
 	BaseURL  string `default:"https://api.lucc.dev/v1" yaml:"baseUrl,omitempty"`
-	Provider string `default:"openai"                  yaml:"provider,omitempty"`
 	Language string `yaml:"language,omitempty"`
 	Enabled  bool   `yaml:"enabled,omitempty"`
 }

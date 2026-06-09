@@ -42,7 +42,7 @@ type NewsletterItem struct {
 	Content            string
 	EnclosureURL       string
 	EnclosureType      string
-	SourceLink         string
+	FeedTitle          string
 	ItemHash           string
 	TrnsURL            string
 	PodcastTranscripts []PodcastTranscriptRef
@@ -84,8 +84,9 @@ type EmailContent struct {
 type TemplateType string
 
 const (
-	DashboardTpl  TemplateType = "Dashboard For Newsletter"
-	NewsletterTpl TemplateType = "Newsletter"
+	DashboardTpl    TemplateType = "Dashboard For Newsletter"
+	NewsletterTpl   TemplateType = "Newsletter"
+	podcastCategory              = "podcast"
 )
 
 // NewsletterService 处理新闻通讯的服务.
@@ -145,7 +146,19 @@ func runSend(config *rss.Config, trnsOut string) error {
 	// Process transcripts for podcast items and set trns URLs
 	if config.TrnsConfig.Enabled {
 		for i := range categories {
-			ProcessNewsletterTrns(categories[i].Items, config, trnsOut)
+			if !shouldProcessNewsletterTrns(categories[i].Category) {
+				continue
+			}
+			report := ProcessNewsletterTrns(categories[i].Items, config, trnsOut)
+			slog.Info("Newsletter trns completed",
+				"category", categories[i].Category,
+				"eligible", report.Eligible,
+				"attempted", report.Attempted,
+				"linked", report.Linked,
+				"failed", report.Failed,
+				"skippedNoMedia", report.SkippedNoMedia,
+				"skippedByLimit", report.SkippedByLimit,
+			)
 		}
 	}
 
@@ -344,10 +357,11 @@ func (s *NewsletterService) mergeFeedItems(typeName string, allFeeds []*gofeed.F
 // makeNewsletterItem converts a gofeed.Item to a NewsletterItem.
 func (s *NewsletterService) makeNewsletterItem(item *gofeed.Item, sourceFeed *gofeed.Feed, typeName, itemHash string) NewsletterItem {
 	ni := NewsletterItem{
-		Title:    s.getItemTitle(item),
-		Link:     item.Link,
-		PubDate:  carbon.CreateFromStdTime(getItemCreationTime(item)).ToDateTimeString(),
-		ItemHash: itemHash,
+		Title:     s.getItemTitle(item),
+		Link:      item.Link,
+		PubDate:   carbon.CreateFromStdTime(getItemCreationTime(item)).ToDateTimeString(),
+		FeedTitle: feedDisplayName(sourceFeed),
+		ItemHash:  itemHash,
 	}
 
 	// Description / content
@@ -370,6 +384,21 @@ func (s *NewsletterService) makeNewsletterItem(item *gofeed.Item, sourceFeed *go
 	ni.PodcastTranscripts = extractTranscriptRefs(item)
 
 	return ni
+}
+
+func shouldProcessNewsletterTrns(category string) bool {
+	return strings.EqualFold(strings.TrimSpace(category), podcastCategory)
+}
+
+func feedDisplayName(feed *gofeed.Feed) string {
+	if feed == nil {
+		return ""
+	}
+	if feed.Title != "" {
+		return feed.Title
+	}
+
+	return feed.Link
 }
 
 // extractTranscriptRefs extracts podcast:transcript references from item extensions.
