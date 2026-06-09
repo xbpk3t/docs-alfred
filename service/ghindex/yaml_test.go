@@ -27,6 +27,7 @@ func TestGithubYAMLRenderNormalizesTopicDisplayFields(t *testing.T) {
           hasPic: true
   repo:
     - url: https://github.com/acme/main-repo.git
+      nix: github:acme/main-repo#main-repo
       topics:
         - topic: Parent Topic
           meta:
@@ -61,6 +62,7 @@ func TestGithubYAMLRenderNormalizesTopicDisplayFields(t *testing.T) {
 	assert.Equal(t, "kernel/HTTP/using-topic", cfg.Using.Topics[0].PicDir)
 
 	require.Len(t, cfg.Repos, 1)
+	assert.Equal(t, "github:acme/main-repo#main-repo", cfg.Repos[0].NixURL)
 	require.Len(t, cfg.Repos[0].Topics, 1)
 	parent := cfg.Repos[0].Topics[0]
 	assert.True(t, parent.HasPic)

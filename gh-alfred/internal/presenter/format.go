@@ -26,7 +26,7 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredIt
 			Valid:        true,
 		}
 
-		item.Icon = &wf.AlfredIcon{Path: determineRepoIcon(repo)}
+		item.Icon = &wf.AlfredIcon{Path: repoIconPath(repo)}
 
 		item.Mods = make(map[string]*wf.AlfredMod)
 
@@ -120,22 +120,6 @@ func formatRepoSubtitle(repo *ghindex.Repository) string {
 	}
 
 	return strings.Join(parts, " ")
-}
-
-func determineRepoIcon(repo *ghindex.Repository) string {
-	if repo == nil {
-		return IconGh
-	}
-	switch {
-	case repo.HasQs() && repo.Doc != "":
-		return IconQsDoc
-	case repo.HasQs():
-		return IconQs
-	case repo.Doc != "":
-		return IconDoc
-	default:
-		return IconGh
-	}
 }
 
 // FormatPlain returns plain-text output of repos with labels.

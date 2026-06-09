@@ -1,6 +1,7 @@
 package presenter
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,19 @@ import (
 	"github.com/xbpk3t/docs-alfred/service/ghindex"
 )
 
+func useTempRepoIconCache(t *testing.T) string {
+	t.Helper()
+
+	old := repoIconCacheDir
+	dir := t.TempDir()
+	repoIconCacheDir = dir
+	t.Cleanup(func() {
+		repoIconCacheDir = old
+	})
+
+	return dir
+}
+
 func TestBuildDocURL(t *testing.T) {
 	assert.Equal(t, "https://example.com/doc", BuildDocURL("https://docs.lucc.dev", "https://example.com/doc"))
 	assert.Equal(t, "https://docs.lucc.dev/#/data/gh/foo", BuildDocURL("https://docs.lucc.dev/", "/data/gh/foo"))
@@ -16,6 +30,7 @@ func TestBuildDocURL(t *testing.T) {
 }
 
 func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
+	cacheDir := useTempRepoIconCache(t)
 	repos := ghindex.Repos{
 		{
 			URL:       "https://github.com/acme/tool",
@@ -40,7 +55,7 @@ func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
 	assert.Equal(t, "https://github.com/acme/tool", items[0].Arg)
 	assert.Equal(t, "acme/tool", items[0].Autocomplete)
 	assert.Equal(t, "[SUB#acme/main] [kernel#tool] Tooling", items[0].Subtitle)
-	assert.Equal(t, IconQsDoc, items[0].Icon.Path)
+	assert.Equal(t, filepath.Join(cacheDir, "gh-d1-n0-s0.svg"), items[0].Icon.Path)
 	require.NotNil(t, items[0].Text)
 	assert.Equal(t, "https://github.com/acme/tool", items[0].Text.Copy)
 	require.Contains(t, items[0].Mods, "alt")
@@ -58,6 +73,7 @@ func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
 }
 
 func TestFormatAlfredItemsAddsGitHubSearchFallbackForQueries(t *testing.T) {
+	useTempRepoIconCache(t)
 	repos := ghindex.Repos{{URL: "https://github.com/acme/tool"}}
 
 	items := FormatAlfredItems(repos, "https://docs.lucc.dev/", "tool kit")
