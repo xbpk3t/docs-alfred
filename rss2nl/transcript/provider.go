@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html"
 	"mime"
 	"net/http"
 	"net/url"
@@ -13,12 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/asticode/go-astisub"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/xbpk3t/docs-alfred/pkg/htmlutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
-	"mvdan.cc/xurls/v2"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // TranscriptResult holds the result of a transcript fetch.
@@ -204,94 +202,27 @@ func (p *DescriptionLinkProvider) Fetch(ctx context.Context, ep *EpisodeRef) (*T
 	}, nil
 }
 
-// extractTranscriptLinksFromText extracts transcript URLs from HTML text.
-// Uses goquery for href extraction, xurls for bare URL detection,
-// and html.UnescapeString for entity decoding.
 func extractTranscriptLinksFromText(text, baseURL string) []string {
-	var candidates []string
+	refs := urlutil.ExtractURLRefs(text, urlutil.ExtractOptions{
+		BaseURL:        baseURL,
+		HTMLAnchors:    true,
+		BareURLs:       true,
+		Relaxed:        true,
+		HTTPOnly:       true,
+		Deduplicate:    true,
+		TranscriptOnly: true,
+	})
 
-	// Extract href="..." candidates via goquery
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(text))
-	if err == nil {
-		doc.Find("a[href]").Each(func(_ int, sel *goquery.Selection) {
-			if href, ok := sel.Attr("href"); ok {
-				candidate := normalizeCandidateURL(href, baseURL)
-				if candidate != "" {
-					candidates = append(candidates, candidate)
-				}
-			}
-		})
+	links := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		links = append(links, ref.URL)
 	}
 
-	// Extract bare URL candidates via xurls (after HTML entity decoding)
-	decoded := html.UnescapeString(text)
-	rxRelaxed := xurls.Relaxed()
-	for _, match := range rxRelaxed.FindAllString(decoded, -1) {
-		candidate := normalizeCandidateURL(match, baseURL)
-		if candidate != "" {
-			candidates = append(candidates, candidate)
-		}
-	}
-
-	// Deduplicate and filter
-	seen := make(map[string]bool)
-	var result []string
-	for _, c := range candidates {
-		if !seen[c] && isTranscriptURL(c) {
-			seen[c] = true
-			result = append(result, c)
-		}
-	}
-
-	return result
-}
-
-func normalizeCandidateURL(raw, baseURL string) string {
-	raw = strings.TrimSpace(raw)
-	// Trim trailing punctuation
-	raw = strings.TrimRight(raw, "),.;\\]")
-
-	// Decode HTML entities
-	raw = html.UnescapeString(raw)
-
-	// Parse as URL (with optional base URL)
-	u, err := url.Parse(raw)
-	if err != nil {
-		return ""
-	}
-
-	if !u.IsAbs() && baseURL != "" {
-		base, err := url.Parse(baseURL)
-		if err != nil {
-			return ""
-		}
-		u = base.ResolveReference(u)
-	}
-
-	if u.Scheme == "" {
-		u.Scheme = "https"
-	}
-
-	result := u.String()
-	if result == "" {
-		return ""
-	}
-
-	return result
+	return links
 }
 
 func isTranscriptURL(rawURL string) bool {
-	lower := strings.ToLower(rawURL)
-	if strings.Contains(lower, "transcript") {
-		return true
-	}
-
-	switch urlExtension(lower) {
-	case ".json", ".srt", ".txt", ".vtt":
-		return true
-	default:
-		return false
-	}
+	return urlutil.IsTranscriptURL(rawURL)
 }
 
 // --- AudioTranscriptionProvider ---

@@ -25,7 +25,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 	"github.com/xbpk3t/docs-alfred/rss2nl/transcript"
-	"mvdan.cc/xurls/v2"
+	"golang.org/x/text/language"
 )
 
 // ContentFetchResult holds fetched content metadata and body.
@@ -203,6 +203,21 @@ type ytdlpSubtitle struct {
 	Name string `json:"name"`
 }
 
+const (
+	subtitleLangEnglish    = "en"
+	subtitleLangChinese    = "zh"
+	subtitleLangZhHans     = "zh-Hans"
+	subtitleLangZhCN       = "zh-CN"
+	subtitleLangZhHant     = "zh-Hant"
+	subtitleLangZhTW       = "zh-TW"
+	subtitleLangMandarin   = "cmn"
+	subtitleLangZho        = "zho"
+	subtitleLangChi        = "chi"
+	subtitleExtVTT         = "vtt"
+	subtitleExtWebVTT      = "webvtt"
+	subtitleContentTypeVTT = "text/vtt"
+)
+
 type subtitlePick struct {
 	Language string
 	Source   string
@@ -274,10 +289,20 @@ func (f *Fetcher) videoSubtitleLangs(rawURL string, meta *ytdlpMetadata) []strin
 		return f.SubtitleLangs
 	}
 	if isBilibiliURL(strings.ToLower(rawURL)) || metadataLooksChinese(meta) {
-		return []string{"zh-Hans", "zh-CN", "zh", "zh-Hant", "zh-TW", "cmn", "zho", "chi", "en"}
+		return []string{
+			subtitleLangZhHans,
+			subtitleLangZhCN,
+			subtitleLangChinese,
+			subtitleLangZhHant,
+			subtitleLangZhTW,
+			subtitleLangMandarin,
+			subtitleLangZho,
+			subtitleLangChi,
+			subtitleLangEnglish,
+		}
 	}
 
-	return []string{"en", "en-US", "en-GB", "zh-Hans", "zh-CN", "zh"}
+	return []string{subtitleLangEnglish, "en-US", "en-GB", subtitleLangZhHans, subtitleLangZhCN, subtitleLangChinese}
 }
 
 func pickVideoSubtitle(meta *ytdlpMetadata, langs []string) (subtitlePick, bool) {
@@ -332,26 +357,56 @@ func sortedSubtitleLangs(subtitles map[string][]ytdlpSubtitle) []string {
 }
 
 func langMatches(have, want string) bool {
-	have = normalizeLang(have)
-	want = normalizeLang(want)
-	if have == "" || want == "" {
+	haveTag, ok := parseLanguageTag(have)
+	if !ok {
 		return false
 	}
+	wantTag, ok := parseLanguageTag(want)
+	if !ok {
+		return false
+	}
+	_, _, confidence := language.NewMatcher([]language.Tag{wantTag}).Match(haveTag)
 
-	return have == want || strings.HasPrefix(have, want+"-") || strings.HasPrefix(want, have+"-")
+	return confidence != language.No
 }
 
-func normalizeLang(lang string) string {
-	lang = strings.TrimSpace(strings.ToLower(lang))
-	lang = strings.ReplaceAll(lang, "_", "-")
+func parseLanguageTag(lang string) (language.Tag, bool) {
+	lang = normalizeLegacyLanguage(strings.TrimSpace(strings.ToLower(lang)))
+	if lang == "" {
+		return language.Und, false
+	}
+	tag, err := language.Parse(lang)
+	if err != nil {
+		return language.Und, false
+	}
 
-	return lang
+	return tag, true
+}
+
+func normalizeLegacyLanguage(lang string) string {
+	lang = strings.ReplaceAll(lang, "_", "-")
+	switch lang {
+	case subtitleLangChi, subtitleLangZho, subtitleLangMandarin:
+		return subtitleLangChinese
+	case "zh-cn", "zh-hans-cn":
+		return subtitleLangZhHans
+	case "zh-tw", "zh-hant-tw":
+		return subtitleLangZhHant
+	default:
+		return lang
+	}
+}
+
+func languageBase(tag language.Tag) string {
+	base, _ := tag.Base()
+
+	return base.String()
 }
 
 func subtitleDeclaredType(ext string) string {
 	switch strings.TrimPrefix(strings.ToLower(strings.TrimSpace(ext)), ".") {
-	case "vtt", "webvtt":
-		return "text/vtt"
+	case subtitleExtVTT, subtitleExtWebVTT:
+		return subtitleContentTypeVTT
 	case "srt":
 		return "text/srt"
 	case "json":
@@ -746,7 +801,7 @@ func socialShellLike(lower, body string) bool {
 }
 
 func isLinkHeavy(body string) bool {
-	links := strings.Count(body, "](") + len(xurls.Strict().FindAllString(body, -1))
+	links := strings.Count(body, "](") + urlutil.CountURLs(body)
 	if links < 20 {
 		return false
 	}
@@ -861,8 +916,7 @@ func metadataLooksChinese(meta *ytdlpMetadata) bool {
 	if meta == nil {
 		return false
 	}
-	language := normalizeLang(meta.Language)
-	if strings.HasPrefix(language, "zh") || language == "cmn" || language == "zho" || language == "chi" {
+	if tag, ok := parseLanguageTag(meta.Language); ok && languageBase(tag) == subtitleLangChinese {
 		return true
 	}
 
