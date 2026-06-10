@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -72,6 +71,7 @@ type wikiASRConfig struct {
 
 // AIConfig contains AI model settings.
 type AIConfig struct {
+	APIKey  string `yaml:"apiKey"`
 	Model   string `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
 	BaseURL string `default:"https://api.lucc.dev/v1" validate:"required,url" yaml:"baseUrl"`
 }
@@ -151,6 +151,7 @@ type InboxInput struct {
 // AuditInput contains inputs for read-only wiki auditing.
 type AuditInput struct {
 	Config      *Config
+	RunCmd      CommandRunner // optional; defaults to exec.CommandContext
 	Paths       []string
 	ChangedOnly bool
 }
@@ -270,6 +271,10 @@ func (r *Result) Actions() []string {
 	return actions
 }
 
+// CommandRunner abstracts external command execution for testability.
+// The dir parameter is the working directory for the command.
+type CommandRunner func(ctx context.Context, dir string, name string, args ...string) ([]byte, error)
+
 type dependencies struct {
 	fetcher    fetcher
 	classifier classifier
@@ -385,7 +390,7 @@ func RunAudit(ctx context.Context, input AuditInput) (*AuditResult, error) {
 	if len(input.Paths) > 0 {
 		auditPaths = input.Paths
 	} else if input.ChangedOnly {
-		changed, err := changedWikiMarkdownPaths(ctx, wikiRoot)
+		changed, err := changedWikiMarkdownPaths(ctx, wikiRoot, input.RunCmd)
 		if err != nil {
 			return nil, err
 		}
@@ -406,13 +411,13 @@ func RunAudit(ctx context.Context, input AuditInput) (*AuditResult, error) {
 	return &AuditResult{Name: "wiki audit", WikiRoot: wikiRoot, Issues: issues}, nil
 }
 
-func changedWikiMarkdownPaths(ctx context.Context, wikiRoot string) ([]string, error) {
-	roots, err := changedWikiGitRoots(ctx, wikiRoot)
+func changedWikiMarkdownPaths(ctx context.Context, wikiRoot string, runCmd CommandRunner) ([]string, error) {
+	roots, err := changedWikiGitRoots(ctx, wikiRoot, runCmd)
 	if err != nil {
 		return nil, err
 	}
 
-	return changedMarkdownPathsFromGit(ctx, roots.repoRoot, roots.relWikiRoot)
+	return changedMarkdownPathsFromGit(ctx, roots.repoRoot, roots.relWikiRoot, runCmd)
 }
 
 type changedWikiRoots struct {
@@ -420,13 +425,13 @@ type changedWikiRoots struct {
 	relWikiRoot string
 }
 
-func changedWikiGitRoots(ctx context.Context, wikiRoot string) (changedWikiRoots, error) {
+func changedWikiGitRoots(ctx context.Context, wikiRoot string, runCmd CommandRunner) (changedWikiRoots, error) {
 	absWikiRoot, err := filepath.Abs(wikiRoot)
 	if err != nil {
 		return changedWikiRoots{}, fmt.Errorf("resolve wiki root: %w", err)
 	}
 	absWikiRoot = evalSymlinksOrOriginal(absWikiRoot)
-	repoRoot, err := gitOutput(ctx, absWikiRoot, "rev-parse", "--show-toplevel")
+	repoRoot, err := gitOutput(ctx, absWikiRoot, runCmd, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return changedWikiRoots{}, fmt.Errorf("find git worktree for changed-only audit: %w", err)
 	}
@@ -452,7 +457,7 @@ func evalSymlinksOrOriginal(path string) string {
 	return resolved
 }
 
-func changedMarkdownPathsFromGit(ctx context.Context, repoRoot, relWikiRoot string) ([]string, error) {
+func changedMarkdownPathsFromGit(ctx context.Context, repoRoot, relWikiRoot string, runCmd CommandRunner) ([]string, error) {
 	seen := make(map[string]bool)
 	var paths []string
 	for _, args := range [][]string{
@@ -460,7 +465,7 @@ func changedMarkdownPathsFromGit(ctx context.Context, repoRoot, relWikiRoot stri
 		{"diff", "--name-only", "--", relWikiRoot},
 		{"ls-files", "--others", "--exclude-standard", "--", relWikiRoot},
 	} {
-		out, err := gitOutput(ctx, repoRoot, args...)
+		out, err := gitOutput(ctx, repoRoot, runCmd, args...)
 		if err != nil {
 			return nil, fmt.Errorf("list changed wiki files: %w", err)
 		}
@@ -486,10 +491,11 @@ func appendChangedMarkdownPaths(paths []string, seen map[string]bool, repoRoot, 
 	return paths
 }
 
-func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
+func gitOutput(ctx context.Context, dir string, runCmd CommandRunner, args ...string) (string, error) {
+	if runCmd == nil {
+		return "", fmt.Errorf("git %s: CommandRunner not provided", strings.Join(args, " "))
+	}
+	out, err := runCmd(ctx, dir, "git", args...)
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
@@ -998,13 +1004,8 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 }
 
 func newAIConfig(cfg *Config) *ai.ClientConfig {
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" {
-		apiKey = os.Getenv("LLM_AxonHub")
-	}
-
 	return &ai.ClientConfig{
-		APIKey:  apiKey,
+		APIKey:  cfg.AI.APIKey,
 		BaseURL: cfg.AI.BaseURL,
 		Model:   cfg.AI.Model,
 	}

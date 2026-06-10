@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -60,6 +62,7 @@ func newWikiAddCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
+			resolveWikiAPIKey(cfg)
 
 			result, err := wikiuc.RunAddURLs(context.Background(), wikiuc.AddInput{
 				Config: cfg,
@@ -99,6 +102,7 @@ func newWikiInboxProcessCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
+			resolveWikiAPIKey(cfg)
 
 			result, err := wikiuc.RunProcessInbox(context.Background(), wikiuc.InboxInput{
 				Config: cfg,
@@ -127,9 +131,16 @@ func newWikiAuditCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
+			resolveWikiAPIKey(cfg)
 
 			result, err := wikiuc.RunAudit(context.Background(), wikiuc.AuditInput{
-				Config:      cfg,
+				Config: cfg,
+				RunCmd: func(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
+					cmd := exec.CommandContext(ctx, name, args...)
+					cmd.Dir = dir
+
+					return cmd.CombinedOutput()
+				},
 				ChangedOnly: flags.changedOnly,
 				Paths:       flags.auditPaths,
 			})
@@ -147,6 +158,18 @@ func newWikiAuditCmd() *cobra.Command {
 	addFormatFlag(cmd, &flags.format)
 
 	return cmd
+}
+
+// resolveWikiAPIKey populates cfg.AI.APIKey from environment variables when unset.
+func resolveWikiAPIKey(cfg *wikiuc.Config) {
+	if cfg.AI.APIKey != "" {
+		return
+	}
+	if v := os.Getenv("OPENAI_API_KEY"); v != "" {
+		cfg.AI.APIKey = v
+	} else if v := os.Getenv("LLM_AxonHub"); v != "" {
+		cfg.AI.APIKey = v
+	}
 }
 
 func addWikiFlags(cmd *cobra.Command, flags *wikiFlags) {

@@ -115,7 +115,7 @@ func newSendCmd() *cobra.Command {
 		Use:   "send",
 		Short: "Merge feeds and send newsletter",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			config, err := loadConfig(cfgFile)
+			config, err := loadConfig(cfgFile, os.Getenv("RESEND_TOKEN"))
 			if err != nil {
 				return err
 			}
@@ -123,7 +123,7 @@ func newSendCmd() *cobra.Command {
 				return runFeedHealthCheck(config)
 			}
 
-			return runSend(config, trnsOut)
+			return runSend(config, trnsOut, os.Getenv("SOURCE_DISCOVERY_URL"))
 		},
 	}
 
@@ -136,7 +136,7 @@ func newSendCmd() *cobra.Command {
 
 // -- Run --
 
-func runSend(config *rss.Config, trnsOut string) error {
+func runSend(config *rss.Config, trnsOut, sourceHuntURL string) error {
 	service := NewNewsletterService(config, trnsOut)
 	categories, err := service.ProcessAllFeeds()
 	if err != nil {
@@ -161,9 +161,6 @@ func runSend(config *rss.Config, trnsOut string) error {
 			)
 		}
 	}
-
-	// Inject hunt source discovery link
-	sourceHuntURL := os.Getenv("SOURCE_DISCOVERY_URL")
 
 	contents, err := service.RenderNewsletter(categories, config.Feeds, service.failedFeeds, sourceHuntURL)
 	if err != nil {
@@ -211,7 +208,7 @@ func runFeedHealthCheck(config *rss.Config) error {
 	return nil
 }
 
-func loadConfig(cfgFile string) (*rss.Config, error) {
+func loadConfig(cfgFile, resendTokenFallback string) (*rss.Config, error) {
 	config, err := rss.NewConfig(cfgFile)
 	if err != nil {
 		slog.Error("rss2nl config file load error:", slog.Any("err", err))
@@ -219,10 +216,9 @@ func loadConfig(cfgFile string) (*rss.Config, error) {
 		return nil, err
 	}
 
-	// Fall back to RESEND_TOKEN env var if token not set in config file.
-	// CI sets RESEND_TOKEN as a secret; local dev can set it in .env or shell.
+	// Fall back to caller-provided token if not set in config file.
 	if config.ResendConfig.Token == "" {
-		config.ResendConfig.Token = os.Getenv("RESEND_TOKEN")
+		config.ResendConfig.Token = resendTokenFallback
 	}
 
 	if err := config.ValidateForSend(); err != nil {

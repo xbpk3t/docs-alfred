@@ -393,7 +393,11 @@ This changed-only audit entry is clean and long enough to avoid historical pollu
 		Wiki: WikiConfig{WikiRoot: wikiRoot, GhTopicsURL: "https://example.com/gh.yml", Concurrency: 1, PerURLTimeout: 1, MaxRetries: 1},
 	}
 
-	result, err := RunAudit(context.Background(), AuditInput{Config: cfg, ChangedOnly: true})
+	result, err := RunAudit(context.Background(), AuditInput{
+		Config:      cfg,
+		RunCmd:      testCommandRunner(),
+		ChangedOnly: true,
+	})
 
 	require.NoError(t, err)
 	require.True(t, result.OK())
@@ -406,6 +410,14 @@ func runGit(t *testing.T, dir string, args ...string) {
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
+}
+
+func testCommandRunner() CommandRunner {
+	return func(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, name, args...)
+		cmd.Dir = dir
+		return cmd.CombinedOutput()
+	}
 }
 
 func testConfig(t *testing.T) *Config {

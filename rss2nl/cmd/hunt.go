@@ -141,7 +141,7 @@ func newHuntCmd() *cobra.Command {
 		Short: "Discover high-quality source URLs",
 		Long:  "Discover high-quality source URLs via Exa/Tavily providers and generate review reports.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runHunt(&opts)
+			return runHunt(&opts, os.Getenv("EXA_API_KEY"), os.Getenv("TAVILY_API_KEY"))
 		},
 	}
 
@@ -169,7 +169,9 @@ func runHunt(opts *struct {
 	category, blocked                                          []string
 	max, providerMax, seedLimit, perCat                        int
 	newOnly, dryRun, sendMail                                  bool
-}) error {
+},
+	exaAPIKey, tavilyAPIKey string,
+) error {
 	cfg, err := rss.NewConfig(opts.config)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
@@ -209,9 +211,14 @@ func runHunt(opts *struct {
 		}
 	}
 
+	apiKeys := map[huntProvider]string{
+		providerExa:    exaAPIKey,
+		providerTavily: tavilyAPIKey,
+	}
+
 	for _, category := range categories {
 		processCategory(category, providerNames, opts.seedLimit, opts.perCat, opts.providerMax,
-			opts.newOnly, report, state, blockedSet, now, providerWeights, typeWeights)
+			opts.newOnly, report, state, blockedSet, now, providerWeights, typeWeights, apiKeys)
 	}
 
 	sortCandidatesByScore(report.Candidates)
@@ -310,6 +317,7 @@ func processCategory(
 	blockedSet map[string]bool,
 	now time.Time,
 	providerWeights, typeWeights map[string]float64,
+	apiKeys map[huntProvider]string,
 ) {
 	slog.Info("Scanning category", "type", category.Type)
 
@@ -332,7 +340,7 @@ func processCategory(
 
 	for _, provider := range providerNames {
 		processCategoryProvider(provider, category.Type, seedURLs, seedDescs, providerMax,
-			recentTopics, report, state, blockedSet, newOnly, now, providerWeights, typeWeights)
+			recentTopics, report, state, blockedSet, newOnly, now, providerWeights, typeWeights, apiKeys)
 	}
 }
 
@@ -367,8 +375,9 @@ func processCategoryProvider(
 	newOnly bool,
 	now time.Time,
 	providerWeights, typeWeights map[string]float64,
+	apiKeys map[huntProvider]string,
 ) {
-	candidates := discoverWithProvider(provider, categoryType, seedURLs, seedDescs, providerMax, recentTopics)
+	candidates := discoverWithProvider(provider, categoryType, seedURLs, seedDescs, providerMax, recentTopics, apiKeys[provider])
 	report.Stats.RawCandidates += len(candidates)
 	if len(candidates) > 0 {
 		report.Stats.SuccessfulCalls++
@@ -504,21 +513,21 @@ func sortCandidatesByScore(candidates []huntCandidate) {
 func discoverWithProvider(
 	provider huntProvider, category string,
 	seedURLs, seedDescs []string, maxResults int, recentTopics []string,
+	apiKey string,
 ) []huntCandidate {
 	switch provider {
 	case providerExa:
 
-		return discoverExa(category, seedURLs, seedDescs, maxResults, recentTopics)
+		return discoverExa(category, seedURLs, seedDescs, maxResults, recentTopics, apiKey)
 	case providerTavily:
 
-		return discoverTavily(category, seedURLs, seedDescs, maxResults, recentTopics)
+		return discoverTavily(category, seedURLs, seedDescs, maxResults, recentTopics, apiKey)
 	}
 
 	return nil
 }
 
-func discoverExa(category string, seedURLs, seedDescs []string, maxResults int, recentTopics []string) []huntCandidate {
-	apiKey := os.Getenv("EXA_API_KEY")
+func discoverExa(category string, seedURLs, seedDescs []string, maxResults int, recentTopics []string, apiKey string) []huntCandidate {
 	if apiKey == "" {
 		return nil
 	}
@@ -574,8 +583,7 @@ func discoverExa(category string, seedURLs, seedDescs []string, maxResults int, 
 	return candidates
 }
 
-func discoverTavily(category string, seedURLs, seedDescs []string, maxResults int, recentTopics []string) []huntCandidate {
-	apiKey := os.Getenv("TAVILY_API_KEY")
+func discoverTavily(category string, seedURLs, seedDescs []string, maxResults int, recentTopics []string, apiKey string) []huntCandidate {
 	if apiKey == "" {
 		return nil
 	}
