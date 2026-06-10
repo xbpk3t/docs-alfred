@@ -13,9 +13,9 @@ import (
 
 	"github.com/mmcdole/gofeed"
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/internal/transcript"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
-	"github.com/xbpk3t/docs-alfred/rss2nl/transcript"
 	"github.com/xbpk3t/docs-alfred/service/rss"
 )
 

@@ -14,7 +14,7 @@ import (
 	"github.com/mmcdole/gofeed"
 	gofeedext "github.com/mmcdole/gofeed/extensions"
 	"github.com/stretchr/testify/assert"
-	"github.com/xbpk3t/docs-alfred/rss2nl/transcript"
+	"github.com/xbpk3t/docs-alfred/internal/transcript"
 	"github.com/xbpk3t/docs-alfred/service/rss"
 )
 

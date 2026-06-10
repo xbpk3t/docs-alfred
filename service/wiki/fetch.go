@@ -20,20 +20,21 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/go-github/v70/github"
 	"github.com/mmcdole/gofeed"
+	"github.com/xbpk3t/docs-alfred/internal/transcript"
 	"github.com/xbpk3t/docs-alfred/pkg/htmlutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
-	"github.com/xbpk3t/docs-alfred/rss2nl/transcript"
 	"golang.org/x/text/language"
 )
 
 // ContentFetchResult holds fetched content metadata and body.
 type ContentFetchResult struct {
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	SourceURL string `json:"sourceUrl"`
-	Error     string `json:"error,omitempty"`
+	Title       string      `json:"title"`
+	Body        string      `json:"body"`
+	SourceURL   string      `json:"sourceUrl"`
+	Error       string      `json:"error,omitempty"`
+	FailureKind FailureKind `json:"-"`
 }
 
 // Fetcher handles fetching content from various sources.
@@ -627,12 +628,14 @@ func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetc
 
 	// Distinguish between HTTP-level errors (anti-bot, 4xx -> resolve failure)
 	// and network-level errors (DNS, timeout -> fetch failure).
+	failureKind := FailureFetch
 	errorStr := err.Error()
 	if isHTTPBlockError(err) {
+		failureKind = FailureResolve
 		errorStr = "resolve: " + errorStr
 	}
 
-	return &ContentFetchResult{SourceURL: rawURL, Error: errorStr}
+	return &ContentFetchResult{SourceURL: rawURL, Error: errorStr, FailureKind: failureKind}
 }
 
 func (f *Fetcher) handleHTTPPageData(ctx context.Context, rawURL string, data []byte) *ContentFetchResult {
@@ -819,10 +822,10 @@ func extractFailure(rawURL, reason string) *ContentFetchResult {
 		reason = "content extraction failed"
 	}
 	if strings.HasPrefix(reason, "extract:") {
-		return &ContentFetchResult{SourceURL: rawURL, Error: reason}
+		return &ContentFetchResult{SourceURL: rawURL, Error: reason, FailureKind: FailureExtract}
 	}
 
-	return &ContentFetchResult{SourceURL: rawURL, Error: "extract: " + reason}
+	return &ContentFetchResult{SourceURL: rawURL, Error: "extract: " + reason, FailureKind: FailureExtract}
 }
 
 func cleanExtractReason(reason string) string {

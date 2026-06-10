@@ -1,4 +1,4 @@
-package wiki
+package wikiingest
 
 import (
 	"context"
@@ -198,16 +198,16 @@ type Result struct {
 
 // URLResult records the outcome for one URL.
 type URLResult struct {
-	URL         string `json:"url"`
-	Status      string `json:"status"`
-	OutputPath  string `json:"outputPath,omitempty"`
-	TopicPath   string `json:"topicPath,omitempty"`
-	WikiType    string `json:"wikiType,omitempty"`
-	ContentType string `json:"contentType,omitempty"`
-	FailureType string `json:"failureType,omitempty"`
-	Error       string `json:"error,omitempty"`
-	LineIndex   int    `json:"lineIndex,omitempty"`
-	Handled     bool   `json:"handled"`
+	URL         string              `json:"url"`
+	Status      string              `json:"status"`
+	OutputPath  string              `json:"outputPath,omitempty"`
+	TopicPath   string              `json:"topicPath,omitempty"`
+	WikiType    string              `json:"wikiType,omitempty"`
+	ContentType string              `json:"contentType,omitempty"`
+	FailureType wikisvc.FailureKind `json:"failureType,omitempty"`
+	Error       string              `json:"error,omitempty"`
+	LineIndex   int                 `json:"lineIndex,omitempty"`
+	Handled     bool                `json:"handled"`
 }
 
 // Summary returns count-oriented command details for structured output.
@@ -287,7 +287,12 @@ type classifier interface {
 
 type writer interface {
 	WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.WriteOptions) (string, error)
-	WriteFailureEntry(item *wikisvc.ClassifyItem, failureType, extraInfo string, opts *wikisvc.WriteOptions) (string, error)
+	WriteFailureEntry(
+		item *wikisvc.ClassifyItem,
+		failureType wikisvc.FailureKind,
+		extraInfo string,
+		opts *wikisvc.WriteOptions,
+	) (string, error)
 }
 
 type inboxStore interface {
@@ -609,7 +614,7 @@ type pendingURLWrite struct {
 	URL         string
 	Kind        pendingWriteKind
 	Item        *wikisvc.ClassifyItem
-	FailureType string
+	FailureType wikisvc.FailureKind
 	ExtraInfo   string
 	Error       string
 }
@@ -624,7 +629,7 @@ func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) (
 	}
 	if fetchResult.Error != "" {
 		return pendingURLWrite{}, &fetchFailureError{
-			failureType: classifyFailureType(fetchResult.Error),
+			failureType: failureKindForFetchResult(fetchResult),
 			message:     "fetch content: " + fetchResult.Error,
 		}
 	}
@@ -669,7 +674,7 @@ func pendingClassifyFailureWrite(item *wikisvc.ClassifyItem, extraInfo string) p
 	}
 }
 
-func newPendingFetchFailure(urlStr, failureType, extraInfo string) pendingURLWrite {
+func newPendingFetchFailure(urlStr string, failureType wikisvc.FailureKind, extraInfo string) pendingURLWrite {
 	return pendingURLWrite{URL: urlStr, Kind: pendingFetchFailure, FailureType: failureType, ExtraInfo: extraInfo}
 }
 
@@ -794,7 +799,14 @@ func writeClassifyFailure(
 	}
 }
 
-func writeFetchFailure(deps *dependencies, wikiRoot, urlStr, failureType, extraInfo string, dryRun bool) URLResult {
+func writeFetchFailure(
+	deps *dependencies,
+	wikiRoot,
+	urlStr string,
+	failureType wikisvc.FailureKind,
+	extraInfo string,
+	dryRun bool,
+) URLResult {
 	item := &wikisvc.ClassifyItem{URL: urlStr, Title: urlStr}
 	path, err := deps.writer.WriteFailureEntry(
 		item,
@@ -826,7 +838,7 @@ func writeFetchFailure(deps *dependencies, wikiRoot, urlStr, failureType, extraI
 }
 
 type fetchFailureError struct {
-	failureType string
+	failureType wikisvc.FailureKind
 	message     string
 }
 
@@ -834,7 +846,20 @@ func (e *fetchFailureError) Error() string {
 	return e.message
 }
 
-func classifyFailureType(message string) string {
+func failureKindForFetchResult(result *wikisvc.ContentFetchResult) wikisvc.FailureKind {
+	if result != nil && result.FailureKind != "" {
+		return result.FailureKind
+	}
+	if result == nil {
+		return wikisvc.FailureFetch
+	}
+
+	return legacyFailureKindFromMessage(result.Error)
+}
+
+func legacyFailureKindFromMessage(message string) wikisvc.FailureKind {
+	// Compatibility for test doubles or older fetcher implementations that only
+	// return the pre-typed error string. Real fetchers should set FailureKind.
 	if strings.Contains(message, "extract:") {
 		return wikisvc.FailureExtract
 	}
@@ -993,7 +1018,7 @@ func (serviceWriter) WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.Writ
 
 func (serviceWriter) WriteFailureEntry(
 	item *wikisvc.ClassifyItem,
-	failureType string,
+	failureType wikisvc.FailureKind,
 	extraInfo string,
 	opts *wikisvc.WriteOptions,
 ) (string, error) {
