@@ -1,7 +1,11 @@
 package archtest
 
 import (
+	"fmt"
+	"go/ast"
 	"go/build"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -114,4 +118,110 @@ func hasGoFiles(t *testing.T, dir string) bool {
 	}
 
 	return false
+}
+
+// TestSharedPackagesDoNotCallEnvOrExec verifies that shared internal/service
+// packages do not directly call os.Getenv or exec.Command. These should be
+// handled at the CLI layer and injected via Config or interfaces.
+// TestUsecasePackagesDoNotCallEnvOrExec verifies that internal usecase packages
+// do not directly call os.Getenv or exec.Command. These should be handled at the
+// CLI layer and injected via Config or interfaces. Service/adapter packages are
+// excluded since they legitimately wrap external commands and environment access.
+func TestUsecasePackagesDoNotCallEnvOrExec(t *testing.T) {
+	moduleRoot := findModuleRoot(t)
+	for _, pkgDir := range listGoPackages(t, filepath.Join(moduleRoot, "internal")) {
+		// Skip archtest and non-usecase packages.
+		base := filepath.Base(pkgDir)
+		if base == "archtest" || base == "transcript" {
+			continue
+		}
+
+		violations := findEnvExecCalls(t, pkgDir)
+		for _, v := range violations {
+			t.Errorf("usecase package %s", v)
+		}
+	}
+}
+
+// findEnvExecCalls scans .go files in dir for direct os.Getenv or exec.Command calls.
+func findEnvExecCalls(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var violations []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+
+		path := filepath.Join(dir, entry.Name())
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			continue
+		}
+
+		for _, imp := range file.Imports {
+			if imp.Path == nil {
+				continue
+			}
+			pkg := imp.Path.Value
+			if pkg != `"os"` && pkg != `"os/exec"` {
+				continue
+			}
+
+			alias := pkgAlias(imp)
+			astInspectCalls(file, fset, alias, func(callName string, pos token.Position) {
+				violations = append(violations,
+					fmt.Sprintf("%s:%d: direct %s call (move to CLI layer)", entry.Name(), pos.Line, callName))
+			})
+		}
+	}
+
+	return violations
+}
+
+func pkgAlias(imp *ast.ImportSpec) string {
+	if imp.Name != nil {
+		return imp.Name.Name
+	}
+	p := strings.Trim(imp.Path.Value, `"`)
+	if i := strings.LastIndex(p, "/"); i >= 0 {
+		return p[i+1:]
+	}
+	return p
+}
+
+func astInspectCalls(file *ast.File, fset *token.FileSet, targetAlias string, onCall func(string, token.Position)) {
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		ident, ok := sel.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if ident.Name != targetAlias {
+			return true
+		}
+
+		method := sel.Sel.Name
+		fullCall := targetAlias + "." + method
+
+		switch fullCall {
+		case "os.Getenv", "os.LookupEnv", "os.Setenv", "os.Unsetenv",
+			"exec.Command", "exec.CommandContext":
+			onCall(fullCall, fset.Position(call.Lparen))
+		}
+
+		return true
+	})
 }
