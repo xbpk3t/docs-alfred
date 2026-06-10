@@ -28,13 +28,19 @@ type SummaryFrontmatter struct {
 	Failed    int    `yaml:"failed"`
 }
 
+// FailureKind classifies wiki ingestion failures.
+type FailureKind string
+
 // Failure type constants for WriteFailureEntry.
 const (
-	FailureFetch    = "fetch"
-	FailureResolve  = "resolve"
-	FailureExtract  = "extract"
-	FailureClassify = "classify"
+	FailureFetch    FailureKind = "fetch"
+	FailureResolve  FailureKind = "resolve"
+	FailureExtract  FailureKind = "extract"
+	FailureClassify FailureKind = "classify"
 )
+
+// String returns the stable wire value for the failure kind.
+func (k FailureKind) String() string { return string(k) }
 
 // WriteOptions contains options for writing wiki entries.
 type WriteOptions struct {
@@ -195,7 +201,7 @@ func renderContent(fm *SummaryFrontmatter, body string) string {
 	return fmt.Sprintf("---\n%s---\n\n%s", string(fmYAML), body)
 }
 
-var failureFilenames = map[string]string{
+var failureFilenames = map[FailureKind]string{
 	FailureFetch:    "fetch-failed.md",
 	FailureResolve:  "resolve-failed.md",
 	FailureExtract:  "extract-failed.md",
@@ -210,7 +216,7 @@ var failureFilenames = map[string]string{
 //   - classify:  content fetched but AI couldn't assign a topic
 //
 // Format is a structured markdown entry with title, failure reason, and content snippet.
-func WriteFailureEntry(item *ClassifyItem, failureType, extraInfo string, opts *WriteOptions) (string, error) {
+func WriteFailureEntry(item *ClassifyItem, failureType FailureKind, extraInfo string, opts *WriteOptions) (string, error) {
 	filename, ok := failureFilenames[failureType]
 	if !ok {
 		return "", fmt.Errorf("unknown failure type: %s", failureType)

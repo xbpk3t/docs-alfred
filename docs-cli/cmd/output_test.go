@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	wikiuc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/wiki"
-	workspaceuc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/workspace"
+	wikiuc "github.com/xbpk3t/docs-alfred/internal/wikiingest"
+	workspaceuc "github.com/xbpk3t/docs-alfred/internal/workspaceops"
 	"github.com/xbpk3t/docs-alfred/service/workspace/dotfiles"
 )
 

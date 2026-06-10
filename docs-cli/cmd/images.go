@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	workspaceuc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/workspace"
+	workspaceuc "github.com/xbpk3t/docs-alfred/internal/workspaceops"
 )
 
 type imagesCheckFlags struct {

@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/xbpk3t/docs-alfred/data-cli/internal/usecase"
+	"github.com/xbpk3t/docs-alfred/internal/dataops"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/service/data"
 	"github.com/xbpk3t/docs-alfred/service/ghdata"
@@ -48,7 +48,7 @@ func newRenderCmd() *cobra.Command {
 		Use:   "render",
 		Short: "Render YAML data into outputs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := usecase.RunRender(usecase.RenderInput{
+			_, err := dataops.RunRender(dataops.RenderInput{
 				Config:  flags.config,
 				Extract: flags.extract,
 				Out:     flags.out,
@@ -96,7 +96,7 @@ func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string, ghMaxLin
 		return errors.New("--max-lines must be greater than or equal to 0")
 	}
 
-	result, err := usecase.RunDomainCheck(usecase.DomainCheckInput{
+	result, err := dataops.RunDomainCheck(dataops.DomainCheckInput{
 		Domain:     domain,
 		Path:       dataPath,
 		RuleScope:  ruleScope,
@@ -146,7 +146,7 @@ func parseDataDomainArg(value string) (data.DataDomain, error) {
 }
 
 func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
-	result, err := usecase.RunDomainDuplicate(usecase.DomainDuplicateInput{
+	result, err := dataops.RunDomainDuplicate(dataops.DomainDuplicateInput{
 		Domain: domain,
 		Path:   dataPath,
 	})
@@ -211,7 +211,7 @@ func newGhFindCmd() *cobra.Command {
 }
 
 func runGhFind(query, findURL string, limit int) error {
-	result, err := usecase.RunGhFind(usecase.GhFindInput{
+	result, err := dataops.RunGhFind(dataops.GhFindInput{
 		Query: query,
 		URL:   findURL,
 		Limit: limit,
@@ -252,7 +252,7 @@ func newGhAppendCmd() *cobra.Command {
 }
 
 func runGhAppend(file, url, date, des, topic string) error {
-	result, err := usecase.RunGhAppend(&usecase.GhAppendInput{
+	result, err := dataops.RunGhAppend(&dataops.GhAppendInput{
 		File:  file,
 		URL:   url,
 		Date:  date,

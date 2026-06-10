@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	wikiuc "github.com/xbpk3t/docs-alfred/docs-cli/internal/usecase/wiki"
+	wikiuc "github.com/xbpk3t/docs-alfred/internal/wikiingest"
 )
 
 type wikiFlags struct {

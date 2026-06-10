@@ -17,7 +17,7 @@ tasks:
   lint:
     desc: golang linter
     cmds:
-      - golangci-lint run --fix
+      - golangci-lint run --fix -c .github/linters/golangci-lint.yml
       - gofumpt -l -w .
       - go mod tidy -v
 #      - betteralign -apply ./...

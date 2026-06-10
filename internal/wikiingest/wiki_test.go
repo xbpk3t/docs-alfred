@@ -1,4 +1,4 @@
-package wiki
+package wikiingest
 
 import (
 	"context"
@@ -116,7 +116,10 @@ func TestRunAddURLsTreatsInboxWikiTypeAsClassifyFailure(t *testing.T) {
 
 func TestRunAddURLsWritesFetchFailure(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Error: "resolve: HTTP 403"}
+	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+		Error:       "resolve: HTTP 403",
+		FailureKind: wikisvc.FailureResolve,
+	}
 
 	result, err := RunAddURLs(context.Background(), AddInput{
 		Config: testConfig(t),
@@ -133,7 +136,10 @@ func TestRunAddURLsWritesFetchFailure(t *testing.T) {
 
 func TestRunAddURLsWritesExtractFailure(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Error: "extract: low quality HTTP content"}
+	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+		Error:       "extract: low quality HTTP content",
+		FailureKind: wikisvc.FailureExtract,
+	}
 
 	result, err := RunAddURLs(context.Background(), AddInput{
 		Config: testConfig(t),
@@ -146,6 +152,27 @@ func TestRunAddURLsWritesExtractFailure(t *testing.T) {
 	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
 	require.Equal(t, wikisvc.FailureExtract, result.URLResults[0].FailureType)
 	require.Len(t, deps.writer.failures, 1)
+}
+
+func TestRunAddURLsUsesTypedFetchFailureKind(t *testing.T) {
+	deps := newFakeDeps()
+	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+		Error:       "low quality HTTP content",
+		FailureKind: wikisvc.FailureExtract,
+	}
+
+	result, err := RunAddURLs(context.Background(), AddInput{
+		Config: testConfig(t),
+		URLs:   []string{"https://example.com/a"},
+		deps:   deps.dependencies(),
+	})
+
+	require.NoError(t, err)
+	require.True(t, result.OK())
+	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
+	require.Equal(t, wikisvc.FailureExtract, result.URLResults[0].FailureType)
+	require.Len(t, deps.writer.failures, 1)
+	require.Equal(t, wikisvc.FailureExtract, deps.writer.failures[0].failureType)
 }
 
 func TestRunAddURLsWriterFailureIsUnhandled(t *testing.T) {
@@ -464,7 +491,7 @@ type writeCall struct {
 
 type failureCall struct {
 	url         string
-	failureType string
+	failureType wikisvc.FailureKind
 	dryRun      bool
 	extraInfo   string
 }
@@ -478,13 +505,18 @@ func (f *fakeWriter) WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.Writ
 	return filepath.Join(opts.WikiRoot, item.TopicPath, "summary.md"), nil
 }
 
-func (f *fakeWriter) WriteFailureEntry(item *wikisvc.ClassifyItem, failureType, extraInfo string, opts *wikisvc.WriteOptions) (string, error) {
+func (f *fakeWriter) WriteFailureEntry(
+	item *wikisvc.ClassifyItem,
+	failureType wikisvc.FailureKind,
+	extraInfo string,
+	opts *wikisvc.WriteOptions,
+) (string, error) {
 	if f.failureErr != nil {
 		return "", f.failureErr
 	}
 	f.failures = append(f.failures, failureCall{url: item.URL, failureType: failureType, dryRun: opts.DryRun, extraInfo: extraInfo})
 
-	return filepath.Join(opts.WikiRoot, "failed", failureType+"-failed.md"), nil
+	return filepath.Join(opts.WikiRoot, "failed", failureType.String()+"-failed.md"), nil
 }
 
 type fakeInbox struct {
