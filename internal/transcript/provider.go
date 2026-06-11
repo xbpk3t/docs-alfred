@@ -237,7 +237,7 @@ func NewAudioTranscriptionProvider(cliPath, language string) *AudioTranscription
 		cliPath = "pt"
 	}
 	if language == "" {
-		language = "en"
+		language = "auto"
 	}
 
 	return &AudioTranscriptionProvider{CLIPath: cliPath, Language: language}

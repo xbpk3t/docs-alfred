@@ -20,7 +20,7 @@ type Summarizer struct {
 // NewSummarizer creates a new summarizer with the given AI config.
 func NewSummarizer(cfg *ai.ClientConfig, language string) *Summarizer {
 	if language == "" {
-		language = "en"
+		language = "zh"
 	}
 
 	return &Summarizer{Config: cfg, Language: language}
@@ -30,6 +30,19 @@ func NewSummarizer(cfg *ai.ClientConfig, language string) *Summarizer {
 type SummaryResult struct {
 	Summary     string `json:"summary"`
 	GeneratedAt string `json:"generatedAt"`
+}
+
+func (s *Summarizer) summaryPrompt() string {
+	switch s.Language {
+	case "zh":
+		return "你是一个简洁的技术摘要助手。请用中文对以下内容进行摘要，3-5 句话，聚焦关键技术点、决策和要点。"
+	case "en":
+		return "You are a concise technical summary assistant. " +
+			"Summarize the following content in English in 3-5 sentences, " +
+			"focusing on key technical points, decisions, and highlights."
+	default:
+		return "你是一个简洁的技术摘要助手。请用中文对以下内容进行摘要，3-5 句话，聚焦关键技术点、决策和要点。"
+	}
 }
 
 // GenerateSummary generates a summary of the transcript content.
@@ -42,7 +55,7 @@ func (s *Summarizer) GenerateSummary(ctx context.Context, episodeTitle, transcri
 	content := truncateTranscript(transcriptContent, 8000)
 
 	// TS equivalent: system prompt + user message
-	systemMsg := "你是一个简洁的技术摘要助手。请用中文对以下内容进行摘要，3-5 句话，聚焦关键技术点、决策和要点。"
+	systemMsg := s.summaryPrompt()
 	userMsg := fmt.Sprintf("Title: %s\n\nContent:\n%s", episodeTitle, content)
 
 	messages := []ai.Message{

@@ -26,22 +26,18 @@ env:
 
 # -- Transcript (trns) configuration --
 trns:
-  sources:
-    - feedUrl: https://example.com/podcast/feed.xml
-      asr: true
-      language: en
-      maxEpisodes: 10
-      maxAgeDays: 90
+  enabled: true
+  defaultLimit: 10
   asr:
     enabled: false         # Enable ASR fallback via pt CLI
-    language: en
-    # cliPath: /usr/local/bin/pt
+    language: auto
   summary:
     enabled: true          # AI summary generation
-    model: gpt-4o
-    language: en
+    model: deepseek-v4-flash
+    baseUrl: https://api.lucc.dev/v1
+    language: zh
   temporaryUpload:
-    enabled: false         # Upload transcripts to Litterbox
+    enabled: true          # Upload transcripts to Litterbox
     expiration: 24h        # 1h, 12h, 24h, 72h
 
 # -- Source discovery (hunt) configuration --
