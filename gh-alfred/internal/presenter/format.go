@@ -51,6 +51,14 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredIt
 			}
 		}
 
+		if repo.HasNix() {
+			item.Mods["ctrl"] = &wf.AlfredMod{
+				Valid:    true,
+				Arg:      repo.NixURL,
+				Subtitle: "nixpkgs: " + repo.NixURL,
+			}
+		}
+
 		items = append(items, item)
 	}
 

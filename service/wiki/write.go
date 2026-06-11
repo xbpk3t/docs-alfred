@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -130,7 +131,26 @@ func buildEntry(item *ClassifyItem) string {
 		title = item.URL
 	}
 
-	return fmt.Sprintf("### %s\n\n- URL: %s\n- Type: %s\n\n%s\n", title, item.URL, item.Type, item.Summary)
+	// Build codeblock metadata section.
+	metaBlock := item.MetadataBlock
+	if metaBlock == "" {
+		// Fallback: generate from URL + Type if no structured metadata.
+		metaBlock = fmt.Sprintf("URL: %s\nType: %s", item.URL, item.Type)
+	}
+
+	entry := fmt.Sprintf("### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, item.Summary)
+
+	// Post-process: fix any heading level issues.
+	entry = fixSectionHeadings(entry)
+
+	return entry
+}
+
+// fixSectionHeadings ensures section headings are at #### level.
+// Converts ## or ### 概述/关键要点/值得关注/可执行建议 → ####.
+func fixSectionHeadings(s string) string {
+	re := regexp.MustCompile(`(?m)^#{2,3} (概述|关键要点|值得关注|可执行建议)`)
+	return re.ReplaceAllString(s, `#### $1`)
 }
 
 //nolint:nonamedreturns
@@ -209,7 +229,7 @@ var failureFilenames = map[FailureKind]string{
 }
 
 // WriteFailureEntry writes a structured failure entry to the appropriate file
-// under <wikiRoot>/failed/<failureType>-failed.md. Each file collects one type:
+// under <wikiRoot>/<failureType>-failed.md. Each file collects one type:
 //   - fetch:     network-level errors (DNS, timeout) with no opencli fallback
 //   - resolve:   HTTP-level errors (403 anti-bot) where opencli also failed
 //   - extract:   URL fetched but usable article/media content could not be extracted
@@ -222,7 +242,7 @@ func WriteFailureEntry(item *ClassifyItem, failureType FailureKind, extraInfo st
 		return "", fmt.Errorf("unknown failure type: %s", failureType)
 	}
 
-	failedDir := filepath.Join(opts.WikiRoot, "failed")
+	failedDir := opts.WikiRoot
 	path := filepath.Join(failedDir, filename)
 
 	if opts.DryRun {

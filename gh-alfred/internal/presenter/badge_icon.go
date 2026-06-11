@@ -101,23 +101,23 @@ func renderBadgeIconSVG(state badgeState) string {
 }
 
 func docBadgeSVG(active bool) string {
-	return textBadgeSVG(4, badgeFill(active, "#3B88C3"), badgeText(active, "#FFFFFF"), "D")
+	return textBadgeSVG(4, 7.5, badgeFill(active, "#1D4ED8"), badgeText(active, "#FFFFFF"), "D")
 }
 
 func nixBadgeSVG(active bool) string {
-	return textBadgeSVG(13.5, badgeFill(active, "#9266CC"), badgeText(active, "#FFFFFF"), "N")
+	return textBadgeSVG(13.5, 17.0, badgeFill(active, "#DC2626"), badgeText(active, "#FFFFFF"), "N")
 }
 
 func scoreBadgeSVG(score int) string {
-	return textBadgeSVG(23, "#FABC05", "#111827", strconv.Itoa(clampScore(score)))
+	return textBadgeSVG(23, 27.5, "#FABC05", "#111827", strconv.Itoa(clampScore(score)))
 }
 
-func textBadgeSVG(x float64, fill, textFill, label string) string {
+func textBadgeSVG(x, textX float64, fill, textFill, label string) string {
 	return fmt.Sprintf(`<g>
     <rect x="%.1f" y="25.6" width="9" height="7.8" rx="2" fill="%s"/>
     <text x="%.1f" y="31.8" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="6.3"
       font-weight="700" fill="%s">%s</text>
-  </g>`, x, fill, x+4.5, textFill, label)
+  </g>`, x, fill, textX, textFill, label)
 }
 
 func badgeFill(active bool, color string) string {

@@ -22,10 +22,32 @@
 - 如果 URL 是 GitHub/GitLab 等代码仓库，或正文明显在评测/介绍某个开源项目，优先使用 repo_eval。
 - 如果正文是可读的文章、问答、教程、研究博客或视频/播客 transcript，并且候选目录中存在明确匹配主题，选择最合适的候选 path。
 - 不要为了提高归档率而选择泛化、牵强或仅有弱关联的 topic；候选不明确时返回 topicPath="none"、wikiType="inbox"、needsManualReview=true。
-- needsManualReview=true 用于正文不可用、明显是错误页/登录页/导航页，或者没有明确匹配候选目录。
+- needsManualReview=true 用于正文不可用、明显是错误页/登录页/导航页、或者没有明确匹配候选目录。
 - topicPath 必须从候选 path 中逐字选择；不要创造新 path。
 - summary 应基于正文内容，不要复述网页标题或候选目录。
-- summary 必须是合法 JSON string；不要把 Markdown 编号写成 `\1.`、`\2.`、`\3.` 这类非法 JSON 转义。
+- 所有字符串值必须是合法 JSON string；不要把 Markdown 编号写成 `\1.`、`\2.`、`\3.` 这类非法 JSON 转义。
+
+## contentType 说明
+- text: 文章、问答、教程、博客等纯文本内容
+- video: 视频内容（Bilibili、YouTube 等）
+- audio: 播客、音频内容（小宇宙等）
+
+## metadata.contentType 与 contentType 的关系
+- metadata.contentType 是面向展示的派生类型：text = 文章/博文，media = 视频/播客，repo = 开源仓库评测
+- 对于 GitHub/GitLab 仓库 URL，metadata.contentType = "repo"
+- 对于 video/audio contentType，metadata.contentType = "media"
+- 其他情况 metadata.contentType = "text"
+
+## metadata 字段说明
+- tags: 逗号分隔的关键词标签，3-8 个
+- quality: 综合质量评分，格式 "X/5"（如 "4/5"）
+- author: 作者/UP主/仓库所有者（有则填，无则空字符串）
+- uncertainties: 正文中不确定或需要核实的信息（可选，无则为空字符串）
+- duration: 视频/播客时长（仅 media 类型，如 "15:23"）
+- transcriptQuality: 字幕质量（仅 media 类型，"good"|"fair"|"poor"）
+- verdict: 仓库评测结论（仅 repo 类型，"watch"|"skip"|"try"）
+- stars: GitHub stars 数量（仅 repo 类型，数字）
+- language: 仓库主要语言（仅 repo 类型，如 "Python"）
 
 ## 输出要求
 只返回一个 JSON object，不要 Markdown code fence，不要额外解释。字段如下：
@@ -34,9 +56,28 @@
   "topicPath": "候选 path 或 none",
   "wikiType": "repo_eval|deep_dive|inbox",
   "contentType": "text|video|audio",
-  "summary": "Markdown 中文摘要，包含 概述、关键要点、值得关注 三个小节",
+  "summary": {
+    "overview": "2-3 句概括",
+    "keyPoints": ["要点 1", "要点 2", "要点 3"],
+    "actionableAdvice": ["建议 1", "建议 2"],
+    "worthNoting": "后续关注方向"
+  },
+  "metadata": {
+    "contentType": "text|media|repo",
+    "tags": ["tag1", "tag2"],
+    "quality": "4/5",
+    "author": "作者名（无则空字符串）",
+    "uncertainties": "需要核实的信息（可选，无则空字符串）",
+    "duration": "15:23（仅 media，无则空字符串）",
+    "transcriptQuality": "good|fair|poor（仅 media，无则空字符串）",
+    "verdict": "watch|skip|try（仅 repo，无则空字符串）",
+    "stars": 2564（仅 repo，无则 0）,
+    "language": "Python（仅 repo，无则空字符串）"
+  },
   "confidence": 0.0,
   "needsManualReview": false
 }
 
 如果正文是错误页、登录页、空壳页面、纯导航、广告页、无法判断主题或候选都完全不匹配，返回 topicPath="none"、wikiType="inbox"、needsManualReview=true。
+summary.actionableAdvice 在有明确可执行建议时提供，否则可以省略或为空数组。
+metadata.contentType 如果无法判断默认为 "text"。
