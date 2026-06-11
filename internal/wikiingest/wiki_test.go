@@ -528,7 +528,7 @@ func (f *fakeWriter) WriteFailureEntry(
 	}
 	f.failures = append(f.failures, failureCall{url: item.URL, failureType: failureType, dryRun: opts.DryRun, extraInfo: extraInfo})
 
-	return filepath.Join(opts.WikiRoot, "failed", failureType.String()+"-failed.md"), nil
+	return filepath.Join(opts.WikiRoot, failureType.String()+"-failed.md"), nil
 }
 
 type fakeInbox struct {

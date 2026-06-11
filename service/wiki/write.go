@@ -150,6 +150,7 @@ func buildEntry(item *ClassifyItem) string {
 // Converts ## or ### 概述/关键要点/值得关注/可执行建议 → ####.
 func fixSectionHeadings(s string) string {
 	re := regexp.MustCompile(`(?m)^#{2,3} (概述|关键要点|值得关注|可执行建议)`)
+
 	return re.ReplaceAllString(s, `#### $1`)
 }
 

@@ -105,6 +105,24 @@ type huntReport struct {
 	DryRun      bool            `json:"dryRun"`
 }
 
+// huntRunConfig holds resolved configuration after initialization.
+type huntRunConfig struct {
+	now             time.Time
+	apiKeys         map[huntProvider]string
+	report          *huntReport
+	state           *huntState
+	blockedSet      map[string]bool
+	providerWeights map[string]float64
+	typeWeights     map[string]float64
+	providerNames   []huntProvider
+	categories      []rss.FeedsDetail
+	max             int
+	perCat          int
+	seedLimit       int
+	newOnly         bool
+	dryRun          bool
+}
+
 // -- Default blocklist --
 
 var defaultBlockedDomains = []string{
@@ -164,17 +182,18 @@ func newHuntCmd() *cobra.Command {
 	return cmd
 }
 
-func runHunt(opts *struct {
+// initHuntRun loads config, state, and resolves all defaults.
+func initHuntRun(opts *struct {
 	reportHTML, config, providers, reportMd, state, reportJSON string
 	category, blocked                                          []string
 	max, providerMax, seedLimit, perCat                        int
 	newOnly, dryRun, sendMail                                  bool
 },
 	exaAPIKey, tavilyAPIKey string,
-) error {
+) (*huntRunConfig, error) {
 	cfg, err := rss.NewConfig(opts.config)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return nil, fmt.Errorf("load config: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -217,36 +236,70 @@ func runHunt(opts *struct {
 	}
 
 	// Apply config defaults when CLI flags are not set (0 = unset).
-	if opts.max == 0 && cfg.HuntConfig.DefaultMax > 0 {
-		opts.max = cfg.HuntConfig.DefaultMax
+	maxVal := opts.max
+	if maxVal == 0 {
+		maxVal = cfg.HuntConfig.DefaultMax
 	}
-	if opts.perCat == 0 && cfg.HuntConfig.DefaultPerCat > 0 {
-		opts.perCat = cfg.HuntConfig.DefaultPerCat
+	perCatVal := opts.perCat
+	if perCatVal == 0 {
+		perCatVal = cfg.HuntConfig.DefaultPerCat
 	}
-	if opts.seedLimit == 0 && cfg.HuntConfig.DefaultSeed > 0 {
-		opts.seedLimit = cfg.HuntConfig.DefaultSeed
-	}
-
-	for _, category := range categories {
-		processCategory(category, providerNames, opts.seedLimit, opts.perCat, opts.providerMax,
-			opts.newOnly, report, state, blockedSet, now, providerWeights, typeWeights, apiKeys)
+	seedLimitVal := opts.seedLimit
+	if seedLimitVal == 0 {
+		seedLimitVal = cfg.HuntConfig.DefaultSeed
 	}
 
-	sortCandidatesByScore(report.Candidates)
+	return &huntRunConfig{
+		categories:      categories,
+		report:          report,
+		state:           state,
+		providerNames:   providerNames,
+		blockedSet:      blockedSet,
+		providerWeights: providerWeights,
+		typeWeights:     typeWeights,
+		apiKeys:         apiKeys,
+		max:             maxVal,
+		perCat:          perCatVal,
+		seedLimit:       seedLimitVal,
+		newOnly:         opts.newOnly,
+		dryRun:          opts.dryRun,
+		now:             now,
+	}, nil
+}
 
-	if opts.max > 0 && len(report.Candidates) > opts.max {
-		report.Candidates = report.Candidates[:opts.max]
-		report.Stats.AcceptedCandidates = len(report.Candidates)
+func runHunt(opts *struct {
+	reportHTML, config, providers, reportMd, state, reportJSON string
+	category, blocked                                          []string
+	max, providerMax, seedLimit, perCat                        int
+	newOnly, dryRun, sendMail                                  bool
+},
+	exaAPIKey, tavilyAPIKey string,
+) error {
+	hc, err := initHuntRun(opts, exaAPIKey, tavilyAPIKey)
+	if err != nil {
+		return err
 	}
 
-	writeHuntReports(report, opts.reportMd, opts.reportHTML, opts.reportJSON)
-	if !opts.dryRun {
-		saveHuntState(opts.state, state)
+	for _, category := range hc.categories {
+		processCategory(category, hc.providerNames, hc.seedLimit, hc.perCat, opts.providerMax,
+			hc.newOnly, hc.report, hc.state, hc.blockedSet, hc.now, hc.providerWeights, hc.typeWeights, hc.apiKeys)
+	}
+
+	sortCandidatesByScore(hc.report.Candidates)
+
+	if hc.max > 0 && len(hc.report.Candidates) > hc.max {
+		hc.report.Candidates = hc.report.Candidates[:hc.max]
+		hc.report.Stats.AcceptedCandidates = len(hc.report.Candidates)
+	}
+
+	writeHuntReports(hc.report, opts.reportMd, opts.reportHTML, opts.reportJSON)
+	if !hc.dryRun {
+		saveHuntState(opts.state, hc.state)
 	}
 
 	slog.Info("Hunt complete",
-		"candidates", report.Stats.AcceptedCandidates,
-		"categories", report.Stats.CategoriesScanned,
+		"candidates", hc.report.Stats.AcceptedCandidates,
+		"categories", hc.report.Stats.CategoriesScanned,
 	)
 
 	return nil

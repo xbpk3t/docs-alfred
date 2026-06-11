@@ -14,25 +14,25 @@ import (
 
 // canonicalSectionHeadings are the only allowed #### section headings in summary entries.
 var canonicalSectionHeadings = map[string]bool{
-	"概述":     true,
-	"关键要点":   true,
-	"可执行建议":  true,
-	"值得关注":   true,
+	"概述":    true,
+	"关键要点":  true,
+	"可执行建议": true,
+	"值得关注":  true,
 }
 
 // validCodeblockFields are the allowed fields in summary codeblocks.
 var validCodeblockFields = map[string]bool{
-	"URL":              true,
-	"Type":             true,
-	"tags":             true,
-	"quality":          true,
-	"author":           true,
-	"uncertainties":    true,
-	"duration":         true,
+	"URL":               true,
+	"Type":              true,
+	"tags":              true,
+	"quality":           true,
+	"author":            true,
+	"uncertainties":     true,
+	"duration":          true,
 	"transcriptQuality": true,
-	"verdict":          true,
-	"stars":            true,
-	"language":         true,
+	"verdict":           true,
+	"stars":             true,
+	"language":          true,
 }
 
 var sectionHeadingRe = regexp.MustCompile(`^####\s+(.+)$`)
@@ -274,7 +274,7 @@ func auditCodeblockFields(file string, lines []string) []checkutil.Issue {
 				File:     file,
 				Line:     i + 1,
 				Severity: checkutil.SeverityWarn,
-				Message:  fmt.Sprintf("unknown codeblock field: %s", fieldName),
+				Message:  "unknown codeblock field: " + fieldName,
 			})
 		}
 	}
@@ -296,65 +296,6 @@ func auditMalformedURLLines(file string, lines []string) []checkutil.Issue {
 	}
 
 	return issues
-}
-
-func auditShortSummaryEntries(file string, lines []string) []checkutil.Issue {
-	var issues []checkutil.Issue
-	entries := splitSummaryEntries(lines)
-	for _, entry := range entries {
-		body := stripSummaryEntryMetadata(entry.body)
-		if len([]rune(body)) > 0 && len([]rune(body)) < 80 {
-			issues = append(issues, checkutil.Issue{
-				File:     file,
-				Line:     entry.line,
-				Severity: checkutil.SeverityWarn,
-				Message:  "summary entry is suspiciously short",
-			})
-		}
-	}
-
-	return issues
-}
-
-type summaryEntry struct {
-	body string
-	line int
-}
-
-func splitSummaryEntries(lines []string) []summaryEntry {
-	var entries []summaryEntry
-	var current *summaryEntry
-	for i, line := range lines {
-		if strings.HasPrefix(line, "### ") {
-			if current != nil {
-				entries = append(entries, *current)
-			}
-			current = &summaryEntry{line: i + 1}
-
-			continue
-		}
-		if current != nil {
-			current.body += line + "\n"
-		}
-	}
-	if current != nil {
-		entries = append(entries, *current)
-	}
-
-	return entries
-}
-
-func stripSummaryEntryMetadata(body string) string {
-	var cleaned []string
-	for line := range strings.SplitSeq(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "- URL:") || strings.HasPrefix(trimmed, "- Type:") {
-			continue
-		}
-		cleaned = append(cleaned, trimmed)
-	}
-
-	return strings.TrimSpace(strings.Join(cleaned, "\n"))
 }
 
 func lineHasRawMalformedURL(line string) bool {

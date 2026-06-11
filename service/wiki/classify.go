@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -44,13 +45,13 @@ const (
 
 // ClassifyItem holds the full classification result for a URL.
 type ClassifyItem struct {
-	URL            string       `json:"url"`
-	Title          string       `json:"title"`
-	ContentType    string       `json:"contentType"`
-	TopicPath      string       `json:"topicPath"`
-	Type           ClassifyType `json:"type"`
-	Summary        string       `json:"summary"`
-	MetadataBlock  string       `json:"metadataBlock,omitempty"`
+	URL           string       `json:"url"`
+	Title         string       `json:"title"`
+	ContentType   string       `json:"contentType"`
+	TopicPath     string       `json:"topicPath"`
+	Type          ClassifyType `json:"type"`
+	Summary       string       `json:"summary"`
+	MetadataBlock string       `json:"metadataBlock,omitempty"`
 }
 
 // ClassifyResult is the structured output from classifyItem.
@@ -453,23 +454,23 @@ func formatTopicCandidates(candidates []ghindex.TopicCandidate) string {
 // StructuredSummary holds the AI-generated summary broken into sections.
 type StructuredSummary struct {
 	Overview         string   `json:"overview"`
+	WorthNoting      string   `json:"worthNoting"`
 	KeyPoints        []string `json:"keyPoints"`
 	ActionableAdvice []string `json:"actionableAdvice,omitempty"`
-	WorthNoting      string   `json:"worthNoting"`
 }
 
 // EntryMetadata holds additional metadata fields from AI classification.
 type EntryMetadata struct {
 	ContentType       string   `json:"contentType"`
-	Tags              []string `json:"tags,omitempty"`
 	Quality           string   `json:"quality,omitempty"`
 	Author            string   `json:"author,omitempty"`
 	Uncertainties     string   `json:"uncertainties,omitempty"`
 	Duration          string   `json:"duration,omitempty"`
 	TranscriptQuality string   `json:"transcriptQuality,omitempty"`
 	Verdict           string   `json:"verdict,omitempty"`
-	Stars             int      `json:"stars,omitempty"`
 	Language          string   `json:"language,omitempty"`
+	Tags              []string `json:"tags,omitempty"`
+	Stars             int      `json:"stars,omitempty"`
 }
 
 // ContentTypeDisplay maps content types to display-friendly labels.
@@ -480,13 +481,13 @@ const (
 )
 
 type aiClassification struct {
-	TopicPath         string              `json:"topicPath"`
-	WikiType          ClassifyType        `json:"wikiType"`
-	ContentType       string              `json:"contentType"`
-	Summary           *StructuredSummary  `json:"summary"`
-	Metadata          *EntryMetadata      `json:"metadata"`
-	Confidence        float64             `json:"confidence"`
-	NeedsManualReview bool                `json:"needsManualReview"`
+	Summary           *StructuredSummary `json:"summary"`
+	Metadata          *EntryMetadata     `json:"metadata"`
+	TopicPath         string             `json:"topicPath"`
+	WikiType          ClassifyType       `json:"wikiType"`
+	ContentType       string             `json:"contentType"`
+	Confidence        float64            `json:"confidence"`
+	NeedsManualReview bool               `json:"needsManualReview"`
 }
 
 // renderStructuredSummary converts AI structured output to markdown sections string.
@@ -519,6 +520,7 @@ func renderStructuredSummary(s *StructuredSummary) string {
 		b.WriteString(s.WorthNoting)
 		b.WriteString("\n")
 	}
+
 	return strings.TrimSpace(b.String())
 }
 
@@ -528,36 +530,27 @@ func metadataToMap(m *EntryMetadata) map[string]string {
 		return nil
 	}
 	kv := make(map[string]string)
-	if m.ContentType != "" {
-		kv["Type"] = m.ContentType
+	for _, f := range [...][2]string{
+		{"Type", m.ContentType},
+		{"quality", m.Quality},
+		{"author", m.Author},
+		{"uncertainties", m.Uncertainties},
+		{"duration", m.Duration},
+		{"transcriptQuality", m.TranscriptQuality},
+		{"verdict", m.Verdict},
+		{"language", m.Language},
+	} {
+		if f[1] != "" {
+			kv[f[0]] = f[1]
+		}
 	}
 	if len(m.Tags) > 0 {
 		kv["tags"] = strings.Join(m.Tags, ", ")
 	}
-	if m.Quality != "" {
-		kv["quality"] = m.Quality
-	}
-	if m.Author != "" {
-		kv["author"] = m.Author
-	}
-	if m.Uncertainties != "" {
-		kv["uncertainties"] = m.Uncertainties
-	}
-	if m.Duration != "" {
-		kv["duration"] = m.Duration
-	}
-	if m.TranscriptQuality != "" {
-		kv["transcriptQuality"] = m.TranscriptQuality
-	}
-	if m.Verdict != "" {
-		kv["verdict"] = m.Verdict
-	}
 	if m.Stars > 0 {
-		kv["stars"] = fmt.Sprintf("%d", m.Stars)
+		kv["stars"] = strconv.Itoa(m.Stars)
 	}
-	if m.Language != "" {
-		kv["language"] = m.Language
-	}
+
 	return kv
 }
 
