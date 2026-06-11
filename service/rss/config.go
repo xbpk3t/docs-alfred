@@ -75,7 +75,7 @@ type TrnsConfig struct {
 	Summary         TrnsSummaryConfig         `yaml:"summary,omitempty"`
 	Asr             TrnsAsrConfig             `yaml:"asr,omitempty"`
 	TemporaryUpload TrnsTemporaryUploadConfig `yaml:"temporaryUpload,omitempty"`
-	DefaultLimit    int                       `yaml:"defaultLimit,omitempty"`
+	DefaultLimit    int                       `default:"10"                     yaml:"defaultLimit,omitempty"`
 	Enabled         bool                      `yaml:"enabled,omitempty"`
 }
 
@@ -87,8 +87,8 @@ type TrnsAsrConfig struct {
 
 // TrnsSummaryConfig AI 摘要配置.
 type TrnsSummaryConfig struct {
-	Model    string `default:"deepseek-v4-flash"       yaml:"model,omitempty"`
-	BaseURL  string `default:"https://api.lucc.dev/v1" yaml:"baseUrl,omitempty"`
+	Model    string `yaml:"model,omitempty"`
+	BaseURL  string `yaml:"baseUrl,omitempty"`
 	Language string `yaml:"language,omitempty"`
 	Enabled  bool   `yaml:"enabled,omitempty"`
 }
