@@ -653,12 +653,13 @@ func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) (
 	}
 
 	item := &wikisvc.ClassifyItem{
-		URL:         urlStr,
-		Title:       title,
-		ContentType: classResult.ContentType,
-		TopicPath:   classResult.TopicPath,
-		Type:        classResult.WikiType,
-		Summary:     classResult.Summary,
+		URL:           urlStr,
+		Title:         title,
+		ContentType:   classResult.ContentType,
+		TopicPath:     classResult.TopicPath,
+		Type:          classResult.WikiType,
+		Summary:       classResult.Summary,
+		MetadataBlock: classResult.MetadataBlock,
 	}
 
 	if shouldWriteClassifyFailure(classResult) {

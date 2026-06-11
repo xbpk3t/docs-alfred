@@ -92,8 +92,8 @@ func TestWriteFailureEntryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
 	path, err := WriteFailureEntry(item, FailureFetch, "fetch failed", &WriteOptions{WikiRoot: root, DryRun: true})
 
 	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(root, "failed", "fetch-failed.md"), path)
-	_, err = os.Stat(filepath.Join(root, "failed"))
+	assert.Equal(t, filepath.Join(root, "fetch-failed.md"), path)
+	_, err = os.Stat(filepath.Join(root, "fetch-failed.md"))
 	assert.True(t, os.IsNotExist(err))
 }
 

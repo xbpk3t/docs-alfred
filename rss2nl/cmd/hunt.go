@@ -216,6 +216,17 @@ func runHunt(opts *struct {
 		providerTavily: tavilyAPIKey,
 	}
 
+	// Apply config defaults when CLI flags are not set (0 = unset).
+	if opts.max == 0 && cfg.HuntConfig.DefaultMax > 0 {
+		opts.max = cfg.HuntConfig.DefaultMax
+	}
+	if opts.perCat == 0 && cfg.HuntConfig.DefaultPerCat > 0 {
+		opts.perCat = cfg.HuntConfig.DefaultPerCat
+	}
+	if opts.seedLimit == 0 && cfg.HuntConfig.DefaultSeed > 0 {
+		opts.seedLimit = cfg.HuntConfig.DefaultSeed
+	}
+
 	for _, category := range categories {
 		processCategory(category, providerNames, opts.seedLimit, opts.perCat, opts.providerMax,
 			opts.newOnly, report, state, blockedSet, now, providerWeights, typeWeights, apiKeys)

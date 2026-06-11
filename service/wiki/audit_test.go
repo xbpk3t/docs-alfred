@@ -34,8 +34,7 @@ This page requires JavaScript.
 
 func TestAuditWikiReportsMalformedFailedAndInboxURLs(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "failed"), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "failed", "fetch-failed.md"), []byte("https://t.co/a](https://x.com/a)"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "fetch-failed.md"), []byte("https://t.co/a](https://x.com/a)"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "inbox.md"), []byte("https://t.co/b](https://x.com/b)"), 0o600))
 
 	issues, err := AuditWiki(root)

@@ -44,12 +44,13 @@ const (
 
 // ClassifyItem holds the full classification result for a URL.
 type ClassifyItem struct {
-	URL         string       `json:"url"`
-	Title       string       `json:"title"`
-	ContentType string       `json:"contentType"`
-	TopicPath   string       `json:"topicPath"`
-	Type        ClassifyType `json:"type"`
-	Summary     string       `json:"summary"`
+	URL            string       `json:"url"`
+	Title          string       `json:"title"`
+	ContentType    string       `json:"contentType"`
+	TopicPath      string       `json:"topicPath"`
+	Type           ClassifyType `json:"type"`
+	Summary        string       `json:"summary"`
+	MetadataBlock  string       `json:"metadataBlock,omitempty"`
 }
 
 // ClassifyResult is the structured output from classifyItem.
@@ -58,6 +59,7 @@ type ClassifyResult struct {
 	WikiType          ClassifyType `json:"wikiType"`
 	ContentType       string       `json:"contentType"`
 	Summary           string       `json:"summary"`
+	MetadataBlock     string       `json:"metadataBlock,omitempty"`
 	RejectReason      string       `json:"rejectReason,omitempty"`
 	Confidence        float64      `json:"confidence,omitempty"`
 	NeedsManualReview bool         `json:"needsManualReview,omitempty"`
@@ -448,13 +450,115 @@ func formatTopicCandidates(candidates []ghindex.TopicCandidate) string {
 	return strings.Join(lines, "\n")
 }
 
+// StructuredSummary holds the AI-generated summary broken into sections.
+type StructuredSummary struct {
+	Overview         string   `json:"overview"`
+	KeyPoints        []string `json:"keyPoints"`
+	ActionableAdvice []string `json:"actionableAdvice,omitempty"`
+	WorthNoting      string   `json:"worthNoting"`
+}
+
+// EntryMetadata holds additional metadata fields from AI classification.
+type EntryMetadata struct {
+	ContentType       string   `json:"contentType"`
+	Tags              []string `json:"tags,omitempty"`
+	Quality           string   `json:"quality,omitempty"`
+	Author            string   `json:"author,omitempty"`
+	Uncertainties     string   `json:"uncertainties,omitempty"`
+	Duration          string   `json:"duration,omitempty"`
+	TranscriptQuality string   `json:"transcriptQuality,omitempty"`
+	Verdict           string   `json:"verdict,omitempty"`
+	Stars             int      `json:"stars,omitempty"`
+	Language          string   `json:"language,omitempty"`
+}
+
+// ContentTypeDisplay maps content types to display-friendly labels.
+const (
+	DisplayTypeText  = "text"
+	DisplayTypeMedia = "media"
+	DisplayTypeRepo  = "repo"
+)
+
 type aiClassification struct {
-	TopicPath         string       `json:"topicPath"`
-	WikiType          ClassifyType `json:"wikiType"`
-	ContentType       string       `json:"contentType"`
-	Summary           string       `json:"summary"`
-	Confidence        float64      `json:"confidence"`
-	NeedsManualReview bool         `json:"needsManualReview"`
+	TopicPath         string              `json:"topicPath"`
+	WikiType          ClassifyType        `json:"wikiType"`
+	ContentType       string              `json:"contentType"`
+	Summary           *StructuredSummary  `json:"summary"`
+	Metadata          *EntryMetadata      `json:"metadata"`
+	Confidence        float64             `json:"confidence"`
+	NeedsManualReview bool                `json:"needsManualReview"`
+}
+
+// renderStructuredSummary converts AI structured output to markdown sections string.
+func renderStructuredSummary(s *StructuredSummary) string {
+	if s == nil {
+		return ""
+	}
+	var b strings.Builder
+	if s.Overview != "" {
+		b.WriteString("#### 概述\n")
+		b.WriteString(s.Overview)
+		b.WriteString("\n\n")
+	}
+	if len(s.KeyPoints) > 0 {
+		b.WriteString("#### 关键要点\n")
+		for _, p := range s.KeyPoints {
+			b.WriteString("- " + p + "\n")
+		}
+		b.WriteString("\n")
+	}
+	if len(s.ActionableAdvice) > 0 {
+		b.WriteString("#### 可执行建议\n")
+		for _, a := range s.ActionableAdvice {
+			b.WriteString("- " + a + "\n")
+		}
+		b.WriteString("\n")
+	}
+	if s.WorthNoting != "" {
+		b.WriteString("#### 值得关注\n")
+		b.WriteString(s.WorthNoting)
+		b.WriteString("\n")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// renderMetadataCodeblock formats metadata into a markdown codeblock body.
+func metadataToMap(m *EntryMetadata) map[string]string {
+	if m == nil {
+		return nil
+	}
+	kv := make(map[string]string)
+	if m.ContentType != "" {
+		kv["Type"] = m.ContentType
+	}
+	if len(m.Tags) > 0 {
+		kv["tags"] = strings.Join(m.Tags, ", ")
+	}
+	if m.Quality != "" {
+		kv["quality"] = m.Quality
+	}
+	if m.Author != "" {
+		kv["author"] = m.Author
+	}
+	if m.Uncertainties != "" {
+		kv["uncertainties"] = m.Uncertainties
+	}
+	if m.Duration != "" {
+		kv["duration"] = m.Duration
+	}
+	if m.TranscriptQuality != "" {
+		kv["transcriptQuality"] = m.TranscriptQuality
+	}
+	if m.Verdict != "" {
+		kv["verdict"] = m.Verdict
+	}
+	if m.Stars > 0 {
+		kv["stars"] = fmt.Sprintf("%d", m.Stars)
+	}
+	if m.Language != "" {
+		kv["language"] = m.Language
+	}
+	return kv
 }
 
 func parseAIClassification(raw string) (*aiClassification, error) {
@@ -616,11 +720,30 @@ func (c *Classifier) validateAIClassification(
 		return nil, err
 	}
 
+	// Build the metadata codeblock body (used by buildEntry).
+	var metaBlock string
+	if result.Metadata != nil {
+		kv := metadataToMap(result.Metadata)
+		if len(kv) > 0 {
+			var pairs []string
+			// Deterministic order: Type first, then alphabetical.
+			if v, ok := kv["Type"]; ok {
+				pairs = append(pairs, "Type: "+v)
+				delete(kv, "Type")
+			}
+			for k, v := range kv {
+				pairs = append(pairs, k+": "+v)
+			}
+			metaBlock = strings.Join(pairs, "\n")
+		}
+	}
+
 	return &ClassifyResult{
 		TopicPath:         topicPath,
 		WikiType:          result.WikiType,
 		ContentType:       detectedContentType,
 		Summary:           summary,
+		MetadataBlock:     metaBlock,
 		Confidence:        result.Confidence,
 		NeedsManualReview: result.NeedsManualReview,
 	}, nil
@@ -665,7 +788,10 @@ func (c *Classifier) validateAIClassificationTopic(
 }
 
 func validateAIClassificationSummary(result *aiClassification) (string, error) {
-	summary := strings.TrimSpace(result.Summary)
+	if result.Summary == nil {
+		return "", errors.New("empty summary")
+	}
+	summary := strings.TrimSpace(renderStructuredSummary(result.Summary))
 	if summary == "" {
 		return "", errors.New("empty summary")
 	}
@@ -690,7 +816,7 @@ func rejectedClassifyResult(result *aiClassification, detectedContentType string
 		TopicPath:         strings.TrimSpace(result.TopicPath),
 		WikiType:          result.WikiType,
 		ContentType:       contentType,
-		Summary:           strings.TrimSpace(result.Summary),
+		Summary:           renderStructuredSummary(result.Summary),
 		Confidence:        result.Confidence,
 		NeedsManualReview: result.NeedsManualReview,
 		RejectReason:      reason,

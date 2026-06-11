@@ -6,10 +6,36 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
+
+// canonicalSectionHeadings are the only allowed #### section headings in summary entries.
+var canonicalSectionHeadings = map[string]bool{
+	"概述":     true,
+	"关键要点":   true,
+	"可执行建议":  true,
+	"值得关注":   true,
+}
+
+// validCodeblockFields are the allowed fields in summary codeblocks.
+var validCodeblockFields = map[string]bool{
+	"URL":              true,
+	"Type":             true,
+	"tags":             true,
+	"quality":          true,
+	"author":           true,
+	"uncertainties":    true,
+	"duration":         true,
+	"transcriptQuality": true,
+	"verdict":          true,
+	"stars":            true,
+	"language":         true,
+}
+
+var sectionHeadingRe = regexp.MustCompile(`^####\s+(.+)$`)
 
 // AuditWiki scans wiki markdown files for polluted successful entries and malformed URLs.
 func AuditWiki(wikiRoot string) ([]checkutil.Issue, error) {
@@ -197,7 +223,61 @@ func auditSummaryFile(file string, lines []string) []checkutil.Issue {
 			break
 		}
 	}
-	issues = append(issues, auditShortSummaryEntries(file, lines)...)
+	issues = append(issues, auditCanonicalHeadings(file, lines)...)
+	issues = append(issues, auditCodeblockFields(file, lines)...)
+
+	return issues
+}
+
+func auditCanonicalHeadings(file string, lines []string) []checkutil.Issue {
+	var issues []checkutil.Issue
+	for i, line := range lines {
+		m := sectionHeadingRe.FindStringSubmatch(strings.TrimSpace(line))
+		if m == nil {
+			continue
+		}
+		heading := m[1]
+		if !canonicalSectionHeadings[heading] {
+			issues = append(issues, checkutil.Issue{
+				File:     file,
+				Line:     i + 1,
+				Severity: checkutil.SeverityWarn,
+				Message:  fmt.Sprintf("non-canonical section heading: #### %s (allowed: 概述, 关键要点, 可执行建议, 值得关注)", heading),
+			})
+		}
+	}
+
+	return issues
+}
+
+func auditCodeblockFields(file string, lines []string) []checkutil.Issue {
+	var issues []checkutil.Issue
+	inCodeblock := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "```" || strings.HasPrefix(trimmed, "```") {
+			inCodeblock = !inCodeblock
+
+			continue
+		}
+		if !inCodeblock {
+			continue
+		}
+		// Inside a codeblock — check key: value pairs.
+		fieldName, _, ok := strings.Cut(trimmed, ":")
+		if !ok {
+			continue
+		}
+		fieldName = strings.TrimSpace(fieldName)
+		if fieldName != "" && !validCodeblockFields[fieldName] {
+			issues = append(issues, checkutil.Issue{
+				File:     file,
+				Line:     i + 1,
+				Severity: checkutil.SeverityWarn,
+				Message:  fmt.Sprintf("unknown codeblock field: %s", fieldName),
+			})
+		}
+	}
 
 	return issues
 }
@@ -300,7 +380,7 @@ func lineHasRawMalformedURL(line string) bool {
 func isFailureFile(wikiRoot, path string) bool {
 	rel := slashRel(wikiRoot, path)
 
-	return strings.HasPrefix(rel, "failed/")
+	return strings.HasSuffix(rel, "-failed.md")
 }
 
 func auditIssue(wikiRoot, path string, line int, severity, message string) checkutil.Issue {
