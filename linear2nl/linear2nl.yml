@@ -14,5 +14,5 @@ ai:
 
 resend:
   token: ""                  # 或环境变量 RESEND_TOKEN
-  mailTo: [me@lucc.dev]
+  mailTo: [jeffcottlu@gmail.com]
   fromName: "Linear Bot"
