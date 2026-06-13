@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/resend/resend-go/v2"
@@ -142,6 +143,23 @@ func tmplFuncs() template.FuncMap {
 		"safeHTML": func(s string) template.HTML {
 			return template.HTML(s) //nolint:gosec // G203: intentional safe HTML passthrough
 		},
+		"priorityClass": priorityClass,
+	}
+}
+
+// priorityClass extracts a CSS class name from a priority label.
+func priorityClass(label string) string {
+	switch {
+	case strings.Contains(label, "P0"):
+		return "p0"
+	case strings.Contains(label, "P1"):
+		return "p1"
+	case strings.Contains(label, "P2"):
+		return "p2"
+	case strings.Contains(label, "P3"):
+		return "p3"
+	default:
+		return ""
 	}
 }
 
