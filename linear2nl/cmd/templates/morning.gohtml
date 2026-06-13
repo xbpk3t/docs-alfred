@@ -14,12 +14,10 @@
       --border: #202632;
       --accent: #01aaff;
       --muted: #8b949e;
-      --ai-bg: #1a1f28;
-      --ai-border: #202632;
-      --tag-p0: #f85149;
-      --tag-p1: #d29922;
-      --tag-p2: #58a6ff;
-      --tag-p3: #8b949e;
+      --grp-fixme: #f85149;
+      --grp-maybe: #d29922;
+      --grp-remove: #8b949e;
+      --grp-uncategorized: var(--muted);
     }
     @media (prefers-color-scheme: light) {
       :root {
@@ -31,12 +29,10 @@
         --border: #e0e0e0;
         --accent: #0172ad;
         --muted: #888888;
-        --ai-bg: #ffffff;
-        --ai-border: #e0e0e0;
-        --tag-p0: #cf222e;
-        --tag-p1: #bf8700;
-        --tag-p2: #0969da;
-        --tag-p3: #656d76;
+        --grp-fixme: #cf222e;
+        --grp-maybe: #bf8700;
+        --grp-remove: #656d76;
+        --grp-uncategorized: var(--muted);
       }
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -72,81 +68,72 @@
       margin-bottom: 28px;
     }
 
-    /* Stats bar */
-    .stats-bar {
-      display: flex;
-      justify-content: center;
-      gap: 24px;
-      flex-wrap: wrap;
-      margin-bottom: 24px;
-      font-size: 14px;
+    /* Group headings (Option C: color + count badge) */
+    .group-section {
+      margin-bottom: 28px;
     }
-    .stat-item {
+    .group-heading {
+      font-size: 19px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }
-    .stat-value {
-      font-weight: 700;
-      color: var(--heading);
-      font-size: 16px;
-    }
+    .group-heading-fixme { color: var(--grp-fixme); }
+    .group-heading-maybe { color: var(--grp-maybe); }
+    .group-heading-remove { color: var(--grp-remove); }
+    .group-heading-uncategorized { color: var(--grp-uncategorized); }
 
-    /* AI Summary */
-    .ai-box {
-      background: var(--ai-bg);
-      border: 1px solid var(--ai-border);
-      border-radius: 8px;
-      padding: 16px 20px;
-      margin-bottom: 24px;
-      font-size: 14px;
-      line-height: 1.7;
-    }
-    .ai-box h3 { color: var(--heading); margin: 12px 0 6px; font-size: 15px; }
-    .ai-box h4 { color: var(--heading); margin: 8px 0 4px; font-size: 14px; }
-    .ai-box ul { margin: 4px 0 8px; padding-left: 20px; }
-    .ai-box li { margin: 3px 0; }
-    .ai-box p { margin: 6px 0; }
-    .ai-box hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
-    .ai-box strong { color: var(--heading); }
-
-    /* Mini summary tables */
-    .summary-section {
-      margin-bottom: 20px;
-    }
-    .summary-heading {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--heading);
-      margin-bottom: 8px;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      font-size: 13px;
-    }
-    thead th {
-      padding: 6px 10px;
-      border: 1px solid var(--border);
-      text-align: left;
-      font-weight: 600;
+    .count-badge {
+      display: inline-block;
       font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      font-weight: 600;
+      padding: 1px 10px;
+      border-radius: 10px;
+      background: var(--border);
       color: var(--muted);
-      background: var(--card-bg);
-    }
-    tbody td {
-      padding: 6px 10px;
-      border: 1px solid var(--border);
+      line-height: 1.6;
       vertical-align: middle;
     }
-    .link {
+
+    /* Per-issue sections */
+    .issue-section {
+      padding: 8px 0 4px;
+    }
+    .issue-heading {
+      font-size: 17px;
+      font-weight: 600;
+      margin: 0 0 6px;
+    }
+    .issue-heading a {
       color: var(--link);
       text-decoration: none;
-      font-weight: 500;
     }
-    .link:hover { text-decoration: underline; }
+    .issue-heading a:hover { text-decoration: underline; }
+
+    .issue-content {
+      font-size: 14px;
+      padding-left: 4px;
+    }
+    .issue-content h3 {
+      color: var(--heading);
+      margin: 10px 0 4px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .issue-content ul { margin: 4px 0 6px; padding-left: 18px; }
+    .issue-content li { margin: 2px 0; }
+    .issue-content p { margin: 3px 0; }
+    .issue-content strong { color: var(--heading); }
+    .issue-content code {
+      font-size: 13px;
+      background: color-mix(in srgb, var(--text) 10%, transparent);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
 
     /* Priority tags */
     .tag {
@@ -157,15 +144,22 @@
       padding: 2px 6px;
       border-radius: 4px;
     }
-    .tag-p0 { color: var(--tag-p0); background: color-mix(in srgb, var(--tag-p0) 15%, transparent); }
-    .tag-p1 { color: var(--tag-p1); background: color-mix(in srgb, var(--tag-p1) 15%, transparent); }
-    .tag-p2 { color: var(--tag-p2); background: color-mix(in srgb, var(--tag-p2) 15%, transparent); }
-    .tag-p3 { color: var(--tag-p3); background: color-mix(in srgb, var(--tag-p3) 15%, transparent); }
+    .tag-p0 { color: var(--grp-fixme); background: color-mix(in srgb, var(--grp-fixme) 15%, transparent); }
+    .tag-p1 { color: var(--grp-maybe); background: color-mix(in srgb, var(--grp-maybe) 15%, transparent); }
+    .tag-p2 { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+    .tag-p3 { color: var(--grp-remove); background: color-mix(in srgb, var(--grp-remove) 15%, transparent); }
 
     .section-empty {
       color: var(--muted);
       font-size: 13px;
       padding: 4px 0;
+    }
+
+    /* Separator between groups */
+    .group-separator {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0 0 24px;
     }
 
     /* Compact mode */
@@ -174,12 +168,11 @@
       body { padding: 12px 8px; font-size: 13.5px; line-height: 1.4; }
       h1 { font-size: 18px; }
       .date-subtitle { font-size: 12px; margin-bottom: 20px; }
-      .stats-bar { font-size: 12px; gap: 16px; }
-      .stat-value { font-size: 14px; }
-      thead th, tbody td { padding: 4px 6px; font-size: 12px; }
-      table { font-size: 12px; }
-      .summary-heading { font-size: 14px; }
-      .ai-box { font-size: 13px; padding: 12px 14px; }
+      .group-heading { font-size: 17px; }
+      .issue-heading { font-size: 15px; }
+      .issue-content { font-size: 13px; }
+      .issue-content h3 { font-size: 13px; }
+      .count-badge { font-size: 11px; padding: 1px 8px; }
     }
   </style>
 </head>
@@ -189,80 +182,31 @@
       <h1>🌅 Linear 今日任务</h1>
       <p class="date-subtitle">{{.Date}} {{.DayOfWeek}}</p>
 
-      <!-- Stats bar -->
-      <div class="stats-bar">
-        <span class="stat-item">▶️ 进行中 <span class="stat-value">{{.Stats.InProgress}}</span></span>
-        <span class="stat-item">📋 待办 <span class="stat-value">{{.Stats.Todo}}</span></span>
-        <span class="stat-item">⏰ 今日截止 <span class="stat-value">{{.Stats.DueToday}}</span></span>
-      </div>
+      {{if gt (len .Groups) 0}}
+        {{range $gi, $group := .Groups}}
+          {{if $gi}}<hr class="group-separator">{{end}}
+          <div class="group-section">
+            <h2 class="group-heading group-heading-{{$group.Name | groupCSSClass}}">
+              {{$group.Emoji}} {{$group.Name}}
+              <span class="count-badge">{{$group.GroupCount}} 项</span>
+            </h2>
 
-      {{if .AISummary}}
-      <div class="ai-box">
-        {{.AISummary | markdownToHTML}}
-      </div>
-      {{end}}
-
-      <!-- Mini summary table: In Progress -->
-      <div class="summary-section">
-        <div class="summary-heading">▶️ 进行中 · {{len .InProgress}}</div>
-        {{if gt (len .InProgress) 0}}
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Title</th>
-              <th>Priority</th>
-              <th>Team</th>
-              <th>Due</th>
-            </tr>
-          </thead>
-          <tbody>
-          {{range .InProgress}}
-            <tr>
-              <td><a href="{{.URL}}" class="link" target="_blank" rel="noopener">{{.Identifier}}</a></td>
-              <td>{{.Title}}</td>
-              <td>{{if .Priority}}<span class="tag tag-{{priorityClass .Priority}}">{{.Priority}}</span>{{end}}</td>
-              <td>{{.TeamName}}</td>
-              <td>{{if .DueDate}}{{.DueDate}}{{else}}<span class="section-empty">—</span>{{end}}</td>
-            </tr>
-          {{end}}
-          </tbody>
-        </table>
-        {{else}}
-        <p class="section-empty">暂无进行中的任务</p>
+            {{range $group.Issues}}
+            <div class="issue-section">
+              <h2 class="issue-heading">
+                {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Identifier}} {{.Title}} 🔗</a>{{else}}{{.Identifier}} {{.Title}}{{end}}
+                {{if .Priority}}<span class="tag tag-{{.Priority | priorityClass}}">{{.Priority}}</span>{{end}}
+              </h2>
+              {{if .Content}}
+              <div class="issue-content">{{.Content}}</div>
+              {{end}}
+            </div>
+            {{end}}
+          </div>
         {{end}}
-      </div>
-
-      <!-- Mini summary table: Todo -->
-      <div class="summary-section">
-        <div class="summary-heading">📋 待办 · {{len .Todo}}</div>
-        {{if gt (len .Todo) 0}}
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Title</th>
-              <th>Priority</th>
-              <th>Team</th>
-              <th>Due</th>
-            </tr>
-          </thead>
-          <tbody>
-          {{range .Todo}}
-            <tr>
-              <td><a href="{{.URL}}" class="link" target="_blank" rel="noopener">{{.Identifier}}</a></td>
-              <td>{{.Title}}</td>
-              <td>{{if .Priority}}<span class="tag tag-{{priorityClass .Priority}}">{{.Priority}}</span>{{end}}</td>
-              <td>{{.TeamName}}</td>
-              <td>{{if .DueDate}}{{.DueDate}}{{else}}<span class="section-empty">—</span>{{end}}</td>
-            </tr>
-          {{end}}
-          </tbody>
-        </table>
-        {{else}}
+      {{else}}
         <p class="section-empty">暂无待办任务</p>
-        {{end}}
-      </div>
+      {{end}}
     </div>
   </div>
 </body>

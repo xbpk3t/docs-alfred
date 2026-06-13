@@ -179,7 +179,7 @@ func (c *Client) GetUpdatedIssuesWithDetails(ctx context.Context, since time.Tim
 func (c *Client) baseFilter() map[string]any {
 	filter := map[string]any{
 		"state": map[string]any{
-			"type": map[string]any{"nin": []string{"completed", "canceled"}},
+			"type": map[string]any{"nin": []string{"completed", "canceled", "backlog"}},
 		},
 	}
 	c.applyTeamFilter(filter)

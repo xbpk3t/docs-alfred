@@ -3,6 +3,7 @@ package aggregate
 import (
 	"sort"
 
+	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/xzb/internal/model"
 )
 
@@ -30,47 +31,45 @@ type CategorySummary struct {
 }
 
 func Build(transactions []model.Transaction) Summary {
-	monthMap := make(map[string]*MonthSummary)
 	categoryMap := make(map[string]*CategorySummary)
 	summary := Summary{Records: len(transactions)}
 
-	for i := range transactions {
-		t := &transactions[i]
-		month := monthMap[t.Month]
-		if month == nil {
-			month = &MonthSummary{Month: t.Month}
-			monthMap[t.Month] = month
-		}
-		month.TransactionCount++
+	groups := lo.GroupBy(transactions, func(t model.Transaction) string { return t.Month })
+	monthNames := lo.Keys(groups)
+	sort.Strings(monthNames)
 
-		switch t.InOut {
-		case "收入":
-			summary.TotalIncomeCents += t.AmountCents
-			month.IncomeCents += t.AmountCents
-		case "支出":
-			summary.TotalExpenseCents += t.AmountCents
-			month.ExpenseCents += t.AmountCents
-			if t.BudgetIncluded {
-				summary.BudgetCents += t.AmountCents
-				month.BudgetCents += t.AmountCents
-				category := categoryMap[t.Category]
-				if category == nil {
-					category = &CategorySummary{Category: t.Category}
-					categoryMap[t.Category] = category
+	for _, monthKey := range monthNames {
+		txns := groups[monthKey]
+		month := MonthSummary{Month: monthKey}
+		for i := range txns {
+			t := &txns[i]
+			month.TransactionCount++
+
+			switch t.InOut {
+			case "收入":
+				summary.TotalIncomeCents += t.AmountCents
+				month.IncomeCents += t.AmountCents
+			case "支出":
+				summary.TotalExpenseCents += t.AmountCents
+				month.ExpenseCents += t.AmountCents
+				if t.BudgetIncluded {
+					summary.BudgetCents += t.AmountCents
+					month.BudgetCents += t.AmountCents
+					cat := categoryMap[t.Category]
+					if cat == nil {
+						cat = &CategorySummary{Category: t.Category}
+						categoryMap[t.Category] = cat
+					}
+					cat.AmountCents += t.AmountCents
+					cat.TransactionCount++
 				}
-				category.AmountCents += t.AmountCents
-				category.TransactionCount++
 			}
 		}
+		summary.Months = append(summary.Months, month)
 	}
 
-	for _, month := range monthMap {
-		summary.Months = append(summary.Months, *month)
-	}
-	sort.Slice(summary.Months, func(i, j int) bool { return summary.Months[i].Month < summary.Months[j].Month })
-
-	for _, category := range categoryMap {
-		summary.Categories = append(summary.Categories, *category)
+	for _, cat := range categoryMap {
+		summary.Categories = append(summary.Categories, *cat)
 	}
 	sort.Slice(summary.Categories, func(i, j int) bool {
 		if summary.Categories[i].AmountCents == summary.Categories[j].AmountCents {

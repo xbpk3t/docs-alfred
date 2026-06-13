@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"strings"
 	"text/template"
+	"time"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 )
 
@@ -51,6 +53,8 @@ func NewAIProvider(cfg AIConfig) *AIProvider {
 
 // MorningSummary generates AI priority suggestions for the morning report.
 // Returns markdown string; empty if AI is unavailable or call fails.
+//
+// Deprecated: use MorningStructuredReview for JSON-based grouped output.
 func (p *AIProvider) MorningSummary(issues []IssueView) string {
 	prompt, err := p.renderPrompt("prompts/morning-summary.txt", morningPromptData{
 		Lang:   p.lang,
@@ -63,6 +67,42 @@ func (p *AIProvider) MorningSummary(issues []IssueView) string {
 	}
 
 	return p.chat(prompt)
+}
+
+// MorningStructuredReview generates a structured JSON review for the morning report.
+// Returns raw JSON string; empty if AI is unavailable or call fails.
+func (p *AIProvider) MorningStructuredReview(issues []IssueView) string {
+	prompt, err := p.renderPrompt("prompts/morning-summary.txt", morningPromptData{
+		Lang:   p.lang,
+		Issues: issues,
+	})
+	if err != nil {
+		slog.Warn("failed to render morning structured review prompt", "error", err)
+
+		return ""
+	}
+
+	return p.chat(prompt)
+}
+
+// MorningReviewJSON is the expected JSON structure from the AI morning review.
+type MorningReviewJSON struct {
+	Groups []MorningGroupJSON `json:"groups"`
+}
+
+// MorningGroupJSON is a single group in the morning review JSON response.
+type MorningGroupJSON struct {
+	Name   string             `json:"name"`
+	Issues []MorningIssueItem `json:"issues"`
+}
+
+// MorningIssueItem is a single issue item within a group in the JSON response.
+type MorningIssueItem struct {
+	Identifier string   `json:"identifier"`
+	Title      string   `json:"title"`
+	Reason     []string `json:"reason"`
+	Impact     []string `json:"impact"`
+	Action     []string `json:"action"`
 }
 
 // EveningDeepReview generates per-issue deep review for the evening report.
@@ -91,9 +131,23 @@ func (p *AIProvider) chat(prompt string) string {
 		return ""
 	}
 
-	result, err := ai.Chat(p.clientCfg, []ai.Message{{Role: "user", Content: prompt}})
+	var result string
+	err := retry.Do(
+		func() error {
+			r, err := ai.Chat(p.clientCfg, []ai.Message{{Role: "user", Content: prompt}})
+			if err != nil {
+				return err
+			}
+			result = r
+
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(1*time.Second),
+		retry.DelayType(retry.BackOffDelay),
+	)
 	if err != nil {
-		slog.Warn("AI call failed", "error", err)
+		slog.Warn("AI call failed after retries", "error", err)
 
 		return ""
 	}
