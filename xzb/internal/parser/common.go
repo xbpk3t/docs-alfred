@@ -13,6 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/araddon/dateparse"
+	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/xzb/internal/model"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
@@ -42,19 +44,15 @@ type rowParser func(
 ) (model.ParsedTransaction, bool, error)
 
 func NormalizeTransactions(records []model.ParsedTransaction, now time.Time) []model.Transaction {
-	transactions := make([]model.Transaction, 0, len(records))
-	seen := make(map[string]struct{}, len(records))
-	for i := range records {
-		transaction := records[i].Normalize(now)
-		transaction.ID = StableID(&transaction)
-		if _, ok := seen[transaction.ID]; ok {
-			continue
-		}
-		seen[transaction.ID] = struct{}{}
-		transactions = append(transactions, transaction)
-	}
+	return lo.UniqBy(
+		lo.Map(records, func(r model.ParsedTransaction, _ int) model.Transaction {
+			t := r.Normalize(now)
+			t.ID = StableID(&t)
 
-	return transactions
+			return t
+		}),
+		func(t model.Transaction) string { return t.ID },
+	)
 }
 
 func StableID(t *model.Transaction) string {
@@ -80,23 +78,13 @@ func StableID(t *model.Transaction) string {
 
 func ParseTime(value string) (time.Time, error) {
 	s := cleanCell(value)
-	formats := []string{
-		"2006-01-02 15:04:05",
-		"2006/01/02 15:04:05",
-		"2006-01-02 15:04",
-		"2006/01/02 15:04",
-		"2006-01-02",
-		"2006/01/02",
-	}
 	loc := time.FixedZone("Asia/Shanghai", 8*60*60)
-	for _, format := range formats {
-		parsed, err := time.ParseInLocation(format, s, loc)
-		if err == nil {
-			return parsed, nil
-		}
+	parsed, err := dateparse.ParseIn(s, loc)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("unsupported time %q", value)
 	}
 
-	return time.Time{}, fmt.Errorf("unsupported time %q", value)
+	return parsed, nil
 }
 
 func readCSVRows(path, encodingHint string) ([][]string, error) {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -555,24 +554,15 @@ func metadataToMap(m *EntryMetadata) map[string]string {
 }
 
 func parseAIClassification(raw string) (*aiClassification, error) {
-	raw = strings.TrimSpace(raw)
-	raw = strings.TrimPrefix(raw, "```json")
-	raw = strings.TrimPrefix(raw, "```")
-	raw = strings.TrimSuffix(raw, "```")
-	start := strings.Index(raw, "{")
-	end := strings.LastIndex(raw, "}")
-	if start < 0 || end < start {
-		return nil, errors.New("no JSON object found")
-	}
-
 	var result aiClassification
-	payload := raw[start : end+1]
-	if err := json.Unmarshal([]byte(payload), &result); err != nil {
-		repaired := repairInvalidJSONStringEscapes(payload)
-		if repaired == payload {
+	err := ai.UnmarshalStrictJSON(raw, &result)
+	if err != nil {
+		// Try repair for common AI JSON escape issues.
+		repaired := repairInvalidJSONStringEscapes(raw)
+		if repaired == raw {
 			return nil, err
 		}
-		if retryErr := json.Unmarshal([]byte(repaired), &result); retryErr != nil {
+		if retryErr := ai.UnmarshalStrictJSON(repaired, &result); retryErr != nil {
 			return nil, fmt.Errorf("%w; repaired JSON parse failed: %w", err, retryErr)
 		}
 	}

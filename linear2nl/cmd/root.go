@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/resend/resend-go/v2"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
@@ -71,10 +72,8 @@ Subcommands:
 // --- Shared helpers ---
 
 func toIssueViews(issues []linear.Issue) []internal.IssueView {
-	views := make([]internal.IssueView, len(issues))
-	for i := range issues {
-		iss := &issues[i]
-		views[i] = internal.IssueView{
+	return lo.Map(issues, func(iss linear.Issue, _ int) internal.IssueView {
+		return internal.IssueView{
 			Identifier: iss.Identifier,
 			Title:      iss.Title,
 			Priority:   priorityLabel(iss.Priority),
@@ -82,16 +81,12 @@ func toIssueViews(issues []linear.Issue) []internal.IssueView {
 			DueDate:    iss.DueDate,
 			URL:        iss.URL,
 		}
-	}
-
-	return views
+	})
 }
 
 func toStateChangeViews(changes []linear.StateChange) []internal.StateChangeView {
-	views := make([]internal.StateChangeView, len(changes))
-	for i := range changes {
-		ch := &changes[i]
-		views[i] = internal.StateChangeView{
+	return lo.Map(changes, func(ch linear.StateChange, _ int) internal.StateChangeView {
+		return internal.StateChangeView{
 			IssueIdentifier: ch.IssueIdentifier,
 			IssueTitle:      ch.IssueTitle,
 			FromState:       ch.FromState,
@@ -99,9 +94,7 @@ func toStateChangeViews(changes []linear.StateChange) []internal.StateChangeView
 			TeamName:        ch.TeamName,
 			URL:             ch.URL,
 		}
-	}
-
-	return views
+	})
 }
 
 func priorityLabel(p float64) string {

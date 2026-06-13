@@ -10,8 +10,33 @@ type IssueView struct {
 	TeamName   string
 	DueDate    string
 	URL        string
-	Review     template.HTML // per-issue AI review (HTML)
+	Review     template.HTML // per-issue AI review (HTML) — used by evening
 }
+
+// GroupItemView is a single issue within a group in the morning report,
+// carrying AI-generated reason/impact/action fields.
+type GroupItemView struct {
+	Identifier string
+	Title      string
+	Priority   string
+	TeamName   string
+	DueDate    string
+	URL        string
+	Content    template.HTML
+	Reason     []string
+	Impact     []string
+	Action     []string
+}
+
+// GroupView is a named group of issues in the morning report.
+type GroupView struct {
+	Name   string
+	Emoji  string
+	Issues []GroupItemView
+}
+
+// GroupCount returns the number of issues in this group (convenience for templates).
+func (g GroupView) GroupCount() int { return len(g.Issues) }
 
 // StateChangeView is a display-ready state change for templates.
 type StateChangeView struct {
@@ -20,8 +45,8 @@ type StateChangeView struct {
 	FromState       string
 	ToState         string
 	TeamName        string
-	URL              string
-	Review           template.HTML // per-issue AI review (HTML)
+	URL             string
+	Review          template.HTML // per-issue AI review (HTML)
 }
 
 // IssueDetail carries full issue data (description + comments) for AI review.
@@ -44,20 +69,10 @@ type Comment struct {
 
 // MorningData is the template data for the morning report.
 type MorningData struct {
-	Date       string
-	DayOfWeek  string
-	Theme      string
-	AISummary  string
-	InProgress []IssueView
-	Todo       []IssueView
-	Stats      MorningStats
-}
-
-// MorningStats holds aggregated counts for the morning report.
-type MorningStats struct {
-	InProgress int
-	Todo       int
-	DueToday   int
+	Date      string
+	DayOfWeek string
+	Theme     string
+	Groups    []GroupView
 }
 
 // EveningData is the template data for the evening report.

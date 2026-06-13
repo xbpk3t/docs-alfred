@@ -4,17 +4,19 @@ import (
 	"bytes"
 	"context"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
+	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/yuin/goldmark"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:embed templates/evening.gohtml
@@ -84,32 +86,68 @@ type eveningData struct {
 }
 
 func queryEveningData(ctx context.Context, client *linear.Client, todayStart time.Time) (eveningData, error) {
-	completed, err := client.GetCompletedTodayIssues(ctx, todayStart)
-	if err != nil {
-		return eveningData{}, fmt.Errorf("query completed issues: %w", err)
-	}
-	slog.Info("fetched completed issues", "count", len(completed))
+	g, ctx := errgroup.WithContext(ctx)
 
-	changes, err := client.GetStateChanges(ctx, todayStart)
-	if err != nil {
-		slog.Warn("query state changes failed", "error", err)
-		changes = nil
-	}
-	slog.Info("fetched state changes", "count", len(changes))
+	var completed []linear.Issue
+	g.Go(func() error {
+		var err error
+		completed, err = client.GetCompletedTodayIssues(ctx, todayStart)
+		if err != nil {
+			return fmt.Errorf("query completed issues: %w", err)
+		}
+		slog.Info("fetched completed issues", "count", len(completed))
 
-	inProgress, err := client.GetInProgressIssues(ctx)
-	if err != nil {
-		slog.Warn("query in-progress issues failed", "error", err)
-		inProgress = nil
-	}
-	slog.Info("fetched in-progress issues", "count", len(inProgress))
+		return nil
+	})
 
-	updatedDetails, err := client.GetUpdatedIssuesWithDetails(ctx, todayStart)
-	if err != nil {
-		slog.Warn("query updated issues with details failed", "error", err)
-		updatedDetails = nil
+	var changes []linear.StateChange
+	g.Go(func() error {
+		var err error
+		changes, err = client.GetStateChanges(ctx, todayStart)
+		if err != nil {
+			slog.Warn("query state changes failed", "error", err)
+			changes = nil // graceful degradation
+
+			return nil
+		}
+		slog.Info("fetched state changes", "count", len(changes))
+
+		return nil
+	})
+
+	var inProgress []linear.Issue
+	g.Go(func() error {
+		var err error
+		inProgress, err = client.GetInProgressIssues(ctx)
+		if err != nil {
+			slog.Warn("query in-progress issues failed", "error", err)
+			inProgress = nil // graceful degradation
+
+			return nil
+		}
+		slog.Info("fetched in-progress issues", "count", len(inProgress))
+
+		return nil
+	})
+
+	var updatedDetails []linear.IssueDetail
+	g.Go(func() error {
+		var err error
+		updatedDetails, err = client.GetUpdatedIssuesWithDetails(ctx, todayStart)
+		if err != nil {
+			slog.Warn("query updated issues with details failed", "error", err)
+			updatedDetails = nil // graceful degradation
+
+			return nil
+		}
+		slog.Info("fetched issue details for AI review", "count", len(updatedDetails))
+
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return eveningData{}, err
 	}
-	slog.Info("fetched issue details for AI review", "count", len(updatedDetails))
 
 	return eveningData{
 		completed:      completed,
@@ -120,22 +158,16 @@ func queryEveningData(ctx context.Context, client *linear.Client, todayStart tim
 }
 
 func filterActiveDetails(completed []linear.Issue, changes []linear.StateChange, updatedDetails []linear.IssueDetail) []linear.IssueDetail {
-	activeIDs := make(map[string]bool)
-	for i := range completed {
-		activeIDs[completed[i].Identifier] = true
-	}
+	activeIDs := lo.SliceToMap(completed, func(i linear.Issue) (string, bool) {
+		return i.Identifier, true
+	})
 	for i := range changes {
 		activeIDs[changes[i].IssueIdentifier] = true
 	}
 
-	var relevant []linear.IssueDetail
-	for i := range updatedDetails {
-		if activeIDs[updatedDetails[i].Identifier] {
-			relevant = append(relevant, updatedDetails[i])
-		}
-	}
-
-	return relevant
+	return lo.Filter(updatedDetails, func(d linear.IssueDetail, _ int) bool {
+		return activeIDs[d.Identifier]
+	})
 }
 
 // perIssueReviewResult wraps the two return values from parsing AI review JSON.
@@ -229,27 +261,16 @@ func parsePerIssueReviewJSON(raw string) *perIssueReviewResult {
 }
 
 // parseAIReviewJSON attempts to unmarshal the raw string as AIReviewJSON.
-// Falls back to extracting the outermost {...} if wrapped in code fences.
+// Falls back to stripping markdown fences and extracting {...} if wrapped.
 func parseAIReviewJSON(raw string) (*AIReviewJSON, error) {
-	result, err := tryParseJSON(raw)
-	if err == nil {
-		return result, nil
-	}
-	slog.Warn("failed to parse JSON directly, trying brace extraction", "error", err)
-	extracted := extractJSONBraces(raw)
-	if extracted == "" {
-		slog.Warn("brace extraction failed to find JSON object")
-
-		return nil, err
-	}
-	result, err = tryParseJSON(extracted)
-	if err != nil {
-		slog.Warn("brace extraction also failed to parse", "error", err)
+	var result AIReviewJSON
+	if err := ai.UnmarshalStrictJSON(raw, &result); err != nil {
+		slog.Warn("failed to parse AI review JSON", "error", err)
 
 		return nil, err
 	}
 
-	return result, nil
+	return &result, nil
 }
 
 // renderReviewSection appends a section heading and its paragraph items to sb.
@@ -265,63 +286,20 @@ func renderReviewSection(sb *strings.Builder, heading string, items []string) {
 	}
 }
 
-// tryParseJSON attempts to unmarshal the raw string as AIReviewJSON.
-func tryParseJSON(raw string) (*AIReviewJSON, error) {
-	var result AIReviewJSON
-	if err := json.Unmarshal([]byte(raw), &result); err != nil {
-		return nil, err
-	}
-
-	return &result, nil
-}
-
-// extractJSONBraces finds the outermost balanced {...} block in the string.
-// This handles cases where the AI wraps JSON in markdown code fences or other text.
-func extractJSONBraces(s string) string {
-	start := strings.Index(s, "{")
-	if start < 0 {
-		return ""
-	}
-	depth := 0
-	for i := start; i < len(s); i++ {
-		switch s[i] {
-		case '{':
-			depth++
-		case '}':
-			depth--
-			if depth == 0 {
-				return s[start : i+1]
-			}
-		}
-	}
-
-	return ""
-}
-
 func toIssueDetails(issues []linear.IssueDetail) []internal.IssueDetail {
-	details := make([]internal.IssueDetail, len(issues))
-	for i := range issues {
-		iss := &issues[i]
-		comments := make([]internal.Comment, len(iss.Comments))
-		for j, c := range iss.Comments {
-			comments[j] = internal.Comment{
-				Body:      c.Body,
-				UserName:  c.UserName,
-				CreatedAt: c.CreatedAt,
-			}
-		}
-		details[i] = internal.IssueDetail{
+	return lo.Map(issues, func(iss linear.IssueDetail, _ int) internal.IssueDetail {
+		return internal.IssueDetail{
 			Identifier:  iss.Identifier,
 			Title:       iss.Title,
 			Description: iss.Description,
 			StateName:   iss.StateName,
 			TeamName:    iss.TeamName,
-			Comments:    comments,
-			URL:         iss.URL,
+			Comments: lo.Map(iss.Comments, func(c linear.Comment, _ int) internal.Comment {
+				return internal.Comment{Body: c.Body, UserName: c.UserName, CreatedAt: c.CreatedAt}
+			}),
+			URL: iss.URL,
 		}
-	}
-
-	return details
+	})
 }
 
 // markdownParagraph converts a paragraph of markdown text to HTML.
