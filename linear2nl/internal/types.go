@@ -14,7 +14,7 @@ type IssueView struct {
 }
 
 // GroupItemView is a single issue within a group in the morning report,
-// carrying AI-generated reason/impact/action fields.
+// carrying AI-generated context/bottleneck/advice fields.
 type GroupItemView struct {
 	Identifier string
 	Title      string
@@ -23,9 +23,9 @@ type GroupItemView struct {
 	DueDate    string
 	URL        string
 	Content    template.HTML
-	Reason     []string
-	Impact     []string
-	Action     []string
+	Context    []string
+	Bottleneck []string
+	Advice     []string
 }
 
 // GroupView is a named group of issues in the morning report.
@@ -57,6 +57,8 @@ type IssueDetail struct {
 	StateName   string
 	TeamName    string
 	URL         string
+	Priority    string
+	DueDate     string
 	Comments    []Comment
 }
 

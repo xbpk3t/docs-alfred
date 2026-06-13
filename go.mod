@@ -11,7 +11,6 @@ require (
 	github.com/PuerkitoBio/purell v1.2.2
 	github.com/adrg/frontmatter v0.2.0
 	github.com/adrg/xdg v0.5.3
-	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/asticode/go-astisub v0.40.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
@@ -49,6 +48,7 @@ require (
 
 require (
 	github.com/andybalholm/cascadia v1.3.3 // indirect
+	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/asticode/go-astikit v0.20.0 // indirect
 	github.com/asticode/go-astits v1.8.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

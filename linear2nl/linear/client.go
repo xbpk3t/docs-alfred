@@ -131,6 +131,19 @@ func (c *Client) GetStateChanges(ctx context.Context, since time.Time) ([]StateC
 	return changes, nil
 }
 
+// GetActiveIssuesWithDetails returns non-completed issues assigned to the viewer,
+// including full description and comments for AI review.
+func (c *Client) GetActiveIssuesWithDetails(ctx context.Context) ([]IssueDetail, error) {
+	resp, err := UpdatedIssuesWithDetails(ctx, c.graphQLClient(), c.baseFilter(), 50, 100)
+	if err != nil {
+		return nil, fmt.Errorf("query active issues with details: %w", err)
+	}
+
+	details := mapIssueDetails(resp.Viewer.AssignedIssues.Nodes)
+
+	return details, nil
+}
+
 // GetUpdatedIssuesWithDetails returns issues updated since the given time,
 // including full description and comments for AI review.
 func (c *Client) GetUpdatedIssuesWithDetails(ctx context.Context, since time.Time) ([]IssueDetail, error) {
@@ -144,9 +157,16 @@ func (c *Client) GetUpdatedIssuesWithDetails(ctx context.Context, since time.Tim
 		return nil, fmt.Errorf("query updated issues with details: %w", err)
 	}
 
-	details := make([]IssueDetail, 0, len(resp.Viewer.AssignedIssues.Nodes))
-	for i := range resp.Viewer.AssignedIssues.Nodes {
-		n := &resp.Viewer.AssignedIssues.Nodes[i]
+	details := mapIssueDetails(resp.Viewer.AssignedIssues.Nodes)
+
+	return details, nil
+}
+
+// mapIssueDetails converts UpdatedIssuesWithDetails response nodes to IssueDetail slice.
+func mapIssueDetails(nodes []UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssue) []IssueDetail {
+	details := make([]IssueDetail, 0, len(nodes))
+	for i := range nodes {
+		n := &nodes[i]
 		d := IssueDetail{
 			Identifier:       n.Identifier,
 			Title:            n.Title,
@@ -172,7 +192,7 @@ func (c *Client) GetUpdatedIssuesWithDetails(ctx context.Context, since time.Tim
 		details = append(details, d)
 	}
 
-	return details, nil
+	return details
 }
 
 // baseFilter returns the common filter for active (non-completed) issues.

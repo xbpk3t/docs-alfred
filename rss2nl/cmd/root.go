@@ -4,12 +4,15 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/spf13/cobra"
 )
 
 // Execute is the entry point for rss2nl.
 // Root without subcommand shows help and exits 0 (does not send).
 func Execute() {
+	carboninit.Setup()
+
 	rootCmd := &cobra.Command{
 		Use:   "rss2nl",
 		Short: "RSS newsletter, transcription and source discovery tools",

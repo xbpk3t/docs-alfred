@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
@@ -34,7 +35,7 @@ Default: JSON, last 2 days, written to linear2nl_export_<date>.json.`,
 				return err
 			}
 
-			since := time.Now().In(cst).AddDate(0, 0, -days).Truncate(24 * time.Hour)
+			since := carbon.Now().SubDays(days).StartOfDay().StdTime()
 			slog.Info("fetching issues", "since", since.Format(time.RFC3339), "days", days)
 
 			client := linear.NewClient(cfg.Linear.APIKey, cfg.Linear.TeamKeys)
@@ -44,8 +45,8 @@ Default: JSON, last 2 days, written to linear2nl_export_<date>.json.`,
 			}
 			slog.Info("fetched issues", "count", len(details))
 
-			now := time.Now().In(cst)
-			dateStr := now.Format("20060102")
+			now := carbon.Now()
+			dateStr := now.Format("Ymd")
 
 			if format == "md" {
 				return exportMarkdown(details, output, dateStr)

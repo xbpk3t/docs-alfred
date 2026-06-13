@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
@@ -31,7 +32,7 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 	client := linear.NewClient(cfg.Linear.APIKey, cfg.Linear.TeamKeys)
 	aiClient := internal.NewAIProvider(cfg.AI)
 
-	todayStart := time.Now().In(cst).Truncate(24 * time.Hour)
+	todayStart := carbon.Now().StartOfDay().StdTime()
 
 	eq, err := queryEveningData(ctx, client, todayStart)
 	if err != nil {
@@ -49,10 +50,10 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 	changeViews := toStateChangeViews(changes)
 	summaryHTML := attachPerIssueReviews(aiClient, relevantDetails, completedViews, changeViews)
 
-	now := time.Now().In(cst)
+	now := carbon.Now()
 	data := internal.EveningData{
-		Date:         now.Format("2006-01-02"),
-		DayOfWeek:    formatWeekday(now),
+		Date:         now.ToDateString(),
+		DayOfWeek:    now.ToShortWeekString(),
 		Theme:        cfg.Theme,
 		AIReview:     summaryHTML,
 		Completed:    completedViews,
@@ -294,10 +295,11 @@ func toIssueDetails(issues []linear.IssueDetail) []internal.IssueDetail {
 			Description: iss.Description,
 			StateName:   iss.StateName,
 			TeamName:    iss.TeamName,
+			URL:         iss.URL,
+			Priority:    priorityLabel(iss.Priority),
 			Comments: lo.Map(iss.Comments, func(c linear.Comment, _ int) internal.Comment {
 				return internal.Comment{Body: c.Body, UserName: c.UserName, CreatedAt: c.CreatedAt}
 			}),
-			URL: iss.URL,
 		}
 	})
 }
@@ -326,8 +328,8 @@ func markdownParagraph(s string) string {
 }
 
 func sendBriefEveningEmpty(cfg *internal.Config, dryRun bool) error {
-	now := time.Now().In(cst)
-	subject := fmt.Sprintf("🌙 Linear 今日收获 · %s %s", now.Format("2006-01-02"), formatWeekday(now))
+	now := carbon.Now()
+	subject := fmt.Sprintf("🌙 Linear 今日收获 · %s %s", now.ToDateString(), now.ToShortWeekString())
 	html := `<!doctype html><html lang="zh-CN"><body style="font-family:sans-serif;padding:24px;">
 		<h1>` + subject + `</h1><p>今天没有完成记录 🎉</p></body></html>`
 
