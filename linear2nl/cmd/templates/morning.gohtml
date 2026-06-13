@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>🌅 Linear 今日任务 · {{.Date}} {{.DayOfWeek}}</title>
+  <title>Linear 今日任务 · {{.Date}} {{.DayOfWeek}}</title>
   <style>
     :root {
       --bg: #13171f;
@@ -179,7 +179,7 @@
 <body>
   <div class="container">
     <div class="card">
-      <h1>🌅 Linear 今日任务</h1>
+      <h1>Linear 今日任务</h1>
       <p class="date-subtitle">{{.Date}} {{.DayOfWeek}}</p>
 
       {{if gt (len .Groups) 0}}
@@ -187,14 +187,14 @@
           {{if $gi}}<hr class="group-separator">{{end}}
           <div class="group-section">
             <h2 class="group-heading group-heading-{{$group.Name | groupCSSClass}}">
-              {{$group.Emoji}} {{$group.Name}}
+              {{$group.Name}}
               <span class="count-badge">{{$group.GroupCount}} 项</span>
             </h2>
 
             {{range $group.Issues}}
             <div class="issue-section">
               <h2 class="issue-heading">
-                {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Identifier}} {{.Title}} 🔗</a>{{else}}{{.Identifier}} {{.Title}}{{end}}
+                {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Identifier}} {{.Title}}</a>{{else}}{{.Identifier}} {{.Title}}{{end}}
                 {{if .Priority}}<span class="tag tag-{{.Priority | priorityClass}}">{{.Priority}}</span>{{end}}
               </h2>
               {{if .Content}}

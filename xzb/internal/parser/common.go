@@ -13,7 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/araddon/dateparse"
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/xzb/internal/model"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -78,13 +78,12 @@ func StableID(t *model.Transaction) string {
 
 func ParseTime(value string) (time.Time, error) {
 	s := cleanCell(value)
-	loc := time.FixedZone("Asia/Shanghai", 8*60*60)
-	parsed, err := dateparse.ParseIn(s, loc)
-	if err != nil {
+	c := carbon.Parse(s)
+	if c.Error != nil {
 		return time.Time{}, fmt.Errorf("unsupported time %q", value)
 	}
 
-	return parsed, nil
+	return c.StdTime(), nil
 }
 
 func readCSVRows(path, encodingHint string) ([][]string, error) {

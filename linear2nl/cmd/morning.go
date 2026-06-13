@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
-	"time"
 
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
@@ -17,13 +17,13 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 )
 
-// renderMorningIssueContent pre-renders reason/impact/action into HTML,
+// renderMorningIssueContent pre-renders context/bottleneck/advice into HTML,
 // matching the same style as the evening report's per-issue review.
 func renderMorningIssueContent(item *internal.GroupItemView) template.HTML {
 	var sb strings.Builder
-	renderReviewSection(&sb, "📌 原因", item.Reason)
-	renderReviewSection(&sb, "💡 影响", item.Impact)
-	renderReviewSection(&sb, "🎯 行动", item.Action)
+	renderReviewSection(&sb, "上下文", item.Context)
+	renderReviewSection(&sb, "卡点", item.Bottleneck)
+	renderReviewSection(&sb, "建议", item.Advice)
 
 	return template.HTML(sb.String()) //nolint:gosec // G203: AI-generated content for trusted template
 }
@@ -40,31 +40,39 @@ func runMorning(cfg *internal.Config, dryRun bool) error {
 	client := linear.NewClient(cfg.Linear.APIKey, cfg.Linear.TeamKeys)
 	aiClient := internal.NewAIProvider(cfg.AI)
 
-	issues, err := queryMorningIssues(ctx, client, cfg)
+	// Fetch active issues with full details (description + comments) for AI review.
+	details, err := client.GetActiveIssuesWithDetails(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("query active issues with details: %w", err)
 	}
 
-	if len(issues) == 0 {
-		return sendBriefEmptyEmail(cfg, "🌅 Linear 今日任务", "今天没有待办任务 🎉", dryRun)
+	if len(details) == 0 {
+		return sendBriefEmptyEmail(cfg, "Linear 今日任务", "今天没有待办任务", dryRun)
 	}
 
-	allViews := toIssueViews(issues)
+	// Convert linear.IssueDetail → internal.IssueDetail for AI and display.
+	issueDetails := toIssueDetails(details)
+	issueViews := toIssueViewsFromDetails(details)
 
 	// Truncate to 15 items if too many, with a note.
 	var truncatedNote string
-	if len(allViews) > 15 {
-		truncatedNote = fmt.Sprintf("还有 %d 个低优先级未显示", len(allViews)-15)
-		allViews = allViews[:15]
+	if len(issueViews) > 15 {
+		truncatedNote = fmt.Sprintf("还有 %d 个低优先级未显示", len(issueViews)-15)
+		issueDetails = issueDetails[:15]
+		issueViews = issueViews[:15]
 	}
 
-	groups := buildMorningGroups(aiClient, allViews)
+	// Stage 1: Fast classification using metadata only (identifier/title/priority/team/dueDate).
+	groups := buildMorningGroups(aiClient, issueViews)
+
+	// Stage 2: Deep analysis for FIXME + MAYBE groups using full description + comments.
+	enrichActiveGroups(aiClient, groups, issueDetails)
 
 	// Append truncated note as an extra group if needed.
 	if truncatedNote != "" {
 		groups = append(groups, internal.GroupView{
 			Name:  "Note",
-			Emoji: "⚠️",
+			Emoji: "",
 			Issues: []internal.GroupItemView{
 				{
 					Identifier: "",
@@ -74,10 +82,10 @@ func runMorning(cfg *internal.Config, dryRun bool) error {
 		})
 	}
 
-	now := time.Now().In(cst)
+	now := carbon.Now()
 	data := internal.MorningData{
-		Date:      now.Format("2006-01-02"),
-		DayOfWeek: formatWeekday(now),
+		Date:      now.ToDateString(),
+		DayOfWeek: now.ToShortWeekString(),
 		Theme:     cfg.Theme,
 		Groups:    groups,
 	}
@@ -94,23 +102,14 @@ func runMorning(cfg *internal.Config, dryRun bool) error {
 		return fmt.Errorf("render template: %w", err)
 	}
 
-	subject := fmt.Sprintf("🌅 Linear 今日任务 · %s %s", data.Date, data.DayOfWeek)
+	subject := fmt.Sprintf("Linear 今日任务 · %s %s", data.Date, data.DayOfWeek)
 
 	return sendOrWrite(cfg, subject, htmlBody, "morning", dryRun)
 }
 
-// groupEmoji maps group names to their display emoji.
+// groupEmoji returns the emoji for a group. Now unused by the template — emoji removed.
 func groupEmoji(name string) string {
-	switch name {
-	case "FIXME":
-		return "🔴"
-	case "MAYBE":
-		return "🟡"
-	case "REMOVE":
-		return "⚪"
-	default:
-		return "📋"
-	}
+	return ""
 }
 
 // groupCSSClass maps group names to CSS class suffixes.
@@ -148,13 +147,14 @@ func fallbackGroup(views []internal.IssueView) []internal.GroupView {
 	return []internal.GroupView{
 		{
 			Name:   fallbackGroupName,
-			Emoji:  "📋",
+			Emoji:  "",
 			Issues: toGroupItems(views, nil),
 		},
 	}
 }
 
-// buildMorningGroups generates the grouped view of issues using AI review.
+// buildMorningGroups generates the grouped view of issues using AI classification (stage 1).
+// Takes metadata-only IssueView for fast FIXME/MAYBE/REMOVE grouping.
 // Falls back to a flat uncategorized group if AI is unavailable or returns invalid JSON.
 func buildMorningGroups(aiClient *internal.AIProvider, views []internal.IssueView) []internal.GroupView {
 	if !aiClient.IsConfigured() || len(views) == 0 {
@@ -163,17 +163,17 @@ func buildMorningGroups(aiClient *internal.AIProvider, views []internal.IssueVie
 		return fallbackGroup(views)
 	}
 
-	raw := aiClient.MorningStructuredReview(views)
+	raw := aiClient.MorningClassify(views)
 	if raw == "" {
 		slog.Warn("AI returned empty response; using fallback flat group")
 
 		return fallbackGroup(views)
 	}
-	slog.Info("AI morning review response", "len", len(raw))
+	slog.Info("AI morning classification response", "len", len(raw))
 
 	result, err := parseMorningReviewJSON(raw)
 	if err != nil {
-		slog.Warn("failed to parse AI morning review JSON; using fallback flat group", "error", err)
+		slog.Warn("failed to parse AI morning classification JSON; using fallback flat group", "error", err)
 
 		return fallbackGroup(views)
 	}
@@ -186,30 +186,32 @@ func buildMorningGroups(aiClient *internal.AIProvider, views []internal.IssueVie
 func buildGroupsFromResult(result *internal.MorningReviewJSON, views []internal.IssueView) []internal.GroupView {
 	viewMap := lo.KeyBy(views, func(v internal.IssueView) string { return v.Identifier })
 	mentioned := make(map[string]bool)
-	var groups []internal.GroupView
 
-	for _, g := range result.Groups {
+	groups := lo.FilterMap(result.Groups, func(g internal.MorningGroupJSON, _ int) (internal.GroupView, bool) {
 		items := buildGroupItems(g, viewMap, mentioned)
-		if len(items) > 0 {
-			groups = append(groups, internal.GroupView{
-				Name:   g.Name,
-				Emoji:  groupEmoji(g.Name),
-				Issues: items,
-			})
+		if len(items) == 0 {
+			return internal.GroupView{}, false
 		}
-	}
+
+		return internal.GroupView{
+			Name:   g.Name,
+			Emoji:  groupEmoji(g.Name),
+			Issues: items,
+		}, true
+	})
 
 	sort.SliceStable(groups, func(i, j int) bool {
 		return groupOrder(groups[i].Name) < groupOrder(groups[j].Name)
 	})
 
 	// Add uncategorized issues (fetched but not mentioned by AI).
-	var uncategorized []internal.GroupItemView
-	for _, v := range views {
-		if !mentioned[v.Identifier] {
-			uncategorized = append(uncategorized, toGroupItem(&v))
+	uncategorized := lo.FilterMap(views, func(v internal.IssueView, _ int) (internal.GroupItemView, bool) {
+		if mentioned[v.Identifier] {
+			return internal.GroupItemView{}, false
 		}
-	}
+
+		return toGroupItem(&v), true
+	})
 	if len(uncategorized) > 0 {
 		groups = append(groups, internal.GroupView{
 			Name:   fallbackGroupName,
@@ -224,15 +226,14 @@ func buildGroupsFromResult(result *internal.MorningReviewJSON, views []internal.
 // buildGroupItems converts a single AI group's issues into GroupItemViews,
 // merging metadata from original views and pre-rendering AI content.
 func buildGroupItems(g internal.MorningGroupJSON, viewMap map[string]internal.IssueView, mentioned map[string]bool) []internal.GroupItemView {
-	items := make([]internal.GroupItemView, 0, len(g.Issues))
-	for _, iss := range g.Issues {
+	return lo.Map(g.Issues, func(iss internal.MorningIssueItem, _ int) internal.GroupItemView {
 		mentioned[iss.Identifier] = true
 		item := internal.GroupItemView{
 			Identifier: iss.Identifier,
 			Title:      iss.Title,
-			Reason:     iss.Reason,
-			Impact:     iss.Impact,
-			Action:     iss.Action,
+			Context:    iss.Context,
+			Bottleneck: iss.Bottleneck,
+			Advice:     iss.Advice,
 		}
 		if orig, ok := viewMap[iss.Identifier]; ok {
 			item.URL = orig.URL
@@ -241,10 +242,9 @@ func buildGroupItems(g internal.MorningGroupJSON, viewMap map[string]internal.Is
 			item.DueDate = orig.DueDate
 		}
 		item.Content = renderMorningIssueContent(&item)
-		items = append(items, item)
-	}
 
-	return items
+		return item
+	})
 }
 
 // parseMorningReviewJSON attempts to unmarshal the AI response as MorningReviewJSON.
@@ -259,20 +259,18 @@ func parseMorningReviewJSON(raw string) (*internal.MorningReviewJSON, error) {
 
 // toGroupItems converts IssueViews to GroupItemViews, optionally applying AI data from a lookup map.
 func toGroupItems(views []internal.IssueView, aiData map[string]*internal.MorningIssueItem) []internal.GroupItemView {
-	items := make([]internal.GroupItemView, 0, len(views))
-	for i := range views {
-		item := toGroupItem(&views[i])
+	return lo.Map(views, func(v internal.IssueView, _ int) internal.GroupItemView {
+		item := toGroupItem(&v)
 		if aiData != nil {
-			if data, ok := aiData[views[i].Identifier]; ok {
-				item.Reason = data.Reason
-				item.Impact = data.Impact
-				item.Action = data.Action
+			if data, ok := aiData[v.Identifier]; ok {
+				item.Context = data.Context
+				item.Bottleneck = data.Bottleneck
+				item.Advice = data.Advice
 			}
 		}
-		items = append(items, item)
-	}
 
-	return items
+		return item
+	})
 }
 
 // toGroupItem converts a single IssueView to a GroupItemView.
@@ -287,30 +285,104 @@ func toGroupItem(v *internal.IssueView) internal.GroupItemView {
 	}
 }
 
-func queryMorningIssues(ctx context.Context, client *linear.Client, cfg *internal.Config) ([]linear.Issue, error) {
-	var issues []linear.Issue
-	var err error
+// toIssueViewsFromDetails converts linear.IssueDetail to display IssueView.
+func toIssueViewsFromDetails(details []linear.IssueDetail) []internal.IssueView {
+	return lo.Map(details, func(d linear.IssueDetail, _ int) internal.IssueView {
+		return internal.IssueView{
+			Identifier: d.Identifier,
+			Title:      d.Title,
+			Priority:   priorityLabel(d.Priority),
+			TeamName:   d.TeamName,
+			URL:        d.URL,
+		}
+	})
+}
 
-	if cfg.Morning.Strategy == "focused" {
-		today := time.Now().In(cst).Format("2006-01-02")
-		slog.Info("using focused strategy", "date", today)
-		issues, err = client.GetFocusedIssues(ctx, today)
-	} else {
-		slog.Info("using all_assigned strategy")
-		issues, err = client.GetActiveIssues(ctx)
+// activeGroupNames are the groups that should receive deep analysis (stage 2).
+var activeGroupNames = map[string]bool{"FIXME": true, "MAYBE": true}
+
+// enrichActiveGroups performs stage-2 deep analysis on FIXME + MAYBE groups.
+// Sends their full IssueDetail (description + comments) to AI for context/bottleneck/advice.
+func enrichActiveGroups(aiClient *internal.AIProvider, groups []internal.GroupView, allDetails []internal.IssueDetail) {
+	detailMap := lo.KeyBy(allDetails, func(d internal.IssueDetail) string { return d.Identifier })
+
+	// Collect identifiers from FIXME + MAYBE groups, tracking positions for merging.
+	groupIdx := make(map[string]int)
+	itemIdx := make(map[string]int)
+
+	activeIdentifiers := lo.FlatMap(groups, func(g internal.GroupView, gi int) []string {
+		if !activeGroupNames[g.Name] {
+			return nil
+		}
+
+		return lo.FilterMap(g.Issues, func(item internal.GroupItemView, ii int) (string, bool) {
+			if item.Identifier == "" {
+				return "", false
+			}
+			groupIdx[item.Identifier] = gi
+			itemIdx[item.Identifier] = ii
+
+			return item.Identifier, true
+		})
+	})
+
+	if len(activeIdentifiers) == 0 {
+		return
 	}
+
+	// Collect IssueDetail for active groups only.
+	activeDetails := lo.FilterMap(activeIdentifiers, func(id string, _ int) (internal.IssueDetail, bool) {
+		d, ok := detailMap[id]
+
+		return d, ok
+	})
+	if len(activeDetails) == 0 {
+		return
+	}
+
+	raw := aiClient.MorningDeepAnalysis(activeDetails)
+	if raw == "" {
+		slog.Warn("AI deep analysis returned empty response; skipping enrichment")
+
+		return
+	}
+	slog.Info("AI morning deep analysis response", "len", len(raw))
+
+	result, err := parseMorningAnalysisJSON(raw)
 	if err != nil {
-		return nil, fmt.Errorf("query issues: %w", err)
+		slog.Warn("failed to parse AI morning deep analysis JSON; skipping enrichment", "error", err)
+
+		return
 	}
 
-	slog.Info("fetched issues", "count", len(issues))
+	// Merge analysis results into groups.
+	for _, review := range result.Reviews {
+		gi, okGI := groupIdx[review.Identifier]
+		ii, okII := itemIdx[review.Identifier]
+		if !okGI || !okII {
+			continue
+		}
+		item := &groups[gi].Issues[ii]
+		item.Context = review.Context
+		item.Bottleneck = review.Bottleneck
+		item.Advice = review.Advice
+		item.Content = renderMorningIssueContent(item)
+	}
+}
 
-	return issues, nil
+// parseMorningAnalysisJSON attempts to unmarshal the AI response as MorningAnalysisJSON.
+func parseMorningAnalysisJSON(raw string) (*internal.MorningAnalysisJSON, error) {
+	var result internal.MorningAnalysisJSON
+	if err := ai.UnmarshalStrictJSON(raw, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 func sendBriefEmptyEmail(cfg *internal.Config, subject, body string, dryRun bool) error {
-	now := time.Now().In(cst)
-	fullSubject := fmt.Sprintf("%s · %s %s", subject, now.Format("2006-01-02"), formatWeekday(now))
+	now := carbon.Now()
+	fullSubject := fmt.Sprintf("%s · %s %s", subject, now.ToDateString(), now.ToShortWeekString())
 	html := fmt.Sprintf(`<!doctype html><html lang="zh-CN"><body style="font-family:sans-serif;padding:24px;">
 		<h1>%s</h1><p>%s</p></body></html>`, fullSubject, body)
 

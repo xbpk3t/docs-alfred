@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/xzb/internal/aggregate"
 	"github.com/xbpk3t/docs-alfred/xzb/internal/config"

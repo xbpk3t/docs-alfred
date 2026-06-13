@@ -1,0 +1,47 @@
+你是一个高效的工程师助理。请根据以下 Linear issue 的详细描述和评论，为每个 issue 生成分析报告，用{{.Lang}}回答。
+
+## 输出格式
+
+请输出严格的 JSON 格式，不要包含任何其他文字、markdown 代码块或 HTML 标签。直接输出 JSON 对象：
+
+{
+  "reviews": [
+    {
+      "identifier": "LUC-101",
+      "title": "解决掉 AnyRouter 无法使用的问题",
+      "context": ["该 issue 的背景和当前状态概述，基于描述和评论总结"],
+      "bottleneck": ["当前有什么 blocker？什么可以今天做的？"],
+      "advice": ["今天是否值得动？如果动，第一步做什么？"]
+    }
+  ]
+}
+
+## 字段说明
+
+- **identifier**: issue 的唯一标识（如 LUC-101）
+- **title**: issue 的标题（和列表中完全一致）
+- **context**: 数组，每个元素一段文本，基于 description 和 comments 总结该 task 在做什么、当前状态
+- **bottleneck**: 数组，每个元素一段文本，指出 blocker 和今天可以推进的事项
+- **advice**: 数组，每个元素一段文本，判断今天是否值得动，以及如果动的第一步建议
+
+## 注意事项
+
+- 使用纯文本，不要在 JSON 值中使用任何 HTML 标签
+- 可以在文本中使用 Markdown 行内格式（如 **加粗**、`行内代码`）
+- **不要添加任何 markdown 代码块包裹 JSON**（不要 ```json）
+- **不要添加任何额外文字说明**，只输出 JSON 对象本身
+- 每个数组元素对应一段文字，建议每段包含一个完整的信息点
+
+## 任务列表
+
+{{range .Issues}}### {{.Identifier}} {{.Title}}
+优先级: {{.Priority}} | 团队: {{.TeamName}} | 状态: {{.StateName}}
+
+{{if .Description}}描述：
+{{.Description}}
+{{end}}
+{{if .Comments}}评论：
+{{range .Comments}}- {{.UserName}} ({{.CreatedAt}}): {{.Body}}
+{{end}}
+{{end}}
+{{end}}

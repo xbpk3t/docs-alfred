@@ -13,14 +13,19 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 )
 
-//go:embed prompts/morning-summary.txt prompts/evening-summary.txt
+//go:embed prompts/morning-summary.txt prompts/morning-analysis.txt prompts/evening-summary.txt
 var promptFiles embed.FS
 
 // --- Prompt data types ---
 
-type morningPromptData struct {
+type morningClassifyData struct {
 	Lang   string
 	Issues []IssueView
+}
+
+type morningAnalysisData struct {
+	Lang   string
+	Issues []IssueDetail
 }
 
 type eveningDeepPromptData struct {
@@ -54,9 +59,9 @@ func NewAIProvider(cfg AIConfig) *AIProvider {
 // MorningSummary generates AI priority suggestions for the morning report.
 // Returns markdown string; empty if AI is unavailable or call fails.
 //
-// Deprecated: use MorningStructuredReview for JSON-based grouped output.
+// Deprecated: use MorningClassify for JSON-based grouped output.
 func (p *AIProvider) MorningSummary(issues []IssueView) string {
-	prompt, err := p.renderPrompt("prompts/morning-summary.txt", morningPromptData{
+	prompt, err := p.renderPrompt("prompts/morning-summary.txt", morningClassifyData{
 		Lang:   p.lang,
 		Issues: issues,
 	})
@@ -69,20 +74,26 @@ func (p *AIProvider) MorningSummary(issues []IssueView) string {
 	return p.chat(prompt)
 }
 
-// MorningStructuredReview generates a structured JSON review for the morning report.
+// MorningClassify generates a structured JSON classification for the morning report (stage 1).
+// Takes metadata-only IssueView for fast classification into FIXME/MAYBE/REMOVE groups.
 // Returns raw JSON string; empty if AI is unavailable or call fails.
-func (p *AIProvider) MorningStructuredReview(issues []IssueView) string {
-	prompt, err := p.renderPrompt("prompts/morning-summary.txt", morningPromptData{
+func (p *AIProvider) MorningClassify(issues []IssueView) string {
+	prompt, err := p.renderPrompt("prompts/morning-summary.txt", morningClassifyData{
 		Lang:   p.lang,
 		Issues: issues,
 	})
 	if err != nil {
-		slog.Warn("failed to render morning structured review prompt", "error", err)
+		slog.Warn("failed to render morning classify prompt", "error", err)
 
 		return ""
 	}
 
 	return p.chat(prompt)
+}
+
+// MorningStructuredReview is kept for backward compatibility; delegates to MorningClassify.
+func (p *AIProvider) MorningStructuredReview(issues []IssueView) string {
+	return p.MorningClassify(issues)
 }
 
 // MorningReviewJSON is the expected JSON structure from the AI morning review.
@@ -100,9 +111,40 @@ type MorningGroupJSON struct {
 type MorningIssueItem struct {
 	Identifier string   `json:"identifier"`
 	Title      string   `json:"title"`
-	Reason     []string `json:"reason"`
-	Impact     []string `json:"impact"`
-	Action     []string `json:"action"`
+	Context    []string `json:"context"`
+	Bottleneck []string `json:"bottleneck"`
+	Advice     []string `json:"advice"`
+}
+
+// MorningAnalysisJSON is the expected JSON structure from the AI morning deep analysis (stage 2).
+type MorningAnalysisJSON struct {
+	Reviews []MorningAnalysisItem `json:"reviews"`
+}
+
+// MorningAnalysisItem is a single issue analysis item in the JSON response.
+type MorningAnalysisItem struct {
+	Identifier string   `json:"identifier"`
+	Title      string   `json:"title"`
+	Context    []string `json:"context"`
+	Bottleneck []string `json:"bottleneck"`
+	Advice     []string `json:"advice"`
+}
+
+// MorningDeepAnalysis generates per-issue deep analysis for the morning report (stage 2).
+// Takes IssueDetail (with description + comments) for FIXME and MAYBE groups only.
+// Returns raw JSON string; empty if AI is unavailable or call fails.
+func (p *AIProvider) MorningDeepAnalysis(issues []IssueDetail) string {
+	prompt, err := p.renderPrompt("prompts/morning-analysis.txt", morningAnalysisData{
+		Lang:   p.lang,
+		Issues: issues,
+	})
+	if err != nil {
+		slog.Warn("failed to render morning deep analysis prompt", "error", err)
+
+		return ""
+	}
+
+	return p.chat(prompt)
 }
 
 // EveningDeepReview generates per-issue deep review for the evening report.

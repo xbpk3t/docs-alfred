@@ -8,18 +8,16 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
+	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/yuin/goldmark"
 )
-
-var cst = time.FixedZone("CST", 8*3600)
 
 // newReportCmd creates a cobra command for a report subcommand (morning/evening).
 // It consolidates the shared flag setup and config-loading logic.
@@ -48,6 +46,8 @@ func newReportCmd(use, short string, runFunc func(*internal.Config, bool) error)
 
 // Execute is the entry point for linear2nl.
 func Execute() {
+	carboninit.Setup()
+
 	rootCmd := &cobra.Command{
 		Use:   "linear2nl",
 		Short: "Linear task reports via email",
@@ -110,12 +110,6 @@ func priorityLabel(p float64) string {
 	default:
 		return ""
 	}
-}
-
-func formatWeekday(t time.Time) string {
-	weekdays := []string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}
-
-	return weekdays[t.Weekday()]
 }
 
 // markdownToHTML converts a markdown string to HTML using goldmark.
