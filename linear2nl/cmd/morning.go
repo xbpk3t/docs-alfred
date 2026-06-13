@@ -68,19 +68,19 @@ func runMorning(cfg *internal.Config, dryRun bool) error {
 		},
 	}
 
+	// Render template
 	tmpl, err := template.New("morning.gohtml").Funcs(tmplFuncs()).ParseFS(morningTemplates, "templates/morning.gohtml")
 	if err != nil {
 		return fmt.Errorf("parse template: %w", err)
 	}
-
-	html, err := renderHTML(tmpl, "morning.gohtml", data)
+	htmlBody, err := renderHTML(tmpl, "morning.gohtml", data)
 	if err != nil {
 		return fmt.Errorf("render template: %w", err)
 	}
 
 	subject := fmt.Sprintf("🌅 Linear 今日任务 · %s %s", data.Date, data.DayOfWeek)
 
-	return sendOrWrite(cfg, subject, html, "morning", dryRun)
+	return sendOrWrite(cfg, subject, htmlBody, "morning", dryRun)
 }
 
 func queryMorningIssues(ctx context.Context, client *linear.Client, cfg *internal.Config) ([]linear.Issue, error) {

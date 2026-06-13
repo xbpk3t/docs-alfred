@@ -1,18 +1,20 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
+	"github.com/yuin/goldmark"
 )
 
 //go:embed templates/evening.gohtml
@@ -43,13 +45,14 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 	relevantDetails := filterActiveDetails(completed, changes, updatedDetails)
 	completedViews := toIssueViews(completed)
 	changeViews := toStateChangeViews(changes)
-	attachPerIssueReviews(aiClient, relevantDetails, completedViews, changeViews)
+	summaryHTML := attachPerIssueReviews(aiClient, relevantDetails, completedViews, changeViews)
 
 	now := time.Now().In(cst)
 	data := internal.EveningData{
 		Date:         now.Format("2006-01-02"),
 		DayOfWeek:    formatWeekday(now),
 		Theme:        cfg.Theme,
+		AIReview:     summaryHTML,
 		Completed:    completedViews,
 		StateChanges: changeViews,
 		Stats: internal.EveningStats{
@@ -58,19 +61,19 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 		},
 	}
 
+	// Render template
 	tmpl, err := template.New("evening.gohtml").Funcs(tmplFuncs()).ParseFS(eveningTemplates, "templates/evening.gohtml")
 	if err != nil {
 		return fmt.Errorf("parse template: %w", err)
 	}
-
-	html, err := renderHTML(tmpl, "evening.gohtml", data)
+	htmlBody, err := renderHTML(tmpl, "evening.gohtml", data)
 	if err != nil {
 		return fmt.Errorf("render template: %w", err)
 	}
 
 	subject := fmt.Sprintf("🌙 Linear 今日收获 · %s %s", data.Date, data.DayOfWeek)
 
-	return sendOrWrite(cfg, subject, html, "evening", dryRun)
+	return sendOrWrite(cfg, subject, htmlBody, "evening", dryRun)
 }
 
 type eveningData struct {
@@ -135,62 +138,164 @@ func filterActiveDetails(completed []linear.Issue, changes []linear.StateChange,
 	return relevant
 }
 
+// perIssueReviewResult wraps the two return values from parsing AI review JSON.
+type perIssueReviewResult struct {
+	reviews     map[string]string
+	summaryHTML string
+}
+
 func attachPerIssueReviews(
 	aiClient *internal.AIProvider, details []linear.IssueDetail,
 	completedViews []internal.IssueView, changeViews []internal.StateChangeView,
-) {
-	reviewMap := buildPerIssueReviews(aiClient, details)
+) string {
+	r := buildPerIssueReviews(aiClient, details)
+	if r == nil {
+		return ""
+	}
 	for i := range completedViews {
-		if r, ok := reviewMap[completedViews[i].Identifier]; ok {
-			completedViews[i].Review = template.HTML(r) //nolint:gosec // G203: AI-generated HTML for trusted template
+		if review, ok := r.reviews[completedViews[i].Identifier]; ok {
+			completedViews[i].Review = template.HTML(review) //nolint:gosec // G203: AI-generated HTML for trusted template
 		}
 	}
 	for i := range changeViews {
-		if r, ok := reviewMap[changeViews[i].IssueIdentifier]; ok {
-			changeViews[i].Review = template.HTML(r) //nolint:gosec // G203: AI-generated HTML for trusted template
+		if review, ok := r.reviews[changeViews[i].IssueIdentifier]; ok {
+			changeViews[i].Review = template.HTML(review) //nolint:gosec // G203: AI-generated HTML for trusted template
 		}
 	}
+
+	return r.summaryHTML
 }
 
 // buildPerIssueReviews generates AI review for the given issues and parses
-// the response into a per-issue map keyed by issue identifier.
+// the response into a per-issue map keyed by issue identifier and the summary HTML.
 // Returns nil if AI is unavailable or no issues are provided.
-func buildPerIssueReviews(aiClient *internal.AIProvider, details []linear.IssueDetail) map[string]string {
+func buildPerIssueReviews(aiClient *internal.AIProvider, details []linear.IssueDetail) *perIssueReviewResult {
 	if len(details) == 0 || !aiClient.IsConfigured() {
 		return nil
 	}
 
 	raw := aiClient.EveningDeepReview(toIssueDetails(details))
 	if raw == "" {
+		slog.Warn("AI returned empty response")
+
+		return nil
+	}
+	slog.Info("AI raw response preview", "len", len(raw), "raw", raw[:min(len(raw), 2000)])
+
+	return parsePerIssueReviewJSON(raw)
+}
+
+// AIReviewJSON is the expected JSON structure from the AI evening deep review.
+type AIReviewJSON struct {
+	Reviews []AIReviewItemJSON `json:"reviews"`
+	Summary []string           `json:"summary"`
+}
+
+// AIReviewItemJSON is a single issue review item in the JSON response.
+type AIReviewItemJSON struct {
+	Identifier string   `json:"identifier"`
+	Title      string   `json:"title"`
+	Progress   []string `json:"progress"`
+	Knowledge  []string `json:"knowledge"`
+	Review     []string `json:"review"`
+}
+
+// parsePerIssueReviewJSON parses the AI response as JSON and returns
+// a perIssueReviewResult with the per-issue review map and summary HTML.
+func parsePerIssueReviewJSON(raw string) *perIssueReviewResult {
+	result, err := parseAIReviewJSON(raw)
+	if err != nil {
 		return nil
 	}
 
-	return parsePerIssueReview(raw)
+	reviews := make(map[string]string, len(result.Reviews))
+	for _, r := range result.Reviews {
+		var sb strings.Builder
+		renderReviewSection(&sb, "决策/进展", r.Progress)
+		renderReviewSection(&sb, "💡 知识点", r.Knowledge)
+		renderReviewSection(&sb, "📊 Review", r.Review)
+		reviews[r.Identifier] = sb.String()
+	}
+
+	// Render summary
+	var summaryHTML strings.Builder
+	summaryHTML.WriteString(`<div class="ai-summary">`)
+	for _, s := range result.Summary {
+		summaryHTML.WriteString(markdownParagraph(s))
+	}
+	summaryHTML.WriteString(`</div>`)
+
+	return &perIssueReviewResult{reviews: reviews, summaryHTML: summaryHTML.String()}
 }
 
-// parsePerIssueReview splits the AI response by "### IDENTIFIER" headers
-// into a map keyed by issue identifier.
-func parsePerIssueReview(raw string) map[string]string {
-	chunks := regexp.MustCompile(`(?m)^###\s+`).Split(raw, -1)
-	result := make(map[string]string, len(chunks)-1)
-	for _, chunk := range chunks {
-		chunk = strings.TrimSpace(chunk)
-		if chunk == "" {
-			continue
-		}
-		// First line is "IDENTIFIER: title" — extract identifier.
-		lines := strings.SplitN(chunk, "\n", 2)
-		identifier := strings.TrimSpace(strings.SplitN(lines[0], ":", 2)[0])
-		if identifier == "" {
-			continue
-		}
-		body := strings.TrimSpace(chunk)
-		if body != "" {
-			result[identifier] = markdownToHTML(body)
+// parseAIReviewJSON attempts to unmarshal the raw string as AIReviewJSON.
+// Falls back to extracting the outermost {...} if wrapped in code fences.
+func parseAIReviewJSON(raw string) (*AIReviewJSON, error) {
+	result, err := tryParseJSON(raw)
+	if err == nil {
+		return result, nil
+	}
+	slog.Warn("failed to parse JSON directly, trying brace extraction", "error", err)
+	extracted := extractJSONBraces(raw)
+	if extracted == "" {
+		slog.Warn("brace extraction failed to find JSON object")
+
+		return nil, err
+	}
+	result, err = tryParseJSON(extracted)
+	if err != nil {
+		slog.Warn("brace extraction also failed to parse", "error", err)
+
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// renderReviewSection appends a section heading and its paragraph items to sb.
+func renderReviewSection(sb *strings.Builder, heading string, items []string) {
+	if len(items) == 0 {
+		return
+	}
+	sb.WriteString("<h3>")
+	sb.WriteString(heading)
+	sb.WriteString("</h3>")
+	for _, item := range items {
+		sb.WriteString(markdownParagraph(item))
+	}
+}
+
+// tryParseJSON attempts to unmarshal the raw string as AIReviewJSON.
+func tryParseJSON(raw string) (*AIReviewJSON, error) {
+	var result AIReviewJSON
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// extractJSONBraces finds the outermost balanced {...} block in the string.
+// This handles cases where the AI wraps JSON in markdown code fences or other text.
+func extractJSONBraces(s string) string {
+	start := strings.Index(s, "{")
+	if start < 0 {
+		return ""
+	}
+	depth := 0
+	for i := start; i < len(s); i++ {
+		switch s[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return s[start : i+1]
+			}
 		}
 	}
 
-	return result
+	return ""
 }
 
 func toIssueDetails(issues []linear.IssueDetail) []internal.IssueDetail {
@@ -217,6 +322,29 @@ func toIssueDetails(issues []linear.IssueDetail) []internal.IssueDetail {
 	}
 
 	return details
+}
+
+// markdownParagraph converts a paragraph of markdown text to HTML.
+// Uses goldmark and strips the document wrapper, keeping <p> tags and inline formatting.
+func markdownParagraph(s string) string {
+	if s == "" {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := goldmark.New().Convert([]byte(s), &buf); err != nil {
+		return "<p>" + template.HTMLEscapeString(s) + "</p>"
+	}
+	full := buf.String()
+	// goldmark wraps output in <html><head></head><body>...</body></html>
+	const bodyOpen = "<body>"
+	const bodyClose = "</body>"
+	start := strings.Index(full, bodyOpen)
+	end := strings.LastIndex(full, bodyClose)
+	if start >= 0 && end > start {
+		return full[start+len(bodyOpen) : end]
+	}
+
+	return full
 }
 
 func sendBriefEveningEmpty(cfg *internal.Config, dryRun bool) error {

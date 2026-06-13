@@ -82,10 +82,18 @@ repos:
         types: [text]
         stages: [pre-commit, pre-push, manual]
 
-  - repo: https://github.com/pre-commit-ci/pre-commit-ci-config
-    rev: v1.6.1
-    hooks:
-      - id: check-pre-commit-ci-config
+      - id: detect-private-key
+        name: detect private key
+        entry: detect-private-key
+        language: system
+        types: [text]
+
+      - id: destroyed-symlinks
+        name: detect destroyed symlinks
+        entry: destroyed-symlinks
+        language: system
+        types: [file]
+        stages: [pre-commit, pre-push, manual]
 
   - repo: local
     hooks:
@@ -131,19 +139,6 @@ repos:
         types: [yaml]
         files: ^\.github/workflows/
 
-  #  - repo: https://github.com/shellcheck-py/shellcheck-py
-  #    rev: v0.10.0.1
-  #    hooks:
-  #      - id: shellcheck
-  #        types: [shell]
-  #
-  #  - repo: https://github.com/pre-commit/mirrors-eslint
-  #    rev: v9.29.0
-  #    hooks:
-  #      - id: eslint
-  #        files: \.[jt]sx?$  # *.js, *.jsx, *.ts and *.tsx
-  #        types: [file]
-
   - repo: local
     hooks:
       - id: markdownlint
@@ -179,13 +174,14 @@ repos:
         types: [python]
         require_serial: true
 
-#  - repo: https://github.com/gitleaks/gitleaks
-#    rev: v8.28.0
-#    hooks:
-#      - id: gitleaks
-#        name: Scan Secrets
-#        entry: gitleaks detect --source . -v && gitleaks dir . -v
-
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: Scan Secrets
+        entry: gitleaks git --pre-commit --redact --staged --verbose
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
 
   - repo: local
     hooks:
@@ -260,22 +256,6 @@ repos:
   #- url: https://github.com/daixiang0/gci
   #  des: GCI, a tool that control golang package import order and make it always deterministic.
   #- url: https://github.com/mgechev/revive
-  #  des: golangci-lint已经内置了
-  #  - repo: https://github.com/lietu/go-pre-commit
-  #    rev: v0.1.0
-  #    hooks:
-  #      - id: errcheck
-  #      - id: go-fmt-goimports
-  #      - id: go-test
-  #      - id: go-vet
-  #        entry: go vet -vettool=$(which shadow) -strict
-  #      - id: gofumpt
-  #        entry: gofumpt -l -w .
-  #      - id: golangci-lint
-  #      - id: golint
-  #      - id: staticcheck
-  #      - id: go-mod-tidy
-
   - repo: local
     hooks:
 #      - id: betteralign
