@@ -902,12 +902,12 @@ func isRSSFeedLike(lowerURL string) bool {
 
 func isDirectAudioURL(lowerURL string) bool {
 	parsed, err := url.Parse(lowerURL)
-	path := lowerURL
+	urlPath := lowerURL
 	if err == nil {
-		path = strings.ToLower(parsed.Path)
+		urlPath = strings.ToLower(parsed.Path)
 	}
 	for _, suffix := range []string{".mp3", ".m4a", ".aac", ".wav", ".flac", ".ogg", ".opus"} {
-		if strings.HasSuffix(path, suffix) {
+		if strings.HasSuffix(urlPath, suffix) {
 			return true
 		}
 	}
@@ -927,13 +927,9 @@ func metadataLooksChinese(meta *ytdlpMetadata) bool {
 }
 
 func containsHan(s string) bool {
-	for _, r := range s {
-		if unicode.Is(unicode.Han, r) {
-			return true
-		}
-	}
-
-	return false
+	return strings.ContainsFunc(s, func(r rune) bool {
+		return unicode.Is(unicode.Han, r)
+	})
 }
 
 // fetchWithOpenCLI uses the opencli browser tool to extract page content.

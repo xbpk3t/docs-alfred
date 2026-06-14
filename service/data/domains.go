@@ -24,7 +24,7 @@ var domainSpecs = []DomainSpec{
 	{Domain: DomainGH, DefaultPath: "data/gh", DuplicateCheck: true},
 	{Domain: DomainGoods, DefaultPath: "data/goods", YAMLParseOnly: true},
 	{Domain: DomainTask, DefaultPath: "data", YAMLParseOnly: true},
-	{Domain: DomainNtl, DefaultPath: "data/.archive/z/ntl", RuleScope: RuleScope(DomainNtl), StructuredCheck: true},
+	{Domain: DomainNtl, DefaultPath: "data/.archive/ntl", RuleScope: RuleScope(DomainNtl), StructuredCheck: true},
 }
 
 // SpecForDomain returns the configured behavior for a data domain.

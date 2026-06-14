@@ -16,6 +16,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/service/ghindex"
@@ -807,12 +808,9 @@ func rejectedClassifyResult(result *aiClassification, detectedContentType string
 }
 
 func candidatePathSet(candidates []ghindex.TopicCandidate) map[string]bool {
-	set := make(map[string]bool, len(candidates))
-	for _, candidate := range candidates {
-		set[candidate.Path] = true
-	}
-
-	return set
+	return lo.SliceToMap(candidates, func(c ghindex.TopicCandidate) (string, bool) {
+		return c.Path, true
+	})
 }
 
 func isValidClassifyType(typ ClassifyType) bool {

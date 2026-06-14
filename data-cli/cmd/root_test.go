@@ -11,7 +11,7 @@ func TestRootCommandOwnsDataActions(t *testing.T) {
 	root := newRootCmd()
 
 	require.Equal(t, "data-cli", root.Name())
-	requireCommandNames(t, root.Commands(), []string{"check", "duplicate", ghCommandName, "render"})
+	requireCommandNames(t, root.Commands(), []string{"check", "duplicate", "enrich", ghCommandName, "render"})
 }
 
 func TestCheckCommandExposesGhMaxLinesFlag(t *testing.T) {
@@ -23,6 +23,18 @@ func TestCheckCommandExposesGhMaxLinesFlag(t *testing.T) {
 func TestRunDomainCheckRejectsNegativeMaxLines(t *testing.T) {
 	err := runDomainCheck(ghCommandName, "", "", -1)
 	require.ErrorContains(t, err, "--max-lines")
+}
+
+func TestEnrichCommandOwnsDataEnrichActions(t *testing.T) {
+	enrichCmd, _, err := newRootCmd().Find([]string{"enrich"})
+	require.NoError(t, err)
+	require.NotNil(t, enrichCmd)
+	require.Equal(t, "enrich <resource>", enrichCmd.Use)
+
+	// Check flags exist
+	require.NotNil(t, enrichCmd.Flag("path"))
+	require.NotNil(t, enrichCmd.Flag("cache"))
+	require.NotNil(t, enrichCmd.Flag("dry-run"))
 }
 
 func TestGhCommandOwnsDataGhActions(t *testing.T) {
