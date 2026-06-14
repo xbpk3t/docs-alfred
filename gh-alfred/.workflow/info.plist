@@ -114,7 +114,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./gh-alfred search "$1" --url "{var:url}" --docs-url "{var:docs}"</string>
+				<string>./gh-alfred search "$1" --docs-url "{var:docs}"</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>

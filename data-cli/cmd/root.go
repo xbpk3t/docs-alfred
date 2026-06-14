@@ -35,6 +35,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newRenderCmd())
 	rootCmd.AddCommand(newCheckCmd())
 	rootCmd.AddCommand(newDuplicateCmd())
+	rootCmd.AddCommand(newEnrichCmd())
 	rootCmd.AddCommand(newGhCmd())
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
