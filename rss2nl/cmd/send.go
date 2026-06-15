@@ -48,6 +48,7 @@ type NewsletterItem struct {
 	ItemHash           string
 	TrnsURL            string
 	PodcastTranscripts []PodcastTranscriptRef
+	IsMedia            bool
 }
 
 // PodcastTranscriptRef represents a reference to a podcast transcript.
@@ -86,9 +87,8 @@ type EmailContent struct {
 type TemplateType string
 
 const (
-	DashboardTpl    TemplateType = "Dashboard For Newsletter"
-	NewsletterTpl   TemplateType = "Newsletter"
-	podcastCategory              = "podcast"
+	DashboardTpl  TemplateType = "Dashboard For Newsletter"
+	NewsletterTpl TemplateType = "Newsletter"
 )
 
 // NewsletterService 处理新闻通讯的服务.
@@ -149,12 +149,9 @@ func runSend(config *rss.Config, trnsOut, sourceHuntURL string) error {
 		return err
 	}
 
-	// Process transcripts for podcast items and set trns URLs
+	// Process transcripts for media items and set trns URLs
 	if config.TrnsConfig.Enabled {
 		for i := range categories {
-			if !shouldProcessNewsletterTrns(categories[i].Category) {
-				continue
-			}
 			report := ProcessNewsletterTrns(categories[i].Items, config, trnsOut)
 			slog.Info("Newsletter trns completed",
 				"category", categories[i].Category,
@@ -281,7 +278,14 @@ func (s *NewsletterService) ProcessAllFeeds() ([]NewsletterCategory, error) {
 
 func (s *NewsletterService) processSingleFeed(ctx context.Context, feedGroup rss.FeedsDetail) (NewsletterCategory, error) {
 	category := NewsletterCategory{Category: feedGroup.Type}
+
+	// Build URL → feed config mapping
+	feedConfigByURL := make(map[string]rss.Feeds)
 	urls := lo.Compact(lo.Map(feedGroup.Feeds, func(item rss.Feeds, _ int) string {
+		if item.Feed != "" {
+			feedConfigByURL[item.Feed] = item
+		}
+
 		return item.Feed
 	}))
 
@@ -307,7 +311,7 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feedGroup rss
 		return category, nil
 	}
 
-	items, err := s.mergeFeedItems(feedGroup.Type, allFeeds)
+	items, err := s.mergeFeedItems(feedGroup.Type, fetchMeta, feedConfigByURL)
 	if err != nil {
 		slog.Error("Failed to merge feeds",
 			slog.String("category", feedGroup.Type),
@@ -323,12 +327,23 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feedGroup rss
 }
 
 // mergeFeedItems merges all feed results into a deduplicated list of NewsletterItems.
-func (s *NewsletterService) mergeFeedItems(typeName string, allFeeds []*gofeed.Feed) ([]NewsletterItem, error) {
+func (s *NewsletterService) mergeFeedItems(
+	typeName string,
+	fetchMeta []rss.FetchResult,
+	feedConfigByURL map[string]rss.Feeds,
+) ([]NewsletterItem, error) {
 	seenLinks := make(map[string]bool)
 	seenHashes := make(map[string]bool)
 	var items []NewsletterItem
 
-	for _, sourceFeed := range allFeeds {
+	for _, result := range fetchMeta {
+		sourceFeed := result.Feed
+		if sourceFeed == nil {
+			continue
+		}
+		feedURL := result.URL
+		feedConfig := feedConfigByURL[feedURL]
+
 		for i, item := range sourceFeed.Items {
 			if i >= s.config.FeedConfig.FeedLimit {
 				break
@@ -345,11 +360,11 @@ func (s *NewsletterService) mergeFeedItems(typeName string, allFeeds []*gofeed.F
 			}
 
 			// Generate sha256 identity
-			feedURL := ""
+			sourceFeedURL := ""
 			if sourceFeed.Link != "" {
-				feedURL = sourceFeed.Link
+				sourceFeedURL = sourceFeed.Link
 			}
-			itemHash := itemIdentity(feedURL, item)
+			itemHash := itemIdentity(sourceFeedURL, item)
 
 			// Dedup by hash
 			if seenHashes[itemHash] {
@@ -360,6 +375,7 @@ func (s *NewsletterService) mergeFeedItems(typeName string, allFeeds []*gofeed.F
 			seenHashes[itemHash] = true
 
 			ni := s.makeNewsletterItem(item, sourceFeed, typeName, itemHash)
+			ni.IsMedia = feedConfig.IsMedia // propagate isMedia flag from feed config
 			items = append(items, ni)
 		}
 	}
@@ -397,10 +413,6 @@ func (s *NewsletterService) makeNewsletterItem(item *gofeed.Item, sourceFeed *go
 	ni.PodcastTranscripts = extractTranscriptRefs(item)
 
 	return ni
-}
-
-func shouldProcessNewsletterTrns(category string) bool {
-	return strings.EqualFold(strings.TrimSpace(category), podcastCategory)
 }
 
 func feedDisplayName(feed *gofeed.Feed) string {

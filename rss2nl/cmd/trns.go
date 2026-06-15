@@ -361,6 +361,9 @@ func processPodcastFeeds(
 
 	for _, feed := range cfg.RSS {
 		for _, u := range feed.Feeds {
+			if !u.IsMedia {
+				continue
+			}
 			feedEntries := processFeedURL(&u, outDir, limit, flags.refresh, cache, pipeline)
 			entries = append(entries, feedEntries...)
 		}
@@ -659,7 +662,8 @@ func processNewsletterTrnsItems(items []NewsletterItem, limit int, process newsl
 }
 
 func newsletterItemHasTrnsInput(item *NewsletterItem) bool {
-	return item != nil && (item.EnclosureURL != "" || len(item.PodcastTranscripts) > 0)
+	return item != nil && item.IsMedia &&
+		(item.EnclosureURL != "" || len(item.PodcastTranscripts) > 0)
 }
 
 func processItemTrns(
