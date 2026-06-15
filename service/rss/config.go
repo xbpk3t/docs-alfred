@@ -71,8 +71,9 @@ type Feeds struct {
 	URL         string  `yaml:"url"`
 	Des         string  `yaml:"des"`
 	LastUpdated string  `yaml:"last_updated,omitempty"`
-	PublishFreq string  `yaml:"publish_freq,omitempty"` // items/month, e.g. "20/Month"
+	PublishFreq string  `yaml:"publish_freq,omitempty"`
 	Score       float64 `yaml:"score,omitempty"`
+	IsMedia     bool    `yaml:"isMedia,omitempty"`
 }
 
 // -- Trns Config --

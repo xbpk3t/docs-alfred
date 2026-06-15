@@ -128,9 +128,9 @@ func TestMakeNewsletterItem_FeedTitleUsesFeedTitleWithLinkFallback(t *testing.T)
 func TestProcessNewsletterTrnsItemsRespectsDefaultLimitAndReportsCounts(t *testing.T) {
 	items := []NewsletterItem{
 		{Title: "No media"},
-		{Title: "Linked 1", Link: "https://example.com/1", EnclosureURL: "https://example.com/1.mp3"},
-		{Title: "Failed", Link: "https://example.com/2", PodcastTranscripts: []PodcastTranscriptRef{{URL: "https://example.com/2.txt"}}},
-		{Title: "Skipped by limit", Link: "https://example.com/3", EnclosureURL: "https://example.com/3.mp3"},
+		{Title: "Linked 1", Link: "https://example.com/1", EnclosureURL: "https://example.com/1.mp3", IsMedia: true},
+		{Title: "Failed", Link: "https://example.com/2", PodcastTranscripts: []PodcastTranscriptRef{{URL: "https://example.com/2.txt"}}, IsMedia: true},
+		{Title: "Skipped by limit", Link: "https://example.com/3", EnclosureURL: "https://example.com/3.mp3", IsMedia: true},
 	}
 	processed := 0
 
@@ -164,14 +164,14 @@ func TestRunTrnsLimitFlagOverridesConfigDefaultLimit(t *testing.T) {
 		switch r.URL.Path {
 		case "/feed.xml":
 			_, _ = fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
-  <channel>
-    <title>Test Podcast</title>
-    <link>%s</link>
-    <item><title>Ep 1</title><guid>ep-1</guid><link>https://example.com/1</link><podcast:transcript url="http://%s/t1.txt" type="text/plain" /></item>
-    <item><title>Ep 2</title><guid>ep-2</guid><link>https://example.com/2</link><podcast:transcript url="http://%s/t2.txt" type="text/plain" /></item>
-  </channel>
-</rss>`, feedURL, r.Host, r.Host)
+	<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+	  <channel>
+	    <title>Test Podcast</title>
+	    <link>%s</link>
+	    <item><title>Ep 1</title><guid>ep-1</guid><link>https://example.com/1</link><podcast:transcript url="http://%s/t1.txt" type="text/plain" /></item>
+	    <item><title>Ep 2</title><guid>ep-2</guid><link>https://example.com/2</link><podcast:transcript url="http://%s/t2.txt" type="text/plain" /></item>
+	  </channel>
+	</rss>`, feedURL, r.Host, r.Host)
 		case "/t1.txt":
 			_, _ = w.Write([]byte("transcript one"))
 		case "/t2.txt":
@@ -212,6 +212,7 @@ rss:
   - type: podcast
     feeds:
       - feed: %s
+        isMedia: true
 `, limit, feedURL)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -233,13 +234,6 @@ func readTrnsIndex(t *testing.T, outDir string) []trnsIndexEntry {
 	}
 
 	return entries
-}
-
-func TestShouldProcessNewsletterTrns_PodcastOnly(t *testing.T) {
-	assert.True(t, shouldProcessNewsletterTrns("podcast"))
-	assert.True(t, shouldProcessNewsletterTrns(" Podcast "))
-	assert.False(t, shouldProcessNewsletterTrns("coding"))
-	assert.False(t, shouldProcessNewsletterTrns(""))
 }
 
 func TestToTranscriptLinks(t *testing.T) {
@@ -320,18 +314,24 @@ func TestMergeFeedItems_DedupByLink(t *testing.T) {
 	}, "")
 
 	now := time.Now()
-	feeds := []*gofeed.Feed{
+	fetchMeta := []rss.FetchResult{
 		{
-			Title: "Test Feed",
-			Items: []*gofeed.Item{
-				{Title: "Item 1", Link: "http://example.com/1", GUID: "1", PublishedParsed: &now},
-				{Title: "Item 2", Link: "http://example.com/2", GUID: "2", PublishedParsed: &now},
-				{Title: "Item 1 duplicate", Link: "http://example.com/1", GUID: "1", PublishedParsed: &now},
+			Feed: &gofeed.Feed{
+				Title: "Test Feed",
+				Items: []*gofeed.Item{
+					{Title: "Item 1", Link: "http://example.com/1", GUID: "1", PublishedParsed: &now},
+					{Title: "Item 2", Link: "http://example.com/2", GUID: "2", PublishedParsed: &now},
+					{Title: "Item 1 duplicate", Link: "http://example.com/1", GUID: "1", PublishedParsed: &now},
+				},
 			},
+			URL: "http://example.com/feed",
 		},
 	}
+	feedConfigByURL := map[string]rss.Feeds{
+		"http://example.com/feed": {Feed: "http://example.com/feed"},
+	}
 
-	items, err := service.mergeFeedItems("test", feeds)
+	items, err := service.mergeFeedItems("test", fetchMeta, feedConfigByURL)
 	assert.NoError(t, err)
 	assert.Len(t, items, 2) // one deduplicated
 	assert.Equal(t, "Item 1", items[0].Title)
