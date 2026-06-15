@@ -13,7 +13,9 @@ newsletter:
 
 dashboard:
   isShowFetchFailedFeeds: true
-  isShowFeedDetail: true
+  feedDetail:
+    enabled: true
+    staleMonths: 0
   fetchFailureReport:
     mode: grouped
     exampleLimit: 5
@@ -69,9 +71,9 @@ wiki:
     # baseUrl: https://api.openai.com/v1
     # apiKey: (uses OPENAI_API_KEY env var by default)
 
-feeds:
+rss:
   - type: coding
-    urls:
+    feeds:
       - feed: https://blog.lucc.dev/rss.xml
         url: https://blog.lucc.dev/
         des: 【Lucas Blog】
@@ -80,7 +82,7 @@ feeds:
         des: 【数据库内核月报】
 
   - type: videos
-    urls:
+    feeds:
       - feed: https://www.youtube.com/feeds/videos.xml?channel_id=UCxXlhuIa3ggzVzkN1hVq3ug
         url: https://www.youtube.com/@BernieSanders/videos
       - feed: https://www.youtube.com/feeds/videos.xml?channel_id=UCxXlhuIa3ggzVzkN1hVq3ug
