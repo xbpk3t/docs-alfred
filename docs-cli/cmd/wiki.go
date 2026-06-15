@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	wikiuc "github.com/xbpk3t/docs-alfred/internal/wikiingest"
+	workspaceuc "github.com/xbpk3t/docs-alfred/internal/workspaceops"
 )
 
 type wikiFlags struct {
@@ -25,6 +26,7 @@ const (
 	wikiCommandName      = "wiki"
 	wikiInboxCommandName = "inbox"
 	wikiAuditCommandName = "audit"
+	wikiCheckCommandName = "check"
 )
 
 func newWikiCmd() *cobra.Command {
@@ -47,6 +49,7 @@ and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 	cmd.AddCommand(newWikiAddCmd())
 	cmd.AddCommand(newWikiInboxCmd())
 	cmd.AddCommand(newWikiAuditCmd())
+	cmd.AddCommand(newWikiCheckCmd())
 
 	return cmd
 }
@@ -155,6 +158,49 @@ func newWikiAuditCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
 	cmd.Flags().BoolVar(&flags.changedOnly, "changed-only", false, "Audit changed wiki markdown files only")
 	cmd.Flags().StringSliceVar(&flags.auditPaths, "paths", nil, "Audit only these wiki files or directories")
+	addFormatFlag(cmd, &flags.format)
+
+	return cmd
+}
+
+func newWikiCheckCmd() *cobra.Command {
+	var flags struct {
+		ghRoot   string
+		wikiRoot string
+		format   string
+	}
+	cmd := &cobra.Command{
+		Use:   wikiCheckCommandName,
+		Short: "Check wiki/data/gh folder structure consistency",
+		Long:  `Check that wiki/ and data/gh/ have matching folder structures.`,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := workspaceuc.RunWikiCheck(workspaceuc.WikiCheckInput{
+				GhRoot:   flags.ghRoot,
+				WikiRoot: flags.wikiRoot,
+			})
+			if err != nil {
+				return err
+			}
+			textDetails := fmt.Sprintf("summary: expected=%d actual=%d missing=%d extra=%d\n",
+				len(result.ExpectedWikiDirs), len(result.ActualWikiDirs),
+				len(result.MissingWikiDirs), len(result.ExtraWikiDirs))
+			if err := writeCheckCommandOutput(flags.format, &checkCommandOutput{
+				Name:    "wiki check",
+				Issues:  result.Issues,
+				Summary: result.Summary(),
+			}, textDetails); err != nil {
+				return err
+			}
+			if workspaceuc.HasIssueErrors(result.Issues) {
+				return errors.New("wiki check failed")
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&flags.ghRoot, "gh-root", "data/gh", "data/gh path")
+	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "wiki", "wiki path")
 	addFormatFlag(cmd, &flags.format)
 
 	return cmd
