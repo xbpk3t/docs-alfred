@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"math"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -91,17 +93,21 @@ const (
 
 // NewsletterService 处理新闻通讯的服务.
 type NewsletterService struct {
-	config      *rss.Config
-	trnsOut     string
-	failedFeeds []*rss.FeedError
+	config          *rss.Config
+	feedLastUpdated map[string]string // feed URL → last updated date string
+	feedPublishFreq map[string]string // feed URL → items/month freq string
+	trnsOut         string
+	failedFeeds     []*rss.FeedError
 }
 
 // NewNewsletterService 创建新闻通讯服务.
 func NewNewsletterService(cfg *rss.Config, trnsOut string) *NewsletterService {
 	return &NewsletterService{
-		config:      cfg,
-		trnsOut:     trnsOut,
-		failedFeeds: make([]*rss.FeedError, 0),
+		config:          cfg,
+		trnsOut:         trnsOut,
+		failedFeeds:     make([]*rss.FeedError, 0),
+		feedLastUpdated: make(map[string]string),
+		feedPublishFreq: make(map[string]string),
 	}
 }
 
@@ -162,7 +168,7 @@ func runSend(config *rss.Config, trnsOut, sourceHuntURL string) error {
 		}
 	}
 
-	contents, err := service.RenderNewsletter(categories, config.Feeds, service.failedFeeds, sourceHuntURL)
+	contents, err := service.RenderNewsletter(categories, config.RSS, service.failedFeeds, sourceHuntURL)
 	if err != nil {
 		return err
 	}
@@ -178,13 +184,13 @@ func runFeedHealthCheck(config *rss.Config) error {
 	failedCount := 0
 	staleThreshold := 90 * 24 * time.Hour // 3 months
 
-	for _, feedGroup := range config.Feeds {
-		for _, u := range feedGroup.URLs {
+	for _, feedGroup := range config.RSS {
+		for _, u := range feedGroup.Feeds {
 			if u.Feed == "" {
 				continue
 			}
 
-			switch checkFeed(u, config, staleThreshold) {
+			switch checkFeed(&u, config, staleThreshold) {
 			case healthOK:
 				healthyCount++
 			case healthStale:
@@ -238,8 +244,8 @@ func (s *NewsletterService) ProcessAllFeeds() ([]NewsletterCategory, error) {
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(10)
 
-	results := make([]NewsletterCategory, len(s.config.Feeds))
-	for i, feed := range s.config.Feeds {
+	results := make([]NewsletterCategory, len(s.config.RSS))
+	for i, feed := range s.config.RSS {
 		g.Go(func() error {
 			category, err := s.processSingleFeed(ctx, feed)
 			if err != nil {
@@ -275,12 +281,23 @@ func (s *NewsletterService) ProcessAllFeeds() ([]NewsletterCategory, error) {
 
 func (s *NewsletterService) processSingleFeed(ctx context.Context, feedGroup rss.FeedsDetail) (NewsletterCategory, error) {
 	category := NewsletterCategory{Category: feedGroup.Type}
-	urls := lo.Compact(lo.Map(feedGroup.URLs, func(item rss.Feeds, _ int) string {
+	urls := lo.Compact(lo.Map(feedGroup.Feeds, func(item rss.Feeds, _ int) string {
 		return item.Feed
 	}))
 
-	allFeeds, failedFeeds := rss.FetchURLs(ctx, urls, s.config)
+	allFeeds, fetchMeta, failedFeeds := rss.FetchURLsWithMeta(ctx, urls, s.config)
 	category.FailedFeeds = failedFeeds
+
+	// Record last updated time and publish frequency for each feed
+	for _, r := range fetchMeta {
+		if r.Feed != nil && len(r.Feed.Items) > 0 {
+			latest := getFeedLatestTime(r.Feed)
+			if !latest.IsZero() {
+				s.feedLastUpdated[r.URL] = carbon.CreateFromStdTime(latest).ToDateString()
+			}
+			s.feedPublishFreq[r.URL] = calcPublishFreq(r.Feed)
+		}
+	}
 
 	if len(allFeeds) == 0 {
 		slog.Info("No feeds fetched for category",
@@ -455,6 +472,46 @@ func getItemCreationTime(item *gofeed.Item) time.Time {
 	return time.Now()
 }
 
+// getFeedLatestTime returns the latest item update time from a feed.
+func getFeedLatestTime(feed *gofeed.Feed) time.Time {
+	if len(feed.Items) == 0 {
+		return time.Time{}
+	}
+	// Items are typically sorted by date, check first item
+	first := feed.Items[0]
+	if first.PublishedParsed != nil {
+		return *first.PublishedParsed
+	}
+	if first.UpdatedParsed != nil {
+		return *first.UpdatedParsed
+	}
+
+	return time.Time{}
+}
+
+// calcPublishFreq calculates items-per-month frequency from feed items.
+func calcPublishFreq(feed *gofeed.Feed) string {
+	var dates []time.Time
+	for _, item := range feed.Items {
+		if item.PublishedParsed != nil {
+			dates = append(dates, *item.PublishedParsed)
+		}
+	}
+	if len(dates) < 2 {
+		return "-"
+	}
+
+	sort.Slice(dates, func(i, j int) bool {
+		return dates[i].Before(dates[j])
+	})
+
+	spanDays := dates[len(dates)-1].Sub(dates[0]).Hours() / 24
+
+	freq := float64(len(dates)) / (spanDays / 30.44)
+
+	return fmt.Sprintf("%d/Month", int(math.Round(freq)))
+}
+
 func (s *NewsletterService) getItemTitle(item *gofeed.Item) string {
 	hasAuthor := item.Author != nil && item.Author.Name != ""
 	if !s.config.NewsletterConfig.IsHideAuthorInTitle && hasAuthor {
@@ -504,6 +561,15 @@ func (s *NewsletterService) RenderNewsletter(
 	if reportErr != nil {
 		slog.Warn("Failed to update feed failure report state", "error", reportErr)
 	}
+
+	// Enrich feed details with actual last updated times
+	enrichedFeedList := s.enrichFeedDetails(feedList)
+
+	// Filter by staleness if configured
+	if s.config.DashboardConfig.FeedDetail.Enabled && s.config.DashboardConfig.FeedDetail.StaleMonths > 0 {
+		enrichedFeedList = s.filterStaleFeeds(enrichedFeedList)
+	}
+
 	data := TemplateData{
 		Title:           subject,
 		WeekNumber:      now.WeekOfYear(),
@@ -517,7 +583,7 @@ func (s *NewsletterService) RenderNewsletter(
 		}{
 			FailedFeeds:   failedFeeds,
 			FailureReport: failureReport,
-			FeedDetails:   feedList,
+			FeedDetails:   enrichedFeedList,
 		},
 	}
 
@@ -537,13 +603,65 @@ func (s *NewsletterService) RenderNewsletter(
 }
 
 func firstFeedURL(feed rss.FeedsDetail) string {
-	for _, u := range feed.URLs {
+	for _, u := range feed.Feeds {
 		if u.Feed != "" {
 			return u.Feed
 		}
 	}
 
 	return ""
+}
+
+// enrichFeedDetails populates LastUpdated for each feed entry from fetched data.
+func (s *NewsletterService) enrichFeedDetails(feedList []rss.FeedsDetail) []rss.FeedsDetail {
+	enriched := make([]rss.FeedsDetail, len(feedList))
+	for i, detail := range feedList {
+		enrichedFeeds := make([]rss.Feeds, len(detail.Feeds))
+		for j, f := range detail.Feeds {
+			// Try to find last updated from fetched data (by feed URL)
+			if updated, ok := s.feedLastUpdated[f.Feed]; ok {
+				f.LastUpdated = updated
+				if freq, ok := s.feedPublishFreq[f.Feed]; ok {
+					f.PublishFreq = freq
+				}
+			}
+			enrichedFeeds[j] = f
+		}
+		enriched[i] = rss.FeedsDetail{Type: detail.Type, Feeds: enrichedFeeds}
+	}
+
+	return enriched
+}
+
+// filterStaleFeeds filters feed list to only include feeds stale for more than N months.
+func (s *NewsletterService) filterStaleFeeds(feedList []rss.FeedsDetail) []rss.FeedsDetail {
+	staleMonths := s.config.DashboardConfig.FeedDetail.StaleMonths
+	if staleMonths <= 0 {
+		return feedList
+	}
+	cutoff := carbon.Now().SubMonths(staleMonths).StartOfDay()
+
+	var filtered []rss.FeedsDetail
+	for _, detail := range feedList {
+		var staleFeeds []rss.Feeds
+		for _, f := range detail.Feeds {
+			if f.LastUpdated == "" {
+				// No data available, keep it but mark as unknown
+				staleFeeds = append(staleFeeds, f)
+
+				continue
+			}
+			t := carbon.Parse(f.LastUpdated)
+			if !t.IsValid() || t.Lt(cutoff) {
+				staleFeeds = append(staleFeeds, f)
+			}
+		}
+		if len(staleFeeds) > 0 {
+			filtered = append(filtered, rss.FeedsDetail{Type: detail.Type, Feeds: staleFeeds})
+		}
+	}
+
+	return filtered
 }
 
 func (s *NewsletterService) handleOutput(contents []EmailContent) error {
@@ -610,7 +728,7 @@ const (
 	healthFailed
 )
 
-func checkFeed(u rss.Feeds, config *rss.Config, staleThreshold time.Duration) feedHealthStatus {
+func checkFeed(u *rss.Feeds, config *rss.Config, staleThreshold time.Duration) feedHealthStatus {
 	fp := gofeed.NewParser()
 	fp.UserAgent = rss.DefaultUserAgent
 	fp.Client = rss.NewHTTPClient(config)

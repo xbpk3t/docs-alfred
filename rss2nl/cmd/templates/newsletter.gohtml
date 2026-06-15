@@ -86,17 +86,17 @@
   {{end}}
   {{end}}
 
-  {{if .DashboardConfig.IsShowFeedDetail}}
+  {{if .DashboardConfig.FeedDetail.Enabled}}
   <h2>Feed Details</h2>
   {{range .DashboardData.FeedDetails}}
-  <h3>{{.Type}} <span class="muted">Count: {{len .URLs}}</span></h3>
+  <h3>{{.Type}} <span class="muted">Count: {{len .Feeds}}</span></h3>
   <table>
-    <thead><tr><th>Feed</th><th>Last Updated</th></tr></thead>
+    <thead><tr><th>Feed</th><th>Last Updated</th><th>Publish Freq</th></tr></thead>
     <tbody>
-    {{range .URLs}}
-    <tr><td><a href="{{if .URL}}{{.URL}}{{else}}{{.Feed}}{{end}}" target="_blank" rel="noreferrer">{{if .Des}}{{.Des}}{{else if .URL}}{{.URL}}{{else}}{{.Feed}}{{end}}</a></td><td>{{if .LastUpdated}}{{.LastUpdated}}{{else}}-{{end}}</td></tr>
+    {{range .Feeds}}
+    <tr><td><a href="{{if .URL}}{{.URL}}{{else}}{{.Feed}}{{end}}" target="_blank" rel="noreferrer">{{if .Des}}{{.Des}}{{else if .URL}}{{.URL}}{{else}}{{.Feed}}{{end}}</a></td><td>{{if .LastUpdated}}{{.LastUpdated}}{{else}}-{{end}}</td><td>{{if .PublishFreq}}{{.PublishFreq}}{{else}}-{{end}}</td></tr>
     {{else}}
-    <tr><td><span class="muted">note-only category, no feed urls</span></td><td>-</td></tr>
+    <tr><td><span class="muted">note-only category, no feed urls</span></td><td>-</td><td>-</td></tr>
     {{end}}
     </tbody>
   </table>

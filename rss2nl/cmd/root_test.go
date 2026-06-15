@@ -208,9 +208,9 @@ trns:
     enabled: false
   temporaryUpload:
     enabled: false
-feeds:
+rss:
   - type: podcast
-    urls:
+    feeds:
       - feed: %s
 `, limit, feedURL)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {

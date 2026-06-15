@@ -131,8 +131,22 @@ type fetchURLResult struct {
 	err  *FeedError
 }
 
-// FetchURLs 批量获取URLs.
+// FetchResult holds a fetched feed with its original URL.
+type FetchResult struct {
+	Feed *gofeed.Feed
+	Err  *FeedError
+	URL  string
+}
+
+// FetchURLs 批量获取URLs，返回成功和失败的 feeds.
 func FetchURLs(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed, []*FeedError) {
+	allFeeds, _, failedFeeds := FetchURLsWithMeta(ctx, urls, cfg)
+
+	return allFeeds, failedFeeds
+}
+
+// FetchURLsWithMeta 批量获取URLs，同时返回每个请求的结果元信息.
+func FetchURLsWithMeta(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed, []FetchResult, []*FeedError) {
 	results := make([]fetchURLResult, len(urls))
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(DefaultFeedFetchConcurrency)
@@ -149,8 +163,10 @@ func FetchURLs(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed,
 	_ = g.Wait()
 
 	allFeeds := make([]*gofeed.Feed, 0, len(urls))
+	meta := make([]FetchResult, 0, len(urls))
 	failedFeeds := make([]*FeedError, 0)
-	for _, result := range results {
+	for i, result := range results {
+		meta = append(meta, FetchResult{URL: urls[i], Feed: result.feed, Err: result.err})
 		if result.err != nil {
 			slog.Error("Failed to fetch feed",
 				slog.String(LogKeyURL, result.err.URL),
@@ -162,7 +178,7 @@ func FetchURLs(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed,
 		}
 	}
 
-	return allFeeds, failedFeeds
+	return allFeeds, meta, failedFeeds
 }
 
 // FilterFeedsWithTimeRange 根据时间范围过滤feeds.

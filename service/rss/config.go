@@ -14,12 +14,12 @@ import (
 // Config 主配置结构.
 type Config struct {
 	WikiConfig       WikiConfig       `yaml:"wiki,omitempty"`
-	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
 	ResendConfig     ResendConfig     `yaml:"resend"`
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
-	Feeds            []FeedsDetail    `yaml:"feeds"`
+	RSS              []FeedsDetail    `yaml:"rss"`
 	TrnsConfig       TrnsConfig       `yaml:"trns,omitempty"`
 	HuntConfig       HuntConfig       `yaml:"hunt,omitempty"`
+	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
 	FeedConfig       FeedConfig       `yaml:"feed"`
 	EnvConfig        EnvConfig        `yaml:"env"`
 }
@@ -46,13 +46,19 @@ type FeedConfig struct {
 type DashboardConfig struct {
 	FetchFailureReport     FeedFailureReportConfig `yaml:"fetchFailureReport,omitempty"`
 	IsShowFetchFailedFeeds bool                    `yaml:"isShowFetchFailedFeeds"`
-	IsShowFeedDetail       bool                    `yaml:"isShowFeedDetail"`
+	FeedDetail             FeedDetailConfig        `yaml:"feedDetail,omitempty"`
+}
+
+// FeedDetailConfig Feed详情展示配置.
+type FeedDetailConfig struct {
+	Enabled     bool `yaml:"enabled"`
+	StaleMonths int  `yaml:"staleMonths,omitempty"` // 0 = show all; >0 = only show feeds not updated for N months
 }
 
 // FeedsDetail Feed详情.
 type FeedsDetail struct {
-	Type string  `yaml:"type"`
-	URLs []Feeds `yaml:"urls"`
+	Type  string  `yaml:"type"`
+	Feeds []Feeds `yaml:"feeds"`
 }
 
 type EnvConfig struct {
@@ -65,6 +71,7 @@ type Feeds struct {
 	URL         string  `yaml:"url"`
 	Des         string  `yaml:"des"`
 	LastUpdated string  `yaml:"last_updated,omitempty"`
+	PublishFreq string  `yaml:"publish_freq,omitempty"` // items/month, e.g. "20/Month"
 	Score       float64 `yaml:"score,omitempty"`
 }
 

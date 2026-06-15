@@ -323,7 +323,7 @@ func buildBlockedSet(defaults, configBlocked, flagBlocked []string) map[string]b
 // -- Category processing --
 
 func filterCategories(cfg *rss.Config, categoryFilter []string) []rss.FeedsDetail {
-	categories := cfg.Feeds
+	categories := cfg.RSS
 	except := buildExceptSet(cfg)
 
 	if len(categoryFilter) > 0 {
@@ -400,7 +400,7 @@ func processCategory(
 		providerMax = perCat * 2
 	}
 
-	recentTopics := enrichTopics(category.URLs)
+	recentTopics := enrichTopics(category.Feeds)
 
 	for _, provider := range providerNames {
 		processCategoryProvider(provider, category.Type, seedURLs, seedDescs, providerMax,
@@ -410,7 +410,7 @@ func processCategory(
 
 //nolint:nonamedreturns
 func buildSeeds(category rss.FeedsDetail, seedLimit int) (seedURLs, seedDescs []string) {
-	for _, u := range category.URLs {
+	for _, u := range category.Feeds {
 		if u.URL != "" {
 			seedURLs = append(seedURLs, u.URL)
 		} else if u.Feed != "" {

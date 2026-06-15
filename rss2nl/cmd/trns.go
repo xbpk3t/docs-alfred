@@ -279,8 +279,8 @@ func runTrnsCheck(source string, flags *trnsFlags) error {
 	failedFeeds := 0
 	totalEpisodes := 0
 
-	for _, feed := range cfg.Feeds {
-		for _, u := range feed.URLs {
+	for _, feed := range cfg.RSS {
+		for _, u := range feed.Feeds {
 			if u.Feed == "" {
 				continue
 			}
@@ -359,9 +359,9 @@ func processPodcastFeeds(
 
 	var entries []trnsIndexEntry
 
-	for _, feed := range cfg.Feeds {
-		for _, u := range feed.URLs {
-			feedEntries := processFeedURL(u, outDir, limit, flags.refresh, cache, pipeline)
+	for _, feed := range cfg.RSS {
+		for _, u := range feed.Feeds {
+			feedEntries := processFeedURL(&u, outDir, limit, flags.refresh, cache, pipeline)
 			entries = append(entries, feedEntries...)
 		}
 	}
@@ -370,7 +370,7 @@ func processPodcastFeeds(
 }
 
 func processFeedURL(
-	u rss.Feeds,
+	u *rss.Feeds,
 	outDir string,
 	limit int,
 	refresh bool,
