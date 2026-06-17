@@ -58,6 +58,13 @@ func RunWikiCheck(input WikiCheckInput) (*WikiCheckResult, error) {
 	extra = filterContainerDirs(extra, expectedDirs)
 	issues := buildWikiIssues(missing, extra)
 
+	// Append OKF v0.1 frontmatter check.
+	okfIssues, err := RunWikiCheckOKF(input.WikiRoot)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, okfIssues...)
+
 	return &WikiCheckResult{
 		Issues:           issues,
 		ExpectedWikiDirs: expectedDirs,
