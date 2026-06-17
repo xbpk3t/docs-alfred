@@ -25,9 +25,6 @@ func TestLoadConfigPreservesDefaultsWithPartialFile(t *testing.T) {
 	require.Equal(t, "24h", cfg.Wiki.GhTopicsMaxAge)
 	require.True(t, cfg.Wiki.OpenCLIFallback)
 	require.True(t, cfg.Wiki.Media.Enabled)
-	require.Equal(t, "yt-dlp", cfg.Wiki.Media.SubtitleCLIPath)
-	require.False(t, cfg.Wiki.Media.ASR.Enabled)
-	require.Empty(t, cfg.Wiki.Media.ASR.CLIPath)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
 }
 
@@ -529,6 +526,13 @@ func (f *fakeWriter) WriteFailureEntry(
 	f.failures = append(f.failures, failureCall{url: item.URL, failureType: failureType, dryRun: opts.DryRun, extraInfo: extraInfo})
 
 	return filepath.Join(opts.WikiRoot, failureType.String()+"-failed.md"), nil
+}
+
+func (f *fakeWriter) WriteManualReviewEntry(item *wikisvc.ClassifyItem, opts *wikisvc.WriteOptions) (string, error) {
+	if f.failureErr != nil {
+		return "", f.failureErr
+	}
+	return filepath.Join(opts.WikiRoot, "uncat.md"), nil
 }
 
 type fakeInbox struct {

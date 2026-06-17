@@ -1,6 +1,7 @@
 package wiki
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -39,6 +40,7 @@ const (
 	FailureResolve  FailureKind = "resolve"
 	FailureExtract  FailureKind = "extract"
 	FailureClassify FailureKind = "classify"
+	FailureAI       FailureKind = "ai"
 )
 
 // String returns the stable wire value for the failure kind.
@@ -78,6 +80,13 @@ func lockPath(path string) func() {
 // WriteSummary writes a structured summary.md entry with YAML frontmatter.
 // Follows TS writer.ts: appendToSummaryFile.
 func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
+	if item.TopicPath == "" {
+		// Empty TopicPath would write to wiki root — route to classify rejection.
+		_, err := WriteFailureEntry(item, FailureClassify, "empty topic path", opts)
+
+		return "", err
+	}
+
 	topicDir := resolveTopicDir(item, opts)
 	summaryPath := filepath.Join(topicDir, "summary.md")
 	if opts.DryRun {
@@ -119,6 +128,11 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 
 	slog.Info("Summary written", "path", summaryPath, "topic", item.TopicPath)
 
+	// Log success to JSONL.
+	if _, err := LogSuccessEntry(item, summaryPath, opts); err != nil {
+		slog.Warn("Failed to log success entry", "url", item.URL, "error", err)
+	}
+
 	return summaryPath, nil
 }
 
@@ -132,11 +146,13 @@ func buildEntry(item *ClassifyItem) string {
 		title = item.URL
 	}
 
-	// Build codeblock metadata section.
-	metaBlock := item.MetadataBlock
-	if metaBlock == "" {
-		// Fallback: generate from URL + Type if no structured metadata.
-		metaBlock = fmt.Sprintf("URL: %s\nType: %s", item.URL, item.Type)
+	// Build codeblock metadata section. URL is always the first field.
+	metaBlock := fmt.Sprintf("URL: %s\n", item.URL)
+	if item.MetadataBlock != "" {
+		metaBlock += item.MetadataBlock
+	} else {
+		// Fallback: just Type if no structured metadata.
+		metaBlock += fmt.Sprintf("Type: %s", item.Type)
 	}
 
 	entry := fmt.Sprintf("### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, item.Summary)
@@ -224,51 +240,123 @@ func renderContent(fm *SummaryFrontmatter, body string) string {
 	return fmt.Sprintf("---\n%s---\n\n%s", string(fmYAML), body)
 }
 
-var failureFilenames = map[FailureKind]string{
-	FailureFetch:    "fetch-failed.md",
-	FailureResolve:  "resolve-failed.md",
-	FailureExtract:  "extract-failed.md",
-	FailureClassify: "group-failed.md",
-}
-
-// WriteFailureEntry writes a structured failure entry to the appropriate file
-// under <wikiRoot>/<failureType>-failed.md. Each file collects one type:
+// WriteFailureEntry logs a structured failure entry to the appropriate JSONL log
+// under <wikiRoot>/digest-<type>-error.jsonl. Each log file collects one type:
 //   - fetch:     network-level errors (DNS, timeout) with no opencli fallback
 //   - resolve:   HTTP-level errors (403 anti-bot) where opencli also failed
 //   - extract:   URL fetched but usable article/media content could not be extracted
 //   - classify:  content fetched but AI couldn't assign a topic
 //
-// Format is a structured markdown entry with title, failure reason, and content snippet.
+// The legacy MD file format is replaced by JSONL for machine-parseable diagnostics.
 func WriteFailureEntry(item *ClassifyItem, failureType FailureKind, extraInfo string, opts *WriteOptions) (string, error) {
-	filename, ok := failureFilenames[failureType]
-	if !ok {
-		return "", fmt.Errorf("unknown failure type: %s", failureType)
+	if opts == nil {
+		return "", errors.New("write options required for failure entry")
 	}
 
-	failedDir := opts.WikiRoot
-	path := filepath.Join(failedDir, filename)
+	entry := DigestEntry{
+		URL:         itemURL(item),
+		Stage:       digestStageForFailure(failureType),
+		Status:      DigestFailure,
+		FailureKind: string(failureType),
+		Error:       extraInfo,
+		TopicPath:   item.TopicPath,
+	}
 
+	path, err := LogDigestEntry(&entry, opts)
+	if err != nil {
+		return "", fmt.Errorf("log %s failure for %s: %w", failureType, itemURL(item), err)
+	}
+
+	slog.Info("Failure entry logged", "path", path, "type", failureType, "url", item.URL)
+
+	return path, nil
+}
+
+// LogSuccessEntry logs a successful pipeline outcome to digest-success.jsonl.
+func LogSuccessEntry(item *ClassifyItem, outputPath string, opts *WriteOptions) (string, error) {
+	if opts == nil {
+		return "", nil
+	}
+
+	entry := DigestEntry{
+		URL:        itemURL(item),
+		Stage:      StageWrite,
+		Status:     DigestSuccess,
+		TopicPath:  item.TopicPath,
+		OutputPath: outputPath,
+	}
+
+	return LogDigestEntry(&entry, opts)
+}
+
+// WriteManualReviewEntry appends a human-readable entry to wiki/uncat.md
+// for items with NeedsManualReview=true that have good AI-generated summaries.
+func WriteManualReviewEntry(item *ClassifyItem, opts *WriteOptions) (string, error) {
+	if opts == nil || item == nil {
+		return "", nil
+	}
+
+	path := filepath.Join(opts.WikiRoot, "uncat.md")
 	if opts.DryRun {
-		slog.Info("[DRY RUN] Would write failure entry", "path", path, "type", failureType)
+		slog.Info("[DRY RUN] Would append to uncat.md", "path", path, "url", item.URL)
 
 		return path, nil
 	}
 	unlock := lockPath(path)
 	defer unlock()
 
-	if err := fileutil.EnsureDir(failedDir); err != nil {
-		return "", fmt.Errorf("create failed dir: %w", err)
+	today := time.Now().Format("2006-01-02")
+	dateHeading := "## " + today
+
+	title := item.Title
+	if title == "" {
+		title = item.URL
 	}
 
-	entry := buildFailureEntry(item, extraInfo)
+	entry := fmt.Sprintf("\n### %s\n\nURL: %s\n\n%s\n", title, item.URL, item.Summary)
 
-	if err := appendToFile(path, entry); err != nil {
-		return "", err
+	var existing strings.Builder
+	if data, err := os.ReadFile(path); err == nil {
+		existing.Write(data)
 	}
 
-	slog.Info("Failure entry written", "path", path, "type", failureType, "url", item.URL)
+	var newContent string
+	if strings.Contains(existing.String(), dateHeading) {
+		newContent = appendEntryToExistingDateSection(existing.String(), dateHeading, entry)
+	} else if existing.Len() > 0 {
+		newContent = fmt.Sprintf("%s\n%s\n\n%s\n", strings.TrimRight(existing.String(), "\n"), dateHeading, entry)
+	} else {
+		newContent = fmt.Sprintf("%s\n\n%s\n", dateHeading, entry)
+	}
+
+	if err := fileutil.AtomicWriteFile(path, []byte(newContent), fileutil.FilePermPrivate); err != nil {
+		return "", fmt.Errorf("write uncat.md: %w", err)
+	}
+
+	slog.Info("Manual review entry appended", "path", path, "url", item.URL)
 
 	return path, nil
+}
+
+func itemURL(item *ClassifyItem) string {
+	if item == nil {
+		return ""
+	}
+
+	return item.URL
+}
+
+func digestStageForFailure(failureType FailureKind) DigestStage {
+	switch failureType {
+	case FailureFetch, FailureResolve:
+		return StageFetch
+	case FailureExtract:
+		return StageExtract
+	case FailureClassify:
+		return StageClassify
+	default:
+		return StageClassify
+	}
 }
 
 func buildFailureEntry(item *ClassifyItem, extraInfo string) string {
@@ -296,6 +384,7 @@ func buildFailureEntry(item *ClassifyItem, extraInfo string) string {
 `, title, item.URL, extraInfo, bodySnippet)
 }
 
+// nolint: unused
 func appendToFile(path, content string) error {
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileutil.FilePermPrivate)
 	if err != nil {

@@ -45,13 +45,14 @@ const (
 
 // ClassifyItem holds the full classification result for a URL.
 type ClassifyItem struct {
-	URL           string       `json:"url"`
-	Title         string       `json:"title"`
-	ContentType   string       `json:"contentType"`
-	TopicPath     string       `json:"topicPath"`
-	Type          ClassifyType `json:"type"`
-	Summary       string       `json:"summary"`
-	MetadataBlock string       `json:"metadataBlock,omitempty"`
+	URL               string       `json:"url"`
+	Title             string       `json:"title"`
+	ContentType       string       `json:"contentType"`
+	TopicPath         string       `json:"topicPath"`
+	Type              ClassifyType `json:"type"`
+	Summary           string       `json:"summary"`
+	MetadataBlock     string       `json:"metadataBlock,omitempty"`
+	NeedsManualReview bool         `json:"needsManualReview,omitempty"`
 }
 
 // ClassifyResult is the structured output from classifyItem.
@@ -108,7 +109,7 @@ func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string, opts ..
 		GhTopicsURL:    ghTopicsURL,
 		GhTopicsMaxAge: ghindex.DefaultMaxAge,
 		CandidateLimit: 120,
-		MinConfidence:  0.45,
+		MinConfidence:  0.30,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -692,6 +693,10 @@ func (c *Classifier) validateAIClassification(
 	candidates []ghindex.TopicCandidate,
 	detectedContentType string,
 ) (*ClassifyResult, error) {
+	if c.isManualReviewWithGoodContent(result) {
+		return c.uncategorizedClassifyResult(result, detectedContentType), nil
+	}
+
 	if err := c.validateAIClassificationBasics(result); err != nil {
 		return nil, err
 	}
@@ -733,6 +738,30 @@ func (c *Classifier) validateAIClassification(
 	}, nil
 }
 
+// uncategorizedClassifyResult produces a ClassifyResult with NeedsManualReview=true
+// and TopicPath=uncategorized, preserving the AI-generated summary. Used when the
+// AI has good content but no matching topic — the write layer will route to uncat.md.
+func (c *Classifier) uncategorizedClassifyResult(result *aiClassification, detectedContentType string) *ClassifyResult {
+	return &ClassifyResult{
+		TopicPath:         fallbackUncategorized(c.WikiRoot, nil),
+		WikiType:          result.WikiType,
+		ContentType:       detectedContentType,
+		Summary:           renderStructuredSummary(result.Summary),
+		MetadataBlock:     "",
+		Confidence:        result.Confidence,
+		NeedsManualReview: true,
+	}
+}
+
+// isManualReviewWithGoodContent returns true when the AI explicitly marked
+// NeedsManualReview but still produced a valid summary — meaning the content was
+// good, only the topic match failed. In this case we route to uncategorized
+// rather than rejecting outright.
+func (c *Classifier) isManualReviewWithGoodContent(result *aiClassification) bool {
+	return result != nil && result.NeedsManualReview &&
+		result.Summary != nil && strings.TrimSpace(result.Summary.Overview) != ""
+}
+
 func (c *Classifier) validateAIClassificationBasics(result *aiClassification) error {
 	if result == nil {
 		return errors.New("classification result is nil")
@@ -759,16 +788,27 @@ func (c *Classifier) validateAIClassificationTopic(
 ) (string, error) {
 	topicPath := strings.TrimSpace(result.TopicPath)
 	if topicPath == "" || topicPath == noneVal || topicPath == "inbox" {
-		return "", errors.New("AI did not select a topic")
+		return fallbackUncategorized(c.WikiRoot, candidates), nil
 	}
+	//nolint: nilerr // validate path only for candidate lookup; fallback on any error.
 	if err := ValidateRelativeWikiPath(c.WikiRoot, topicPath); err != nil {
-		return "", err
+		return fallbackUncategorized(c.WikiRoot, candidates), nil
 	}
 	if !candidatePathSet(candidates)[topicPath] {
-		return "", fmt.Errorf("topic path not in candidates: %s", topicPath)
+		return fallbackUncategorized(c.WikiRoot, candidates), nil
 	}
 
 	return topicPath, nil
+}
+
+// fallbackUncategorized returns "zzz/ss/uncategorized" if it exists in the
+// candidate set, otherwise creates and returns it as a hardcoded fallback.
+func fallbackUncategorized(wikiRoot string, candidates []ghindex.TopicCandidate) string {
+	if candidatePathSet(candidates)["zzz/ss/uncategorized"] {
+		return "zzz/ss/uncategorized"
+	}
+	// Even if not in candidates, accept it — WriteSummary will create the dir.
+	return "zzz/ss/uncategorized"
 }
 
 func validateAIClassificationSummary(result *aiClassification) (string, error) {

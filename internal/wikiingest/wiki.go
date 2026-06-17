@@ -47,26 +47,16 @@ type WikiConfig struct {
 	GhTopicsURL       string          `default:"https://cdn.lucc.dev/gh.yml" validate:"required,url" yaml:"ghTopicsURL"`
 	GhTopicsCachePath string          `yaml:"ghTopicsCachePath"`
 	GhTopicsMaxAge    string          `default:"24h"                         validate:"required"     yaml:"ghTopicsMaxAge"`
-	Media             wikiMediaConfig `yaml:"media"`
 	Concurrency       int             `default:"5"                           validate:"gte=1"        yaml:"concurrency"`
 	PerURLTimeout     int             `default:"180"                         validate:"gte=1"        yaml:"perURLTimeout"`
 	MaxRetries        int             `default:"3"                           validate:"gte=0"        yaml:"maxRetries"`
+	Media             wikiMediaConfig `yaml:"media"`
 	OpenCLIFallback   bool            `default:"true"                        yaml:"opencliFallback"`
 }
 
-// wikiMediaConfig contains media transcript extraction settings.
+// wikiMediaConfig controls media content extraction.
 type wikiMediaConfig struct {
-	ASR             wikiASRConfig `yaml:"asr"`
-	SubtitleCLIPath string        `default:"yt-dlp"     yaml:"subtitleCLIPath"`
-	SubtitleLangs   []string      `yaml:"subtitleLangs"`
-	Enabled         bool          `default:"true"       yaml:"enabled"`
-}
-
-// wikiASRConfig is reserved for a future audio transcription fallback.
-type wikiASRConfig struct {
-	CLIPath  string `yaml:"cliPath"`
-	Language string `yaml:"language"`
-	Enabled  bool   `yaml:"enabled"`
+	Enabled bool `default:"true" yaml:"enabled"`
 }
 
 // AIConfig contains AI model settings.
@@ -296,6 +286,10 @@ type writer interface {
 		item *wikisvc.ClassifyItem,
 		failureType wikisvc.FailureKind,
 		extraInfo string,
+		opts *wikisvc.WriteOptions,
+	) (string, error)
+	WriteManualReviewEntry(
+		item *wikisvc.ClassifyItem,
 		opts *wikisvc.WriteOptions,
 	) (string, error)
 }
@@ -588,8 +582,12 @@ func prepareInboxEntry(
 		retry.LastErrorOnly(true),
 		retry.RetryIf(func(err error) bool {
 			var fetchErr *fetchFailureError
+			if errors.As(err, &fetchErr) {
+				return true
+			}
+			var classifyErr *classifyRetryError
 
-			return errors.As(err, &fetchErr)
+			return errors.As(err, &classifyErr)
 		}),
 		retry.OnRetry(func(n uint, retryErr error) {
 			slog.Warn("Retrying processing wiki URL", "url", entry.URL, "attempt", n+1, "error", retryErr)
@@ -604,6 +602,11 @@ func prepareInboxEntry(
 		return newPendingFetchFailure(entry.URL, fetchErr.failureType, fetchErr.Error())
 	}
 
+	var classifyErr *classifyRetryError
+	if errors.As(err, &classifyErr) {
+		return newPendingAIError(entry.URL, classifyErr.Error())
+	}
+
 	return newPendingUnhandled(entry.URL, err.Error())
 }
 
@@ -612,7 +615,9 @@ type pendingWriteKind string
 const (
 	pendingSummary         pendingWriteKind = "summary"
 	pendingClassifyFailure pendingWriteKind = "classify_failure"
+	pendingExtractFailure  pendingWriteKind = "extract_failure"
 	pendingFetchFailure    pendingWriteKind = "fetch_failure"
+	pendingAIError         pendingWriteKind = "ai_error"
 	pendingUnhandled       pendingWriteKind = "unhandled"
 )
 
@@ -645,11 +650,17 @@ func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) (
 		title = urlStr
 	}
 
-	classResult := deps.classifier.ClassifyURL(ctx, urlStr, title, fetchResult.Body)
+	content := fetchResult.Body
+	classResult := deps.classifier.ClassifyURL(ctx, urlStr, title, content)
 	if classResult == nil {
-		item := &wikisvc.ClassifyItem{URL: urlStr, Title: title, ContentType: contentType}
+		// Distinguish: empty content is a permanent classify failure (content-side issue);
+		// non-empty content with nil classifier means AI call failed (transient).
+		item := &wikisvc.ClassifyItem{URL: urlStr, Title: title, ContentType: contentType, Summary: content}
+		if strings.TrimSpace(content) == "" {
+			return pendingExtractFailureWrite(item, "extraction failed: empty content"), nil
+		}
 
-		return pendingClassifyFailureWrite(item, "classification failed (returned nil)"), nil
+		return pendingURLWrite{}, &classifyRetryError{message: "classification failed: AI error"}
 	}
 
 	item := &wikisvc.ClassifyItem{
@@ -681,6 +692,20 @@ func pendingClassifyFailureWrite(item *wikisvc.ClassifyItem, extraInfo string) p
 	}
 }
 
+func pendingExtractFailureWrite(item *wikisvc.ClassifyItem, extraInfo string) pendingURLWrite {
+	return pendingURLWrite{
+		URL:         item.URL,
+		Kind:        pendingExtractFailure,
+		Item:        item,
+		FailureType: wikisvc.FailureExtract,
+		ExtraInfo:   extraInfo,
+	}
+}
+
+func newPendingAIError(urlStr, message string) pendingURLWrite {
+	return pendingURLWrite{URL: urlStr, Kind: pendingAIError, Error: message}
+}
+
 func newPendingFetchFailure(urlStr string, failureType wikisvc.FailureKind, extraInfo string) pendingURLWrite {
 	return pendingURLWrite{URL: urlStr, Kind: pendingFetchFailure, FailureType: failureType, ExtraInfo: extraInfo}
 }
@@ -700,6 +725,8 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 		return writeClassifyFailure(deps, wikiRoot, pending.Item, pending.ExtraInfo, dryRun)
 	case pendingFetchFailure:
 		return writeFetchFailure(deps, wikiRoot, pending.URL, pending.FailureType, pending.ExtraInfo, dryRun)
+	case pendingAIError:
+		return writeAIError(deps, wikiRoot, pending.URL, pending.Error, dryRun)
 	case pendingUnhandled:
 		return URLResult{URL: pending.URL, Status: StatusUnhandledError, Error: pending.Error}
 	default:
@@ -708,6 +735,33 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 }
 
 func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyItem, dryRun bool) URLResult {
+	// Items with NeedsManualReview and good content get written to wiki/uncat.md
+	// for manual triage, not under a topic dir.
+	if item.NeedsManualReview {
+		path, err := deps.writer.WriteManualReviewEntry(
+			item,
+			&wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun},
+		)
+		if err != nil {
+			return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("write manual review: %v", err)}
+		}
+
+		status := StatusSummaryWritten
+		if dryRun {
+			status = StatusDryRunSummary
+		}
+
+		return URLResult{
+			URL:         item.URL,
+			Status:      status,
+			Handled:     true,
+			OutputPath:  path,
+			TopicPath:   item.TopicPath,
+			WikiType:    string(item.Type),
+			ContentType: item.ContentType,
+		}
+	}
+
 	path, err := deps.writer.WriteSummary(item, &wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun})
 	if err != nil {
 		return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("write summary: %v", err)}
@@ -732,6 +786,11 @@ func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyIte
 func shouldWriteClassifyFailure(result *wikisvc.ClassifyResult) bool {
 	if result == nil {
 		return true
+	}
+	// If NeedsManualReview but already routed to uncategorized (content was good,
+	// only topic was missing), treat as success — write layer will use uncat.md.
+	if result.NeedsManualReview && result.TopicPath == "zzz/ss/uncategorized" {
+		return false
 	}
 
 	return result.RejectReason != "" || result.NeedsManualReview || result.WikiType == wikisvc.TypeInbox ||
@@ -844,12 +903,59 @@ func writeFetchFailure(
 	}
 }
 
+func writeAIError(
+	deps *dependencies,
+	wikiRoot,
+	urlStr,
+	message string,
+	dryRun bool,
+) URLResult {
+	item := &wikisvc.ClassifyItem{URL: urlStr, Title: urlStr}
+	path, err := deps.writer.WriteFailureEntry(
+		item,
+		wikisvc.FailureAI,
+		message,
+		&wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun},
+	)
+	if err != nil {
+		return URLResult{
+			URL:         urlStr,
+			Status:      StatusUnhandledError,
+			FailureType: wikisvc.FailureAI,
+			Error:       fmt.Sprintf("write AI error: %v", err),
+		}
+	}
+
+	status := StatusFailureWritten
+	if dryRun {
+		status = StatusDryRunFailure
+	}
+
+	return URLResult{
+		URL:         urlStr,
+		Status:      status,
+		Handled:     true,
+		OutputPath:  path,
+		FailureType: wikisvc.FailureAI,
+	}
+}
+
 type fetchFailureError struct {
 	failureType wikisvc.FailureKind
 	message     string
 }
 
 func (e *fetchFailureError) Error() string {
+	return e.message
+}
+
+// classifyRetryError is returned when a transient classifcation failure occurs
+// (AI timeout, rate limit, invalid response) that may succeed on retry.
+type classifyRetryError struct {
+	message string
+}
+
+func (e *classifyRetryError) Error() string {
 	return e.message
 }
 
@@ -977,8 +1083,6 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		deps.fetcher = wikisvc.NewFetcher(
 			wikisvc.WithOpenCLIFallback(cfg.Wiki.OpenCLIFallback),
 			wikisvc.WithMediaEnabled(cfg.Wiki.Media.Enabled),
-			wikisvc.WithSubtitleCLIPath(cfg.Wiki.Media.SubtitleCLIPath),
-			wikisvc.WithSubtitleLangs(cfg.Wiki.Media.SubtitleLangs),
 		)
 	}
 	if deps.classifier == nil {
@@ -1025,6 +1129,13 @@ func (serviceWriter) WriteFailureEntry(
 	opts *wikisvc.WriteOptions,
 ) (string, error) {
 	return wikisvc.WriteFailureEntry(item, failureType, extraInfo, opts)
+}
+
+func (serviceWriter) WriteManualReviewEntry(
+	item *wikisvc.ClassifyItem,
+	opts *wikisvc.WriteOptions,
+) (string, error) {
+	return wikisvc.WriteManualReviewEntry(item, opts)
 }
 
 type serviceInboxStore struct{}

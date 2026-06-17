@@ -55,9 +55,9 @@ func TestParseAIClassificationRejectsInvalidJSON(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestValidateAIClassificationRejectsTopicOutsideCandidates(t *testing.T) {
+func TestValidateAIClassificationFallsBackToUncategorized(t *testing.T) {
 	classifier := NewClassifier(nil, t.TempDir(), "", WithCandidateLimit(10))
-	_, err := classifier.validateAIClassification(&aiClassification{
+	result, err := classifier.validateAIClassification(&aiClassification{
 		TopicPath:   "ai/tool/missing",
 		WikiType:    TypeDeepDive,
 		ContentType: ContentText,
@@ -65,8 +65,8 @@ func TestValidateAIClassificationRejectsTopicOutsideCandidates(t *testing.T) {
 		Confidence:  0.9,
 	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, ContentText)
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not in candidates")
+	require.NoError(t, err)
+	assert.Equal(t, "zzz/ss/uncategorized", result.TopicPath)
 }
 
 func TestValidateAIClassificationRejectsLowConfidence(t *testing.T) {
