@@ -47,11 +47,11 @@ type WikiConfig struct {
 	GhTopicsURL       string          `default:"https://cdn.lucc.dev/gh.yml" validate:"required,url" yaml:"ghTopicsURL"`
 	GhTopicsCachePath string          `yaml:"ghTopicsCachePath"`
 	GhTopicsMaxAge    string          `default:"24h"                         validate:"required"     yaml:"ghTopicsMaxAge"`
+	FetchStrategy     string          `default:"opencli"                     yaml:"fetchStrategy"`
 	Concurrency       int             `default:"5"                           validate:"gte=1"        yaml:"concurrency"`
 	PerURLTimeout     int             `default:"180"                         validate:"gte=1"        yaml:"perURLTimeout"`
 	MaxRetries        int             `default:"3"                           validate:"gte=0"        yaml:"maxRetries"`
 	Media             wikiMediaConfig `yaml:"media"`
-	OpenCLIFallback   bool            `default:"true"                        yaml:"opencliFallback"`
 }
 
 // wikiMediaConfig controls media content extraction.
@@ -1035,6 +1035,15 @@ func handledURLsByLine(results []URLResult) map[int][]string {
 	return processed
 }
 
+func parseFetchStrategy(s string) wikisvc.FetchStrategy {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "http":
+		return wikisvc.FetchStrategyHTTP
+	default:
+		return wikisvc.FetchStrategyOpenCLI
+	}
+}
+
 func resolveWikiRoot(cfg *Config) string {
 	if cfg.Wiki.WikiRoot != "" {
 		return cfg.Wiki.WikiRoot
@@ -1081,7 +1090,7 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 	}
 	if deps.fetcher == nil {
 		deps.fetcher = wikisvc.NewFetcher(
-			wikisvc.WithOpenCLIFallback(cfg.Wiki.OpenCLIFallback),
+			wikisvc.WithStrategy(parseFetchStrategy(cfg.Wiki.FetchStrategy)),
 			wikisvc.WithMediaEnabled(cfg.Wiki.Media.Enabled),
 		)
 	}
