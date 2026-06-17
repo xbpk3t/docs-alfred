@@ -23,6 +23,7 @@ type SummaryFrontmatter struct {
 	Title     string `yaml:"title"`
 	Date      string `yaml:"date"`
 	Source    string `yaml:"source"`
+	Type      string `yaml:"type"`
 	BatchID   string `yaml:"batch_id"`
 	TotalURLs int    `yaml:"total_urls"`
 	Succeeded int    `yaml:"succeeded"`
@@ -160,6 +161,7 @@ func loadFrontmatter(summaryPath string, item *ClassifyItem, today, batchID stri
 		Title:     filepath.Base(item.TopicPath),
 		Date:      today,
 		Source:    "rss2nl-wiki",
+		Type:      string(item.Type),
 		BatchID:   batchID,
 		TotalURLs: 0,
 		Succeeded: 0,

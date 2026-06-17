@@ -32,7 +32,7 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 	client := linear.NewClient(cfg.Linear.APIKey, cfg.Linear.TeamKeys)
 	aiClient := internal.NewAIProvider(cfg.AI)
 
-	todayStart := carbon.Now().StartOfDay().StdTime()
+	todayStart := carbon.Yesterday().StartOfDay().StdTime()
 
 	eq, err := queryEveningData(ctx, client, todayStart)
 	if err != nil {
@@ -50,7 +50,7 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 	changeViews := toStateChangeViews(changes)
 	summaryHTML := attachPerIssueReviews(aiClient, relevantDetails, completedViews, changeViews)
 
-	now := carbon.Now()
+	now := carbon.Yesterday()
 	data := internal.EveningData{
 		Date:         now.ToDateString(),
 		DayOfWeek:    now.ToShortWeekString(),
