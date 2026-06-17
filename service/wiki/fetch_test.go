@@ -36,95 +36,11 @@ func TestFetchHTTPPageRejectsLowQualitySuccess(t *testing.T) {
 	require.Contains(t, result.Error, "low quality")
 }
 
-func TestFetchVideoTranscriptMissingYTDLPSoftFails(t *testing.T) {
-	fetcher := NewFetcher(WithSubtitleCLIPath(filepath.Join(t.TempDir(), "missing-yt-dlp")))
 
-	result := fetcher.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", ContentVideo)
 
-	require.NotNil(t, result)
-	require.Contains(t, result.Error, "extract:")
-	require.Contains(t, result.Error, "subtitle CLI not found")
-}
 
-func TestFetchVideoTranscriptUsesPreferredSubtitle(t *testing.T) {
-	subtitleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", subtitleContentTypeVTT)
-		_, _ = w.Write([]byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n你好，世界\n"))
-	}))
-	t.Cleanup(subtitleServer.Close)
 
-	ytdlp := filepath.Join(t.TempDir(), "yt-dlp")
-	script := `#!/bin/sh
-has_ignore_config=0
-for arg in "$@"; do
-	if [ "$arg" = "--ignore-config" ]; then
-		has_ignore_config=1
-	fi
-done
-if [ "$has_ignore_config" -ne 1 ]; then
-	echo "missing --ignore-config" >&2
-	exit 2
-fi
-cat <<'JSON'
-` + `{"title":"测试视频","language":"` + subtitleLangZhCN + `","subtitles":{"` + subtitleLangZhHans + `":[{"url":"` + subtitleServer.URL + `/sub.vtt","ext":"` + subtitleExtVTT + `"}]}}` + `
-JSON
-`
-	require.NoError(t, os.WriteFile(ytdlp, []byte(script), 0o700))
 
-	fetcher := NewFetcher(WithSubtitleCLIPath(ytdlp))
-	result := fetcher.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", ContentVideo)
-
-	require.NotNil(t, result)
-	require.Empty(t, result.Error)
-	assert.Equal(t, "测试视频", result.Title)
-	assert.Contains(t, result.Body, "你好，世界")
-	assert.Contains(t, result.Body, "subtitle:manual:zh-Hans")
-}
-
-func TestPickSubtitleFromMapMatchesLanguageTags(t *testing.T) {
-	subtitles := map[string][]ytdlpSubtitle{
-		"en-US":            {{URL: "https://example.com/en.vtt", Ext: subtitleExtVTT}},
-		subtitleLangZhHant: {{URL: "https://example.com/zh.vtt", Ext: subtitleExtVTT}},
-	}
-
-	lang, item, ok := pickSubtitleFromMap(subtitles, []string{subtitleLangZhTW, subtitleLangEnglish})
-
-	require.True(t, ok)
-	assert.Equal(t, subtitleLangZhHant, lang)
-	assert.Equal(t, "https://example.com/zh.vtt", item.URL)
-}
-
-func TestPickSubtitleFromMapPrefersEnglishTags(t *testing.T) {
-	subtitles := map[string][]ytdlpSubtitle{
-		"fr":    {{URL: "https://example.com/fr.vtt", Ext: subtitleExtVTT}},
-		"en-GB": {{URL: "https://example.com/en.vtt", Ext: subtitleExtVTT}},
-	}
-
-	lang, item, ok := pickSubtitleFromMap(subtitles, []string{subtitleLangEnglish})
-
-	require.True(t, ok)
-	assert.Equal(t, "en-GB", lang)
-	assert.Equal(t, "https://example.com/en.vtt", item.URL)
-}
-
-func TestPickSubtitleFromMapFallsBackDeterministically(t *testing.T) {
-	subtitles := map[string][]ytdlpSubtitle{
-		"zz": {{URL: "https://example.com/zz.vtt", Ext: subtitleExtVTT}},
-		"aa": {{URL: "https://example.com/aa.vtt", Ext: subtitleExtVTT}},
-	}
-
-	lang, item, ok := pickSubtitleFromMap(subtitles, []string{subtitleLangEnglish})
-
-	require.True(t, ok)
-	assert.Equal(t, "aa", lang)
-	assert.Equal(t, "https://example.com/aa.vtt", item.URL)
-}
-
-func TestMetadataLooksChineseUsesLanguageTagsAndTextFallback(t *testing.T) {
-	assert.True(t, metadataLooksChinese(&ytdlpMetadata{Language: subtitleLangMandarin}))
-	assert.True(t, metadataLooksChinese(&ytdlpMetadata{Title: "测试视频"}))
-	assert.False(t, metadataLooksChinese(&ytdlpMetadata{Language: subtitleLangEnglish, Title: "demo"}))
-}
 
 func TestFetchPodcastTranscriptUsesRSSTranscript(t *testing.T) {
 	transcriptServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -168,13 +84,6 @@ func TestFetchDirectAudioDoesNotRunASR(t *testing.T) {
 	require.Contains(t, result.Error, "direct audio URL has no RSS metadata")
 }
 
-func TestMediaContentResultTruncatesUTF8Safely(t *testing.T) {
-	result := mediaContentResult("title", "https://example.com/audio", "rss-transcript", strings.Repeat("你好", 100), 5)
-
-	require.NotNil(t, result)
-	assert.True(t, utf8.ValidString(result.Body))
-	assert.Contains(t, result.Body, "...")
-}
 
 func TestExtractWithReadabilityTruncatesUTF8Safely(t *testing.T) {
 	fetcher := NewFetcher()

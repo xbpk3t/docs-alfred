@@ -3,18 +3,14 @@ package wiki
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 	"time"
-	"unicode"
 
 	"codeberg.org/readeck/go-readability/v2"
 	"github.com/PuerkitoBio/goquery"
@@ -23,9 +19,9 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/transcript"
 	"github.com/xbpk3t/docs-alfred/pkg/htmlutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/xbpk3t/docs-alfred/pkg/opencli"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
-	"golang.org/x/text/language"
 )
 
 // ContentFetchResult holds fetched content metadata and body.
@@ -42,8 +38,6 @@ type Fetcher struct {
 	GHClient        *http.Client
 	HTTPClient      *http.Client
 	GHBaseURL       string
-	SubtitleCLIPath string
-	SubtitleLangs   []string
 	MaxBodySize     int
 	OpenCLIFallback bool
 	MediaEnabled    bool
@@ -60,14 +54,6 @@ func WithMediaEnabled(enabled bool) FetcherOption {
 	return func(f *Fetcher) { f.MediaEnabled = enabled }
 }
 
-func WithSubtitleCLIPath(path string) FetcherOption {
-	return func(f *Fetcher) { f.SubtitleCLIPath = path }
-}
-
-func WithSubtitleLangs(langs []string) FetcherOption {
-	return func(f *Fetcher) { f.SubtitleLangs = append([]string(nil), langs...) }
-}
-
 // NewFetcher creates a new Fetcher with default settings.
 func NewFetcher(opts ...FetcherOption) *Fetcher {
 	f := &Fetcher{
@@ -77,7 +63,6 @@ func NewFetcher(opts ...FetcherOption) *Fetcher {
 		MaxBodySize:     5000,
 		OpenCLIFallback: true,
 		MediaEnabled:    true,
-		SubtitleCLIPath: "yt-dlp",
 	}
 	for _, opt := range opts {
 		opt(f)
@@ -91,6 +76,10 @@ func NewFetcher(opts ...FetcherOption) *Fetcher {
 
 // FetchContent fetches content based on the URL pattern.
 // Supports GitHub repos, YouTube, Bilibili, and generic HTTP pages.
+// FetchContent fetches content based on the URL pattern.
+// Supports GitHub repos, podcasts, and generic HTTP pages.
+// Video content (YouTube, Bilibili) is fetched via HTTP → opencli fallback,
+// with the YouTube/Bilibili opencli adapters extracting metadata and transcripts.
 func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) *ContentFetchResult {
 	slog.Info("FetchContent", "url", urlStr, "type", contentType)
 
@@ -108,7 +97,7 @@ func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) 
 			return extractFailure(urlStr, "media extraction disabled")
 		}
 
-		return f.fetchVideoTranscript(ctx, urlStr)
+		return f.fetchHTTPPage(ctx, urlStr)
 	case contentType == ContentAudio || isPodcastLikeURL(u) || isDirectAudioURL(u):
 		if !f.MediaEnabled {
 			return extractFailure(urlStr, "media extraction disabled")
@@ -189,238 +178,6 @@ func (f *Fetcher) githubClient() (*github.Client, error) {
 	return client, nil
 }
 
-type ytdlpMetadata struct {
-	Subtitles         map[string][]ytdlpSubtitle `json:"subtitles"`
-	AutomaticCaptions map[string][]ytdlpSubtitle `json:"automatic_captions"`
-	Title             string                     `json:"title"`
-	Description       string                     `json:"description"`
-	Language          string                     `json:"language"`
-	WebpageURL        string                     `json:"webpage_url"`
-}
-
-type ytdlpSubtitle struct {
-	URL  string `json:"url"`
-	Ext  string `json:"ext"`
-	Name string `json:"name"`
-}
-
-const (
-	subtitleLangEnglish    = "en"
-	subtitleLangChinese    = "zh"
-	subtitleLangZhHans     = "zh-Hans"
-	subtitleLangZhCN       = "zh-CN"
-	subtitleLangZhHant     = "zh-Hant"
-	subtitleLangZhTW       = "zh-TW"
-	subtitleLangMandarin   = "cmn"
-	subtitleLangZho        = "zho"
-	subtitleLangChi        = "chi"
-	subtitleExtVTT         = "vtt"
-	subtitleExtWebVTT      = "webvtt"
-	subtitleContentTypeVTT = "text/vtt"
-)
-
-type subtitlePick struct {
-	Language string
-	Source   string
-	Item     ytdlpSubtitle
-}
-
-func (f *Fetcher) fetchVideoTranscript(ctx context.Context, rawURL string) *ContentFetchResult {
-	meta, err := f.loadVideoMetadata(ctx, rawURL)
-	if err != nil {
-		return extractFailure(rawURL, err.Error())
-	}
-
-	pick, ok := pickVideoSubtitle(meta, f.videoSubtitleLangs(rawURL, meta))
-	if !ok {
-		return extractFailure(rawURL, "no subtitle or automatic caption available")
-	}
-
-	data, err := httputil.GetBytes(ctx, pick.Item.URL, httputil.RequestOptions{Timeout: httputil.DefaultClientTimeout})
-	if err != nil {
-		return extractFailure(rawURL, "fetch subtitle: "+err.Error())
-	}
-	contentType := transcript.DetectContentType(pick.Item.URL, subtitleDeclaredType(pick.Item.Ext), data)
-	body := transcript.NormalizeContent(string(data), contentType)
-	if strings.TrimSpace(body) == "" {
-		return extractFailure(rawURL, "subtitle normalized to empty content")
-	}
-
-	title := strings.TrimSpace(meta.Title)
-	if title == "" {
-		title = rawURL
-	}
-
-	return mediaContentResult(title, rawURL, fmt.Sprintf("subtitle:%s:%s", pick.Source, pick.Language), body, f.mediaMaxBodySize())
-}
-
-func (f *Fetcher) loadVideoMetadata(ctx context.Context, rawURL string) (*ytdlpMetadata, error) {
-	cliPath := strings.TrimSpace(f.SubtitleCLIPath)
-	if cliPath == "" {
-		cliPath = "yt-dlp"
-	}
-	if !commandAvailable(cliPath) {
-		return nil, fmt.Errorf("subtitle CLI not found: %s", cliPath)
-	}
-
-	cmd := exec.CommandContext(ctx, cliPath, "--ignore-config", "--dump-json", "--skip-download", "--no-warnings", rawURL)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("yt-dlp metadata: %w (stderr: %s)", err, strings.TrimSpace(stderr.String()))
-	}
-	if strings.TrimSpace(stdout.String()) == "" {
-		return nil, errors.New("yt-dlp returned empty metadata")
-	}
-
-	var meta ytdlpMetadata
-	if err := json.Unmarshal(stdout.Bytes(), &meta); err != nil {
-		return nil, fmt.Errorf("parse yt-dlp metadata: %w", err)
-	}
-	if meta.WebpageURL == "" {
-		meta.WebpageURL = rawURL
-	}
-
-	return &meta, nil
-}
-
-func (f *Fetcher) videoSubtitleLangs(rawURL string, meta *ytdlpMetadata) []string {
-	if len(f.SubtitleLangs) > 0 {
-		return f.SubtitleLangs
-	}
-	if isBilibiliURL(strings.ToLower(rawURL)) || metadataLooksChinese(meta) {
-		return []string{
-			subtitleLangZhHans,
-			subtitleLangZhCN,
-			subtitleLangChinese,
-			subtitleLangZhHant,
-			subtitleLangZhTW,
-			subtitleLangMandarin,
-			subtitleLangZho,
-			subtitleLangChi,
-			subtitleLangEnglish,
-		}
-	}
-
-	return []string{subtitleLangEnglish, "en-US", "en-GB", subtitleLangZhHans, subtitleLangZhCN, subtitleLangChinese}
-}
-
-func pickVideoSubtitle(meta *ytdlpMetadata, langs []string) (subtitlePick, bool) {
-	if meta == nil {
-		return subtitlePick{}, false
-	}
-	if lang, item, ok := pickSubtitleFromMap(meta.Subtitles, langs); ok {
-		return subtitlePick{Language: lang, Source: "manual", Item: item}, true
-	}
-	if lang, item, ok := pickSubtitleFromMap(meta.AutomaticCaptions, langs); ok {
-		return subtitlePick{Language: lang, Source: "auto", Item: item}, true
-	}
-
-	return subtitlePick{}, false
-}
-
-func pickSubtitleFromMap(subtitles map[string][]ytdlpSubtitle, langs []string) (string, ytdlpSubtitle, bool) {
-	if len(subtitles) == 0 {
-		return "", ytdlpSubtitle{}, false
-	}
-	for _, want := range langs {
-		for _, have := range sortedSubtitleLangs(subtitles) {
-			if !langMatches(have, want) {
-				continue
-			}
-			for _, item := range subtitles[have] {
-				if strings.TrimSpace(item.URL) != "" {
-					return have, item, true
-				}
-			}
-		}
-	}
-	for _, have := range sortedSubtitleLangs(subtitles) {
-		for _, item := range subtitles[have] {
-			if strings.TrimSpace(item.URL) != "" {
-				return have, item, true
-			}
-		}
-	}
-
-	return "", ytdlpSubtitle{}, false
-}
-
-func sortedSubtitleLangs(subtitles map[string][]ytdlpSubtitle) []string {
-	langs := make([]string, 0, len(subtitles))
-	for lang := range subtitles {
-		langs = append(langs, lang)
-	}
-	sort.Strings(langs)
-
-	return langs
-}
-
-func langMatches(have, want string) bool {
-	haveTag, ok := parseLanguageTag(have)
-	if !ok {
-		return false
-	}
-	wantTag, ok := parseLanguageTag(want)
-	if !ok {
-		return false
-	}
-	_, _, confidence := language.NewMatcher([]language.Tag{wantTag}).Match(haveTag)
-
-	return confidence != language.No
-}
-
-func parseLanguageTag(lang string) (language.Tag, bool) {
-	lang = normalizeLegacyLanguage(strings.TrimSpace(strings.ToLower(lang)))
-	if lang == "" {
-		return language.Und, false
-	}
-	tag, err := language.Parse(lang)
-	if err != nil {
-		return language.Und, false
-	}
-
-	return tag, true
-}
-
-func normalizeLegacyLanguage(lang string) string {
-	lang = strings.ReplaceAll(lang, "_", "-")
-	switch lang {
-	case subtitleLangChi, subtitleLangZho, subtitleLangMandarin:
-		return subtitleLangChinese
-	case "zh-cn", "zh-hans-cn":
-		return subtitleLangZhHans
-	case "zh-tw", "zh-hant-tw":
-		return subtitleLangZhHant
-	default:
-		return lang
-	}
-}
-
-func languageBase(tag language.Tag) string {
-	base, _ := tag.Base()
-
-	return base.String()
-}
-
-func subtitleDeclaredType(ext string) string {
-	switch strings.TrimPrefix(strings.ToLower(strings.TrimSpace(ext)), ".") {
-	case subtitleExtVTT, subtitleExtWebVTT:
-		return subtitleContentTypeVTT
-	case "srt":
-		return "text/srt"
-	case "json":
-		return "application/json"
-	case "html", "htm":
-		return "text/html"
-	case "txt":
-		return "text/plain"
-	default:
-		return ""
-	}
-}
-
 func (f *Fetcher) fetchPodcastTranscript(ctx context.Context, rawURL string) *ContentFetchResult {
 	lowerURL := strings.ToLower(rawURL)
 	if isDirectAudioURL(lowerURL) {
@@ -453,15 +210,6 @@ func (f *Fetcher) fetchPodcastTranscript(ctx context.Context, rawURL string) *Co
 	}
 
 	return extractFailure(rawURL, "rss transcript unavailable: "+reason)
-}
-
-func isMissingTranscriptReason(reason string) bool {
-	lower := strings.ToLower(reason)
-
-	return strings.Contains(lower, "rss item has no podcast:transcript tag") ||
-		strings.Contains(lower, "description/content has no transcript link") ||
-		strings.Contains(lower, "no description or content to search") ||
-		strings.Contains(lower, "all providers failed to produce transcript")
 }
 
 func podcastFeedCandidates(feed *gofeed.Feed, rawURL string) []*gofeed.Item {
@@ -577,21 +325,6 @@ func mediaContentResult(title, rawURL, source, content string, maxBodySize int) 
 	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 }
 
-func commandAvailable(path string) bool {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return false
-	}
-	if strings.Contains(path, string(os.PathSeparator)) {
-		info, err := os.Stat(path)
-
-		return err == nil && !info.IsDir()
-	}
-	_, err := exec.LookPath(path)
-
-	return err == nil
-}
-
 // fetchHTTPPage fetches a web page via plain HTTP GET.
 // Falls back to opencli (browser-based) when the server blocks the request
 // (e.g. zhihu ZSE anti-bot protection).
@@ -610,7 +343,7 @@ func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetc
 	if f.OpenCLIFallback {
 		// opencli fallback with a timeout so it can't hang
 		// (e.g. if Chrome isn't running with the debug port).
-		openCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+		openCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
 
 		result := f.fetchWithOpenCLI(openCtx, rawURL)
@@ -667,7 +400,7 @@ func (f *Fetcher) ensureContentQuality(ctx context.Context, result *ContentFetch
 
 	slog.Warn("HTTP extraction low quality, trying opencli fallback",
 		"url", result.SourceURL, "reason", quality.Reason)
-	openCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	openCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
 	fallback := f.fetchWithOpenCLI(openCtx, result.SourceURL)
@@ -746,6 +479,9 @@ func assessContentQuality(title, body, rawURL string) contentQuality {
 		return contentQuality{Reason: "empty body"}
 	}
 	lower := strings.ToLower(title + "\n" + trimmed)
+	if cfReason := cloudflareChallengeReason(lower); cfReason != "" {
+		return contentQuality{Reason: cfReason}
+	}
 	for _, pattern := range lowQualityPatterns() {
 		if strings.Contains(lower, pattern) {
 			return contentQuality{Reason: "matched error/login shell: " + pattern}
@@ -764,6 +500,23 @@ func assessContentQuality(title, body, rawURL string) contentQuality {
 	}
 
 	return contentQuality{OK: true}
+}
+
+// cloudflareChallengeReason returns a descriptive reason if the content
+// looks like a Cloudflare anti-bot challenge page, or empty string otherwise.
+func cloudflareChallengeReason(lower string) string {
+	if strings.Contains(lower, "just a moment") &&
+		strings.Contains(lower, "checking your browser") {
+		return "cloudflare anti-bot: challenge page"
+	}
+	if strings.Contains(lower, "just a moment") &&
+		(strings.Contains(lower, "cf-browser-verification") ||
+			strings.Contains(lower, "cloudflare") ||
+			strings.Contains(lower, "ray id:")) {
+		return "cloudflare anti-bot: challenge page"
+	}
+
+	return ""
 }
 
 func lowQualityPatterns() []string {
@@ -798,9 +551,54 @@ func isSocialShellDomain(domain string) bool {
 	}
 }
 
+// Content quality check thresholds for social shell detection.
+const (
+	socialShortContentThreshold = 300
+	socialContentThreshold      = 2000
+	socialMinSentences          = 3
+)
+
 func socialShellLike(lower, body string) bool {
-	return strings.Contains(lower, "log in") || strings.Contains(lower, "sign up") ||
-		strings.Contains(lower, "javascript") || len([]rune(strings.TrimSpace(body))) < 500
+	trimmed := strings.TrimSpace(body)
+	runeLen := len([]rune(trimmed))
+	if runeLen < socialShortContentThreshold {
+		return true
+	}
+	if socialShellPatterns(lower) {
+		return true
+	}
+	if runeLen < socialContentThreshold && !hasRealSentences(lower) {
+		return true
+	}
+
+	return false
+}
+
+func socialShellPatterns(lower string) bool {
+	return strings.Contains(lower, "log in") ||
+		strings.Contains(lower, "sign up") ||
+		strings.Contains(lower, "javascript") ||
+		strings.Contains(lower, "enable js") ||
+		strings.Contains(lower, "keyboard shortcuts") ||
+		strings.Contains(lower, "keyboard shortcut") ||
+		strings.Contains(lower, "to continue, please") ||
+		strings.Contains(lower, "already have an account") ||
+		strings.Contains(lower, "don't have an account")
+}
+
+func hasRealSentences(lower string) bool {
+	count := 0
+	for i := 0; i < len(lower); i++ {
+		switch lower[i] {
+		case '.', '!', '?':
+			count++
+			if count >= socialMinSentences {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func isLinkHeavy(body string) bool {
@@ -832,6 +630,14 @@ func cleanExtractReason(reason string) string {
 	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(reason), "extract:"))
 }
 
+func isMissingTranscriptReason(reason string) bool {
+	lower := strings.ToLower(reason)
+
+	return strings.Contains(lower, "rss item has no podcast:transcript tag") ||
+		strings.Contains(lower, "description/content has no transcript link") ||
+		strings.Contains(lower, "no description or content to search") ||
+		strings.Contains(lower, "all providers failed to produce transcript")
+}
 func compactStrings(items []string) []string {
 	result := make([]string, 0, len(items))
 	for _, item := range items {
@@ -879,10 +685,6 @@ func isParsedVideoURL(parsed *url.URL) bool {
 	}
 }
 
-func isBilibiliURL(lowerURL string) bool {
-	return strings.Contains(lowerURL, "bilibili.com") || strings.Contains(lowerURL, "b23.tv")
-}
-
 func isPodcastLikeURL(lowerURL string) bool {
 	return strings.Contains(lowerURL, "xiaoyuzhou") || strings.Contains(lowerURL, "podcast") ||
 		strings.Contains(lowerURL, "libsyn.com") || strings.Contains(lowerURL, "anchor.fm") || isRSSFeedLike(lowerURL)
@@ -915,31 +717,12 @@ func isDirectAudioURL(lowerURL string) bool {
 	return false
 }
 
-func metadataLooksChinese(meta *ytdlpMetadata) bool {
-	if meta == nil {
-		return false
-	}
-	if tag, ok := parseLanguageTag(meta.Language); ok && languageBase(tag) == subtitleLangChinese {
-		return true
-	}
-
-	return containsHan(meta.Title + "\n" + meta.Description)
-}
-
-func containsHan(s string) bool {
-	return strings.ContainsFunc(s, func(r rune) bool {
-		return unicode.Is(unicode.Han, r)
-	})
-}
-
 // fetchWithOpenCLI uses the opencli browser tool to extract page content.
-// opencli drives a real Chrome window to handle JS-rendered pages.
+
 func (f *Fetcher) fetchWithOpenCLI(ctx context.Context, rawURL string) *ContentFetchResult {
-	// opencli web read writes to a file by default; --stdout pipes content.
-	cmd := exec.CommandContext(ctx, "opencli", "web", "read",
-		"--url", rawURL,
-		"--stdout",
-	)
+	subcommand, extraArgs := opencli.CommandForURL(rawURL)
+	args := append([]string{subcommand}, extraArgs...)
+	cmd := exec.CommandContext(ctx, "opencli", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -956,7 +739,7 @@ func (f *Fetcher) fetchWithOpenCLI(ctx context.Context, rawURL string) *ContentF
 
 	body = textutil.TruncateUTF8(body, f.MaxBodySize*3)
 
-	// opencli web read returns Markdown; first heading line is the title.
+	// opencli returns Markdown; first heading line is the title.
 	title := rawURL
 	for line := range strings.SplitSeq(body, "\n") {
 		trimmed := strings.TrimSpace(line)

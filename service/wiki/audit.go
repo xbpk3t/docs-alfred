@@ -321,7 +321,7 @@ func lineHasRawMalformedURL(line string) bool {
 func isFailureFile(wikiRoot, path string) bool {
 	rel := slashRel(wikiRoot, path)
 
-	return strings.HasSuffix(rel, "-failed.md")
+	return strings.HasSuffix(rel, "-failed.md") || strings.HasPrefix(filepath.Base(rel), "digest-")
 }
 
 func auditIssue(wikiRoot, path string, line int, severity, message string) checkutil.Issue {
