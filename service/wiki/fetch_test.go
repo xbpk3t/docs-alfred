@@ -28,12 +28,12 @@ func TestFetchHTTPPageRejectsLowQualitySuccess(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	fetcher := NewFetcher(WithOpenCLIFallback(false))
+	fetcher := NewFetcher(WithStrategy(FetchStrategyHTTP))
 	result := fetcher.FetchContent(context.Background(), server.URL, ContentText)
 
 	require.NotNil(t, result)
 	require.Contains(t, result.Error, "extract:")
-	require.Contains(t, result.Error, "low quality")
+	require.Contains(t, result.Error, "all fetch methods failed")
 }
 
 
@@ -114,6 +114,45 @@ printf '` + strings.Repeat("你好", 100) + `\n'
 	require.Empty(t, result.Error)
 	assert.True(t, utf8.ValidString(result.Body))
 	assert.Contains(t, result.Body, "...")
+}
+
+func TestOpenCLIPlanner_BilibiliUsesAdapter(t *testing.T) {
+	p := OpenCLIPlanner{}
+	methods := p.Plan(context.Background(), "https://www.bilibili.com/video/BV1xx")
+	require.Equal(t, []FetchMethod{MethodAdapter}, methods)
+}
+
+func TestOpenCLIPlanner_UnknownURLUsesWeb(t *testing.T) {
+	p := OpenCLIPlanner{}
+	methods := p.Plan(context.Background(), "https://example.com/article")
+	require.Equal(t, []FetchMethod{MethodWeb}, methods)
+}
+
+func TestHTTPPlanner_FallsBackToAdapter(t *testing.T) {
+	p := HTTPPlanner{}
+	methods := p.Plan(context.Background(), "https://www.bilibili.com/video/BV1xx")
+	require.Equal(t, []FetchMethod{MethodHTTP, MethodAdapter}, methods)
+}
+
+func TestHTTPPlanner_FallsBackToWeb(t *testing.T) {
+	p := HTTPPlanner{}
+	methods := p.Plan(context.Background(), "https://example.com/article")
+	require.Equal(t, []FetchMethod{MethodHTTP, MethodWeb}, methods)
+}
+
+func TestFetchHTTPPageNoLongerHasInternalFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`<html><head><title>Forbidden</title></head><body>Access Denied</body></html>`))
+	}))
+	t.Cleanup(server.Close)
+
+	fetcher := NewFetcher()
+	result := fetcher.fetchHTTPPage(context.Background(), server.URL)
+
+	require.NotNil(t, result)
+	// fetchHTTPPage no longer has internal fallback — it just returns the HTTP error.
+	require.Contains(t, result.Error, "HTTP 403")
 }
 
 func TestDetectContentTypeOnlyTreatsConcreteVideoURLsAsVideo(t *testing.T) {

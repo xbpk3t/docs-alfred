@@ -23,7 +23,7 @@ func TestLoadConfigPreservesDefaultsWithPartialFile(t *testing.T) {
 	require.Equal(t, "wiki", cfg.Wiki.WikiRoot)
 	require.Equal(t, "https://cdn.lucc.dev/gh.yml", cfg.Wiki.GhTopicsURL)
 	require.Equal(t, "24h", cfg.Wiki.GhTopicsMaxAge)
-	require.True(t, cfg.Wiki.OpenCLIFallback)
+	require.Equal(t, "opencli", cfg.Wiki.FetchStrategy)
 	require.True(t, cfg.Wiki.Media.Enabled)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
 }
