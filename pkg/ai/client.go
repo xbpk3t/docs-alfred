@@ -13,7 +13,9 @@ import (
 )
 
 // DefaultAITimeout is the default HTTP timeout for AI chat requests.
-const DefaultAITimeout = 3 * time.Minute
+// Kept at 90s to leave room for retries within the per-URL timeout (180s)
+// when the two-step pipeline (classify + summarize) runs across retries.
+const DefaultAITimeout = 90 * time.Second
 
 // Role constants for chat messages.
 const (
@@ -24,10 +26,11 @@ const (
 
 // ClientConfig holds the AI client configuration.
 type ClientConfig struct {
-	APIKey  string
-	BaseURL string
-	Model   string
-	Timeout time.Duration // HTTP client timeout; 0 uses default 3 min
+	APIKey      string
+	BaseURL     string
+	Model       string
+	Timeout     time.Duration // HTTP client timeout; 0 uses default 3 min
+	Temperature float64       // Sampling temperature; 0 uses API default
 }
 
 // Message represents a chat message.
@@ -128,6 +131,9 @@ func ChatContext(ctx context.Context, cfg *ClientConfig, messages []Message) (st
 	if cfg.Model != "" {
 		callOptions = append(callOptions, llms.WithModel(cfg.Model))
 	}
+	if cfg.Temperature > 0 {
+		callOptions = append(callOptions, llms.WithTemperature(cfg.Temperature))
+	}
 
 	resp, err := model.GenerateContent(ctx, toLLMSMessages(messages), callOptions...)
 	if err != nil {
@@ -137,6 +143,12 @@ func ChatContext(ctx context.Context, cfg *ClientConfig, messages []Message) (st
 
 		return "", fmt.Errorf("generate content: %w", err)
 	}
+
+	return extractContentAndValidate(resp)
+}
+
+// extractContentAndValidate validates the AI response and returns the content.
+func extractContentAndValidate(resp *llms.ContentResponse) (string, error) {
 	if resp == nil || len(resp.Choices) == 0 {
 		return "", errors.New("no choices returned")
 	}

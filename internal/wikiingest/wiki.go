@@ -47,10 +47,11 @@ type WikiConfig struct {
 	GhTopicsURL       string          `default:"https://cdn.lucc.dev/gh.yml" validate:"required,url" yaml:"ghTopicsURL"`
 	GhTopicsCachePath string          `yaml:"ghTopicsCachePath"`
 	GhTopicsMaxAge    string          `default:"24h"                         validate:"required"     yaml:"ghTopicsMaxAge"`
-	FetchStrategy     string          `default:"opencli"                     yaml:"fetchStrategy"`
-	Concurrency       int             `default:"5"                           validate:"gte=1"        yaml:"concurrency"`
-	PerURLTimeout     int             `default:"180"                         validate:"gte=1"        yaml:"perURLTimeout"`
-	MaxRetries        int             `default:"3"                           validate:"gte=0"        yaml:"maxRetries"`
+	Driver            string          `default:"opencli"                     yaml:"driver"`
+	Concurrency       int             `default:"3"                           validate:"gte=1"        yaml:"concurrency"`
+	PerURLTimeout     int             `default:"600"                         validate:"gte=1"        yaml:"perURLTimeout"`
+	MaxRetries        int             `default:"6"                           validate:"gte=0"        yaml:"maxRetries"`
+	MaxContentSize    int             `default:"20000"                       yaml:"maxContentSize"`
 	Media             wikiMediaConfig `yaml:"media"`
 }
 
@@ -61,9 +62,10 @@ type wikiMediaConfig struct {
 
 // AIConfig contains AI model settings.
 type AIConfig struct {
-	APIKey  string `yaml:"apiKey"`
-	Model   string `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
-	BaseURL string `default:"https://api.lucc.dev/v1" validate:"required,url" yaml:"baseUrl"`
+	APIKey      string  `yaml:"apiKey"`
+	Model       string  `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
+	BaseURL     string  `default:"https://api.lucc.dev/v1" validate:"required,url" yaml:"baseUrl"`
+	Temperature float64 `default:"0.3"                     yaml:"temperature"`
 }
 
 // LoadConfig loads wiki config from disk, preserving defaults for omitted fields.
@@ -131,8 +133,8 @@ type AddInput struct {
 	DryRun bool
 }
 
-// InboxInput contains inputs for wiki inbox processing.
-type InboxInput struct {
+// DigestInput contains inputs for wiki digest processing.
+type DigestInput struct {
 	Config *Config
 	deps   *dependencies
 	DryRun bool
@@ -323,8 +325,9 @@ func RunAddURLs(ctx context.Context, input AddInput) (*Result, error) {
 	return result, nil
 }
 
-// RunProcessInbox processes wiki/inbox.md and flushes handled lines.
-func RunProcessInbox(ctx context.Context, input InboxInput) (*Result, error) {
+// RunDigest processes wiki/inbox.md and flushes handled lines.
+func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
+	slog.Info("wiki digest started")
 	if input.Config == nil {
 		return nil, errors.New("wiki config is required")
 	}
@@ -344,20 +347,26 @@ func RunProcessInbox(ctx context.Context, input InboxInput) (*Result, error) {
 		return nil, fmt.Errorf("parse inbox: %w", err)
 	}
 
-	result := &Result{Name: "wiki inbox process", WikiRoot: wikiRoot, DryRun: input.DryRun}
+	result := &Result{Name: "wiki digest", WikiRoot: wikiRoot, DryRun: input.DryRun}
 	if len(entries) == 0 {
+		slog.Info("wiki digest: no entries found")
+
 		return result, nil
 	}
 
+	slog.Info("wiki digest: processing entries", "count", len(entries))
 	inboxCfg := resolveInboxConfig(input.Config)
 	result.URLResults = runInboxEntries(ctx, deps, wikiRoot, entries, inboxCfg, input.DryRun)
 
 	processed := handledURLsByLine(result.URLResults)
 	if len(processed) == 0 {
+		slog.Info("wiki digest: no entries handled")
+
 		return result, nil
 	}
 	if input.DryRun {
 		result.WouldFlush = len(processed)
+		slog.Info("wiki digest dry-run: would flush", "count", len(processed))
 
 		return result, nil
 	}
@@ -366,6 +375,7 @@ func RunProcessInbox(ctx context.Context, input InboxInput) (*Result, error) {
 		return result, fmt.Errorf("flush inbox: %w", err)
 	}
 	result.Flushed = len(processed)
+	slog.Info("wiki digest completed", "flushed", len(processed))
 
 	return result, nil
 }
@@ -651,11 +661,20 @@ func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) (
 	}
 
 	content := fetchResult.Body
+
+	// Pre-classification content quality: for video content, require enough
+	// content for meaningful classification (i.e., actually got a transcript).
+	if contentType == wikisvc.ContentVideo && len([]rune(content)) < 600 {
+		item := &wikisvc.ClassifyItem{URL: urlStr, Title: title, ContentType: contentType, Summary: &wikisvc.StructuredSummary{Overview: content}}
+
+		return pendingExtractFailureWrite(item, "video content too short (likely no transcript)"), nil
+	}
+
 	classResult := deps.classifier.ClassifyURL(ctx, urlStr, title, content)
 	if classResult == nil {
 		// Distinguish: empty content is a permanent classify failure (content-side issue);
 		// non-empty content with nil classifier means AI call failed (transient).
-		item := &wikisvc.ClassifyItem{URL: urlStr, Title: title, ContentType: contentType, Summary: content}
+		item := &wikisvc.ClassifyItem{URL: urlStr, Title: title, ContentType: contentType, Summary: &wikisvc.StructuredSummary{Overview: content}}
 		if strings.TrimSpace(content) == "" {
 			return pendingExtractFailureWrite(item, "extraction failed: empty content"), nil
 		}
@@ -664,13 +683,14 @@ func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) (
 	}
 
 	item := &wikisvc.ClassifyItem{
-		URL:           urlStr,
-		Title:         title,
-		ContentType:   classResult.ContentType,
-		TopicPath:     classResult.TopicPath,
-		Type:          classResult.WikiType,
-		Summary:       classResult.Summary,
-		MetadataBlock: classResult.MetadataBlock,
+		URL:               urlStr,
+		Title:             title,
+		ContentType:       classResult.ContentType,
+		TopicPath:         classResult.TopicPath,
+		Type:              classResult.WikiType,
+		Summary:           classResult.Summary,
+		MetadataBlock:     classResult.MetadataBlock,
+		NeedsManualReview: classResult.NeedsManualReview,
 	}
 
 	if shouldWriteClassifyFailure(classResult) {
@@ -723,6 +743,8 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 		return writeSummary(deps, wikiRoot, pending.Item, dryRun)
 	case pendingClassifyFailure:
 		return writeClassifyFailure(deps, wikiRoot, pending.Item, pending.ExtraInfo, dryRun)
+	case pendingExtractFailure:
+		return writeExtractFailure(deps, wikiRoot, pending.Item, pending.ExtraInfo, dryRun)
 	case pendingFetchFailure:
 		return writeFetchFailure(deps, wikiRoot, pending.URL, pending.FailureType, pending.ExtraInfo, dryRun)
 	case pendingAIError:
@@ -787,9 +809,9 @@ func shouldWriteClassifyFailure(result *wikisvc.ClassifyResult) bool {
 	if result == nil {
 		return true
 	}
-	// If NeedsManualReview but already routed to uncategorized (content was good,
-	// only topic was missing), treat as success — write layer will use uncat.md.
-	if result.NeedsManualReview && result.TopicPath == "zzz/ss/uncategorized" {
+	// If NeedsManualReview but content was good (AI produced a valid summary),
+	// treat as success — write layer will route to uncat.md for manual review.
+	if result.NeedsManualReview && result.Summary != nil && strings.TrimSpace(result.Summary.Overview) != "" {
 		return false
 	}
 
@@ -819,8 +841,10 @@ func classifyFailureInfo(result *wikisvc.ClassifyResult) string {
 	if result.NeedsManualReview {
 		lines = append(lines, "NeedsManualReview: true")
 	}
-	if strings.TrimSpace(result.Summary) != "" {
-		lines = append(lines, "Summary: "+result.Summary)
+	if result.Summary != nil {
+		if s := strings.TrimSpace(wikisvc.RenderStructuredSummary(result.Summary)); s != "" {
+			lines = append(lines, "Summary: "+s)
+		}
 	}
 
 	return strings.Join(lines, "\n")
@@ -862,6 +886,42 @@ func writeClassifyFailure(
 		WikiType:    string(item.Type),
 		ContentType: item.ContentType,
 		FailureType: wikisvc.FailureClassify,
+	}
+}
+
+func writeExtractFailure(
+	deps *dependencies,
+	wikiRoot string,
+	item *wikisvc.ClassifyItem,
+	extraInfo string,
+	dryRun bool,
+) URLResult {
+	path, err := deps.writer.WriteFailureEntry(
+		item,
+		wikisvc.FailureExtract,
+		extraInfo,
+		&wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun},
+	)
+	if err != nil {
+		return URLResult{
+			URL:         item.URL,
+			Status:      StatusUnhandledError,
+			FailureType: wikisvc.FailureExtract,
+			Error:       fmt.Sprintf("write extract failure: %v", err),
+		}
+	}
+
+	status := StatusFailureWritten
+	if dryRun {
+		status = StatusDryRunFailure
+	}
+
+	return URLResult{
+		URL:         item.URL,
+		Status:      status,
+		Handled:     true,
+		OutputPath:  path,
+		FailureType: wikisvc.FailureExtract,
 	}
 }
 
@@ -1035,15 +1095,6 @@ func handledURLsByLine(results []URLResult) map[int][]string {
 	return processed
 }
 
-func parseFetchStrategy(s string) wikisvc.FetchStrategy {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "http":
-		return wikisvc.FetchStrategyHTTP
-	default:
-		return wikisvc.FetchStrategyOpenCLI
-	}
-}
-
 func resolveWikiRoot(cfg *Config) string {
 	if cfg.Wiki.WikiRoot != "" {
 		return cfg.Wiki.WikiRoot
@@ -1089,8 +1140,23 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		deps = &dependencies{}
 	}
 	if deps.fetcher == nil {
+		driverName := cfg.Wiki.Driver
+		if driverName == "" {
+			driverName = "opencli"
+		}
+		driver, err := wikisvc.NewDriver(driverName, wikisvc.DriverOptions{
+			MaxBodySize:  cfg.Wiki.MaxContentSize,
+			MediaEnabled: cfg.Wiki.Media.Enabled,
+		})
+		if err != nil {
+			slog.Warn("Unknown driver, falling back to opencli", "driver", driverName, "error", err)
+			driver, _ = wikisvc.NewDriver("opencli", wikisvc.DriverOptions{
+				MaxBodySize:  cfg.Wiki.MaxContentSize,
+				MediaEnabled: cfg.Wiki.Media.Enabled,
+			})
+		}
 		deps.fetcher = wikisvc.NewFetcher(
-			wikisvc.WithStrategy(parseFetchStrategy(cfg.Wiki.FetchStrategy)),
+			wikisvc.WithDriver(driver),
 			wikisvc.WithMediaEnabled(cfg.Wiki.Media.Enabled),
 		)
 	}
@@ -1105,6 +1171,7 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 			cfg.Wiki.GhTopicsURL,
 			wikisvc.WithGHTopicsCachePath(cfg.Wiki.GhTopicsCachePath),
 			wikisvc.WithGHTopicsMaxAge(maxAge),
+			wikisvc.WithMaxContentSize(cfg.Wiki.MaxContentSize),
 		)
 	}
 	if deps.writer == nil {
@@ -1119,9 +1186,10 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 
 func newAIConfig(cfg *Config) *ai.ClientConfig {
 	return &ai.ClientConfig{
-		APIKey:  cfg.AI.APIKey,
-		BaseURL: cfg.AI.BaseURL,
-		Model:   cfg.AI.Model,
+		APIKey:      cfg.AI.APIKey,
+		BaseURL:     cfg.AI.BaseURL,
+		Model:       cfg.AI.Model,
+		Temperature: cfg.AI.Temperature,
 	}
 }
 

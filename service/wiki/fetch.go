@@ -1,87 +1,22 @@
 package wiki
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
-	"codeberg.org/readeck/go-readability/v2"
-	"github.com/PuerkitoBio/goquery"
 	"github.com/google/go-github/v70/github"
 	"github.com/mmcdole/gofeed"
 	"github.com/xbpk3t/docs-alfred/internal/transcript"
-	"github.com/xbpk3t/docs-alfred/pkg/htmlutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
-	"github.com/xbpk3t/docs-alfred/pkg/opencli"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
-	"github.com/yuin/goldmark"
-	gast "github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/extension"
-	geast "github.com/yuin/goldmark/extension/ast"
-	"github.com/yuin/goldmark/text"
 )
-
-// FetchMethod represents a single content fetching approach.
-type FetchMethod int
-
-const (
-	MethodAdapter FetchMethod = iota // opencli site adapter (youtube/bilibili/twitter...)
-	MethodHTTP                       // HTTP GET + readability/markdown
-	MethodWeb                        // opencli web read (generic browser)
-)
-
-// FetchStrategy selects the primary fetching approach.
-type FetchStrategy int
-
-const (
-	FetchStrategyOpenCLI FetchStrategy = iota // opencli first (adapter or web read)
-	FetchStrategyHTTP                         // HTTP GET first (current behavior)
-)
-
-// FetchPlanner decides the ordered fetch methods for a URL.
-type FetchPlanner interface {
-	// Plan returns an ordered list of fetch methods to try for the given URL.
-	Plan(ctx context.Context, urlStr string) []FetchMethod
-}
-
-// OpenCLIPlanner implements opencli-first strategy.
-type OpenCLIPlanner struct{}
-
-func (OpenCLIPlanner) Plan(_ context.Context, urlStr string) []FetchMethod {
-	if opencli.HasAdapter(urlStr) {
-		return []FetchMethod{MethodAdapter}
-	}
-
-	return []FetchMethod{MethodWeb}
-}
-
-// HTTPPlanner implements HTTP-first strategy (current behavior).
-type HTTPPlanner struct{}
-
-func (HTTPPlanner) Plan(_ context.Context, urlStr string) []FetchMethod {
-	if opencli.HasAdapter(urlStr) {
-		return []FetchMethod{MethodHTTP, MethodAdapter}
-	}
-
-	return []FetchMethod{MethodHTTP, MethodWeb}
-}
-
-func strategyPlanner(s FetchStrategy) FetchPlanner {
-	switch s {
-	case FetchStrategyHTTP:
-		return HTTPPlanner{}
-	default:
-		return OpenCLIPlanner{}
-	}
-}
 
 // ContentFetchResult holds fetched content metadata and body.
 type ContentFetchResult struct {
@@ -94,41 +29,44 @@ type ContentFetchResult struct {
 
 // Fetcher handles fetching content from various sources.
 type Fetcher struct {
-	planner      FetchPlanner
+	driver       ContentDriver
 	GHClient     *http.Client
 	HTTPClient   *http.Client
 	GHBaseURL    string
 	MaxBodySize  int
-	Strategy     FetchStrategy
 	MediaEnabled bool
 }
 
 // FetcherOption customizes content fetching behavior.
 type FetcherOption func(*Fetcher)
 
-func WithStrategy(strategy FetchStrategy) FetcherOption {
-	return func(f *Fetcher) { f.Strategy = strategy; f.planner = strategyPlanner(strategy) }
+// WithDriver sets the content driver for the fetcher.
+func WithDriver(driver ContentDriver) FetcherOption {
+	return func(f *Fetcher) { f.driver = driver }
 }
 
+// WithMediaEnabled enables or media content extraction.
 func WithMediaEnabled(enabled bool) FetcherOption {
 	return func(f *Fetcher) { f.MediaEnabled = enabled }
 }
 
-// NewFetcher creates a new Fetcher with default settings (opencli-first).
+// NewFetcher creates a new Fetcher with default settings.
 func NewFetcher(opts ...FetcherOption) *Fetcher {
 	f := &Fetcher{
 		GHClient:     httputil.NewClient(30 * time.Second),
 		HTTPClient:   httputil.NewClient(30 * time.Second),
 		GHBaseURL:    "https://api.github.com",
 		MaxBodySize:  5000,
-		Strategy:     FetchStrategyOpenCLI,
 		MediaEnabled: true,
 	}
 	for _, opt := range opts {
 		opt(f)
 	}
-	if f.planner == nil {
-		f.planner = strategyPlanner(f.Strategy)
+	if f.driver == nil {
+		f.driver = newOpenCLIDriver(DriverOptions{
+			MaxBodySize:  f.MaxBodySize,
+			MediaEnabled: f.MediaEnabled,
+		})
 	}
 	if f.MaxBodySize <= 0 {
 		f.MaxBodySize = 5000
@@ -138,7 +76,8 @@ func NewFetcher(opts ...FetcherOption) *Fetcher {
 }
 
 // FetchContent fetches content based on the URL pattern.
-// Uses the configured FetchPlanner to determine the ordered fetch methods.
+// GitHub repos and podcasts are handled directly; all other URLs
+// are delegated to the configured ContentDriver.
 func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) *ContentFetchResult {
 	slog.Info("FetchContent", "url", urlStr, "type", contentType)
 
@@ -150,7 +89,7 @@ func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) 
 		return f.fetchGitHubRepo(ctx, urlStr)
 	}
 
-	// Podcast/audio bypasses the planner — direct to podcast transcript pipeline.
+	// Podcast/audio bypasses the driver — direct to podcast transcript pipeline.
 	if contentType == ContentAudio || isPodcastLikeURL(u) || isDirectAudioURL(u) {
 		if !f.MediaEnabled {
 			return extractFailure(urlStr, "media extraction disabled")
@@ -159,54 +98,21 @@ func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) 
 		return f.fetchPodcastTranscript(ctx, urlStr)
 	}
 
-	// Planner-driven fetch: try each method in order.
-	methods := f.planner.Plan(ctx, u)
-
-	for _, m := range methods {
-		if result := f.tryFetchMethod(ctx, m, urlStr, u); result != nil {
-			return result
-		}
+	// Delegate to driver.
+	result := f.driver.FetchContent(ctx, urlStr, contentType)
+	if result != nil && result.Error == "" {
+		return result
 	}
 
-	return extractFailure(urlStr, "all fetch methods failed")
+	if result != nil {
+		return result
+	}
+
+	return extractFailure(urlStr, "driver returned empty result")
 }
 
-// tryFetchMethod attempts a single fetch method from the planner.
-// Returns the result if successful, or nil to continue to the next method.
-func (f *Fetcher) tryFetchMethod(ctx context.Context, m FetchMethod, urlStr, u string) *ContentFetchResult {
-	switch m {
-	case MethodAdapter:
-		if isVideoURL(u) && !f.MediaEnabled {
-			return extractFailure(urlStr, "media extraction disabled")
-		}
+// --- GitHub repo fetching ---
 
-		return validOrNil(f.fetchWithOpenCLI(ctx, urlStr))
-	case MethodHTTP:
-		return validOrNil(f.fetchHTTPPage(ctx, urlStr))
-	case MethodWeb:
-		r := f.runOpenCLI(ctx, "web", []string{"read", "--url", urlStr, "--stdout"})
-		r.SourceURL = urlStr
-
-		return validOrNil(r)
-	}
-
-	return nil
-}
-
-// validOrNil returns the result if its content quality is acceptable, nil otherwise.
-func validOrNil(r *ContentFetchResult) *ContentFetchResult {
-	if r == nil || r.Error != "" {
-		return nil
-	}
-	q := assessContentQuality(r.Title, r.Body, r.SourceURL)
-	if q.OK {
-		return r
-	}
-
-	return nil
-}
-
-// fetchGitHubRepo fetches GitHub repository information via the API.
 func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFetchResult {
 	repoRef, ok := urlutil.GitHubOwnerRepo(rawURL)
 	if !ok {
@@ -274,6 +180,8 @@ func (f *Fetcher) githubClient() (*github.Client, error) {
 
 	return client, nil
 }
+
+// --- Podcast/audio fetching ---
 
 func (f *Fetcher) fetchPodcastTranscript(ctx context.Context, rawURL string) *ContentFetchResult {
 	lowerURL := strings.ToLower(rawURL)
@@ -422,108 +330,7 @@ func mediaContentResult(title, rawURL, source, content string, maxBodySize int) 
 	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 }
 
-// fetchHTTPPage fetches a web page via plain HTTP GET.
-// Quality checking is performed via ensureContentQuality.
-// The FetchPlanner manages fallback — this function does not retry or delegate.
-func (f *Fetcher) fetchHTTPPage(ctx context.Context, rawURL string) *ContentFetchResult {
-	timeout := httputil.DefaultClientTimeout
-	if f.HTTPClient != nil && f.HTTPClient.Timeout > 0 {
-		timeout = f.HTTPClient.Timeout
-	}
-	data, err := httputil.GetBytes(ctx, rawURL, httputil.RequestOptions{Timeout: timeout})
-	if err != nil {
-		failureKind := FailureFetch
-		errorStr := err.Error()
-		if isHTTPBlockError(err) {
-			failureKind = FailureResolve
-			errorStr = "resolve: " + errorStr
-		}
-
-		return &ContentFetchResult{SourceURL: rawURL, Error: errorStr, FailureKind: failureKind}
-	}
-
-	return f.handleHTTPPageData(ctx, rawURL, data)
-}
-
-func (f *Fetcher) handleHTTPPageData(ctx context.Context, rawURL string, data []byte) *ContentFetchResult {
-	slog.Info("HTTP fetch succeeded", "url", rawURL, "bodyLen", len(data))
-	if result := f.extractWithReadability(data, rawURL); result != nil {
-		return f.ensureContentQuality(ctx, result)
-	}
-
-	body := textutil.TruncateUTF8(markdownFallbackBody(data), f.MaxBodySize)
-	title := extractTitle(string(data))
-	if title == "" {
-		title = rawURL
-	}
-
-	return f.ensureContentQuality(ctx, &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL})
-}
-
-func (f *Fetcher) ensureContentQuality(_ context.Context, result *ContentFetchResult) *ContentFetchResult {
-	if result == nil || result.Error != "" {
-		return result
-	}
-	quality := assessContentQuality(result.Title, result.Body, result.SourceURL)
-	if quality.OK {
-		return result
-	}
-
-	return extractFailure(result.SourceURL, "low quality HTTP content: "+quality.Reason)
-}
-
-func markdownFallbackBody(data []byte) string {
-	body, err := htmlutil.ToMarkdown(string(data))
-	if err == nil && strings.TrimSpace(body) != "" {
-		return body
-	}
-
-	return string(data)
-}
-
-// extractWithReadability uses go-readability to extract article content.
-// Returns nil if extraction fails or produces empty content.
-func (f *Fetcher) extractWithReadability(data []byte, rawURL string) *ContentFetchResult {
-	parsedURL, err := url.Parse(rawURL)
-	if err != nil {
-		return nil
-	}
-
-	article, err := readability.FromReader(bytes.NewReader(data), parsedURL)
-	if err != nil || article.Node == nil {
-		return nil
-	}
-
-	var buf strings.Builder
-	if err := article.RenderText(&buf); err != nil {
-		return nil
-	}
-
-	body := buf.String()
-	if strings.TrimSpace(body) == "" {
-		return nil
-	}
-
-	body = textutil.TruncateUTF8(body, f.MaxBodySize)
-
-	title := article.Title()
-	if title == "" {
-		title = extractTitle(string(data))
-	}
-	if title == "" {
-		title = rawURL
-	}
-
-	slog.Info("go-readability extraction succeeded", "url", rawURL, "bodyLen", len(body))
-
-	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
-}
-
-// isHTTPBlockError checks whether the error is from an HTTP status code
-// (e.g. 403 anti-bot) rather than a network-level error.
-func isHTTPBlockError(err error) bool {
-	return strings.Contains(err.Error(), "HTTP ")
-}
+// --- Content quality assessment ---
 
 type contentQuality struct {
 	Reason string
@@ -559,8 +366,6 @@ func assessContentQuality(title, body, rawURL string) contentQuality {
 	return contentQuality{OK: true}
 }
 
-// cloudflareChallengeReason returns a descriptive reason if the content
-// looks like a Cloudflare anti-bot challenge page, or empty string otherwise.
 func cloudflareChallengeReason(lower string) string {
 	if strings.Contains(lower, "just a moment") &&
 		strings.Contains(lower, "checking your browser") {
@@ -608,7 +413,6 @@ func isSocialShellDomain(domain string) bool {
 	}
 }
 
-// Content quality check thresholds for social shell detection.
 const (
 	socialShortContentThreshold = 300
 	socialContentThreshold      = 2000
@@ -671,6 +475,8 @@ func isLinkHeavy(body string) bool {
 	return links*80 > textLen
 }
 
+// --- Failure helpers ---
+
 func extractFailure(rawURL, reason string) *ContentFetchResult {
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
@@ -695,6 +501,7 @@ func isMissingTranscriptReason(reason string) bool {
 		strings.Contains(lower, "no description or content to search") ||
 		strings.Contains(lower, "all providers failed to produce transcript")
 }
+
 func compactStrings(items []string) []string {
 	result := make([]string, 0, len(items))
 	for _, item := range items {
@@ -706,6 +513,8 @@ func compactStrings(items []string) []string {
 
 	return result
 }
+
+// --- URL classification helpers ---
 
 func isVideoURL(lowerURL string) bool {
 	lowerURL = strings.ToLower(strings.TrimSpace(lowerURL))
@@ -772,125 +581,6 @@ func isDirectAudioURL(lowerURL string) bool {
 	}
 
 	return false
-}
-
-// runOpenCLI executes an arbitrary opencli subcommand and returns the result.
-func (f *Fetcher) runOpenCLI(ctx context.Context, subcommand string, extraArgs []string) *ContentFetchResult {
-	args := append([]string{subcommand}, extraArgs...)
-
-	cmd := exec.CommandContext(ctx, "opencli", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return &ContentFetchResult{
-			Error: fmt.Sprintf("opencli: %v (stderr: %s)", err, strings.TrimSpace(stderr.String())),
-		}
-	}
-
-	body := stdout.String()
-	if body == "" {
-		return &ContentFetchResult{Error: "opencli returned empty content"}
-	}
-
-	body = textutil.TruncateUTF8(body, f.MaxBodySize*3)
-
-	title := extractTitleFromMarkdown(body)
-
-	slog.Info("opencli fetch succeeded", "subcommand", subcommand, "bodyLen", len(body))
-
-	return &ContentFetchResult{Title: title, Body: body}
-}
-
-// fetchWithOpenCLI uses the opencli browser tool to extract page content
-// for a URL, routing to the appropriate site adapter.
-func (f *Fetcher) fetchWithOpenCLI(ctx context.Context, rawURL string) *ContentFetchResult {
-	subcommand, extraArgs := opencli.CommandForURL(rawURL)
-
-	result := f.runOpenCLI(ctx, subcommand, extraArgs)
-	result.SourceURL = rawURL
-
-	return result
-}
-
-// extractTitle extracts the <title> from HTML content using goquery.
-func extractTitle(htmlContent string) string {
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
-	if err != nil {
-		return ""
-	}
-
-	return strings.TrimSpace(doc.Find("title").First().Text())
-}
-
-// extractTitleFromMarkdown parses the markdown body with goldmark and returns
-// the title from either:
-//   - the first heading (any level), or
-//   - a metadata-style table (| field | value |) with a "title" field.
-//
-// This handles all opencli adapters — those that return heading-prefixed
-// markdown (twitter, web read, etc.) and those that return metadata tables
-// (bilibili video, etc.).
-func extractTitleFromMarkdown(body string) string {
-	md := goldmark.New(
-		goldmark.WithExtensions(extension.Table),
-	)
-	reader := text.NewReader([]byte(body))
-	doc := md.Parser().Parse(reader)
-
-	var title string
-	_ = gast.Walk(doc, func(n gast.Node, entering bool) (gast.WalkStatus, error) {
-		if !entering {
-			return gast.WalkContinue, nil
-		}
-
-		// First heading (any level) wins.
-		if n.Kind() == gast.KindHeading {
-			title = strings.TrimSpace(string(n.Text([]byte(body))))
-
-			return gast.WalkStop, nil
-		}
-
-		// Table with | field | value | structure — look for a "title" row.
-		if n.Kind() == geast.KindTable {
-			if t := extractTitleFromTable(body, n); t != "" {
-				title = t
-
-				return gast.WalkStop, nil
-			}
-		}
-
-		return gast.WalkContinue, nil
-	})
-
-	return title
-}
-
-// extractTitleFromTable walks a goldmark Table AST node looking for a row
-// whose first cell is "title" and returns the value from the second cell.
-func extractTitleFromTable(body string, table gast.Node) string {
-	for row := table.FirstChild(); row != nil; row = row.NextSibling() {
-		if row.Kind() != geast.KindTableRow {
-			continue
-		}
-		cell := row.FirstChild()
-		if cell == nil || cell.Kind() != geast.KindTableCell {
-			continue
-		}
-		field := strings.TrimSpace(string(cell.Text([]byte(body))))
-		if !strings.EqualFold(field, "title") {
-			continue
-		}
-		valueCell := cell.NextSibling()
-		if valueCell == nil || valueCell.Kind() != geast.KindTableCell {
-			continue
-		}
-
-		return strings.TrimSpace(string(valueCell.Text([]byte(body))))
-	}
-
-	return ""
 }
 
 func getGHToken() string {

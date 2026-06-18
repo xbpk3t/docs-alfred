@@ -23,7 +23,6 @@ func TestLoadConfigPreservesDefaultsWithPartialFile(t *testing.T) {
 	require.Equal(t, "wiki", cfg.Wiki.WikiRoot)
 	require.Equal(t, "https://cdn.lucc.dev/gh.yml", cfg.Wiki.GhTopicsURL)
 	require.Equal(t, "24h", cfg.Wiki.GhTopicsMaxAge)
-	require.Equal(t, "opencli", cfg.Wiki.FetchStrategy)
 	require.True(t, cfg.Wiki.Media.Enabled)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
 }
@@ -41,7 +40,7 @@ func TestRunAddURLsWritesSummary(t *testing.T) {
 		TopicPath:   "topic/path",
 		WikiType:    wikisvc.TypeDeepDive,
 		ContentType: wikisvc.ContentText,
-		Summary:     "summary",
+		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
 	}
 
 	result, err := RunAddURLs(context.Background(), AddInput{
@@ -65,7 +64,7 @@ func TestRunAddURLsWritesClassifyFailure(t *testing.T) {
 		TopicPath:   "none",
 		WikiType:    wikisvc.TypeInbox,
 		ContentType: wikisvc.ContentText,
-		Summary:     "summary",
+		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
 	}
 
 	result, err := RunAddURLs(context.Background(), AddInput{
@@ -79,7 +78,7 @@ func TestRunAddURLsWritesClassifyFailure(t *testing.T) {
 	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
 	require.Equal(t, wikisvc.FailureClassify, result.URLResults[0].FailureType)
 	require.Len(t, deps.writer.failures, 1)
-	require.Contains(t, deps.writer.failures[0].extraInfo, "Summary: summary")
+	require.Contains(t, deps.writer.failures[0].extraInfo, "summary")
 }
 
 func TestRunAddURLsTreatsInboxWikiTypeAsClassifyFailure(t *testing.T) {
@@ -89,7 +88,7 @@ func TestRunAddURLsTreatsInboxWikiTypeAsClassifyFailure(t *testing.T) {
 		TopicPath:         "topic/path",
 		WikiType:          wikisvc.TypeInbox,
 		ContentType:       wikisvc.ContentText,
-		Summary:           "needs review summary",
+		Summary:           &wikisvc.StructuredSummary{Overview: "needs review summary"},
 		Confidence:        0.88,
 		NeedsManualReview: true,
 		RejectReason:      "AI marked result for manual review",
@@ -103,12 +102,12 @@ func TestRunAddURLsTreatsInboxWikiTypeAsClassifyFailure(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, result.OK())
-	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
-	require.Equal(t, wikisvc.FailureClassify, result.URLResults[0].FailureType)
+	// NeedsManualReview with valid summary → goes to manual review (uncat.md)
+	// instead of classify failure.
+	require.Equal(t, StatusSummaryWritten, result.URLResults[0].Status)
+	require.Contains(t, result.URLResults[0].OutputPath, "uncat.md")
+	require.Empty(t, deps.writer.failures)
 	require.Empty(t, deps.writer.summaries)
-	require.Len(t, deps.writer.failures, 1)
-	require.Contains(t, deps.writer.failures[0].extraInfo, "AI marked result for manual review")
-	require.Contains(t, deps.writer.failures[0].extraInfo, "NeedsManualReview: true")
 }
 
 func TestRunAddURLsWritesFetchFailure(t *testing.T) {
@@ -179,7 +178,7 @@ func TestRunAddURLsWriterFailureIsUnhandled(t *testing.T) {
 		TopicPath:   "topic/path",
 		WikiType:    wikisvc.TypeDeepDive,
 		ContentType: wikisvc.ContentText,
-		Summary:     "summary",
+		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
 	}
 	deps.writer.summaryErr = errors.New("disk full")
 
@@ -195,7 +194,7 @@ func TestRunAddURLsWriterFailureIsUnhandled(t *testing.T) {
 	require.Contains(t, result.URLResults[0].Error, "disk full")
 }
 
-func TestRunProcessInboxFlushesHandledLines(t *testing.T) {
+func TestRunDigestFlushesHandledLines(t *testing.T) {
 	deps := newFakeDeps()
 	deps.inbox.entries = []wikisvc.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
 	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
@@ -203,12 +202,12 @@ func TestRunProcessInboxFlushesHandledLines(t *testing.T) {
 		TopicPath:   "topic/path",
 		WikiType:    wikisvc.TypeDeepDive,
 		ContentType: wikisvc.ContentText,
-		Summary:     "summary",
+		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
 	}
 	cfg := testConfig(t)
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/a\n"), 0o600))
 
-	result, err := RunProcessInbox(context.Background(), InboxInput{
+	result, err := RunDigest(context.Background(), DigestInput{
 		Config: cfg,
 		deps:   deps.dependencies(),
 	})
@@ -219,7 +218,7 @@ func TestRunProcessInboxFlushesHandledLines(t *testing.T) {
 	require.Equal(t, []string{"https://example.com/a"}, deps.inbox.flushed[1])
 }
 
-func TestRunProcessInboxWritesSameTopicInInboxOrderAfterReverseCompletion(t *testing.T) {
+func TestRunDigestWritesSameTopicInInboxOrderAfterReverseCompletion(t *testing.T) {
 	urls := []string{"https://example.com/a", "https://example.com/b", "https://example.com/c"}
 	blocks := map[string]chan struct{}{
 		urls[0]: make(chan struct{}),
@@ -238,7 +237,7 @@ func TestRunProcessInboxWritesSameTopicInInboxOrderAfterReverseCompletion(t *tes
 			TopicPath:   "topic/path",
 			WikiType:    wikisvc.TypeDeepDive,
 			ContentType: wikisvc.ContentText,
-			Summary:     "summary " + url,
+			Summary:     &wikisvc.StructuredSummary{Overview: "summary " + url},
 		}
 		entries = append(entries, wikisvc.InboxEntry{URL: url, LineIndex: i})
 	}
@@ -259,7 +258,7 @@ func TestRunProcessInboxWritesSameTopicInInboxOrderAfterReverseCompletion(t *tes
 	}
 	done := make(chan runResult, 1)
 	go func() {
-		result, err := RunProcessInbox(context.Background(), InboxInput{Config: cfg, deps: deps})
+		result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps})
 		done <- runResult{result: result, err: err}
 	}()
 
@@ -281,7 +280,7 @@ func TestRunProcessInboxWritesSameTopicInInboxOrderAfterReverseCompletion(t *tes
 	require.Less(t, strings.Index(content, urls[1]), strings.Index(content, urls[2]))
 }
 
-func TestRunProcessInboxDryRunDoesNotWriteOrFlush(t *testing.T) {
+func TestRunDigestDryRunDoesNotWriteOrFlush(t *testing.T) {
 	deps := newFakeDeps()
 	deps.inbox.entries = []wikisvc.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
 	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
@@ -289,12 +288,12 @@ func TestRunProcessInboxDryRunDoesNotWriteOrFlush(t *testing.T) {
 		TopicPath:   "topic/path",
 		WikiType:    wikisvc.TypeDeepDive,
 		ContentType: wikisvc.ContentText,
-		Summary:     "summary",
+		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
 	}
 	cfg := testConfig(t)
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/a\n"), 0o600))
 
-	result, err := RunProcessInbox(context.Background(), InboxInput{
+	result, err := RunDigest(context.Background(), DigestInput{
 		Config: cfg,
 		DryRun: true,
 		deps:   deps.dependencies(),

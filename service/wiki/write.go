@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -155,20 +154,7 @@ func buildEntry(item *ClassifyItem) string {
 		metaBlock += fmt.Sprintf("Type: %s", item.Type)
 	}
 
-	entry := fmt.Sprintf("### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, item.Summary)
-
-	// Post-process: fix any heading level issues.
-	entry = fixSectionHeadings(entry)
-
-	return entry
-}
-
-// fixSectionHeadings ensures section headings are at #### level.
-// Converts ## or ### 概述/关键要点/值得关注/可执行建议 → ####.
-func fixSectionHeadings(s string) string {
-	re := regexp.MustCompile(`(?m)^#{2,3} (概述|关键要点|值得关注|可执行建议)`)
-
-	return re.ReplaceAllString(s, `#### $1`)
+	return fmt.Sprintf("### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, RenderStructuredSummary(item.Summary))
 }
 
 //nolint:nonamedreturns
@@ -308,13 +294,46 @@ func WriteManualReviewEntry(item *ClassifyItem, opts *WriteOptions) (string, err
 	today := time.Now().Format("2006-01-02")
 	dateHeading := "## " + today
 
-	title := item.Title
+	title, metaBlock := buildReviewEntryMeta(item)
+	entry := fmt.Sprintf("\n### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, RenderStructuredSummary(item.Summary))
+
+	if err := appendToDateSectionAndWrite(path, dateHeading, entry); err != nil {
+		return "", fmt.Errorf("write uncat.md: %w", err)
+	}
+
+	slog.Info("Manual review entry appended", "path", path, "url", item.URL)
+
+	// Log success to JSONL so uncat.md entries count toward the success rate.
+	if _, err := LogSuccessEntry(item, path, opts); err != nil {
+		slog.Warn("Failed to log success entry for manual review", "url", item.URL, "error", err)
+	}
+
+	return path, nil
+}
+
+// buildReviewEntryMeta builds the title and metadata block for a manual review entry.
+//
+//nolint:nonamedreturns
+func buildReviewEntryMeta(item *ClassifyItem) (title, metaBlock string) {
+	title = item.Title
 	if title == "" {
 		title = item.URL
 	}
 
-	entry := fmt.Sprintf("\n### %s\n\nURL: %s\n\n%s\n", title, item.URL, item.Summary)
+	// Build codeblock metadata section matching buildEntry format.
+	metaBlock = fmt.Sprintf("URL: %s\n", item.URL)
+	if item.MetadataBlock != "" {
+		metaBlock += item.MetadataBlock
+	} else if item.Type != "" {
+		metaBlock += fmt.Sprintf("Type: %s", item.Type)
+	}
 
+	return
+}
+
+// appendToDateSectionAndWrite appends an entry to the appropriate date section
+// in the uncat.md file and writes the result.
+func appendToDateSectionAndWrite(path, dateHeading, entry string) error {
 	var existing strings.Builder
 	if data, err := os.ReadFile(path); err == nil {
 		existing.Write(data)
@@ -329,13 +348,7 @@ func WriteManualReviewEntry(item *ClassifyItem, opts *WriteOptions) (string, err
 		newContent = fmt.Sprintf("%s\n\n%s\n", dateHeading, entry)
 	}
 
-	if err := fileutil.AtomicWriteFile(path, []byte(newContent), fileutil.FilePermPrivate); err != nil {
-		return "", fmt.Errorf("write uncat.md: %w", err)
-	}
-
-	slog.Info("Manual review entry appended", "path", path, "url", item.URL)
-
-	return path, nil
+	return fileutil.AtomicWriteFile(path, []byte(newContent), fileutil.FilePermPrivate)
 }
 
 func itemURL(item *ClassifyItem) string {
@@ -365,7 +378,7 @@ func buildFailureEntry(item *ClassifyItem, extraInfo string) string {
 		title = item.URL
 	}
 
-	bodySnippet := item.Summary
+	bodySnippet := RenderStructuredSummary(item.Summary)
 	if bodySnippet == "" {
 		bodySnippet = "(无内容)"
 	}
