@@ -10,6 +10,18 @@ import (
 	"github.com/samber/lo"
 )
 
+// tcoDomain is the t.co URL shortener domain used by Twitter/X.
+const tcoDomain = "t.co"
+
+// urlFlag is the --url flag used for opencli commands that take a URL argument.
+const urlFlag = "--url"
+
+// subcmdVideo is the "video" subcommand used for video site adapters.
+const subcmdVideo = "video"
+
+// subcmdRead is the "read" subcommand used for web/fallback reading.
+const subcmdRead = "read"
+
 // Adapter constants for known site adapters.
 const (
 	AdapterTwitter  = "twitter"
@@ -31,7 +43,7 @@ func CommandForURL(rawURL string) (string, []string) {
 		return urlMatchesDomain(rawURL, r.domains)
 	})
 	if !found {
-		return AdapterWeb, []string{"read", "--url", rawURL, "--stdout"}
+		return AdapterWeb, []string{subcmdRead, urlFlag, rawURL, "--stdout"}
 	}
 
 	return route.adapter, argsForRoute(route, rawURL)
@@ -64,13 +76,13 @@ type route struct {
 // routes is the URL-to-opencli-command mapping table.
 // Ordered by specificity — more precise domains come first.
 var routes = []route{
-	{AdapterYoutube, "video", []string{"youtube.com", "youtu.be"}},
-	{AdapterTwitter, "article", []string{"x.com", "twitter.com", "mobile.twitter.com", "t.co"}},
-	{AdapterWeb, "read", []string{"zhuanlan.zhihu.com"}},
+	{AdapterYoutube, subcmdVideo, []string{"youtube.com", "youtu.be"}},
+	{AdapterTwitter, "thread", []string{"x.com", "twitter.com", "mobile.twitter.com"}},
+	{AdapterWeb, subcmdRead, []string{"zhuanlan.zhihu.com"}},
 	{AdapterZhihu, "question", []string{"zhihu.com"}},
-	{AdapterBilibili, "video", []string{"bilibili.com", "b23.tv"}},
-	{AdapterWeixin, "article", []string{"mp.weixin.qq.com"}},
-	{AdapterReddit, "read", []string{"reddit.com"}},
+	{AdapterBilibili, subcmdVideo, []string{"bilibili.com", "b23.tv"}},
+	{AdapterWeixin, "download", []string{"mp.weixin.qq.com"}},
+	{AdapterReddit, subcmdRead, []string{"reddit.com"}},
 	{AdapterHN, "item", []string{"news.ycombinator.com"}},
 }
 
@@ -110,7 +122,7 @@ func isNumeric(s string) bool {
 // argsForRoute builds the opencli command arguments for a matched route.
 func argsForRoute(r route, rawURL string) []string {
 	if r.adapter == AdapterWeb {
-		return []string{r.subcmd, "--url", rawURL, "--stdout"}
+		return []string{r.subcmd, urlFlag, rawURL, "--stdout"}
 	}
 
 	// Strip query parameters for site-specific adapters — they expect a clean URL.
@@ -130,5 +142,49 @@ func argsForRoute(r route, rawURL string) []string {
 		}
 	}
 
+	// weixin download uses --url <url> (not positional), and outputs to file
+	// by default so we need --format md for stdout-friendly output.
+	if r.adapter == AdapterWeixin {
+		return []string{r.subcmd, urlFlag, cleanURL, "--format", "md"}
+	}
+
 	return []string{r.subcmd, cleanURL, "--format", "md"}
+}
+
+// IsTcoURL reports whether the URL is a t.co shortlink.
+func IsTcoURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+
+	return strings.ToLower(parsed.Hostname()) == tcoDomain
+}
+
+// CleanXMediaSuffix removes trailing media path segments (/photo/N, /video/N)
+// from resolved X.com/Twitter URLs, returning a clean status URL.
+func CleanXMediaSuffix(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+	if host != "x.com" && host != "twitter.com" && host != "mobile.twitter.com" {
+		return rawURL
+	}
+
+	path := strings.TrimRight(parsed.Path, "/")
+	parts := strings.Split(path, "/")
+	// Expect: ["", "user", "status", "<id>", "photo"|"video", "<n>"]
+	if len(parts) >= 6 && parts[len(parts)-4] == "status" &&
+		(strings.HasPrefix(parts[len(parts)-2], "photo") || strings.HasPrefix(parts[len(parts)-2], "video")) {
+		parts = parts[:len(parts)-2]
+		parsed.RawPath = ""
+		parsed.Path = strings.Join(parts, "/") + "/"
+
+		return parsed.String()
+	}
+
+	return rawURL
 }
