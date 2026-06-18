@@ -14,19 +14,21 @@ import (
 )
 
 type wikiFlags struct {
-	config      string
-	wikiRoot    string
-	format      string
-	auditPaths  []string
-	dryRun      bool
-	changedOnly bool
+	config         string
+	wikiRoot       string
+	format         string
+	model          string
+	auditPaths     []string
+	maxContentSize int
+	dryRun         bool
+	changedOnly    bool
 }
 
 const (
-	wikiCommandName      = "wiki"
-	wikiInboxCommandName = "inbox"
-	wikiAuditCommandName = "audit"
-	wikiCheckCommandName = "check"
+	wikiCommandName          = "wiki"
+	wikiDigestCommandName    = "digest"
+	wikiAuditCommandName     = "audit"
+	wikiCheckCommandName     = "check"
 )
 
 func newWikiCmd() *cobra.Command {
@@ -39,7 +41,7 @@ Uses AI to classify URLs by content type (video/audio/text), topic path,
 and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
-				return errors.New("use `docs-cli wiki add <urls...>` or `docs-cli wiki inbox process`")
+				return errors.New("use `docs-cli wiki add <urls...>` or `docs-cli wiki digest`")
 			}
 
 			return cmd.Help()
@@ -47,7 +49,7 @@ and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 	}
 
 	cmd.AddCommand(newWikiAddCmd())
-	cmd.AddCommand(newWikiInboxCmd())
+	cmd.AddCommand(newWikiDigestCmd())
 	cmd.AddCommand(newWikiAuditCmd())
 	cmd.AddCommand(newWikiCheckCmd())
 
@@ -66,6 +68,7 @@ func newWikiAddCmd() *cobra.Command {
 				return fmt.Errorf("load config: %w", err)
 			}
 			resolveWikiAPIKey(cfg)
+			applyWikiFlagOverrides(cfg, &flags)
 
 			result, err := wikiuc.RunAddURLs(context.Background(), wikiuc.AddInput{
 				Config: cfg,
@@ -84,21 +87,11 @@ func newWikiAddCmd() *cobra.Command {
 	return cmd
 }
 
-func newWikiInboxCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   wikiInboxCommandName,
-		Short: "Wiki inbox operations",
-	}
-	cmd.AddCommand(newWikiInboxProcessCmd())
-
-	return cmd
-}
-
-func newWikiInboxProcessCmd() *cobra.Command {
+func newWikiDigestCmd() *cobra.Command {
 	var flags wikiFlags
 	cmd := &cobra.Command{
-		Use:   "process",
-		Short: "Process wiki/inbox.md and flush handled lines",
+		Use:   wikiDigestCommandName,
+		Short: "Digest wiki/inbox.md URLs and flush handled lines",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
@@ -106,8 +99,9 @@ func newWikiInboxProcessCmd() *cobra.Command {
 				return fmt.Errorf("load config: %w", err)
 			}
 			resolveWikiAPIKey(cfg)
+			applyWikiFlagOverrides(cfg, &flags)
 
-			result, err := wikiuc.RunProcessInbox(context.Background(), wikiuc.InboxInput{
+			result, err := wikiuc.RunDigest(context.Background(), wikiuc.DigestInput{
 				Config: cfg,
 				DryRun: flags.dryRun,
 			})
@@ -218,9 +212,21 @@ func resolveWikiAPIKey(cfg *wikiuc.Config) {
 	}
 }
 
+// applyWikiFlagOverrides applies CLI flag overrides to the loaded config.
+func applyWikiFlagOverrides(cfg *wikiuc.Config, flags *wikiFlags) {
+	if flags.model != "" {
+		cfg.AI.Model = flags.model
+	}
+	if flags.maxContentSize > 0 {
+		cfg.Wiki.MaxContentSize = flags.maxContentSize
+	}
+}
+
 func addWikiFlags(cmd *cobra.Command, flags *wikiFlags) {
 	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
+	cmd.Flags().StringVar(&flags.model, "model", "", "AI model override (e.g. deepseek-v3)")
+	cmd.Flags().IntVar(&flags.maxContentSize, "max-content-size", 0, "Max content chars sent to AI (default 20000)")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Run fetch/classify without writing files or flushing inbox")
 	addFormatFlag(cmd, &flags.format)
 }

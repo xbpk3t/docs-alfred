@@ -46,8 +46,8 @@ func TestWikiCommandOwnsWikiActions(t *testing.T) {
 
 	require.Equal(t, wikiCommandName, wikiCmd.Name())
 	require.False(t, wikiCmd.HasAvailableFlags())
-	requireCommandNames(t, wikiCmd.Commands(), []string{"add", wikiInboxCommandName, wikiAuditCommandName, wikiCheckCommandName})
-	require.Nil(t, wikiCmd.Flags().Lookup(wikiInboxCommandName))
+	requireCommandNames(t, wikiCmd.Commands(), []string{"add", "digest", wikiAuditCommandName, wikiCheckCommandName})
+	require.Nil(t, wikiCmd.Flags().Lookup("digest"))
 }
 
 func TestWikiAddCommandFlags(t *testing.T) {
@@ -64,24 +64,26 @@ func TestWikiAddCommandFlags(t *testing.T) {
 	require.NotNil(t, f.Lookup("dry-run"))
 }
 
-func TestWikiInboxCommandOwnsProcessAction(t *testing.T) {
-	wikiInboxCmd, _, err := newRootCmd().Find([]string{wikiCommandName, wikiInboxCommandName})
+func TestWikiDigestCommand(t *testing.T) {
+	wikiDigestCmd, _, err := newRootCmd().Find([]string{wikiCommandName, "digest"})
 	require.NoError(t, err)
 
-	require.Equal(t, wikiInboxCommandName, wikiInboxCmd.Name())
-	requireCommandNames(t, wikiInboxCmd.Commands(), []string{"process"})
+	require.Equal(t, "digest", wikiDigestCmd.Name())
+	require.Empty(t, wikiDigestCmd.Commands())
 }
 
-func TestWikiInboxProcessCommandFlags(t *testing.T) {
-	wikiInboxProcessCmd, _, err := newRootCmd().Find([]string{wikiCommandName, wikiInboxCommandName, "process"})
+func TestWikiDigestCommandFlags(t *testing.T) {
+	wikiDigestCmd, _, err := newRootCmd().Find([]string{wikiCommandName, "digest"})
 	require.NoError(t, err)
 
-	require.Equal(t, "process", wikiInboxProcessCmd.Name())
-	require.True(t, wikiInboxProcessCmd.HasAvailableFlags())
+	require.Equal(t, "digest", wikiDigestCmd.Name())
+	require.True(t, wikiDigestCmd.HasAvailableFlags())
 
-	f := wikiInboxProcessCmd.Flags()
+	f := wikiDigestCmd.Flags()
 	require.NotNil(t, f.Lookup("config"))
 	require.NotNil(t, f.Lookup("wiki-root"))
+	require.NotNil(t, f.Lookup("model"))
+	require.NotNil(t, f.Lookup("max-content-size"))
 	require.NotNil(t, f.Lookup("format"))
 	require.NotNil(t, f.Lookup("dry-run"))
 }

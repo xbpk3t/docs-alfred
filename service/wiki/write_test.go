@@ -71,7 +71,7 @@ func TestWriteSummaryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
 		Title:     "A",
 		TopicPath: "topic/path",
 		Type:      TypeDeepDive,
-		Summary:   "summary",
+		Summary:   &StructuredSummary{Overview: "summary"},
 	}
 
 	path, err := WriteSummary(item, &WriteOptions{WikiRoot: root, DryRun: true})
@@ -110,7 +110,7 @@ func TestWriteSummaryConcurrentSameTopicDoesNotLoseEntries(t *testing.T) {
 				Title:     fmt.Sprintf("Item %02d", i),
 				TopicPath: "topic/path",
 				Type:      TypeDeepDive,
-				Summary:   "summary",
+				Summary:   &StructuredSummary{Overview: "summary"},
 			}, &WriteOptions{WikiRoot: root})
 			require.NoError(t, err)
 		}(i)
@@ -222,7 +222,7 @@ func TestBuildFailureEntryTruncatesUTF8Safely(t *testing.T) {
 	entry := buildFailureEntry(&ClassifyItem{
 		URL:     "https://example.com/a",
 		Title:   "A",
-		Summary: strings.Repeat("你好", 400),
+		Summary: &StructuredSummary{Overview: strings.Repeat("你好", 400)},
 	}, "failed")
 
 	assert.True(t, utf8.ValidString(entry))

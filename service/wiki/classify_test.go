@@ -15,10 +15,11 @@ import (
 )
 
 func TestRenderPrompt(t *testing.T) {
-	prompt, err := renderPrompt("classify-type.txt", &promptData{
-		Title:   "A title",
-		URL:     "https://example.com/post",
-		Content: "A summary",
+	prompt, err := renderPrompt("classify-json.txt", &promptData{
+		Title:         "A title",
+		URL:           "https://example.com/post",
+		Content:       "A summary",
+		CandidateTree: "- path: ai/tool/demo | title: Demo | source: test",
 	})
 	if err != nil {
 		t.Fatalf("renderPrompt() error = %v", err)
@@ -35,7 +36,7 @@ func TestRenderPrompt(t *testing.T) {
 }
 
 func TestParseAIClassificationAcceptsJSONObject(t *testing.T) {
-	parsed, err := parseAIClassification(`{"topicPath":"ai/tool/demo","wikiType":"deep_dive","contentType":"text","summary":{"overview":"ok","keyPoints":["p1"],"worthNoting":"n"},"confidence":0.9}`)
+	parsed, err := parseAIClassification(`{"topicPath":"ai/tool/demo","wikiType":"research","contentType":"text","summary":{"overview":"ok","keyPoints":["p1"],"worthNoting":"n"},"confidence":0.9}`)
 
 	require.NoError(t, err)
 	assert.Equal(t, "ai/tool/demo", parsed.TopicPath)
@@ -43,7 +44,7 @@ func TestParseAIClassificationAcceptsJSONObject(t *testing.T) {
 }
 
 func TestParseAIClassificationRepairsInvalidStringEscapes(t *testing.T) {
-	parsed, err := parseAIClassification(`{"topicPath":"ai/tool/demo","wikiType":"deep_dive","contentType":"text","summary":{"overview":"1. ok \3. bad","keyPoints":["p1"],"worthNoting":"n"},"confidence":0.9}`)
+	parsed, err := parseAIClassification(`{"topicPath":"ai/tool/demo","wikiType":"research","contentType":"text","summary":{"overview":"1. ok \3. bad","keyPoints":["p1"],"worthNoting":"n"},"confidence":0.9}`)
 
 	require.NoError(t, err)
 	assert.Equal(t, `1. ok \3. bad`, parsed.Summary.Overview)
@@ -96,8 +97,8 @@ func TestRejectedClassifyResultPreservesDiagnostics(t *testing.T) {
 	require.NotNil(t, result)
 	assert.Equal(t, "ai/tool/demo", result.TopicPath)
 	assert.Equal(t, TypeInbox, result.WikiType)
-	assert.Contains(t, result.Summary, "manual summary")
-	assert.Contains(t, result.Summary, "#### 概述")
+	require.NotNil(t, result.Summary)
+	assert.Equal(t, "manual summary", result.Summary.Overview)
 	assert.Equal(t, 0.42, result.Confidence)
 	assert.True(t, result.NeedsManualReview)
 	assert.Contains(t, result.RejectReason, assert.AnError.Error())

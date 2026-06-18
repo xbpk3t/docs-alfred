@@ -14,12 +14,12 @@
 {{.Content}}
 
 ## wikiType 枚举
-- repo_eval: 对开源项目/代码仓库的评测、分析、推荐
-- deep_dive: 对某个技术主题的深入分析、教程、原理讲解
+- review: 对开源项目/代码仓库的评测、分析、推荐
+- research: 对某个技术主题的深入分析、教程、原理讲解
 - inbox: 信息不足或需要人工判断
 
 ## 分类原则
-- 如果 URL 是 GitHub/GitLab 等代码仓库，或正文明显在评测/介绍某个开源项目，优先使用 repo_eval。
+- 如果 URL 是 GitHub/GitLab 等代码仓库，或正文明显在评测/介绍某个开源项目，优先使用 review。
 - 如果正文是可读的文章、问答、教程、研究博客或视频/播客 transcript，并且候选目录中存在明确匹配主题，选择最合适的候选 path。
 - 不要为了提高归档率而选择泛化、牵强或仅有弱关联的 topic；候选不明确时返回 topicPath="none"、wikiType="inbox"、needsManualReview=true。
 - needsManualReview=true 用于正文不可用、明显是错误页/登录页/导航页、或者没有明确匹配候选目录。
@@ -54,17 +54,17 @@
 
 {
   "topicPath": "候选 path 或 none",
-  "wikiType": "repo_eval|deep_dive|inbox",
+  "wikiType": "review|research|inbox",
   "contentType": "text|video|audio",
   "summary": {
-    "overview": "2-3 句概括",
-    "keyPoints": ["要点 1", "要点 2", "要点 3"],
-    "actionableAdvice": ["建议 1", "建议 2"],
-    "worthNoting": "后续关注方向"
+    "overview": "3-5 句详尽概括，确保包含核心技术点、关键数据/指标、结论和实际效果，让读者不打开原文也能掌握 90% 知识点",
+    "keyPoints": ["要点 1（附带具体数据/细节）", "要点 2", "要点 3", "要点 4", "要点 5"],
+    "actionableAdvice": ["可落地的建议/最佳实践 1", "建议 2"],
+    "worthNoting": "后续关注方向或值得进一步研究的主题"
   },
   "metadata": {
     "contentType": "text|media|repo",
-    "tags": ["tag1", "tag2"],
+    "tags": ["tag1", "tag2", "tag3"],
     "quality": "4/5",
     "author": "作者名（无则空字符串）",
     "uncertainties": "需要核实的信息（可选，无则空字符串）",
@@ -77,6 +77,12 @@
   "confidence": 0.0,
   "needsManualReview": false
 }
+
+## 摘要质量要求
+- overview 必须 3-5 句，包含具体的技术细节、数据指标和结论，不能只说"本文介绍了XX"这种空洞概括
+- keyPoints 至少 5 条，每条附带具体数据、例子或细节
+- actionableAdvice 在有明确可执行建议时提供 2-3 条具体建议
+- 目标：读者只看你的摘要就能掌握原文 90% 的知识点，无需再打开原文
 
 如果正文是错误页、登录页、空壳页面、纯导航、广告页、无法判断主题或候选都完全不匹配，返回 topicPath="none"、wikiType="inbox"、needsManualReview=true。
 summary.actionableAdvice 在有明确可执行建议时提供，否则可以省略或为空数组。

@@ -24,6 +24,7 @@ const (
 
 // CommandForURL returns the opencli adapter name and arguments for the given URL.
 // The caller uses these to build: opencli <adapter> <args...>.
+//
 //nolint:gocritic
 func CommandForURL(rawURL string) (string, []string) {
 	route, found := lo.Find(routes, func(r route) bool {
@@ -65,7 +66,8 @@ type route struct {
 var routes = []route{
 	{AdapterYoutube, "video", []string{"youtube.com", "youtu.be"}},
 	{AdapterTwitter, "article", []string{"x.com", "twitter.com", "mobile.twitter.com", "t.co"}},
-	{AdapterZhihu, "question", []string{"zhuanlan.zhihu.com", "zhihu.com"}},
+	{AdapterWeb, "read", []string{"zhuanlan.zhihu.com"}},
+	{AdapterZhihu, "question", []string{"zhihu.com"}},
 	{AdapterBilibili, "video", []string{"bilibili.com", "b23.tv"}},
 	{AdapterWeixin, "article", []string{"mp.weixin.qq.com"}},
 	{AdapterReddit, "read", []string{"reddit.com"}},
@@ -81,6 +83,30 @@ func HasAdapter(rawURL string) bool {
 	return found
 }
 
+// extractZhihuQuestionID extracts the numeric question ID from a zhihu URL path.
+// The path is expected to be /question/{id} or /question/{id}/answer/{answer_id}.
+func extractZhihuQuestionID(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) >= 2 && parts[0] == "question" && isNumeric(parts[1]) {
+		return parts[1]
+	}
+
+	return ""
+}
+
+func isNumeric(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+
+	return true
+}
+
 // argsForRoute builds the opencli command arguments for a matched route.
 func argsForRoute(r route, rawURL string) []string {
 	if r.adapter == AdapterWeb {
@@ -93,6 +119,15 @@ func argsForRoute(r route, rawURL string) []string {
 	if parsed, err := url.Parse(rawURL); err == nil && parsed.RawQuery != "" {
 		parsed.RawQuery = ""
 		cleanURL = parsed.String()
+	}
+
+	// zhihu question subcommand expects a numeric question ID, not a full URL.
+	if r.adapter == AdapterZhihu && r.subcmd == "question" {
+		if parsed, err := url.Parse(cleanURL); err == nil {
+			if id := extractZhihuQuestionID(parsed.Path); id != "" {
+				return []string{r.subcmd, id, "--format", "md"}
+			}
+		}
 	}
 
 	return []string{r.subcmd, cleanURL, "--format", "md"}
