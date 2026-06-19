@@ -6,8 +6,15 @@ import (
 	"os"
 
 	"github.com/knadh/koanf/parsers/yaml"
+	env "github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/v2"
 )
+
+// EnvOverride maps a single environment variable to a config path.
+type EnvOverride struct {
+	Path string
+	Name string
+}
 
 // LoadYAMLConfigOptions configures LoadYAMLConfig.
 type LoadYAMLConfigOptions[T any] struct {
@@ -16,6 +23,7 @@ type LoadYAMLConfigOptions[T any] struct {
 	Validate       func(*T) error
 	Path           string
 	Tag            string
+	EnvOverrides   []EnvOverride
 }
 
 const (
@@ -58,18 +66,12 @@ func LoadYAMLConfig[T any](opts LoadYAMLConfigOptions[T]) (T, error) {
 		tag = "yaml"
 	}
 
-	if opts.Path != "" {
-		data, err := os.ReadFile(opts.Path)
-		if err != nil {
-			return cfg, &LoadError{Stage: StageRead, Err: err}
-		}
-		k, err := LoadYAMLBytes(data)
-		if err != nil {
-			return cfg, &LoadError{Stage: StageParse, Err: err}
-		}
-		if err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: tag}); err != nil {
-			return cfg, &LoadError{Stage: StageUnmarshal, Err: err}
-		}
+	if err := loadConfigFromPath(&cfg, opts.Path, tag); err != nil {
+		return cfg, err
+	}
+
+	if err := applyEnvOverrides(&cfg, tag, opts.EnvOverrides); err != nil {
+		return cfg, &LoadError{Stage: StageUnmarshal, Err: err}
 	}
 
 	if opts.AfterUnmarshal != nil {
@@ -84,6 +86,53 @@ func LoadYAMLConfig[T any](opts LoadYAMLConfigOptions[T]) (T, error) {
 	}
 
 	return cfg, nil
+}
+
+func loadConfigFromPath[T any](cfg *T, path, tag string) error {
+	if path == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return &LoadError{Stage: StageRead, Err: err}
+	}
+	k, err := LoadYAMLBytes(data)
+	if err != nil {
+		return &LoadError{Stage: StageParse, Err: err}
+	}
+	if err := k.UnmarshalWithConf("", cfg, koanf.UnmarshalConf{Tag: tag}); err != nil {
+		return &LoadError{Stage: StageUnmarshal, Err: err}
+	}
+
+	return nil
+}
+
+func applyEnvOverrides[T any](cfg *T, tag string, overrides []EnvOverride) error {
+	if len(overrides) == 0 {
+		return nil
+	}
+
+	k := koanf.New(".")
+	if err := k.Load(env.Provider(".", env.Opt{TransformFunc: func(key, value string) (string, any) {
+		if value == "" {
+			return "", nil
+		}
+		for _, override := range overrides {
+			if override.Name == key {
+				return override.Path, value
+			}
+		}
+
+		return "", nil
+	}}), nil); err != nil {
+		return err
+	}
+	if len(k.Keys()) == 0 {
+		return nil
+	}
+
+	return k.UnmarshalWithConf("", cfg, koanf.UnmarshalConf{Tag: tag})
 }
 
 type bytesProvider []byte

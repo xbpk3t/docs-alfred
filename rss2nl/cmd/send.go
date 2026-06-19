@@ -134,7 +134,7 @@ func newSendCmd() *cobra.Command {
 		Use:   "send",
 		Short: "Merge feeds and send newsletter",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			config, err := loadConfig(cfgFile, os.Getenv("RESEND_TOKEN"))
+			config, err := loadConfig(cfgFile)
 			if err != nil {
 				return err
 			}
@@ -224,17 +224,12 @@ func runFeedHealthCheck(config *rss.Config) error {
 	return nil
 }
 
-func loadConfig(cfgFile, resendTokenFallback string) (*rss.Config, error) {
+func loadConfig(cfgFile string) (*rss.Config, error) {
 	config, err := rss.NewConfig(cfgFile)
 	if err != nil {
 		slog.Error("rss2nl config file load error:", slog.Any("err", err))
 
 		return nil, err
-	}
-
-	// Fall back to caller-provided token if not set in config file.
-	if config.ResendConfig.Token == "" {
-		config.ResendConfig.Token = resendTokenFallback
 	}
 
 	if err := config.ValidateForSend(); err != nil {

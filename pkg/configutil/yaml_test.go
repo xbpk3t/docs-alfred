@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadYAMLBytes(t *testing.T) {
@@ -106,6 +107,55 @@ func TestLoadYAMLConfigReturnsValidationError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("LoadYAMLConfig() error = nil, want validation error")
+	}
+}
+
+func TestLoadYAMLConfigAppliesEnvOverrides(t *testing.T) {
+	type config struct {
+		Name    string        `yaml:"name"`
+		Count   int           `yaml:"count"`
+		Enabled bool          `yaml:"enabled"`
+		Timeout time.Duration `yaml:"timeout"`
+	}
+	path := writeConfigFile(t, "name: yaml\ncount: 2\nenabled: false\ntimeout: 5s\n")
+	t.Setenv("TEST_NAME", "env")
+	t.Setenv("TEST_COUNT", "7")
+	t.Setenv("TEST_ENABLED", "true")
+	t.Setenv("TEST_TIMEOUT", "30s")
+
+	got, err := LoadYAMLConfig(LoadYAMLConfigOptions[config]{
+		Path: path,
+		EnvOverrides: []EnvOverride{
+			{Name: "TEST_NAME", Path: "name"},
+			{Name: "TEST_COUNT", Path: "count"},
+			{Name: "TEST_ENABLED", Path: "enabled"},
+			{Name: "TEST_TIMEOUT", Path: "timeout"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("LoadYAMLConfig() error = %v", err)
+	}
+	if got.Name != "env" || got.Count != 7 || !got.Enabled || got.Timeout != 30*time.Second {
+		t.Fatalf("config = %+v, want env overrides applied", got)
+	}
+}
+
+func TestLoadYAMLConfigIgnoresEmptyEnvOverrides(t *testing.T) {
+	type config struct {
+		Name string `yaml:"name"`
+	}
+	path := writeConfigFile(t, "name: yaml\n")
+	t.Setenv("TEST_NAME", "")
+
+	got, err := LoadYAMLConfig(LoadYAMLConfigOptions[config]{
+		Path:         path,
+		EnvOverrides: []EnvOverride{{Name: "TEST_NAME", Path: "name"}},
+	})
+	if err != nil {
+		t.Fatalf("LoadYAMLConfig() error = %v", err)
+	}
+	if got.Name != "yaml" {
+		t.Fatalf("Name = %q, want YAML value preserved", got.Name)
 	}
 }
 

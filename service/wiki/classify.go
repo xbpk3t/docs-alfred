@@ -1055,3 +1055,24 @@ var ErrClassificationUnavailable = errors.New("classification unavailable")
 func truncate(s string, maxLen int) string {
 	return textutil.TruncateUTF8(s, maxLen)
 }
+
+// ClassifyContent classifies content to determine topic path.
+// This is a shared function that can be used by both wiki and ccx.
+func ClassifyContent(content, wikiRoot string, aiConfig *ai.ClientConfig) (string, error) {
+	classifier := NewClassifier(aiConfig, wikiRoot, "https://cdn.lucc.dev/gh.yml")
+
+	// Truncate content for classification (use first 2000 chars for speed)
+	if len(content) > 2000 {
+		content = content[:2000]
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	result := classifier.ClassifyURL(ctx, "session-export", "Session Export", content)
+	if result == nil {
+		return "", errors.New("classification returned nil")
+	}
+
+	return result.TopicPath, nil
+}
