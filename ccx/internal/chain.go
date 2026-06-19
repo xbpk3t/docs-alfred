@@ -289,7 +289,7 @@ func extractDisplay(transcriptPath string) string {
 		}
 
 		// Check if this is a user message
-		if obj["type"] != "user" {
+		if obj["type"] != roleUser {
 			continue
 		}
 
