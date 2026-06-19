@@ -125,18 +125,52 @@ func classifyWithFallback(content, wikiRoot string, verbose bool) string {
 	return topicPath
 }
 
-// exportSessionToMarkdown exports a single session JSONL to markdown using cc2md.
+// exportSessionToMarkdown exports a single session JSONL to markdown using claude-conversation-extractor.
 func exportSessionToMarkdown(sessionPath string) (string, error) {
-	if _, ok := cmdutil.LookPath("cc2md"); !ok {
-		return "", errors.New("cc2md not installed")
+	if _, ok := cmdutil.LookPath("claude-extract"); !ok {
+		return "", errors.New("claude-extract not found (install with: uv tool install claude-conversation-extractor)")
 	}
 
-	out, err := cmdutil.RunStdout(context.Background(), "cc2md", sessionPath, "--raw", "--markdown", "gfm", "--no-pager")
+	// Create temp directory for output
+	tmpDir, err := os.MkdirTemp("", "ccx-session-*")
 	if err != nil {
-		return "", fmt.Errorf("cc2md: %w", err)
+		return "", fmt.Errorf("create temp dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Symlink the JSONL file to temp dir
+	err = os.Symlink(sessionPath, filepath.Join(tmpDir, filepath.Base(sessionPath)))
+	if err != nil {
+		return "", fmt.Errorf("symlink session file: %w", err)
 	}
 
-	return string(out), nil
+	// Call claude-extract to export the session
+	_, err = cmdutil.RunStdout(context.Background(), "claude-extract",
+		"--extract", "1",
+		"--output", tmpDir,
+	)
+	if err != nil {
+		return "", fmt.Errorf("claude-extract: %w", err)
+	}
+
+	// Find and read the output file
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		return "", fmt.Errorf("read output dir: %w", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
+			data, err := os.ReadFile(filepath.Join(tmpDir, entry.Name()))
+			if err != nil {
+				return "", fmt.Errorf("read output file: %w", err)
+			}
+
+			return string(data), nil
+		}
+	}
+
+	return "", errors.New("no markdown file found in output")
 }
 
 // mergeMarkdowns merges multiple session markdowns into one.
@@ -183,22 +217,19 @@ func extractFirstUserMessage(markdown string) string {
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		if strings.Contains(trimmed, "**User**") {
+		if strings.Contains(trimmed, "👤 User") {
 			inUserBlock = true
 
 			continue
 		}
 
-		if inUserBlock && trimmed != "" && !strings.HasPrefix(trimmed, "> [!") {
-			content := strings.TrimPrefix(trimmed, "> ")
-			content = strings.TrimSpace(content)
-
-			if isValidUserMessage(content) {
-				return content
+		if inUserBlock && trimmed != "" && trimmed != "---" {
+			if isValidUserMessage(trimmed) {
+				return trimmed
 			}
 		}
 
-		if inUserBlock && trimmed == "" {
+		if inUserBlock && trimmed == "---" {
 			inUserBlock = false
 		}
 	}
