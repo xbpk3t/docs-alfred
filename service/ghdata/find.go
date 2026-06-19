@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/agnivade/levenshtein"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
@@ -199,8 +200,24 @@ func isFuzzyMatch(query, target string) bool {
 	if len([]rune(query)) < 3 || target == "" {
 		return false
 	}
+	if fuzzy.MatchFold(query, target) {
+		return true
+	}
+	// Typo-tolerant: allow 1 edit for short queries, 2 for longer ones.
+	lowerTarget := strings.ToLower(target)
+	queryLen := len([]rune(query))
+	threshold := 1
+	if queryLen > 5 {
+		threshold = 2
+	}
+	// Check Levenshtein against each word in the target.
+	for word := range strings.FieldsSeq(lowerTarget) {
+		if levenshtein.ComputeDistance(query, word) <= threshold {
+			return true
+		}
+	}
 
-	return fuzzy.MatchFold(query, target)
+	return false
 }
 
 func scoreEntryByTextQuery(repo *Repo, repoURL, lowerQuery string, ev *WalkerEvent) FindEntry {

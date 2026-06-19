@@ -1,14 +1,13 @@
 package wiki
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	"github.com/xbpk3t/docs-alfred/pkg/opencli"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/yuin/goldmark"
@@ -192,10 +191,9 @@ func (d *openCLIDriver) resolveTcoURL(ctx context.Context, rawURL string) string
 		return rawURL
 	}
 
-	cmd := exec.CommandContext(ctx, "curl", "-sL", "-o", "/dev/null",
+	out, err := cmdutil.RunStdout(ctx, "curl", "-sL", "-o", "/dev/null",
 		"-w", "%{url_effective}", "--connect-timeout", "10",
 		"--max-time", "30", rawURL)
-	out, err := cmd.Output()
 	if err != nil {
 		slog.Warn("t.co resolution: curl failed", "url", rawURL, "error", err)
 
@@ -267,16 +265,13 @@ func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *
 	}()
 
 	// Run weixin download with YAML output format so we can parse the saved path.
-	args := []string{"download", "--url", rawURL, "-f", "yaml", "--output", tmpDir}
-	cmd := exec.CommandContext(ctx, "opencli", append([]string{"weixin"}, args...)...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	args := []string{"weixin", "download", "--url", rawURL, "-f", "yaml", "--output", tmpDir}
 
 	slog.Info("weixin: downloading article", "url", rawURL)
-	if runErr := cmd.Run(); runErr != nil {
+	stdout, stderr, runErr := cmdutil.RunSeparate(ctx, "opencli", args...)
+	if runErr != nil {
 		return &ContentFetchResult{
-			Error:       fmt.Sprintf("weixin: %v (stderr: %s)", runErr, strings.TrimSpace(stderr.String())),
+			Error:       fmt.Sprintf("weixin: %v (stderr: %s)", runErr, strings.TrimSpace(string(stderr))),
 			SourceURL:   rawURL,
 			FailureKind: FailureFetch,
 		}
@@ -287,7 +282,7 @@ func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *
 	//   - title: ...
 	//     ...
 	//     saved: /tmp/weixin-xxx/红筹退潮.../红筹退潮....md
-	savedPath := extractWeixinSavedPath(stdout.String())
+	savedPath := extractWeixinSavedPath(string(stdout))
 	if savedPath == "" {
 		return &ContentFetchResult{
 			Error:       "weixin: could not find saved file path in output",
@@ -354,18 +349,14 @@ func extractSavedPathFromLine(line string) string {
 
 func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extraArgs []string) *ContentFetchResult {
 	args := append([]string{subcommand}, extraArgs...)
-	cmd := exec.CommandContext(ctx, "opencli", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
+	stdout, stderr, err := cmdutil.RunSeparate(ctx, "opencli", args...)
+	if err != nil {
 		return &ContentFetchResult{
-			Error: fmt.Sprintf("opencli: %v (stderr: %s)", err, strings.TrimSpace(stderr.String())),
+			Error: fmt.Sprintf("opencli: %v (stderr: %s)", err, strings.TrimSpace(string(stderr))),
 		}
 	}
 
-	body := stdout.String()
+	body := string(stdout)
 	if body == "" {
 		return &ContentFetchResult{Error: "opencli returned empty content"}
 	}

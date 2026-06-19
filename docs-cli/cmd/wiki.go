@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	wikiuc "github.com/xbpk3t/docs-alfred/internal/wikiingest"
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/workspaceops"
 )
@@ -132,12 +132,7 @@ func newWikiAuditCmd() *cobra.Command {
 
 			result, err := wikiuc.RunAudit(context.Background(), wikiuc.AuditInput{
 				Config: cfg,
-				RunCmd: func(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
-					cmd := exec.CommandContext(ctx, name, args...)
-					cmd.Dir = dir
-
-					return cmd.CombinedOutput()
-				},
+				RunCmd: cmdutil.RunWithOutput,
 				ChangedOnly: flags.changedOnly,
 				Paths:       flags.auditPaths,
 			})

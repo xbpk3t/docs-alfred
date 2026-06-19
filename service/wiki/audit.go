@@ -212,16 +212,12 @@ func pathWithinRoot(absRoot, absPath string) (bool, error) {
 func auditSummaryFile(file string, lines []string) []checkutil.Issue {
 	issues := auditMalformedURLLines(file, lines)
 	lowerAll := strings.ToLower(strings.Join(lines, "\n"))
-	for _, pattern := range lowQualityPatterns() {
-		if strings.Contains(lowerAll, pattern) {
-			issues = append(issues, checkutil.Issue{
-				File:     file,
-				Severity: checkutil.SeverityError,
-				Message:  "successful summary contains low-quality extraction marker: " + pattern,
-			})
-
-			break
-		}
+	if matches := lowQualityMatcher.Match([]byte(lowerAll)); len(matches) > 0 {
+		issues = append(issues, checkutil.Issue{
+			File:     file,
+			Severity: checkutil.SeverityError,
+			Message:  "successful summary contains low-quality extraction marker: " + lowQualityPatternsList[matches[0]],
+		})
 	}
 	issues = append(issues, auditCanonicalHeadings(file, lines)...)
 	issues = append(issues, auditCodeblockFields(file, lines)...)

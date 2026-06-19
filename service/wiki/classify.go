@@ -743,104 +743,74 @@ func parseAIClassification(raw string) (*aiClassification, error) {
 	return &result, nil
 }
 
+// repairInvalidJSONStringEscapes fixes AI-generated JSON escape issues that sonic
+// doesn't handle natively. Sonic already tolerates unescaped \n, \r, \t in strings,
+// so this only repairs invalid backslash escapes (e.g. \k) and stray control chars.
 func repairInvalidJSONStringEscapes(raw string) string {
-	repairer := jsonStringEscapeRepairer{raw: raw}
+	var b strings.Builder
+	b.Grow(len(raw))
+	inString := false
 
-	return repairer.repair()
-}
+	for i := 0; i < len(raw); i++ {
+		ch := raw[i]
+		if !inString {
+			b.WriteByte(ch)
+			if ch == '"' {
+				inString = true
+			}
 
-type jsonStringEscapeRepairer struct {
-	raw      string
-	b        strings.Builder
-	inString bool
-}
-
-func (r *jsonStringEscapeRepairer) repair() string {
-	r.b.Grow(len(r.raw))
-	for i := 0; i < len(r.raw); i++ {
-		i = r.writeByte(i)
+			continue
+		}
+		switch ch {
+		case '"':
+			b.WriteByte(ch)
+			inString = false
+		case '\\':
+			i = repairBackslash(raw, i, &b)
+		default:
+			if ch < 0x20 {
+				fmt.Fprintf(&b, `\u%04x`, ch)
+			} else {
+				b.WriteByte(ch)
+			}
+		}
 	}
 
-	return r.b.String()
+	return b.String()
 }
 
-func (r *jsonStringEscapeRepairer) writeByte(i int) int {
-	ch := r.raw[i]
-	if !r.inString {
-		r.writeOutsideString(ch)
+// repairBackslash handles a backslash escape sequence starting at position i.
+// Valid JSON escapes are passed through; invalid ones are double-escaped.
+func repairBackslash(raw string, i int, b *strings.Builder) int {
+	if i+1 >= len(raw) {
+		b.WriteString(`\\`)
 
 		return i
 	}
-
-	return r.writeInsideString(i, ch)
-}
-
-func (r *jsonStringEscapeRepairer) writeOutsideString(ch byte) {
-	r.b.WriteByte(ch)
-	if ch == '"' {
-		r.inString = true
-	}
-}
-
-func (r *jsonStringEscapeRepairer) writeInsideString(i int, ch byte) int {
-	switch ch {
-	case '"':
-		r.b.WriteByte(ch)
-		r.inString = false
-	case '\\':
-		return r.writeBackslashEscape(i)
-	case '\n':
-		r.b.WriteString(`\n`)
-	case '\r':
-		r.b.WriteString(`\r`)
-	case '\t':
-		r.b.WriteString(`\t`)
-	default:
-		r.writeStringByte(ch)
-	}
-
-	return i
-}
-
-func (r *jsonStringEscapeRepairer) writeBackslashEscape(i int) int {
-	if i+1 >= len(r.raw) {
-		r.b.WriteString(`\\`)
-
-		return i
-	}
-	next := r.raw[i+1]
-	if isValidSimpleJSONEscape(next) {
-		r.b.WriteByte('\\')
-		r.b.WriteByte(next)
+	next := raw[i+1]
+	if isValidJSONEscape(next) {
+		b.WriteByte('\\')
+		b.WriteByte(next)
 
 		return i + 1
 	}
-	if next == 'u' && i+5 < len(r.raw) && isHex4(r.raw[i+2:i+6]) {
-		r.b.WriteString(r.raw[i : i+6])
+	if next == 'u' && i+5 < len(raw) && isHex4(raw[i+2:i+6]) {
+		b.WriteString(raw[i : i+6])
 
 		return i + 5
 	}
-	r.b.WriteString(`\\`)
+	b.WriteString(`\\`)
 
 	return i
 }
 
-func (r *jsonStringEscapeRepairer) writeStringByte(ch byte) {
-	if ch < 0x20 {
-		fmt.Fprintf(&r.b, `\u%04x`, ch)
-
-		return
-	}
-	r.b.WriteByte(ch)
-}
-
-func isValidSimpleJSONEscape(ch byte) bool {
+func isValidJSONEscape(ch byte) bool {
 	switch ch {
 	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 		return true
-	default:
-		return false
 	}
+
+	return false
 }
 
 func isHex4(s string) bool {

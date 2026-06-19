@@ -143,7 +143,7 @@ type DigestInput struct {
 // AuditInput contains inputs for read-only wiki auditing.
 type AuditInput struct {
 	Config      *Config
-	RunCmd      CommandRunner // optional; defaults to exec.CommandContext
+	RunCmd      CommandRunner // optional; required if ChangedOnly is set
 	Paths       []string
 	ChangedOnly bool
 }

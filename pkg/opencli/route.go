@@ -37,7 +37,6 @@ const (
 // CommandForURL returns the opencli adapter name and arguments for the given URL.
 // The caller uses these to build: opencli <adapter> <args...>.
 //
-//nolint:gocritic
 func CommandForURL(rawURL string) (string, []string) {
 	route, found := lo.Find(routes, func(r route) bool {
 		return urlMatchesDomain(rawURL, r.domains)

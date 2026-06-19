@@ -1,8 +1,9 @@
 package ai
 
 import (
-	"encoding/json"
 	"strings"
+
+	"github.com/bytedance/sonic"
 )
 
 // ExtractJSONBraces finds the outermost balanced {...} block in the string.
@@ -30,9 +31,9 @@ func ExtractJSONBraces(s string) string {
 
 // UnmarshalStrictJSON tries to unmarshal raw JSON; if that fails, it strips
 // markdown code fences and extracts the outermost JSON block before retrying.
-// Returns the original json.Unmarshal error if extraction also fails.
+// Returns the original sonic.Unmarshal error if extraction also fails.
 func UnmarshalStrictJSON(raw string, v any) error {
-	if err := json.Unmarshal([]byte(raw), v); err == nil {
+	if err := sonic.Unmarshal([]byte(raw), v); err == nil {
 		return nil
 	}
 
@@ -46,8 +47,8 @@ func UnmarshalStrictJSON(raw string, v any) error {
 	extracted := ExtractJSONBraces(cleaned)
 	if extracted == "" {
 		// Return the original error if nothing extracted.
-		return json.Unmarshal([]byte(raw), v)
+		return sonic.Unmarshal([]byte(raw), v)
 	}
 
-	return json.Unmarshal([]byte(extracted), v)
+	return sonic.Unmarshal([]byte(extracted), v)
 }

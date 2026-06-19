@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -160,8 +162,9 @@ func getDetail[T tmdbMovieDetail | tmdbTvDetail](c *tmdbClient, ctx context.Cont
 	return &detail, nil
 }
 
-//nolint:cyclop
 // searchWithCache wraps a TMDB search with cache lookup/store and year retry.
+//
+//nolint:cyclop
 func (c *tmdbClient) searchWithCache(
 	ctx context.Context,
 	cachePrefix, name, year string,
@@ -374,13 +377,22 @@ func mapTvFields(search *tmdbSearchItem, detail *tmdbTvDetail) *EnrichFields {
 
 // extractYear extracts the 4-digit year from a date string (YYYY-MM-DD or YYYY).
 func extractYear(date string) string {
-	if len(date) >= 4 {
-		year := date[:4]
-		// Verify it looks like a year
-		if year >= "1900" && year <= "2100" {
-			return year
+	if len(date) < 4 {
+		return ""
+	}
+	c := carbon.Parse(date)
+	if !c.IsValid() || c.Year() <= 0 {
+		// Fallback: try raw prefix for bare year strings like "2000".
+		if year, err := strconv.Atoi(date[:4]); err == nil && year >= 1900 && year <= 2100 {
+			return date[:4]
 		}
+
+		return ""
+	}
+	year := c.Year()
+	if year < 1900 || year > 2100 {
+		return ""
 	}
 
-	return ""
+	return strconv.Itoa(year)
 }

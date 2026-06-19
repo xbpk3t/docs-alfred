@@ -1,11 +1,9 @@
 package ghdata
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -14,6 +12,7 @@ import (
 	"github.com/goccy/go-yaml/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/gitutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 	"github.com/xbpk3t/docs-alfred/pkg/yamlutil"
 )
@@ -131,14 +130,12 @@ func inferTopicFromURL(urlStr string) string {
 }
 
 func getGitDiffStat(file string) (string, error) {
-	cmd := exec.Command("git", "diff", "--stat", file)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
+	repoRoot, err := gitutil.FindRepoRoot(file)
+	if err != nil {
 		return "", err
 	}
 
-	return strings.TrimSpace(out.String()), nil
+	return gitutil.DiffStat(repoRoot, file)
 }
 
 // appendYAMLRecord appends a record entry to the YAML file using go-yaml AST.
