@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-viper/mapstructure/v2"
 	yaml "github.com/goccy/go-yaml"
 	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -67,7 +68,6 @@ func RunDuplicateCheck(targetDir string) (*DuplicateReport, error) {
 	}, nil
 }
 
-//nolint:gocritic // groupByURL returns unnamed results; named returns conflict with nonamedreturns
 func groupByURL(items []parsedItem) ([]URLDupEntry, map[string]bool) {
 	byURL := lo.GroupBy(lo.Filter(items, func(item parsedItem, _ int) bool {
 		return item.url != ""
@@ -285,36 +285,29 @@ func parseDomainFiles(targetDir string) ([]parsedItem, error) {
 	return items, nil
 }
 
+// yamlItem is the exported-field struct used for mapstructure decoding.
+type yamlItem struct {
+	Name   string   `mapstructure:"name"`
+	Author string   `mapstructure:"author"`
+	URL    string   `mapstructure:"url"`
+	Tags   []string `mapstructure:"tags"`
+	Score  int      `mapstructure:"score"`
+}
+
 func parseYAMLDocItems(doc []map[string]any, fileName string) []parsedItem {
 	var items []parsedItem
 	for _, item := range doc {
-		name, _ := item["name"].(string)
-		if name == "" {
+		var yi yamlItem
+		if err := mapstructure.Decode(item, &yi); err != nil || yi.Name == "" {
 			continue
 		}
-		author, _ := item["author"].(string)
-		url, _ := item["url"].(string)
-		score := 0
-		if s, ok := item["score"].(int); ok {
-			score = s
-		}
-
-		var tags []string
-		if tagList, ok := item["tags"].([]any); ok {
-			for _, t := range tagList {
-				if s, ok := t.(string); ok {
-					tags = append(tags, s)
-				}
-			}
-		}
-
 		items = append(items, parsedItem{
 			file:   fileName,
-			name:   name,
-			author: author,
-			score:  score,
-			tags:   tags,
-			url:    url,
+			name:   yi.Name,
+			author: yi.Author,
+			score:  yi.Score,
+			tags:   yi.Tags,
+			url:    yi.URL,
 		})
 	}
 

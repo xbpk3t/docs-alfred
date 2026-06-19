@@ -129,7 +129,6 @@ func resolveAPIKey(rt enrich.ResourceType) (string, error) {
 	return key, nil
 }
 
-//nolint:gocritic
 func envVarForResource(rt enrich.ResourceType) (string, string) {
 	switch rt {
 	case enrich.ResourceMovie, enrich.ResourceTV:

@@ -3,11 +3,11 @@ package ghindex
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
@@ -160,38 +160,14 @@ func startBackgroundSyncProcess(m *Manager) error {
 		return fmt.Errorf("find current executable: %w", err)
 	}
 
-	cmd := exec.Command(binaryPath, "sync", "--url", m.configURL, "--cache", m.configPath)
-	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
-	if err != nil {
-		return fmt.Errorf("open %s: %w", os.DevNull, err)
-	}
-
-	cmd.Stdin = devNull
-	cmd.Stdout = devNull
-	cmd.Stderr = devNull
-
-	if err := cmd.Start(); err != nil {
-		_ = devNull.Close()
-
-		return fmt.Errorf("start background sync: %w", err)
-	}
-	if err := cmd.Process.Release(); err != nil {
-		_ = devNull.Close()
-
-		return fmt.Errorf("release background sync process: %w", err)
-	}
-	if err := devNull.Close(); err != nil {
-		return fmt.Errorf("close %s: %w", os.DevNull, err)
-	}
-
-	return nil
+	return cmdutil.RunBackground(binaryPath, "sync", "--url", m.configURL, "--cache", m.configPath)
 }
 
 // IsBackgroundSyncAvailable checks if the binary can run background sync.
 func IsBackgroundSyncAvailable(binaryPath string) bool {
-	_, err := exec.LookPath(binaryPath)
+	_, ok := cmdutil.LookPath(binaryPath)
 
-	return err == nil
+	return ok
 }
 
 func (m *Manager) loadFromFile() error {

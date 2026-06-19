@@ -7,13 +7,13 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"os/exec"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/asticode/go-astisub"
 	"github.com/gabriel-vasile/mimetype"
+	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	"github.com/xbpk3t/docs-alfred/pkg/htmlutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
@@ -252,13 +252,11 @@ func (p *AudioTranscriptionProvider) Fetch(ctx context.Context, ep *EpisodeRef) 
 		return nil, errors.New("no audio enclosure URL for ASR")
 	}
 
-	cmd := exec.CommandContext(ctx, p.CLIPath,
+	output, err := cmdutil.RunStdout(ctx, p.CLIPath,
 		"--language", p.Language,
 		"--output-format", "txt",
 		ep.EnclosureURL,
 	)
-
-	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("asr failed: %w", err)
 	}

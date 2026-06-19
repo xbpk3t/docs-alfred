@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudflare/ahocorasick"
 	"github.com/google/go-github/v70/github"
 	"github.com/mmcdole/gofeed"
+	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/internal/transcript"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
@@ -209,7 +211,7 @@ func (f *Fetcher) fetchPodcastTranscript(ctx context.Context, rawURL string) *Co
 		}
 	}
 
-	reason := strings.Join(compactStrings(failures), "; ")
+	reason := strings.Join(lo.Filter(failures, func(s string, _ int) bool { return s != "" }), "; ")
 	if reason == "" {
 		reason = "no RSS item transcript found"
 	}
@@ -346,10 +348,8 @@ func assessContentQuality(title, body, rawURL string) contentQuality {
 	if cfReason := cloudflareChallengeReason(lower); cfReason != "" {
 		return contentQuality{Reason: cfReason}
 	}
-	for _, pattern := range lowQualityPatterns() {
-		if strings.Contains(lower, pattern) {
-			return contentQuality{Reason: "matched error/login shell: " + pattern}
-		}
+	if matches := lowQualityMatcher.Match([]byte(lower)); len(matches) > 0 {
+		return contentQuality{Reason: "matched error/login shell"}
 	}
 
 	domain := urlutil.Domain(rawURL)
@@ -381,28 +381,28 @@ func cloudflareChallengeReason(lower string) string {
 	return ""
 }
 
-func lowQualityPatterns() []string {
-	return []string{
-		"this page requires javascript",
-		"javascript is not available",
-		"enable javascript",
-		"please enable js",
-		"please log in",
-		"log in to continue",
-		"sign in to continue",
-		"sign up for",
-		"access denied",
-		"forbidden",
-		"captcha",
-		"checking your browser",
-		"just a moment",
-		"400 bad request",
-		"404 not found",
-		"page not found",
-		"something went wrong",
-		"video content requires manual review",
-	}
+var lowQualityPatternsList = []string{
+	"this page requires javascript",
+	"javascript is not available",
+	"enable javascript",
+	"please enable js",
+	"please log in",
+	"log in to continue",
+	"sign in to continue",
+	"sign up for",
+	"access denied",
+	"forbidden",
+	"captcha",
+	"checking your browser",
+	"just a moment",
+	"400 bad request",
+	"404 not found",
+	"page not found",
+	"something went wrong",
+	"video content requires manual review",
 }
+
+var lowQualityMatcher = ahocorasick.NewStringMatcher(lowQualityPatternsList)
 
 func isSocialShellDomain(domain string) bool {
 	switch strings.ToLower(domain) {
@@ -435,16 +435,20 @@ func socialShellLike(lower, body string) bool {
 	return false
 }
 
+var socialShellMatcher = ahocorasick.NewStringMatcher([]string{
+	"log in",
+	"sign up",
+	"javascript",
+	"enable js",
+	"keyboard shortcuts",
+	"keyboard shortcut",
+	"to continue, please",
+	"already have an account",
+	"don't have an account",
+})
+
 func socialShellPatterns(lower string) bool {
-	return strings.Contains(lower, "log in") ||
-		strings.Contains(lower, "sign up") ||
-		strings.Contains(lower, "javascript") ||
-		strings.Contains(lower, "enable js") ||
-		strings.Contains(lower, "keyboard shortcuts") ||
-		strings.Contains(lower, "keyboard shortcut") ||
-		strings.Contains(lower, "to continue, please") ||
-		strings.Contains(lower, "already have an account") ||
-		strings.Contains(lower, "don't have an account")
+	return len(socialShellMatcher.Match([]byte(lower))) > 0
 }
 
 func hasRealSentences(lower string) bool {
@@ -500,18 +504,6 @@ func isMissingTranscriptReason(reason string) bool {
 		strings.Contains(lower, "description/content has no transcript link") ||
 		strings.Contains(lower, "no description or content to search") ||
 		strings.Contains(lower, "all providers failed to produce transcript")
-}
-
-func compactStrings(items []string) []string {
-	result := make([]string, 0, len(items))
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if item != "" {
-			result = append(result, item)
-		}
-	}
-
-	return result
 }
 
 // --- URL classification helpers ---

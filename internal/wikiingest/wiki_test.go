@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	wikisvc "github.com/xbpk3t/docs-alfred/service/wiki"
 )
 
@@ -402,17 +402,13 @@ This changed-only audit entry is clean and long enough to avoid historical pollu
 
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
+	out, err := cmdutil.RunWithOutput(context.Background(), dir, "git", args...)
 	require.NoError(t, err, string(out))
 }
 
 func testCommandRunner() CommandRunner {
 	return func(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, name, args...)
-		cmd.Dir = dir
-		return cmd.CombinedOutput()
+		return cmdutil.RunWithOutput(ctx, dir, name, args...)
 	}
 }
 

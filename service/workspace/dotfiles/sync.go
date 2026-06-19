@@ -1,13 +1,12 @@
 package dotfiles
 
 import (
-	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/gitutil"
 )
 
 // SyncRecordOptions holds options for sync-record.
@@ -90,25 +89,14 @@ type changedFile struct {
 }
 
 func getChangedFiles(repoPath string) []changedFile {
-	cmd := exec.Command("git", "-C", repoPath, "status", "--porcelain")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
+	changed, err := gitutil.ChangedFiles(repoPath)
+	if err != nil {
 		return nil
 	}
 
-	var files []changedFile
-	for line := range strings.SplitSeq(out.String(), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		if len(line) < 4 {
-			continue
-		}
-		status := strings.TrimSpace(line[:2])
-		path := strings.TrimSpace(line[3:])
-		files = append(files, changedFile{Path: path, Status: status})
+	files := make([]changedFile, 0, len(changed))
+	for _, f := range changed {
+		files = append(files, changedFile{Path: f.Path, Status: f.Status})
 	}
 
 	return files

@@ -107,6 +107,7 @@ linters:
         - whyNoLint
         - wrapperFunc
         - exitAfterDefer   # 已经默认启用，移除重复配置
+        - unnamedResult    # 与 nonamedreturns 冲突
 
       # 特定规则配置
       settings:

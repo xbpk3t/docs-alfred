@@ -20,10 +20,23 @@ import (
 	resend "github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
+	"github.com/tdewolff/minify/v2"
+	"github.com/tdewolff/minify/v2/html"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/service/rss"
 	"golang.org/x/sync/errgroup"
 )
+
+var htmlMinifier = newHTMLMinifier()
+
+func newHTMLMinifier() *minify.M {
+	m := minify.New()
+	m.Add("text/html", &html.Minifier{
+		KeepWhitespace: false,
+	})
+
+	return m
+}
 
 //go:embed templates/*.gohtml
 var templates embed.FS
@@ -553,7 +566,15 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 		return "", fmt.Errorf("failed to render template: %w", err)
 	}
 
-	return tplBytes.String(), nil
+	// Minify HTML to reduce email size.
+	var minified bytes.Buffer
+	if minErr := htmlMinifier.Minify("text/html", &minified, &tplBytes); minErr != nil {
+		slog.Warn("HTML minification failed, using original", "error", minErr)
+
+		return tplBytes.String(), nil
+	}
+
+	return minified.String(), nil
 }
 
 // RenderNewsletter renders the newsletter template.
