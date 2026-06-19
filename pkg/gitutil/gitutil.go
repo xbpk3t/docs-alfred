@@ -9,7 +9,6 @@
 package gitutil
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -18,7 +17,9 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 // ChangedFile represents a single file change from git status.
@@ -110,6 +111,10 @@ func DiffStat(repoPath, filePath string) (string, error) {
 	// Get HEAD file content
 	headContent, err := headFileContent(repo, relPath)
 	if err != nil {
+		if errors.Is(err, plumbing.ErrReferenceNotFound) {
+			return "", nil
+		}
+
 		if errors.Is(err, object.ErrFileNotFound) {
 			return "", nil // new/untracked file — no diff
 		}
@@ -194,63 +199,58 @@ func headFileContent(repo *git.Repository, relPath string) (string, error) {
 }
 
 // countLineDiff counts additions and deletions between old and new content
-// using a simple LCS-based diff. Returns (additions, deletions).
+// using a line-oriented diff. Returns (additions, deletions).
 func countLineDiff(old, newContent string) (int, int) {
-	oldLines := splitLines(old)
-	newLines := splitLines(newContent)
-	dp := buildLCSTable(oldLines, newLines)
-
-	return backtrackDiff(dp, oldLines, newLines)
-}
-
-// buildLCSTable builds the LCS dynamic programming table.
-func buildLCSTable(oldLines, newLines []string) [][]int {
-	m, n := len(oldLines), len(newLines)
-	dp := make([][]int, m+1)
-	for i := range dp {
-		dp[i] = make([]int, n+1)
+	old = normalizeDiffText(old)
+	newContent = normalizeDiffText(newContent)
+	if old == newContent {
+		return 0, 0
 	}
 
-	for i := 1; i <= m; i++ {
-		for j := 1; j <= n; j++ {
-			if oldLines[i-1] == newLines[j-1] {
-				dp[i][j] = dp[i-1][j-1] + 1
-			} else if dp[i-1][j] >= dp[i][j-1] {
-				dp[i][j] = dp[i-1][j]
-			} else {
-				dp[i][j] = dp[i][j-1]
-			}
-		}
-	}
+	dmp := diffmatchpatch.New()
+	chars1, chars2, lineArray := dmp.DiffLinesToChars(old, newContent)
+	diffs := dmp.DiffMain(chars1, chars2, false)
+	diffs = dmp.DiffCharsToLines(diffs, lineArray)
 
-	return dp
-}
-
-// backtrackDiff walks the LCS table to count additions and deletions.
-func backtrackDiff(dp [][]int, oldLines, newLines []string) (int, int) {
 	var additions, deletions int
-	i, j := len(oldLines), len(newLines)
-	for i > 0 || j > 0 {
-		if i > 0 && j > 0 && oldLines[i-1] == newLines[j-1] {
-			i--
-			j--
-		} else if j > 0 && (i == 0 || dp[i][j-1] >= dp[i-1][j]) {
-			additions++
-			j--
-		} else {
-			deletions++
-			i--
+	for _, diff := range diffs {
+		lines := countLines(diff.Text)
+		switch diff.Type {
+		case diffmatchpatch.DiffInsert:
+			additions += lines
+		case diffmatchpatch.DiffDelete:
+			deletions += lines
 		}
 	}
 
 	return additions, deletions
 }
 
+func normalizeDiffText(s string) string {
+	lines := splitLines(s)
+	if len(lines) == 0 {
+		return ""
+	}
+
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+
+	return len(splitLines(s))
+}
+
 func splitLines(s string) []string {
-	var lines []string
-	scanner := bufio.NewScanner(strings.NewReader(s))
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+	if s == "" {
+		return nil
+	}
+
+	lines := strings.Split(s, "\n")
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
 	}
 
 	return lines

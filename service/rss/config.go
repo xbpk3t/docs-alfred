@@ -165,6 +165,9 @@ func (c *Config) AiBaseURLForWiki() string {
 func NewConfig(configFile string) (*Config, error) {
 	config, err := configutil.LoadYAMLConfig(configutil.LoadYAMLConfigOptions[Config]{
 		Path: configFile,
+		EnvOverrides: []configutil.EnvOverride{
+			{Name: "RESEND_TOKEN", Path: "resend.token"},
+		},
 		AfterUnmarshal: func(config *Config) error {
 			config.applyDefaults()
 

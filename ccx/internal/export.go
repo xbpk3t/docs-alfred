@@ -9,9 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
+	"github.com/xbpk3t/docs-alfred/pkg/textutil"
+	wikisvc "github.com/xbpk3t/docs-alfred/service/wiki"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,6 +25,7 @@ const (
 
 // ExportInput contains inputs for session export.
 type ExportInput struct {
+	AIConfig  *ai.ClientConfig
 	WikiRoot  string
 	OutputDir string
 	DryRun    bool
@@ -61,6 +65,10 @@ type Frontmatter struct {
 
 // ExportSession exports the current session to wiki.
 func ExportSession(input ExportInput) (*ExportResult, error) {
+	if err := validateExportInput(input); err != nil {
+		return nil, err
+	}
+
 	chain, err := WalkSessionChain()
 	if err != nil {
 		return nil, fmt.Errorf("walk session chain: %w", err)
@@ -74,31 +82,23 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 		fmt.Fprintf(os.Stderr, "Found %d sessions in chain\n", len(chain))
 	}
 
-	sessions, err := extractAllSessions(chain, input.Verbose)
+	mergedMessages, err := extractAndMergeSessions(chain, input.Verbose)
 	if err != nil {
 		return nil, err
 	}
 
-	mergedMessages := mergeSessions(sessions)
-
-	if input.Verbose {
-		fmt.Fprintf(os.Stderr, "Merged %d messages\n", len(mergedMessages))
-	}
-
-	title, err := generateAITitle(mergedMessages)
-	if err != nil {
-		return nil, fmt.Errorf("generate title: %w", err)
-	}
+	topicPath, title := classifyAndGenerateTitle(mergedMessages, input)
+	outputPath := determineOutputPath(input, title, topicPath)
 
 	if input.Verbose {
 		fmt.Fprintf(os.Stderr, "Generated title: %s\n", title)
+		fmt.Fprintf(os.Stderr, "Topic path: %s\n", topicPath)
 	}
-
-	outputPath := determineOutputPath(input, title)
 
 	if input.DryRun {
 		return &ExportResult{
 			OutputPath: outputPath,
+			TopicPath:  topicPath,
 			Title:      title,
 			DryRun:     true,
 		}, nil
@@ -110,8 +110,68 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 
 	return &ExportResult{
 		OutputPath: outputPath,
+		TopicPath:  topicPath,
 		Title:      title,
 	}, nil
+}
+
+// validateExportInput validates the export input parameters.
+func validateExportInput(input ExportInput) error {
+	if input.OutputDir != "" {
+		return nil
+	}
+
+	wikiRoot := input.WikiRoot
+	if !filepath.IsAbs(wikiRoot) {
+		wikiRoot = filepath.Join(getProjectDir(), wikiRoot)
+	}
+
+	if _, err := os.Stat(wikiRoot); os.IsNotExist(err) {
+		return fmt.Errorf("wiki-root does not exist: %s", input.WikiRoot)
+	}
+
+	return nil
+}
+
+// extractAndMergeSessions extracts and merges all sessions in the chain.
+func extractAndMergeSessions(chain []ChainRecord, verbose bool) ([]Message, error) {
+	sessions, err := extractAllSessions(chain, verbose)
+	if err != nil {
+		return nil, err
+	}
+
+	mergedMessages := mergeSessions(sessions)
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Merged %d messages\n", len(mergedMessages))
+	}
+
+	return mergedMessages, nil
+}
+
+// classifyAndGenerateTitle classifies content and generates AI title.
+func classifyAndGenerateTitle(messages []Message, input ExportInput) (string, string) {
+	content := renderToMarkdown(messages)
+	topicPath := classifyWithFallback(content, input.WikiRoot, input.Verbose, input.AIConfig)
+
+	title, err := generateAITitle(messages, input.AIConfig)
+	if err != nil {
+		title = fallbackTitle(extractUserMessages(messages))
+	}
+
+	return topicPath, title
+}
+
+// extractUserMessages extracts user messages from the message list.
+func extractUserMessages(messages []Message) []string {
+	var userMessages []string
+	for _, msg := range messages {
+		if msg.Role == roleUser {
+			userMessages = append(userMessages, msg.Content)
+		}
+	}
+
+	return userMessages
 }
 
 // writeExportFile writes the final markdown file.
@@ -242,12 +302,61 @@ func filterMessages(messages []Message) []Message {
 		}
 
 		// Only keep user/assistant
-		if msg.Role == roleUser || msg.Role == roleAssistant {
-			filtered = append(filtered, msg)
+		if msg.Role != roleUser && msg.Role != roleAssistant {
+			continue
 		}
+
+		// Clean up system-generated wrapper content
+		content := unwrapSystemContent(msg.Content)
+		if content == "" {
+			continue
+		}
+
+		msg.Content = content
+		filtered = append(filtered, msg)
 	}
 
 	return filtered
+}
+
+// unwrapSystemContent extracts meaningful content from system-wrapped messages.
+// Returns empty string if the message is purely system noise.
+func unwrapSystemContent(content string) string {
+	// Skip pure system output injections
+	if strings.Contains(content, "<local-command-stdout>") {
+		return ""
+	}
+	if strings.Contains(content, "session-scoped Stop hook") {
+		return ""
+	}
+
+	// Extract content from <command-name> wrappers (user's actual input)
+	if strings.Contains(content, "<command-name>") {
+		return extractCommandContent(content)
+	}
+
+	return content
+}
+
+// extractCommandContent extracts the meaningful content from a command-wrapped message.
+func extractCommandContent(content string) string {
+	// Extract content from <command-args>...</command-args> if present
+	if start := strings.Index(content, "<command-args>"); start >= 0 {
+		start += len("<command-args>")
+		if end := strings.Index(content, "</command-args>"); end > start {
+			return strings.TrimSpace(content[start:end])
+		}
+	}
+
+	// Fallback: extract from <command-message>...</command-message>
+	if start := strings.Index(content, "<command-message>"); start >= 0 {
+		start += len("<command-message>")
+		if end := strings.Index(content, "</command-message>"); end > start {
+			return strings.TrimSpace(content[start:end])
+		}
+	}
+
+	return ""
 }
 
 // mergeSessions merges multiple sessions into a single message list.
@@ -263,7 +372,7 @@ func mergeSessions(sessions []SessionJSON) []Message {
 }
 
 // generateAITitle generates a semantic title using AI.
-func generateAITitle(messages []Message) (string, error) {
+func generateAITitle(messages []Message, aiConfig *ai.ClientConfig) (string, error) {
 	// Extract user messages
 	var userMessages []string
 	for _, msg := range messages {
@@ -281,15 +390,8 @@ func generateAITitle(messages []Message) (string, error) {
 	content := strings.Join(selected, "\n\n")
 
 	// Truncate to avoid excessive tokens
-	if len(content) > 300 {
-		content = content[:300]
-	}
-
-	// AI call
-	aiConfig := &ai.ClientConfig{
-		APIKey:  os.Getenv("OPENAI_API_KEY"),
-		BaseURL: "https://api.lucc.dev/v1",
-		Model:   "deepseek-v4-flash",
+	if len(content) > 200 {
+		content = content[:200]
 	}
 
 	systemMsg := "Generate a short semantic title (max 50 chars) for this conversation. Output ONLY the title, nothing else. No quotes, no punctuation, no explanation. Just the title."
@@ -300,18 +402,51 @@ func generateAITitle(messages []Message) (string, error) {
 		{Role: roleUser, Content: userMsg},
 	}
 
-	title, err := ai.ChatContext(context.Background(), aiConfig, aiMessages)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	title, err := ai.ChatContext(ctx, aiConfig, aiMessages)
 	if err != nil {
-		return "", err
+		// Fallback: use first user message snippet as title
+		return fallbackTitle(userMessages), nil
 	}
 
 	// Clean up and limit length
-	title = sanitizeFilename(strings.TrimSpace(title))
+	title = slugTitle(strings.TrimSpace(title))
 	if len(title) > 50 {
 		title = title[:50]
 	}
 
+	// If AI returned empty, use fallback
+	if title == "" {
+		return fallbackTitle(userMessages), nil
+	}
+
 	return title, nil
+}
+
+// fallbackTitle generates a fallback title from the first user message.
+func fallbackTitle(userMessages []string) string {
+	if len(userMessages) == 0 {
+		return time.Now().Format("2006-01-02-15-04-05")
+	}
+
+	// Use first 50 chars of first message
+	title := userMessages[0]
+	title = strings.TrimSpace(title)
+	// Take first line only
+	if idx := strings.IndexByte(title, '\n'); idx > 0 {
+		title = title[:idx]
+	}
+	title = slugTitle(title)
+	if len(title) > 50 {
+		title = title[:50]
+	}
+	if title == "" {
+		return time.Now().Format("2006-01-02-15-04-05")
+	}
+
+	return title
 }
 
 // selectMessages selects head messages from the beginning and tail messages from the end.
@@ -353,16 +488,87 @@ func renderToMarkdown(messages []Message) string {
 			sb.WriteString("## Claude\n\n")
 		}
 
-		// Add content
-		sb.WriteString(msg.Content)
+		// Sanitize content: remove emoji, strip embedded section headers
+		content := sanitizeContent(msg.Content)
+		sb.WriteString(content)
 		sb.WriteString("\n\n---\n\n")
 	}
 
 	return sb.String()
 }
 
+// sanitizeContent removes emoji and embedded section headers from message content.
+func sanitizeContent(content string) string {
+	// Remove emoji characters (Unicode category So, Sk, and supplementary planes)
+	content = removeEmoji(content)
+
+	// Strip embedded section headers (## ...) that come from assistant's markdown
+	// These would conflict with the ## User / ## Claude headers
+	lines := strings.Split(content, "\n")
+	var filtered []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip lines that look like section headers (## ...) but not code blocks
+		if strings.HasPrefix(trimmed, "## ") && !strings.HasPrefix(trimmed, "## User") && !strings.HasPrefix(trimmed, "## Claude") {
+			// Replace with the text content only (remove the ## prefix)
+			headerText := strings.TrimPrefix(trimmed, "## ")
+			filtered = append(filtered, headerText)
+
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+
+	result := strings.Join(filtered, "\n")
+
+	// Collapse multiple spaces on each line (from emoji removal)
+	collapsed := make([]string, 0, len(filtered))
+	for line := range strings.SplitSeq(result, "\n") {
+		// Collapse 2+ spaces into 1
+		for strings.Contains(line, "  ") {
+			line = strings.ReplaceAll(line, "  ", " ")
+		}
+		collapsed = append(collapsed, line)
+	}
+
+	return strings.Join(collapsed, "\n")
+}
+
+// removeEmoji removes emoji characters from a string.
+func removeEmoji(s string) string {
+	return strings.Map(func(r rune) rune {
+		// Keep normal ASCII and common punctuation (including backtick U+0060)
+		if r < 0x2600 {
+			return r
+		}
+		// Remove variation selectors (U+FE00-U+FE0F)
+		if r >= 0xFE00 && r <= 0xFE0F {
+			return -1
+		}
+		// Remove emoji and symbol ranges (but not Sk which includes backtick)
+		if unicode.Is(unicode.So, r) {
+			return -1
+		}
+		// Remove supplemental symbols (0x1F000+)
+		if r >= 0x1F000 {
+			return -1
+		}
+		// Remove dingbats (0x2700-0x27BF)
+		if r >= 0x2700 && r <= 0x27BF {
+			return -1
+		}
+		// Remove miscellaneous symbols (0x2600-0x26FF)
+		if r >= 0x2600 && r <= 0x26FF {
+			return -1
+		}
+		// Keep everything else (CJK, Latin extended, etc.)
+		return r
+	}, s)
+}
+
 // determineOutputPath determines the output path for the exported session.
-func determineOutputPath(input ExportInput, title string) string {
+func determineOutputPath(input ExportInput, title, topicPath string) string {
 	// Generate filename
 	date := time.Now().Format("2006-01-02")
 	filename := fmt.Sprintf("%s-%s.md", date, title)
@@ -379,30 +585,28 @@ func determineOutputPath(input ExportInput, title string) string {
 		baseDir = filepath.Join(projectDir, baseDir)
 	}
 
+	// Add topic path if available
+	if topicPath != "" {
+		baseDir = filepath.Join(baseDir, topicPath)
+	}
+
 	return filepath.Join(baseDir, filename)
 }
 
-// sanitizeFilename sanitizes a string for use as a filename.
-func sanitizeFilename(s string) string {
-	// Replace spaces with hyphens
-	s = strings.ReplaceAll(s, " ", "-")
-
-	// Remove special characters
-	s = strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
-			return r
+// classifyWithFallback classifies content and returns empty string on failure.
+func classifyWithFallback(content, wikiRoot string, verbose bool, aiConfig *ai.ClientConfig) string {
+	topicPath, err := wikisvc.ClassifyContent(content, wikiRoot, aiConfig)
+	if err != nil {
+		if verbose {
+			fmt.Fprintf(os.Stderr, "Classification failed: %v\n", err)
 		}
 
-		return -1
-	}, s)
-
-	// Collapse multiple hyphens
-	for strings.Contains(s, "--") {
-		s = strings.ReplaceAll(s, "--", "-")
+		return ""
 	}
 
-	// Trim hyphens from ends
-	s = strings.Trim(s, "-")
+	return topicPath
+}
 
-	return s
+func slugTitle(value string) string {
+	return textutil.SlugFilename(value)
 }

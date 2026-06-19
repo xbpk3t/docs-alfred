@@ -7,10 +7,7 @@ import (
 
 	"github.com/creasty/defaults"
 	"github.com/go-playground/validator/v10"
-	"github.com/knadh/koanf/parsers/yaml"
-	env "github.com/knadh/koanf/providers/env/v2"
-	"github.com/knadh/koanf/providers/file"
-	"github.com/knadh/koanf/v2"
+	"github.com/xbpk3t/docs-alfred/pkg/configutil"
 )
 
 // Config is the top-level configuration for linear2nl.
@@ -59,54 +56,50 @@ type ResendConfig struct {
 //
 // AI config flows to pkg/ai.DefaultConfig() (OPENAI_API_KEY etc.).
 func LoadConfig(path string) (*Config, error) {
-	k := koanf.New(".")
+	cfg, err := configutil.LoadYAMLConfig(configutil.LoadYAMLConfigOptions[Config]{
+		Path: path,
+		Tag:  "koanf",
+		EnvOverrides: []configutil.EnvOverride{
+			{Name: "LINEAR2NL_MORNING_STRATEGY", Path: "morning.strategy"},
+			{Name: "LINEAR2NL_AI_MODEL", Path: "ai.model"},
+			{Name: "LINEAR_API_KEY", Path: "linear.apiKey"},
+			{Name: "RESEND_TOKEN", Path: "resend.token"},
+		},
+		AfterUnmarshal: func(cfg *Config) error {
+			applyDefaults(cfg)
 
-	// 1. Load YAML config file
-	if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
-		return nil, fmt.Errorf("read config: %w", err)
-	}
-
-	// 2. Env var overrides and fallbacks. Load after YAML so env wins.
-	if err := loadEnvOverrides(k); err != nil {
-		return nil, fmt.Errorf("load env config: %w", err)
-	}
-
-	// 3. Unmarshal into struct
-	var cfg Config
-	if err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"}); err != nil {
-		return nil, fmt.Errorf("unmarshal config: %w", err)
+			return nil
+		},
+		Validate: validateConfig,
+	})
+	if err != nil {
+		return nil, formatConfigLoadError(err)
 	}
 
 	// AI apiKey/baseURL fall through to pkg/ai.DefaultConfig()
 	// which reads OPENAI_API_KEY / OPENAI_BASE_URL / LLM_MODEL.
 
-	applyDefaults(&cfg)
-
-	if err := validateConfig(&cfg); err != nil {
-		return nil, err
-	}
-
 	return &cfg, nil
 }
 
-func loadEnvOverrides(k *koanf.Koanf) error {
-	return k.Load(env.Provider(".", env.Opt{TransformFunc: func(key, value string) (string, any) {
-		if value == "" {
-			return "", nil
-		}
-		switch key {
-		case "LINEAR2NL_MORNING_STRATEGY":
-			return "morning.strategy", value
-		case "LINEAR2NL_AI_MODEL":
-			return "ai.model", value
-		case "LINEAR_API_KEY":
-			return "linear.apiKey", value
-		case "RESEND_TOKEN":
-			return "resend.token", value
-		default:
-			return "", nil
-		}
-	}}), nil)
+func formatConfigLoadError(err error) error {
+	var loadErr *configutil.LoadError
+	if !errors.As(err, &loadErr) {
+		return err
+	}
+
+	switch loadErr.Stage {
+	case configutil.StageRead:
+		return fmt.Errorf("read config: %w", loadErr.Err)
+	case configutil.StageParse:
+		return fmt.Errorf("parse config: %w", loadErr.Err)
+	case configutil.StageUnmarshal:
+		return fmt.Errorf("unmarshal config: %w", loadErr.Err)
+	case configutil.StageValidate:
+		return loadErr.Err
+	default:
+		return err
+	}
 }
 
 func applyDefaults(cfg *Config) {

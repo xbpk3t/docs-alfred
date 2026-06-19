@@ -10,6 +10,7 @@ import (
 
 func newSessionExportCmd() *cobra.Command {
 	var flags struct {
+		config    string
 		wikiRoot  string
 		outputDir string
 		dryRun    bool
@@ -28,11 +29,19 @@ This command:
 4. AI classifies content to determine topic path
 5. Writes to wiki/<topic>/YYYY-MM-DD-semantic-title.md`,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			cfg, err := loadExportConfig(flags.config, exportConfigOverrides{
+				WikiRoot: flags.wikiRoot,
+			})
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+
 			input := internal.ExportInput{
 				DryRun:    flags.dryRun,
 				Verbose:   flags.verbose,
-				WikiRoot:  flags.wikiRoot,
+				WikiRoot:  cfg.WikiRoot,
 				OutputDir: flags.outputDir,
+				AIConfig:  buildAIConfig(cfg),
 			}
 
 			result, err := internal.ExportSession(input)
@@ -44,9 +53,10 @@ This command:
 		},
 	}
 
+	cmd.Flags().StringVar(&flags.config, "config", "", "Config file path")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show what would be done without writing")
 	cmd.Flags().BoolVar(&flags.verbose, "verbose", false, "Verbose output")
-	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "wiki", "Wiki root directory")
+	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory")
 	cmd.Flags().StringVar(&flags.outputDir, "output-dir", "", "Output directory (overrides wiki-root)")
 
 	return cmd

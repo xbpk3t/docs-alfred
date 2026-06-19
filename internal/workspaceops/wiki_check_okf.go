@@ -85,20 +85,20 @@ func checkFile(path, rel string) []checkutil.Issue {
 		}}
 	}
 
-	if !hasFrontmatter(data) {
-		return []checkutil.Issue{{
-			File:     rel,
-			Severity: checkutil.SeverityError,
-			Message:  "missing frontmatter",
-		}}
-	}
-
 	var fm wikiFrontmatter
-	if _, err := frontmatter.Parse(strings.NewReader(string(data)), &fm); err != nil {
+	body, err := frontmatter.Parse(strings.NewReader(string(data)), &fm)
+	if err != nil {
 		return []checkutil.Issue{{
 			File:     rel,
 			Severity: checkutil.SeverityError,
 			Message:  fmt.Sprintf("parse frontmatter: %v", err),
+		}}
+	}
+	if len(body) == len(data) {
+		return []checkutil.Issue{{
+			File:     rel,
+			Severity: checkutil.SeverityError,
+			Message:  "missing frontmatter",
 		}}
 	}
 
@@ -108,14 +108,6 @@ func checkFile(path, rel string) []checkutil.Issue {
 	issues = append(issues, checkTypeValidity(fm.Type, rel)...)
 
 	return issues
-}
-
-// hasFrontmatter reports whether the data contains YAML frontmatter delimited
-// by a leading `---` and a closing `---` on its own line.
-func hasFrontmatter(data []byte) bool {
-	s := strings.TrimLeft(string(data), "\n\r\t ")
-
-	return strings.HasPrefix(s, "---") && strings.Contains(s[3:], "\n---")
 }
 
 // checkRequiredFields checks that title, date, source, and type are all non-empty.
