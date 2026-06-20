@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -57,6 +58,14 @@ func NewXiaoyuzhouProvider(credentialPath string) *XiaoyuzhouProvider {
 
 func (p *XiaoyuzhouProvider) Name() string {
 	return "xiaoyuzhou"
+}
+
+// ValidateCredentials checks if the xiaoyuzhou credentials are usable
+// by attempting a token refresh. Returns nil if valid.
+func (p *XiaoyuzhouProvider) ValidateCredentials(ctx context.Context) error {
+	_, err := p.refreshAndGetToken(ctx)
+
+	return err
 }
 
 func (p *XiaoyuzhouProvider) Fetch(ctx context.Context, ep *EpisodeRef) (*TranscriptResult, error) {
@@ -183,6 +192,10 @@ func refreshToken(ctx context.Context, creds *xiaoyuzhouCredentials) (*xiaoyuzho
 		return nil, fmt.Errorf("parse refresh response: %w", err)
 	}
 	if !result.Success {
+		slog.Warn("Xiaoyuzhou refresh API returned success=false",
+			"body", string(resp.Body()),
+		)
+
 		return nil, errors.New("refresh API returned success=false")
 	}
 	if result.AccessToken == "" || result.RefreshTkn == "" {
@@ -233,6 +246,12 @@ func (p *XiaoyuzhouProvider) apiGetEpisode(ctx context.Context, eid, token strin
 		return "", fmt.Errorf("parse episode response: %w", err)
 	}
 	if !result.Success {
+		slog.Warn("Xiaoyuzhou episode API returned success=false",
+			"eid", eid,
+			"status", resp.StatusCode(),
+			"body", string(resp.Body()),
+		)
+
 		return "", errors.New("episode API returned success=false")
 	}
 
@@ -277,6 +296,12 @@ func (p *XiaoyuzhouProvider) apiGetTranscriptURL(ctx context.Context, eid, media
 		return "", fmt.Errorf("parse transcript url response: %w", err)
 	}
 	if !result.Success {
+		slog.Warn("Xiaoyuzhou transcript URL API returned success=false",
+			"eid", eid,
+			"status", resp.StatusCode(),
+			"body", string(resp.Body()),
+		)
+
 		return "", errors.New("transcript url API returned success=false")
 	}
 
