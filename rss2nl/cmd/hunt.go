@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/xbpk3t/docs-alfred/pkg/litter"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 	"github.com/xbpk3t/docs-alfred/service/rss"
 )
@@ -116,6 +117,7 @@ type huntRunConfig struct {
 	typeWeights     map[string]float64
 	providerNames   []huntProvider
 	categories      []rss.FeedsDetail
+	publish         rss.HuntPublishConfig
 	max             int
 	perCat          int
 	seedLimit       int
@@ -206,6 +208,9 @@ func initHuntRun(opts *struct {
 
 	providerNames := parseHuntProviders(opts.providers)
 	if len(providerNames) == 0 {
+		providerNames = parseHuntProviders(strings.Join(cfg.HuntConfig.Providers, ","))
+	}
+	if len(providerNames) == 0 {
 		providerNames = []huntProvider{providerExa, providerTavily}
 	}
 
@@ -258,10 +263,11 @@ func initHuntRun(opts *struct {
 		providerWeights: providerWeights,
 		typeWeights:     typeWeights,
 		apiKeys:         apiKeys,
+		publish:         cfg.HuntConfig.Publish,
 		max:             maxVal,
 		perCat:          perCatVal,
 		seedLimit:       seedLimitVal,
-		newOnly:         opts.newOnly,
+		newOnly:         opts.newOnly || cfg.HuntConfig.NewOnly,
 		dryRun:          opts.dryRun,
 		now:             now,
 	}, nil
@@ -302,7 +308,46 @@ func runHunt(opts *struct {
 		"categories", hc.report.Stats.CategoriesScanned,
 	)
 
+	// Publish HTML report to a temporary file host if configured.
+	publishHuntReport(hc, opts.reportHTML)
+
 	return nil
+}
+
+func publishHuntReport(hc *huntRunConfig, reportHTML string) {
+	if !hc.publish.Enabled || hc.report.Stats.AcceptedCandidates <= 0 {
+		return
+	}
+
+	htmlContent, err := os.ReadFile(reportHTML)
+	if err != nil {
+		slog.Warn("Failed to read HTML report for publish", "error", err)
+
+		return
+	}
+
+	uploader := litter.NewFromNames(hc.publish.Drivers, hc.publish.Expiration)
+	filename := fmt.Sprintf("feeds-hunt-report-%s.html", hc.report.GeneratedAt[:10])
+	result, err := uploader.Upload(context.Background(), filename, string(htmlContent))
+	if err != nil {
+		slog.Warn("Failed to publish hunt report", "error", err)
+
+		return
+	}
+
+	slog.Info("Hunt report published", "driver", result.Driver, "url", result.URL)
+
+	// Write directly to $GITHUB_ENV so the workflow doesn't need bash parsing.
+	if ghEnv := os.Getenv("GITHUB_ENV"); ghEnv != "" {
+		count := hc.report.Stats.AcceptedCandidates
+		entry := fmt.Sprintf("SOURCE_DISCOVERY_URL=%s\nSOURCE_DISCOVERY_COUNT=%d\n", result.URL, count)
+		if f, ferr := os.OpenFile(ghEnv, os.O_APPEND|os.O_WRONLY, 0600); ferr == nil { //nolint:gosec // GITHUB_ENV is set by Actions runner
+			fmt.Fprint(f, entry) //nolint:errcheck
+			_ = f.Close()
+		}
+	}
+
+	fmt.Fprintln(os.Stdout, result.URL) //nolint:errcheck
 }
 
 // -- Blocked set --

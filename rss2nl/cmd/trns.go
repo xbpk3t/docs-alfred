@@ -16,6 +16,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/transcript"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/litter"
 	"github.com/xbpk3t/docs-alfred/service/rss"
 )
 
@@ -33,10 +34,8 @@ const (
 type trnsFlags struct {
 	cfgFile  string
 	outDir   string
-	language string
 	limit    int
 	limitSet bool
-	asr      bool
 	publish  bool
 	refresh  bool
 	strict   bool
@@ -73,7 +72,7 @@ func newTrnsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:       "trns [source]",
 		Short:     "Fetch transcript data for a source",
-		Long:      "Fetch transcript/transcription data for a source (e.g. podcast). Uses RSS, description link, and ASR fallback chain.",
+		Long:      "Fetch transcript/transcription data for a source (e.g. podcast). Routes to Xiaoyuzhou API or RSS transcript tags.",
 		Args:      cobra.MaximumNArgs(1),
 		ValidArgs: []string{defaultTrnsSource},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -91,8 +90,6 @@ func newTrnsCmd() *cobra.Command {
 	cmd.Flags().IntVar(&flags.limit, "limit", 0, "Episodes to process per feed")
 	cmd.Flags().BoolVar(&flags.refresh, "refresh", false, "Ignore existing cached trns data")
 	cmd.PersistentFlags().StringVar(&flags.cfgFile, "config", "rss2nl.yml", "Config file path")
-	cmd.Flags().BoolVar(&flags.asr, "asr", false, "Enable ASR fallback")
-	cmd.Flags().StringVar(&flags.language, "language", "", "ASR language")
 	cmd.Flags().BoolVar(&flags.publish, "publish", false, "Temporary upload to Litterbox")
 
 	checkCmd := &cobra.Command{
@@ -134,24 +131,13 @@ func runTrns(source string, flags *trnsFlags) error {
 
 	cache := transcript.NewCache(outDir)
 
-	// Build pipeline: RssTranscriptProvider -> DescriptionLinkProvider -> AudioTranscriptionProvider (optional)
-	pipeline := buildPipeline(flags)
-
-	// Parse config for per-feed ASR override
-	asrOverride := flags.asr
-	if cfg.TrnsConfig.Asr.Enabled {
-		asrOverride = true
-	}
-	language := flags.language
-	if language == "" && cfg.TrnsConfig.Asr.Language != "" {
-		language = cfg.TrnsConfig.Asr.Language
-	}
+	router := buildRouter()
 
 	summarizer := setupSummarizer(cfg)
 
 	uploader := setupUploader(cfg, flags)
 
-	entries := processPodcastFeeds(cfg, outDir, flags, cache, pipeline, asrOverride, language, summarizer, uploader)
+	entries := processPodcastFeeds(cfg, outDir, flags, cache, router, summarizer, uploader)
 
 	// Write index
 	indexPath := cache.IndexFilePath()
@@ -208,7 +194,7 @@ func configuredSummaryBaseURL(cfg *rss.Config) string {
 	return baseURL
 }
 
-func setupUploader(cfg *rss.Config, flags *trnsFlags) *transcript.LitterboxUploader {
+func setupUploader(cfg *rss.Config, flags *trnsFlags) litter.Uploader {
 	if !flags.publish && !cfg.TrnsConfig.TemporaryUpload.Enabled {
 		return nil
 	}
@@ -217,7 +203,7 @@ func setupUploader(cfg *rss.Config, flags *trnsFlags) *transcript.LitterboxUploa
 		exp = "24h"
 	}
 
-	return transcript.NewLitterboxUploader(exp)
+	return litter.NewLitterbox(exp)
 }
 
 //nolint:nonamedreturns
@@ -256,16 +242,11 @@ func trnsLimitReached(processed, limit int) bool {
 	return limit > 0 && processed >= limit
 }
 
-func buildPipeline(flags *trnsFlags) *transcript.Pipeline {
-	providers := []transcript.Provider{
-		transcript.NewRssTranscriptProvider(),
-		transcript.NewDescriptionLinkProvider(),
+func buildRouter() *transcript.Router {
+	return &transcript.Router{
+		Xiaoyuzhou:    transcript.NewXiaoyuzhouProvider(""),
+		RssTranscript: transcript.NewRssTranscriptProvider(),
 	}
-	if flags.asr {
-		providers = append(providers, transcript.NewAudioTranscriptionProvider("pt", flags.language))
-	}
-
-	return transcript.NewPipeline(providers...)
 }
 
 func runTrnsCheck(source string, flags *trnsFlags) error {
@@ -349,11 +330,9 @@ func processPodcastFeeds(
 	outDir string,
 	flags *trnsFlags,
 	cache *transcript.Cache,
-	pipeline *transcript.Pipeline,
-	asrOverride bool,
-	language string,
+	provider transcript.Provider,
 	summarizer *transcript.Summarizer,
-	uploader *transcript.LitterboxUploader,
+	uploader litter.Uploader,
 ) []trnsIndexEntry {
 	limit := effectiveTrnsLimit(cfg, flags)
 
@@ -364,7 +343,7 @@ func processPodcastFeeds(
 			if !u.IsMedia {
 				continue
 			}
-			feedEntries := processFeedURL(&u, outDir, limit, flags.refresh, cache, pipeline)
+			feedEntries := processFeedURL(&u, outDir, limit, flags.refresh, cache, provider)
 			entries = append(entries, feedEntries...)
 		}
 	}
@@ -378,7 +357,7 @@ func processFeedURL(
 	limit int,
 	refresh bool,
 	cache *transcript.Cache,
-	pipeline *transcript.Pipeline,
+	provider transcript.Provider,
 ) []trnsIndexEntry {
 	if u.Feed == "" || !strings.HasPrefix(u.Feed, "http") {
 		return nil
@@ -403,7 +382,7 @@ func processFeedURL(
 			break
 		}
 
-		entry := processEpisode(item, outDir, refresh, cache, pipeline, parsed.Title, u.Feed)
+		entry := processEpisode(item, outDir, refresh, cache, provider, parsed.Title, u.Feed)
 		entries = append(entries, entry)
 	}
 
@@ -415,7 +394,7 @@ func processEpisode(
 	outDir string,
 	refresh bool,
 	cache *transcript.Cache,
-	pipeline *transcript.Pipeline,
+	provider transcript.Provider,
 	feedTitle, feedURL string,
 ) trnsIndexEntry {
 	epRef := toEpisodeRef(item, feedTitle, feedURL)
@@ -437,9 +416,9 @@ func processEpisode(
 		}
 	}
 
-	// Run pipeline
+	// Run provider
 	ctx := context.Background()
-	result, source, err := pipeline.Fetch(ctx, &epRef)
+	result, err := provider.Fetch(ctx, &epRef)
 	if err != nil || result == nil || result.Content == "" {
 		message := "no transcript found"
 		if err != nil {
@@ -472,7 +451,7 @@ func processEpisode(
 		EpisodeURL:   item.Link,
 		FeedTitle:    feedTitle,
 		FeedURL:      feedURL,
-		Source:       source,
+		Source:       result.Source,
 		ContentType:  contentType,
 	}
 
@@ -486,7 +465,7 @@ func processEpisode(
 		FeedTitle:      feedTitle,
 		FeedURL:        feedURL,
 		Key:            key,
-		Source:         source,
+		Source:         result.Source,
 		Status:         statusFound,
 		TranscriptPath: cache.CacheFilePath(key),
 	}
@@ -617,11 +596,11 @@ func ProcessNewsletterTrns(items []NewsletterItem, cfg *rss.Config, outDir strin
 	}
 
 	cache := transcript.NewCache(outDir)
-	pipeline := buildPipeline(&trnsFlags{asr: cfg.TrnsConfig.Asr.Enabled, language: cfg.TrnsConfig.Asr.Language})
+	router := buildRouter()
 	summarizer := setupSummarizer(cfg)
-	uploader := transcript.NewLitterboxUploader(expiration)
+	uploader := litter.NewLitterbox(expiration)
 	processor := func(item *NewsletterItem) (string, error) {
-		return processItemTrns(item, cfg, cache, pipeline, summarizer, uploader, outDir)
+		return processItemTrns(item, cfg, cache, router, summarizer, uploader, outDir)
 	}
 
 	return processNewsletterTrnsItems(items, cfg.TrnsConfig.DefaultLimit, processor)
@@ -670,15 +649,15 @@ func processItemTrns(
 	item *NewsletterItem,
 	cfg *rss.Config,
 	cache *transcript.Cache,
-	pipeline *transcript.Pipeline,
+	provider transcript.Provider,
 	summarizer *transcript.Summarizer,
-	uploader *transcript.LitterboxUploader,
+	uploader litter.Uploader,
 	outDir string,
 ) (string, error) {
 	feedTitle := item.FeedTitle
 	key := cache.Key(feedTitle, item.ItemHash, item.Link, item.Title)
 
-	trns, err := getNewsletterItemTrns(item, feedTitle, key, cache, pipeline)
+	trns, err := getNewsletterItemTrns(item, feedTitle, key, cache, provider)
 	if err != nil {
 		return "", err
 	}
@@ -701,7 +680,7 @@ func getNewsletterItemTrns(
 	item *NewsletterItem,
 	feedTitle, key string,
 	cache *transcript.Cache,
-	pipeline *transcript.Pipeline,
+	provider transcript.Provider,
 ) (*itemTrnsContent, error) {
 	cached, err := readCachedItemTrns(cache, key)
 	if err != nil {
@@ -711,14 +690,14 @@ func getNewsletterItemTrns(
 		return &itemTrnsContent{Content: cached.content, Source: cached.source}, nil
 	}
 
-	return fetchAndCacheItemTrns(item, feedTitle, key, cache, pipeline)
+	return fetchAndCacheItemTrns(item, feedTitle, key, cache, provider)
 }
 
 func fetchAndCacheItemTrns(
 	item *NewsletterItem,
 	feedTitle, key string,
 	cache *transcript.Cache,
-	pipeline *transcript.Pipeline,
+	provider transcript.Provider,
 ) (*itemTrnsContent, error) {
 	epRef := transcript.EpisodeRef{
 		Title:       item.Title,
@@ -732,7 +711,7 @@ func fetchAndCacheItemTrns(
 	}
 	epRef.TranscriptLinks = toTranscriptLinks(item.PodcastTranscripts)
 
-	result, source, fetchErr := pipeline.Fetch(context.Background(), &epRef)
+	result, fetchErr := provider.Fetch(context.Background(), &epRef)
 	if fetchErr != nil || result == nil || result.Content == "" {
 		return nil, fmt.Errorf("no transcript found: %w", fetchErr)
 	}
@@ -741,7 +720,7 @@ func fetchAndCacheItemTrns(
 		EpisodeTitle: item.Title,
 		EpisodeURL:   item.Link,
 		FeedTitle:    feedTitle,
-		Source:       source,
+		Source:       result.Source,
 		ContentType:  result.ContentType,
 	}
 	if cacheErr := cache.Set(key, cacheEntry, result.Content); cacheErr != nil {
@@ -750,7 +729,7 @@ func fetchAndCacheItemTrns(
 
 	return &itemTrnsContent{
 		Content: result.Content,
-		Source:  source,
+		Source:  result.Source,
 	}, nil
 }
 
@@ -785,7 +764,7 @@ func summarizeItemTrns(summarizer *transcript.Summarizer, title, content string)
 	return itemTrnsSummary{text: result.Summary}
 }
 
-func uploadItemTrns(uploader *transcript.LitterboxUploader, itemHash, html string) (string, error) {
+func uploadItemTrns(uploader litter.Uploader, itemHash, html string) (string, error) {
 	if uploader == nil {
 		return "", nil
 	}
