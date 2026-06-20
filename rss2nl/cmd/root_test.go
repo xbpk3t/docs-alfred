@@ -261,7 +261,7 @@ func TestFetchAndCacheItemTrnsPassesPodcastTranscriptRefsToPipeline(t *testing.T
 	}
 	key := cache.Key("Feed", "hash", item.Link, item.Title)
 
-	got, err := fetchAndCacheItemTrns(item, "Feed", key, cache, transcript.NewPipeline(provider))
+	got, err := fetchAndCacheItemTrns(item, "Feed", key, cache, provider)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "recorded transcript", got.Content)

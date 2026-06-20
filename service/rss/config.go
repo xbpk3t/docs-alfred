@@ -18,8 +18,8 @@ type Config struct {
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
 	RSS              []FeedsDetail    `yaml:"rss"`
 	TrnsConfig       TrnsConfig       `yaml:"trns,omitempty"`
-	HuntConfig       HuntConfig       `yaml:"hunt,omitempty"`
 	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
+	HuntConfig       HuntConfig       `yaml:"hunt,omitempty"`
 	FeedConfig       FeedConfig       `yaml:"feed"`
 	EnvConfig        EnvConfig        `yaml:"env"`
 }
@@ -115,9 +115,19 @@ type HuntConfig struct {
 	ProviderWeights map[string]float64    `yaml:"providerWeights,omitempty"`
 	TypeWeights     map[string]float64    `yaml:"typeWeights,omitempty"`
 	BlockedDomains  []string              `yaml:"blockedDomains,omitempty"`
+	Providers       []string              `yaml:"providers,omitempty"`
+	Publish         HuntPublishConfig     `yaml:"publish,omitempty"`
 	DefaultMax      int                   `yaml:"defaultMax,omitempty"`
 	DefaultPerCat   int                   `yaml:"defaultPerCat,omitempty"`
 	DefaultSeed     int                   `yaml:"defaultSeed,omitempty"`
+	NewOnly         bool                  `yaml:"newOnly,omitempty"`
+}
+
+// HuntPublishConfig hunt 报告发布配置.
+type HuntPublishConfig struct {
+	Expiration string   `yaml:"expiration,omitempty"`
+	Drivers    []string `yaml:"drivers,omitempty"`
+	Enabled    bool     `yaml:"enabled,omitempty"`
 }
 
 // HuntCategoriesConfig 分类级别覆盖配置.
