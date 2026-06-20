@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	mjml "github.com/Boostport/mjml-go"
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/mmcdole/gofeed"
 	resend "github.com/resend/resend-go/v2"
@@ -38,7 +39,7 @@ func newHTMLMinifier() *minify.M {
 	return m
 }
 
-//go:embed templates/*.gohtml
+//go:embed templates/*.gohtml templates/*.mjml
 var templates embed.FS
 
 // EmailConfig 邮件配置.
@@ -561,6 +562,19 @@ func (s *NewsletterService) renderTemplate(templateName string, data any) (strin
 		return "", fmt.Errorf("failed to render template: %w", err)
 	}
 
+	// If MJML template, compile to HTML with inline styles.
+	if strings.HasSuffix(templateName, ".mjml") {
+		htmlOutput, err := mjml.ToHTML(context.Background(), tplBytes.String(),
+			mjml.WithMinify(true),
+			mjml.WithValidationLevel("soft"),
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to compile MJML: %w", err)
+		}
+
+		return htmlOutput, nil
+	}
+
 	// Minify HTML to reduce email size.
 	var minified bytes.Buffer
 	if minErr := htmlMinifier.Minify("text/html", &minified, &tplBytes); minErr != nil {
@@ -615,7 +629,7 @@ func (s *NewsletterService) RenderNewsletter(
 		},
 	}
 
-	newsletterContent, err := s.renderTemplate("newsletter.gohtml", data)
+	newsletterContent, err := s.renderTemplate("newsletter.mjml", data)
 	if err != nil {
 		return nil, err
 	}
