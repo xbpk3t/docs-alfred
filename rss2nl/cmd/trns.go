@@ -597,6 +597,17 @@ func ProcessNewsletterTrns(items []NewsletterItem, cfg *rss.Config, outDir strin
 
 	cache := transcript.NewCache(outDir)
 	router := buildRouter()
+
+	// Pre-flight: validate xiaoyuzhou credentials before processing.
+	if xzProvider, ok := router.Xiaoyuzhou.(*transcript.XiaoyuzhouProvider); ok {
+		if err := xzProvider.ValidateCredentials(context.Background()); err != nil {
+			slog.Warn("Xiaoyuzhou credential validation failed, skipping trns",
+				"error", err,
+			)
+
+			return NewsletterTrnsReport{}
+		}
+	}
 	summarizer := setupSummarizer(cfg)
 	uploader := litter.NewLitterbox(expiration)
 	processor := func(item *NewsletterItem) (string, error) {
