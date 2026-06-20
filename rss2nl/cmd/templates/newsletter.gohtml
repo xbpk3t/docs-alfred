@@ -22,15 +22,6 @@
     .failure-suppressed { color: #666; }
     .failure-escalated { color: #9f1239; font-weight: 600; }
     .failure-examples { margin: 4px 0 0; padding-left: 16px; }
-    .badge-dot {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      background-color: #f97316;
-      border-radius: 50%;
-      vertical-align: middle;
-      margin-right: 4px;
-    }
   </style>
 </head>
 <body>
@@ -116,7 +107,7 @@
   <h2>{{.Category}}</h2>
   <ul>
     {{range .Items}}
-    <li><a href="{{.Link}}" target="_blank" rel="noreferrer">{{.Title}}</a> {{if .IsMedia}}<span class="badge-dot"></span>{{end}} {{if .TrnsURL}} <a class="item-extra-link" href="{{.TrnsURL}}" target="_blank" rel="noreferrer">trns</a>{{end}} <span class="muted">{{.PubDate}}</span></li>
+    <li><a href="{{.Link}}" target="_blank" rel="noreferrer">{{.Title}}</a> {{if .IsMedia}}<span style="display:inline-block;width:8px;height:8px;background-color:#f97316;border-radius:50%;vertical-align:middle;margin-right:4px;"></span>{{end}} {{if .TrnsURL}} <a class="item-extra-link" href="{{.TrnsURL}}" target="_blank" rel="noreferrer">trns</a>{{end}} <span class="muted">{{.PubDate}}</span></li>
     {{else}}
     <li class="muted">No items</li>
     {{end}}
