@@ -245,21 +245,21 @@ func (p *XiaoyuzhouProvider) apiGetEpisode(ctx context.Context, eid, token strin
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
 		return "", fmt.Errorf("parse episode response: %w", err)
 	}
-	if !result.Success {
-		slog.Warn("Xiaoyuzhou episode API returned success=false",
-			"eid", eid,
-			"status", resp.StatusCode(),
-			"body", string(resp.Body()),
-		)
 
-		return "", errors.New("episode API returned success=false")
-	}
-
+	// Extract mediaId from transcript or media fields.
+	// Note: the API may return success=false even when data is valid,
+	// so we rely on data fields rather than the success flag.
 	mediaID := result.Data.Transcript.MediaID
 	if mediaID == "" {
 		mediaID = result.Data.Media.ID
 	}
 	if mediaID == "" {
+		slog.Warn("Xiaoyuzhou episode API: no mediaId in response",
+			"eid", eid,
+			"success", result.Success,
+			"status", resp.StatusCode(),
+		)
+
 		return "", errors.New("mediaId not found in episode response")
 	}
 
@@ -295,21 +295,18 @@ func (p *XiaoyuzhouProvider) apiGetTranscriptURL(ctx context.Context, eid, media
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
 		return "", fmt.Errorf("parse transcript url response: %w", err)
 	}
-	if !result.Success {
-		slog.Warn("Xiaoyuzhou transcript URL API returned success=false",
-			"eid", eid,
-			"status", resp.StatusCode(),
-			"body", string(resp.Body()),
-		)
-
-		return "", errors.New("transcript url API returned success=false")
-	}
 
 	url := result.Data.TranscriptURL
 	if url == "" {
 		url = result.Data.URL
 	}
 	if url == "" {
+		slog.Warn("Xiaoyuzhou transcript URL API: no url in response",
+			"eid", eid,
+			"success", result.Success,
+			"status", resp.StatusCode(),
+		)
+
 		return "", errors.New("transcriptUrl not found in response")
 	}
 
