@@ -5,7 +5,6 @@
       <mj-all font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" />
       <mj-text font-size="14px" color="#111" line-height="1.6" />
       <mj-section padding="0" />
-      <mj-wrapper padding="24px" />
     </mj-attributes>
     <mj-style inline="inline">
       .muted { color: #666; font-size: 12px; }
@@ -19,111 +18,98 @@
         margin-right: 4px;
       }
       .item-extra-link { font-size: 12px; color: #0f62fe; text-decoration: none; margin-left: 8px; }
-      .failure-status { color: #666; font-size: 12px; }
-      .failure-suppressed { color: #666; }
       .failure-escalated { color: #9f1239; font-weight: 600; }
-      .feeds-hunt { background: #f8fafc; border: 1px solid #ddd; padding: 10px 12px; }
     </mj-style>
   </mj-head>
   <mj-body>
-    <mj-wrapper>
-      <mj-section>
-        <mj-column>
-          <mj-text font-size="22px" font-weight="600" color="#111">{{.Title}}</mj-text>
+    <mj-section>
+      <mj-column>
+        <mj-text font-size="22px" font-weight="600">{{.Title}}</mj-text>
 
-          {{if .SourceHuntURL}}
-          <mj-text css-class="feeds-hunt">
-            <a href="{{.SourceHuntURL}}" target="_blank" rel="noreferrer" style="color: #0f62fe; text-decoration: none;">Source Discovery: new candidates</a>
-          </mj-text>
-          {{end}}
+        {{if .SourceHuntURL}}
+        <mj-text css-class="feeds-hunt"><a href="{{.SourceHuntURL}}" target="_blank" rel="noreferrer" style="color:#0f62fe;">Source Discovery: new candidates</a></mj-text>
+        {{end}}
 
-          {{if .DashboardConfig.IsShowFetchFailedFeeds}}
-          <mj-text font-size="18px" font-weight="600" color="#111" padding="20px 0 0 0">Fetch Failed Feeds</mj-text>
-          {{if .DashboardData.FailureReport}}
-          {{if .DashboardData.FailureReport.TotalFailures}}
-          <mj-table padding="0">
-            <thead><tr><th style="border:1px solid #ddd;padding:8px;font-size:13px;background:#f6f6f6;text-align:left;">Source / Error</th><th style="border:1px solid #ddd;padding:8px;font-size:13px;background:#f6f6f6;text-align:left;">Status</th><th style="border:1px solid #ddd;padding:8px;font-size:13px;background:#f6f6f6;text-align:left;">Examples</th></tr></thead>
-            <tbody>
-            {{range .DashboardData.FailureReport.Groups}}
-            <tr>
-              <td style="border:1px solid #ddd;padding:8px;font-size:13px;vertical-align:top;">
-                <strong>{{.Host}}</strong><br />
-                <span class="muted">{{.KindLabel}} · {{.Count}} feed{{if ne .Count 1}}s{{end}}</span>
-              </td>
-              <td style="border:1px solid #ddd;padding:8px;font-size:13px;vertical-align:top;">
-                {{if .Escalated}}
-                <span class="failure-escalated">{{.Status}}</span>
-                {{else if .Suppressed}}
-                <span class="failure-suppressed">{{.Status}}</span>
-                {{else}}
-                <span class="failure-status">{{.Status}}</span>
-                {{end}}
-              </td>
-              <td style="border:1px solid #ddd;padding:8px;font-size:13px;vertical-align:top;">
-                <ul style="margin:4px 0 0;padding-left:16px;">
-                  {{range .ExampleURLs}}
-                  <li style="font-size:13px;">{{.}}</li>
-                  {{end}}
-                  {{if .RemainingCount}}
-                  <li class="muted">+{{.RemainingCount}} more</li>
-                  {{end}}
-                </ul>
-              </td>
-            </tr>
-            {{end}}
-            </tbody>
-          </mj-table>
-          {{else}}
-          <mj-text css-class="muted">None</mj-text>
-          {{end}}
-          {{else}}
-          {{if .DashboardData.FailedFeeds}}
-          <mj-table padding="0">
-            <thead><tr><th style="border:1px solid #ddd;padding:8px;font-size:13px;background:#f6f6f6;text-align:left;">Feed</th><th style="border:1px solid #ddd;padding:8px;font-size:13px;background:#f6f6f6;text-align:left;">Error</th></tr></thead>
-            <tbody>
-            {{range .DashboardData.FailedFeeds}}
-            <tr><td style="border:1px solid #ddd;padding:8px;font-size:13px;vertical-align:top;">{{.URL}}</td><td style="border:1px solid #ddd;padding:8px;font-size:13px;vertical-align:top;">{{if .Err}}{{.Err.Error}}{{else}}{{.Message}}{{end}}</td></tr>
-            {{end}}
-            </tbody>
-          </mj-table>
-          {{else}}
-          <mj-text css-class="muted">None</mj-text>
-          {{end}}
-          {{end}}
-          {{end}}
+        {{if .DashboardConfig.IsShowFetchFailedFeeds}}
+        <mj-text font-size="18px" font-weight="600" padding="20px 0 0 0">Fetch Failed Feeds</mj-text>
 
-          {{if .DashboardConfig.FeedDetail.Enabled}}
-          <mj-text font-size="18px" font-weight="600" color="#111" padding="20px 0 0 0">Feed Details</mj-text>
-          {{range .DashboardData.FeedDetails}}
-          <mj-text font-size="16px" font-weight="600" color="#374151">{{.Type}} <span class="muted">Count: {{len .Feeds}}</span></mj-text>
-          <mj-table padding="0">
-            <thead><tr><th style="border:1px solid #ddd;padding:8px;font-size:13px;background:#f6f6f6;text-align:left;">Feed</th><th style="border:1px solid #ddd;padding:8px;font-size:13px;background:#f6f6f6;text-align:left;">Last Updated</th><th style="border:1px solid #ddd;padding:8px;font-size:13px;background:#f6f6f6;text-align:left;">Publish Freq</th></tr></thead>
-            <tbody>
-            {{range .Feeds}}
-            <tr><td style="border:1px solid #ddd;padding:8px;font-size:13px;vertical-align:top;"><a href="{{if .URL}}{{.URL}}{{else}}{{.Feed}}{{end}}" target="_blank" rel="noreferrer" style="color:#0f62fe;text-decoration:none;">{{if .Des}}{{.Des}}{{else if .URL}}{{.URL}}{{else}}{{.Feed}}{{end}}</a></td><td style="border:1px solid #ddd;padding:8px;font-size:13px;vertical-align:top;">{{if .LastUpdated}}{{.LastUpdated}}{{else}}-{{end}}</td><td style="border:1px solid #ddd;padding:8px;font-size:13px;vertical-align:top;">{{if .PublishFreq}}{{.PublishFreq}}{{else}}-{{end}}</td></tr>
-            {{else}}
-            <tr><td style="border:1px solid #ddd;padding:8px;font-size:13px;"><span class="muted">note-only category, no feed urls</span></td><td style="border:1px solid #ddd;padding:8px;font-size:13px;">-</td><td style="border:1px solid #ddd;padding:8px;font-size:13px;">-</td></tr>
-            {{end}}
-            </tbody>
-          </mj-table>
+        {{if .DashboardData.FailureReport}}
+        {{if .DashboardData.FailureReport.TotalFailures}}
+        <mj-table>
+          <thead><tr><th>Source / Error</th><th>Status</th><th>Examples</th></tr></thead>
+          <tbody>
+          {{range .DashboardData.FailureReport.Groups}}
+          <tr>
+            <td><strong>{{.Host}}</strong><br/><span class="muted">{{.KindLabel}} · {{.Count}} feed{{if ne .Count 1}}s{{end}}</span></td>
+            <td>
+              {{if .Escalated}}<span class="failure-escalated">{{.Status}}</span>
+              {{else if .Suppressed}}<span class="muted">{{.Status}}</span>
+              {{else}}<span class="muted">{{.Status}}</span>{{end}}
+            </td>
+            <td>
+              <ul style="margin:4px 0 0;padding-left:16px;">
+                {{range .ExampleURLs}}<li>{{.}}</li>{{end}}
+                {{if .RemainingCount}}<li class="muted">+{{.RemainingCount}} more</li>{{end}}
+              </ul>
+            </td>
+          </tr>
           {{end}}
+          </tbody>
+        </mj-table>
+        {{else}}
+        <mj-text css-class="muted">None</mj-text>
+        {{end}}
+        {{else}}
+        {{if .DashboardData.FailedFeeds}}
+        <mj-table>
+          <thead><tr><th>Feed</th><th>Error</th></tr></thead>
+          <tbody>
+          {{range .DashboardData.FailedFeeds}}
+          <tr><td>{{.URL}}</td><td>{{if .Err}}{{.Err.Error}}{{else}}{{.Message}}{{end}}</td></tr>
           {{end}}
+          </tbody>
+        </mj-table>
+        {{else}}
+        <mj-text css-class="muted">None</mj-text>
+        {{end}}
+        {{end}}
+        {{end}}
 
+        {{if .DashboardConfig.FeedDetail.Enabled}}
+        <mj-text font-size="18px" font-weight="600" padding="20px 0 0 0">Feed Details</mj-text>
+        {{range .DashboardData.FeedDetails}}
+        <mj-text font-size="16px" font-weight="600">{{.Type}} <span class="muted">Count: {{len .Feeds}}</span></mj-text>
+        <mj-table>
+          <thead><tr><th>Feed</th><th>Last Updated</th><th>Publish Freq</th></tr></thead>
+          <tbody>
           {{range .Feeds}}
-          <mj-text font-size="18px" font-weight="600" color="#111" padding="20px 0 0 0">{{.Category}}</mj-text>
-          <mj-text>
-            <ul style="padding-left:18px;margin:0;">
-              {{range .Items}}
-              <li style="margin:6px 0;"><a href="{{.Link}}" target="_blank" rel="noreferrer" style="color:#0f62fe;text-decoration:none;">{{.Title}}</a> {{if .IsMedia}}<span class="badge-dot"></span>{{end}}{{if .TrnsURL}} <a class="item-extra-link" href="{{.TrnsURL}}" target="_blank" rel="noreferrer">trns</a>{{end}} <span class="muted">{{.PubDate}}</span></li>
-              {{else}}
-              <li class="muted">No items</li>
-              {{end}}
-            </ul>
-          </mj-text>
+          <tr>
+            <td><a href="{{if .URL}}{{.URL}}{{else}}{{.Feed}}{{end}}" target="_blank" rel="noreferrer" style="color:#0f62fe;text-decoration:none;">{{if .Des}}{{.Des}}{{else if .URL}}{{.URL}}{{else}}{{.Feed}}{{end}}</a></td>
+            <td>{{if .LastUpdated}}{{.LastUpdated}}{{else}}-{{end}}</td>
+            <td>{{if .PublishFreq}}{{.PublishFreq}}{{else}}-{{end}}</td>
+          </tr>
+          {{else}}
+          <tr><td><span class="muted">note-only category, no feed urls</span></td><td>-</td><td>-</td></tr>
           {{end}}
+          </tbody>
+        </mj-table>
+        {{end}}
+        {{end}}
 
-        </mj-column>
-      </mj-section>
-    </mj-wrapper>
+        {{range .Feeds}}
+        <mj-text font-size="18px" font-weight="600" padding="20px 0 0 0">{{.Category}}</mj-text>
+        <mj-text>
+          <ul style="padding-left:18px;margin:0;">
+            {{range .Items}}
+            <li style="margin:6px 0;"><a href="{{.Link}}" target="_blank" rel="noreferrer" style="color:#0f62fe;text-decoration:none;">{{.Title}}</a> {{if .IsMedia}}<span class="badge-dot"></span>{{end}}{{if .TrnsURL}} <a class="item-extra-link" href="{{.TrnsURL}}" target="_blank" rel="noreferrer">trns</a>{{end}} <span class="muted">{{.PubDate}}</span></li>
+            {{else}}
+            <li class="muted">No items</li>
+            {{end}}
+          </ul>
+        </mj-text>
+        {{end}}
+
+      </mj-column>
+    </mj-section>
   </mj-body>
 </mjml>
