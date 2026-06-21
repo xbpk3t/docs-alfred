@@ -1,6 +1,10 @@
 package urlutil
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestExtractURLRefsMarkdownLinksWithTitles(t *testing.T) {
 	refs := ExtractURLRefs(`- [demo](https://example.com/a "title") https://example.com/b`, ExtractOptions{
@@ -11,15 +15,10 @@ func TestExtractURLRefsMarkdownLinksWithTitles(t *testing.T) {
 		Deduplicate: true,
 	})
 
-	if len(refs) != 2 {
-		t.Fatalf("len(refs) = %d, want 2: %#v", len(refs), refs)
-	}
-	if refs[0].URL != "https://example.com/a" || refs[0].Start != 2 {
-		t.Fatalf("markdown ref = %#v", refs[0])
-	}
-	if refs[1].URL != "https://example.com/b" {
-		t.Fatalf("bare ref = %#v", refs[1])
-	}
+	require.Len(t, refs, 2)
+	require.Equal(t, "https://example.com/a", refs[0].URL)
+	require.Equal(t, 2, refs[0].Start)
+	require.Equal(t, "https://example.com/b", refs[1].URL)
 }
 
 func TestExtractURLRefsCleansBareURLPunctuation(t *testing.T) {
@@ -29,15 +28,9 @@ func TestExtractURLRefsCleansBareURLPunctuation(t *testing.T) {
 		Normalize: true,
 	})
 
-	if len(refs) != 2 {
-		t.Fatalf("len(refs) = %d, want 2: %#v", len(refs), refs)
-	}
-	if refs[0].URL != "https://example.com/a" {
-		t.Fatalf("first URL = %q", refs[0].URL)
-	}
-	if refs[1].URL != "https://example.com/b" {
-		t.Fatalf("second URL = %q", refs[1].URL)
-	}
+	require.Len(t, refs, 2)
+	require.Equal(t, "https://example.com/a", refs[0].URL)
+	require.Equal(t, "https://example.com/b", refs[1].URL)
 }
 
 func TestExtractURLRefsDeduplicatesNormalizedURLs(t *testing.T) {
@@ -48,9 +41,7 @@ func TestExtractURLRefsDeduplicatesNormalizedURLs(t *testing.T) {
 		Deduplicate: true,
 	})
 
-	if len(refs) != 1 {
-		t.Fatalf("len(refs) = %d, want 1: %#v", len(refs), refs)
-	}
+	require.Len(t, refs, 1)
 }
 
 func TestExtractURLRefsResolvesRelativeHTMLAnchors(t *testing.T) {
@@ -62,12 +53,8 @@ func TestExtractURLRefsResolvesRelativeHTMLAnchors(t *testing.T) {
 		Deduplicate:    true,
 	})
 
-	if len(refs) != 1 {
-		t.Fatalf("len(refs) = %d, want 1: %#v", len(refs), refs)
-	}
-	if refs[0].URL != "https://example.com/transcript.vtt" {
-		t.Fatalf("URL = %q", refs[0].URL)
-	}
+	require.Len(t, refs, 1)
+	require.Equal(t, "https://example.com/transcript.vtt", refs[0].URL)
 }
 
 func TestExtractURLRefsRelaxedBareDomainDoesNotResolveAgainstBase(t *testing.T) {
@@ -79,12 +66,8 @@ func TestExtractURLRefsRelaxedBareDomainDoesNotResolveAgainstBase(t *testing.T) 
 		TranscriptOnly: true,
 	})
 
-	if len(refs) != 1 {
-		t.Fatalf("len(refs) = %d, want 1: %#v", len(refs), refs)
-	}
-	if refs[0].URL != "https://example.com/transcript.txt" {
-		t.Fatalf("URL = %q", refs[0].URL)
-	}
+	require.Len(t, refs, 1)
+	require.Equal(t, "https://example.com/transcript.txt", refs[0].URL)
 }
 
 func TestExtractURLRefsTranscriptOnlyFilters(t *testing.T) {
@@ -95,26 +78,17 @@ func TestExtractURLRefsTranscriptOnlyFilters(t *testing.T) {
 		Deduplicate:    true,
 	})
 
-	if len(refs) != 2 {
-		t.Fatalf("len(refs) = %d, want 2: %#v", len(refs), refs)
-	}
-	if refs[0].URL != "https://example.com/transcript.html" || refs[1].URL != "https://example.com/file.srt" {
-		t.Fatalf("refs = %#v", refs)
-	}
+	require.Len(t, refs, 2)
+	require.Equal(t, "https://example.com/transcript.html", refs[0].URL)
+	require.Equal(t, "https://example.com/file.srt", refs[1].URL)
 }
 
 func TestCleanHTTPURLRejectsMalformedMarkdownCapture(t *testing.T) {
-	if got := CleanHTTPURL("https://t.co/abc](https://x.com/user/status/1"); got != "" {
-		t.Fatalf("CleanHTTPURL returned %q, want empty", got)
-	}
+	require.Equal(t, "", CleanHTTPURL("https://t.co/abc](https://x.com/user/status/1"))
 }
 
 func TestNormalizeSetCleansAndNormalizes(t *testing.T) {
 	set := NormalizeSet([]string{"<https://example.com/a/>", "ftp://example.com/nope"})
-	if !set["https://example.com/a"] {
-		t.Fatalf("missing normalized URL in %#v", set)
-	}
-	if len(set) != 1 {
-		t.Fatalf("len(set) = %d, want 1: %#v", len(set), set)
-	}
+	require.True(t, set["https://example.com/a"], "missing normalized URL")
+	require.Len(t, set, 1)
 }

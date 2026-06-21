@@ -46,7 +46,7 @@ func TestWikiCommandOwnsWikiActions(t *testing.T) {
 
 	require.Equal(t, wikiCommandName, wikiCmd.Name())
 	require.False(t, wikiCmd.HasAvailableFlags())
-	requireCommandNames(t, wikiCmd.Commands(), []string{"add", "digest", wikiAuditCommandName, wikiCheckCommandName})
+	requireCommandNames(t, wikiCmd.Commands(), []string{"add", "digest", "digest-local", wikiAuditCommandName, wikiCheckCommandName})
 	require.Nil(t, wikiCmd.Flags().Lookup("digest"))
 }
 

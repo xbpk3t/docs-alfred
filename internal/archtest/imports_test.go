@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestSharedPackagesDoNotImportCLIOwnedPackages(t *testing.T) {
@@ -21,12 +23,13 @@ func TestSharedPackagesDoNotImportCLIOwnedPackages(t *testing.T) {
 				if _, ok := err.(*build.NoGoError); ok {
 					continue
 				}
-				t.Fatalf("import %s: %v", pkgDir, err)
+				require.Fail(t, "import failed", "import %s: %v", pkgDir, err)
 			}
 
 			for _, imported := range packageImports(pkg) {
 				if isCLIOwnedImport(imported) {
-					t.Fatalf("shared package %s imports CLI-owned package %s", pkgDir, imported)
+					require.Fail(t, "shared package imports CLI-owned package",
+						"shared package %s imports CLI-owned package %s", pkgDir, imported)
 				}
 			}
 		}
@@ -63,19 +66,20 @@ func isCLIOwnedImport(importPath string) bool {
 func findModuleRoot(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "getwd failed")
+
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dir
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			t.Fatal("go.mod not found")
+			require.Fail(t, "go.mod not found", "go.mod not found from %s", dir)
 		}
 		dir = parent
 	}
+
+	return ""
 }
 
 func listGoPackages(t *testing.T, root string) []string {
@@ -98,9 +102,7 @@ func listGoPackages(t *testing.T, root string) []string {
 
 		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "walk dir %s", root)
 
 	return packages
 }
@@ -108,9 +110,8 @@ func listGoPackages(t *testing.T, root string) []string {
 func hasGoFiles(t *testing.T, dir string) bool {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "read dir %s", dir)
+
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
 			return true
@@ -120,17 +121,12 @@ func hasGoFiles(t *testing.T, dir string) bool {
 	return false
 }
 
-// TestSharedPackagesDoNotCallEnvOrExec verifies that shared internal/service
+// TestUsecasePackagesDoNotCallEnvOrExec verifies that shared internal/service
 // packages do not directly call os.Getenv or exec.Command. These should be
 // handled at the CLI layer and injected via Config or interfaces.
-// TestUsecasePackagesDoNotCallEnvOrExec verifies that internal usecase packages
-// do not directly call os.Getenv or exec.Command. These should be handled at the
-// CLI layer and injected via Config or interfaces. Service/adapter packages are
-// excluded since they legitimately wrap external commands and environment access.
 func TestUsecasePackagesDoNotCallEnvOrExec(t *testing.T) {
 	moduleRoot := findModuleRoot(t)
 	for _, pkgDir := range listGoPackages(t, filepath.Join(moduleRoot, "internal")) {
-		// Skip archtest and non-usecase packages.
 		base := filepath.Base(pkgDir)
 		if base == "archtest" || base == "transcript" {
 			continue
@@ -147,9 +143,7 @@ func TestUsecasePackagesDoNotCallEnvOrExec(t *testing.T) {
 func findEnvExecCalls(t *testing.T, dir string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "read dir %s", dir)
 
 	var violations []string
 	for _, entry := range entries {

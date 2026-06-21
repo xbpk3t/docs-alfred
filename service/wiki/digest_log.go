@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
@@ -80,7 +81,7 @@ func LogDigestEntry(entry *DigestEntry, opts *WriteOptions) (string, error) {
 		return "", nil
 	}
 	if entry.Timestamp == "" {
-		entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
+		entry.Timestamp = carbon.Now().Layout(time.RFC3339)
 	}
 	if entry.BatchID == "" {
 		entry.BatchID = opts.BatchID

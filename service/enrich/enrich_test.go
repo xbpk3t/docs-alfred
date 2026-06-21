@@ -3,14 +3,17 @@ package enrich
 import (
 	"context"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsChineseMedia(t *testing.T) {
 	tests := []struct {
-		name      string
-		lang      string
-		country   string
-		want      bool
+		name    string
+		lang    string
+		country string
+		want    bool
 	}{
 		{"Chinese language zh", "zh", "", true},
 		{"Chinese language cn", "cn", "", true},
@@ -24,9 +27,7 @@ func TestIsChineseMedia(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsChineseMedia(tt.lang, tt.country); got != tt.want {
-				t.Errorf("IsChineseMedia(%q, %q) = %v, want %v", tt.lang, tt.country, got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsChineseMedia(tt.lang, tt.country))
 		})
 	}
 }
@@ -46,15 +47,12 @@ func TestExtractYear(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.date, func(t *testing.T) {
-			if got := extractYear(tt.date); got != tt.want {
-				t.Errorf("extractYear(%q) = %q, want %q", tt.date, got, tt.want)
-			}
+			assert.Equal(t, tt.want, extractYear(tt.date))
 		})
 	}
 }
 
 func TestMapMovieFields(t *testing.T) {
-	// Test with full detail
 	detail := &tmdbMovieDetail{
 		OriginalTitle:    "The Original Title",
 		ReleaseDate:      "2023-06-15",
@@ -82,34 +80,21 @@ func TestMapMovieFields(t *testing.T) {
 
 	fields := mapMovieFields(search, detail)
 
-	if fields.PublishAt != "2023" {
-		t.Errorf("PublishAt = %q, want 2023", fields.PublishAt)
-	}
-	if fields.Alias != "The Original Title" {
-		t.Errorf("Alias = %q, want 'The Original Title'", fields.Alias)
-	}
-	if fields.Dict != "Director A、Director B" {
-		t.Errorf("Dict = %q, want 'Director A、Director B'", fields.Dict)
-	}
-	if fields.Cast != "Actor One、Actor Two" {
-		t.Errorf("Cast = %q, want 'Actor One、Actor Two'", fields.Cast)
-	}
+	assert.Equal(t, "2023", fields.PublishAt)
+	assert.Equal(t, "The Original Title", fields.Alias)
+	assert.Equal(t, "Director A、Director B", fields.Dict)
+	assert.Equal(t, "Actor One、Actor Two", fields.Cast)
 }
 
 func TestMapMovieFieldsChineseLanguage(t *testing.T) {
-	// Chinese-language film should NOT get alias
 	search := &tmdbSearchItem{
 		Title:            "中文片名",
 		OriginalTitle:    "Chinese Original",
 		OriginalLanguage: "zh",
 	}
 	fields := mapMovieFields(search, nil)
-	if fields.Alias != "" {
-		t.Errorf("Chinese film should not get alias, got %q", fields.Alias)
-	}
-	if fields.PublishAt != "" {
-		t.Errorf("no date but got %q", fields.PublishAt)
-	}
+	assert.Empty(t, fields.Alias, "Chinese film should not get alias")
+	assert.Empty(t, fields.PublishAt)
 }
 
 func TestMapMovieFieldsNoDetail(t *testing.T) {
@@ -119,16 +104,9 @@ func TestMapMovieFieldsNoDetail(t *testing.T) {
 		ReleaseDate:   "2023-01-01",
 	}
 	fields := mapMovieFields(search, nil)
-	if fields.PublishAt != "2023" {
-		t.Errorf("PublishAt = %q, want 2023", fields.PublishAt)
-	}
-	if fields.Alias != "Original" {
-		t.Errorf("Alias = %q, want Original", fields.Alias)
-	}
-	// No detail means no cast/dict
-	if fields.Cast != "" {
-		t.Errorf("Cast should be empty without detail, got %q", fields.Cast)
-	}
+	assert.Equal(t, "2023", fields.PublishAt)
+	assert.Equal(t, "Original", fields.Alias)
+	assert.Empty(t, fields.Cast, "Cast should be empty without detail")
 }
 
 func TestMapTvFields(t *testing.T) {
@@ -155,18 +133,10 @@ func TestMapTvFields(t *testing.T) {
 	}
 
 	fields := mapTvFields(search, detail)
-	if fields.PublishAt != "2022" {
-		t.Errorf("PublishAt = %q, want 2022", fields.PublishAt)
-	}
-	if fields.Alias != "Original TV Name" {
-		t.Errorf("Alias = %q, want Original TV Name", fields.Alias)
-	}
-	if fields.Dict != "Creator One、Creator Two" {
-		t.Errorf("Dict = %q, want 'Creator One、Creator Two'", fields.Dict)
-	}
-	if fields.Cast != "TV Actor A" {
-		t.Errorf("Cast = %q, want 'TV Actor A'", fields.Cast)
-	}
+	assert.Equal(t, "2022", fields.PublishAt)
+	assert.Equal(t, "Original TV Name", fields.Alias)
+	assert.Equal(t, "Creator One、Creator Two", fields.Dict)
+	assert.Equal(t, "TV Actor A", fields.Cast)
 }
 
 func TestMapGoogleBooksFields(t *testing.T) {
@@ -177,15 +147,9 @@ func TestMapGoogleBooksFields(t *testing.T) {
 		PublishedDate: "2019",
 	}
 	fields := mapGoogleBooksFields(info)
-	if fields.PublishAt != "2019" {
-		t.Errorf("PublishAt = %q, want 2019", fields.PublishAt)
-	}
-	if fields.Author != "Author One、Author Two" {
-		t.Errorf("Author = %q, want 'Author One、Author Two'", fields.Author)
-	}
-	if fields.Alias != "A Subtitle" {
-		t.Errorf("Alias = %q, want 'A Subtitle'", fields.Alias)
-	}
+	assert.Equal(t, "2019", fields.PublishAt)
+	assert.Equal(t, "Author One、Author Two", fields.Author)
+	assert.Equal(t, "A Subtitle", fields.Alias)
 }
 
 func TestMapGoogleBooksFieldsNoSubtitle(t *testing.T) {
@@ -195,23 +159,15 @@ func TestMapGoogleBooksFieldsNoSubtitle(t *testing.T) {
 		PublishedDate: "2008-03",
 	}
 	fields := mapGoogleBooksFields(info)
-	if fields.PublishAt != "2008" {
-		t.Errorf("PublishAt = %q, want 2008", fields.PublishAt)
-	}
-	if fields.Alias != "" {
-		t.Errorf("Alias should be empty without subtitle, got %q", fields.Alias)
-	}
+	assert.Equal(t, "2008", fields.PublishAt)
+	assert.Empty(t, fields.Alias, "Alias should be empty without subtitle")
 }
 
 func TestMapGoogleBooksFieldsEmpty(t *testing.T) {
 	info := &gbVolumeInfo{}
 	fields := mapGoogleBooksFields(info)
-	if fields.PublishAt != "" {
-		t.Errorf("PublishAt should be empty, got %q", fields.PublishAt)
-	}
-	if fields.Author != "" {
-		t.Errorf("Author should be empty, got %q", fields.Author)
-	}
+	assert.Empty(t, fields.PublishAt)
+	assert.Empty(t, fields.Author)
 }
 
 func TestMapOLFields(t *testing.T) {
@@ -221,83 +177,56 @@ func TestMapOLFields(t *testing.T) {
 		FirstPublishYear: 2005,
 	}
 	fields := mapOLFields(doc)
-	if fields.PublishAt != "2005" {
-		t.Errorf("PublishAt = %q, want 2005", fields.PublishAt)
-	}
-	if fields.Author != "OL Author" {
-		t.Errorf("Author = %q, want 'OL Author'", fields.Author)
-	}
+	assert.Equal(t, "2005", fields.PublishAt)
+	assert.Equal(t, "OL Author", fields.Author)
 }
 
 func TestMapOLFieldsFromPublishYear(t *testing.T) {
 	doc := &olDoc{
-		Title:        "No First Year",
-		AuthorName:   []string{"Author"},
-		PublishYear:  []int{2010, 2012},
+		Title:       "No First Year",
+		AuthorName:  []string{"Author"},
+		PublishYear: []int{2010, 2012},
 	}
 	fields := mapOLFields(doc)
-	if fields.PublishAt != "2010" {
-		t.Errorf("PublishAt = %q, want 2010", fields.PublishAt)
-	}
+	assert.Equal(t, "2010", fields.PublishAt)
 }
 
 func TestEnricherFor(t *testing.T) {
-	if e := EnricherFor(ResourceMovie, "key"); e == nil {
-		t.Error("EnricherFor(movie) should not be nil")
-	}
-	if e := EnricherFor(ResourceTV, "key"); e == nil {
-		t.Error("EnricherFor(tv) should not be nil")
-	}
-	if e := EnricherFor(ResourceBook, "key"); e == nil {
-		t.Error("EnricherFor(book) should not be nil")
-	}
-	if e := EnricherFor(ResourceType("unknown"), "key"); e != nil {
-		t.Error("EnricherFor(unknown) should be nil")
-	}
+	require.NotNil(t, EnricherFor(ResourceMovie, "key"), "EnricherFor(movie) should not be nil")
+	require.NotNil(t, EnricherFor(ResourceTV, "key"), "EnricherFor(tv) should not be nil")
+	require.NotNil(t, EnricherFor(ResourceBook, "key"), "EnricherFor(book) should not be nil")
+	require.Nil(t, EnricherFor(ResourceType("unknown"), "key"), "EnricherFor(unknown) should be nil")
 }
 
 func TestTMDBEnricherSetCache(t *testing.T) {
 	movieEnricher := NewTMDBMovieEnricher("test-key")
 	cache := NewCache("/tmp/test_enrich_cache.json")
 	movieEnricher.SetCache(cache)
-	if movieEnricher.cache != cache {
-		t.Error("SetCache did not attach cache")
-	}
+	require.Equal(t, cache, movieEnricher.cache, "SetCache did not attach cache")
 
 	tvEnricher := NewTMDBTVEnricher("test-key")
 	tvEnricher.SetCache(cache)
-	if tvEnricher.cache != cache {
-		t.Error("SetCache did not attach cache")
-	}
+	require.Equal(t, cache, tvEnricher.cache, "SetCache did not attach cache")
 }
 
 func TestBooksEnricherSetCache(t *testing.T) {
 	enricher := NewBooksEnricher("test-key")
 	cache := NewCache("/tmp/test_enrich_cache_books.json")
 	enricher.SetCache(cache)
-	if enricher.cache != cache {
-		t.Error("SetCache did not attach cache")
-	}
+	require.Equal(t, cache, enricher.cache, "SetCache did not attach cache")
 }
 
 func TestEnricherEnrichNoNetwork(t *testing.T) {
-	// These calls will fail on network, but should return error, not panic
 	movieEnricher := NewTMDBMovieEnricher("invalid-key")
 	_, err := movieEnricher.Enrich(context.Background(), "Test Movie", "2023")
-	if err == nil {
-		t.Error("expected error with invalid API key")
-	}
+	require.Error(t, err, "expected error with invalid API key")
 
 	bookEnricher := NewBooksEnricher("invalid-key")
 	_, err = bookEnricher.Enrich(context.Background(), "Test Book", "2023")
-	if err == nil {
-		t.Error("expected error with invalid API key")
-	}
+	require.Error(t, err, "expected error with invalid API key")
 }
 
 func TestParseYAMLFileWithInvalidPath(t *testing.T) {
 	_, _, err := ParseYAMLFile("/nonexistent/path.yml")
-	if err == nil {
-		t.Error("expected error for nonexistent file")
-	}
+	require.Error(t, err, "expected error for nonexistent file")
 }

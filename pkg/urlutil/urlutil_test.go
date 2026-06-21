@@ -1,11 +1,16 @@
 package urlutil
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestEqualNormalizesURL(t *testing.T) {
-	if !Equal("HTTPS://github.com:443/Owner/repo/", "https://github.com/Owner/repo#readme") {
-		t.Fatal("expected normalized URLs to match")
-	}
+	require.True(t, Equal(
+		"HTTPS://github.com:443/Owner/repo/",
+		"https://github.com/Owner/repo#readme",
+	), "expected normalized URLs to match")
 }
 
 func TestRepoName(t *testing.T) {
@@ -18,24 +23,20 @@ func TestRepoName(t *testing.T) {
 	}
 
 	for input, want := range tests {
-		if got := RepoName(input); got != want {
-			t.Fatalf("RepoName(%q) = %q, want %q", input, got, want)
-		}
+		t.Run(input, func(t *testing.T) {
+			require.Equal(t, want, RepoName(input))
+		})
 	}
 }
 
 func TestGitHubOwnerRepo(t *testing.T) {
 	repo, ok := GitHubOwnerRepo("https://github.com/owner/repo.git/tree/main")
-	if !ok {
-		t.Fatal("expected GitHub repo URL to parse")
-	}
-	if repo.Owner != "owner" || repo.Name != "repo" {
-		t.Fatalf("GitHubOwnerRepo returned %q/%q", repo.Owner, repo.Name)
-	}
+	require.True(t, ok, "expected GitHub repo URL to parse")
+	require.Equal(t, "owner", repo.Owner)
+	require.Equal(t, "repo", repo.Name)
 
-	if _, ok := GitHubOwnerRepo("https://gitlab.com/owner/repo"); ok {
-		t.Fatal("expected non-GitHub URL to be rejected")
-	}
+	_, ok = GitHubOwnerRepo("https://gitlab.com/owner/repo")
+	require.False(t, ok, "expected non-GitHub URL to be rejected")
 }
 
 func TestSourceRepo(t *testing.T) {
@@ -55,28 +56,20 @@ func TestSourceRepo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			repo, ok := SourceRepo(tt.input)
-			if ok != tt.ok {
-				t.Fatalf("SourceRepo(%q) ok = %v, want %v", tt.input, ok, tt.ok)
-			}
+			require.Equal(t, tt.ok, ok)
 			if !ok {
 				return
 			}
-			if repo.Host != tt.host || repo.Owner != tt.owner || repo.Name != tt.name {
-				t.Fatalf("SourceRepo(%q) = %#v", tt.input, repo)
-			}
-			if !IsSourceRepo(tt.input) {
-				t.Fatalf("IsSourceRepo(%q) = false, want true", tt.input)
-			}
+			require.Equal(t, tt.host, repo.Host)
+			require.Equal(t, tt.owner, repo.Owner)
+			require.Equal(t, tt.name, repo.Name)
+			require.True(t, IsSourceRepo(tt.input))
 		})
 	}
 }
 
 func TestDomainBlocked(t *testing.T) {
 	blocked := map[string]bool{"example.com": true}
-	if !DomainBlocked("blog.example.com", blocked) {
-		t.Fatal("expected registrable domain match")
-	}
-	if DomainBlocked("example.org", blocked) {
-		t.Fatal("unexpected blocked domain")
-	}
+	require.True(t, DomainBlocked("blog.example.com", blocked), "expected registrable domain match")
+	require.False(t, DomainBlocked("example.org", blocked), "unexpected blocked domain")
 }

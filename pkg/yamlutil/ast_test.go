@@ -5,67 +5,44 @@ import (
 
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
+	"github.com/stretchr/testify/require"
 )
 
 func TestASTHelpers(t *testing.T) {
 	file, err := parser.ParseBytes([]byte("- name: demo\n  7: value\n  items:\n    - one\n  empty: ''\n"), parser.ParseComments)
-	if err != nil {
-		t.Fatalf("ParseBytes() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	seq, ok := Sequence(file.Docs[0].Body)
-	if !ok {
-		t.Fatal("document body is not a sequence")
-	}
+	require.True(t, ok, "document body is not a sequence")
 	mapping, ok := Mapping(seq.Values[0])
-	if !ok {
-		t.Fatal("sequence value is not a mapping")
-	}
+	require.True(t, ok, "sequence value is not a mapping")
 
-	if got := NodeLine(mapping); got != 1 {
-		t.Fatalf("NodeLine() = %d, want 1", got)
-	}
+	require.Equal(t, 1, NodeLine(mapping))
 
-	if got, ok := String(MappingValue(mapping, "name")); !ok || got != "demo" {
-		t.Fatalf("String(name) = %q, %v; want demo, true", got, ok)
-	}
+	got, ok := String(MappingValue(mapping, "name"))
+	require.True(t, ok)
+	require.Equal(t, "demo", got)
 
-	if got := MappingValue(mapping, "missing"); got != nil {
-		t.Fatalf("missing value = %v, want nil", got)
-	}
+	require.Nil(t, MappingValue(mapping, "missing"))
 
-	if _, ok := Sequence(MappingValue(mapping, "items")); !ok {
-		t.Fatal("items is not a sequence")
-	}
+	_, ok = Sequence(MappingValue(mapping, "items"))
+	require.True(t, ok, "items is not a sequence")
 
-	if !IsNullOrEmptyString(MappingValue(mapping, "empty")) {
-		t.Fatal("empty string should be treated as empty")
-	}
+	require.True(t, IsNullOrEmptyString(MappingValue(mapping, "empty")), "empty string should be treated as empty")
 }
 
 func TestKeyStringHandlesIntegerKeys(t *testing.T) {
 	file, err := parser.ParseBytes([]byte("7: value\n"), parser.ParseComments)
-	if err != nil {
-		t.Fatalf("ParseBytes() error = %v", err)
-	}
-	mapping, ok := file.Docs[0].Body.(*ast.MappingNode)
-	if !ok {
-		t.Fatal("document body is not a mapping")
-	}
+	require.NoError(t, err)
 
-	if got := KeyString(mapping.Values[0].Key); got != "7" {
-		t.Fatalf("KeyString() = %q, want 7", got)
-	}
+	mapping, ok := file.Docs[0].Body.(*ast.MappingNode)
+	require.True(t, ok, "document body is not a mapping")
+
+	require.Equal(t, "7", KeyString(mapping.Values[0].Key))
 }
 
 func TestNilHelpers(t *testing.T) {
-	if NodeLine(nil) != 0 {
-		t.Fatal("nil node line should be 0")
-	}
-	if MappingValue(nil, "x") != nil {
-		t.Fatal("nil mapping lookup should be nil")
-	}
-	if !IsNullOrEmptyString(nil) {
-		t.Fatal("nil should be empty")
-	}
+	require.Equal(t, 0, NodeLine(nil), "nil node line should be 0")
+	require.Nil(t, MappingValue(nil, "x"), "nil mapping lookup should be nil")
+	require.True(t, IsNullOrEmptyString(nil), "nil should be empty")
 }

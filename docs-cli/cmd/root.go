@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 )
 
 // Execute is the entry point for the docs-cli binary.
 func Execute() error {
+	carboninit.Setup()
+
 	return newRootCmd().Execute()
 }
 

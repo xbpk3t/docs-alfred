@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/adrg/frontmatter"
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
@@ -100,7 +100,7 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 		return "", fmt.Errorf("create topic dir: %w", err)
 	}
 
-	today := time.Now().Format("2006-01-02")
+	today := carbon.Now().ToDateString()
 	dateHeading := "## " + today
 
 	batchID := opts.BatchID
@@ -291,7 +291,7 @@ func WriteManualReviewEntry(item *ClassifyItem, opts *WriteOptions) (string, err
 	unlock := lockPath(path)
 	defer unlock()
 
-	today := time.Now().Format("2006-01-02")
+	today := carbon.Now().ToDateString()
 	dateHeading := "## " + today
 
 	title, metaBlock := buildReviewEntryMeta(item)

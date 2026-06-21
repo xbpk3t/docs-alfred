@@ -1,3 +1,5 @@
+//go:generate mockgen -destination=mocks/mock_queryer.go -package=mocks github.com/xbpk3t/docs-alfred/xzb/internal/d1sync Queryer
+
 package d1sync
 
 import (

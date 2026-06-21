@@ -2,6 +2,9 @@ package opencli
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCommandForURL_twitterThread(t *testing.T) {
@@ -27,12 +30,9 @@ func TestCommandForURL_twitterThread(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			adapter, args := CommandForURL(tt.url)
-			if adapter != tt.wantAdap {
-				t.Errorf("CommandForURL() adapter = %q, want %q", adapter, tt.wantAdap)
-			}
-			if len(args) < 1 || args[0] != tt.wantSub {
-				t.Errorf("CommandForURL() args[0] = %q, want %q", args[0], tt.wantSub)
-			}
+			assert.Equal(t, tt.wantAdap, adapter)
+			require.GreaterOrEqual(t, len(args), 1)
+			assert.Equal(t, tt.wantSub, args[0])
 		})
 	}
 }
@@ -50,119 +50,82 @@ func TestCommandForURL_weixinDownload(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			adapter, args := CommandForURL(tt.url)
-			if adapter != "weixin" {
-				t.Errorf("CommandForURL() adapter = %q, want %q", adapter, "weixin")
-			}
-			// First arg should be "download" not "article"
-			if len(args) < 1 || args[0] != "download" {
-				t.Errorf("CommandForURL() args[0] = %q, want %q", args[0], "download")
-			}
-			// Should use --url flag format
-			if len(args) < 2 || args[1] != urlFlag {
-				t.Errorf("CommandForURL() args[1] = %q, want %q", args[1], urlFlag)
-			}
-			if len(args) < 3 || args[2] != tt.url {
-				t.Errorf("CommandForURL() args[2] = %q, want %q", args[2], tt.url)
-			}
+			assert.Equal(t, "weixin", adapter)
+			require.GreaterOrEqual(t, len(args), 1)
+			assert.Equal(t, "download", args[0])
+			require.GreaterOrEqual(t, len(args), 2)
+			assert.Equal(t, urlFlag, args[1])
+			require.GreaterOrEqual(t, len(args), 3)
+			assert.Equal(t, tt.url, args[2])
 		})
 	}
 }
 
 func TestCommandForURL_tcoNoLongerRouted(t *testing.T) {
-	// t.co is no longer in the route table — it should fall through to web read.
-	// Actual resolution happens in the driver layer.
 	url := "https://t.co/abc123"
 	adapter, args := CommandForURL(url)
-	if adapter != "web" {
-		t.Errorf("CommandForURL() adapter = %q, want %q (t.co should fall through to web)", adapter, "web")
-	}
-	if len(args) < 1 || args[0] != subcmdRead {
-		t.Errorf("CommandForURL() args[0] = %q, want %q", args[0], subcmdRead)
-	}
+	assert.Equal(t, "web", adapter, "t.co should fall through to web")
+	require.GreaterOrEqual(t, len(args), 1)
+	assert.Equal(t, subcmdRead, args[0])
 }
 
 func TestCommandForURL_bilibili(t *testing.T) {
 	adapter, args := CommandForURL("https://www.bilibili.com/video/BV1xx411c7mD")
-	if adapter != "bilibili" {
-		t.Errorf("CommandForURL() adapter = %q, want %q", adapter, "bilibili")
-	}
-	if len(args) < 1 || args[0] != subcmdVideo {
-		t.Errorf("CommandForURL() args[0] = %q, want %q", args[0], subcmdVideo)
-	}
+	assert.Equal(t, "bilibili", adapter)
+	require.GreaterOrEqual(t, len(args), 1)
+	assert.Equal(t, subcmdVideo, args[0])
+
 	// Query params should be stripped
 	adapter2, args2 := CommandForURL("https://www.bilibili.com/video/BV1xx411c7mD/?spm_id_from=333.1387")
-	if adapter2 != "bilibili" {
-		t.Errorf("CommandForURL() adapter = %q, want %q", adapter2, "bilibili")
-	}
-	if len(args2) >= 2 && stringsContains(args2[1], "spm_id_from") {
-		t.Errorf("CommandForURL() args should have query params stripped: %v", args2)
+	assert.Equal(t, "bilibili", adapter2)
+	for _, a := range args2 {
+		assert.NotContains(t, a, "spm_id_from", "args should have query params stripped")
 	}
 }
 
 func TestCommandForURL_youtube(t *testing.T) {
 	adapter, args := CommandForURL("https://www.youtube.com/watch?v=abc123")
-	if adapter != "youtube" {
-		t.Errorf("CommandForURL() adapter = %q, want %q", adapter, "youtube")
-	}
-	if len(args) < 1 || args[0] != subcmdVideo {
-		t.Errorf("CommandForURL() args[0] = %q, want %q", args[0], subcmdVideo)
-	}
+	assert.Equal(t, "youtube", adapter)
+	require.GreaterOrEqual(t, len(args), 1)
+	assert.Equal(t, subcmdVideo, args[0])
 }
 
 func TestCommandForURL_reddit(t *testing.T) {
 	adapter, _ := CommandForURL("https://www.reddit.com/r/programming/comments/abc/")
-	if adapter != "reddit" {
-		t.Errorf("CommandForURL() adapter = %q, want %q", adapter, "reddit")
-	}
+	assert.Equal(t, "reddit", adapter)
 }
 
 func TestCommandForURL_hackernews(t *testing.T) {
 	adapter, _ := CommandForURL("https://news.ycombinator.com/item?id=123")
-	if adapter != "hackernews" {
-		t.Errorf("CommandForURL() adapter = %q, want %q", adapter, "hackernews")
-	}
+	assert.Equal(t, "hackernews", adapter)
 }
 
 func TestCommandForURL_zhihuQuestion(t *testing.T) {
 	adapter, args := CommandForURL("https://www.zhihu.com/question/35129528")
-	if adapter != "zhihu" {
-		t.Errorf("CommandForURL() adapter = %q, want %q", adapter, "zhihu")
-	}
-	if len(args) < 2 || args[1] != "35129528" {
-		t.Errorf("CommandForURL() args = %v, want numeric ID as second arg", args)
-	}
+	assert.Equal(t, "zhihu", adapter)
+	require.GreaterOrEqual(t, len(args), 2)
+	assert.Equal(t, "35129528", args[1])
 }
 
 func TestCommandForURL_zhihuAnswer(t *testing.T) {
 	adapter, args := CommandForURL("https://www.zhihu.com/question/35129528/answer/123456789")
-	if adapter != "zhihu" {
-		t.Errorf("CommandForURL() adapter = %q, want %q", adapter, "zhihu")
-	}
-	// Should extract the question ID
-	if len(args) < 2 || args[1] != "35129528" {
-		t.Errorf("CommandForURL() args = %v, want extracted question ID", args)
-	}
+	assert.Equal(t, "zhihu", adapter)
+	require.GreaterOrEqual(t, len(args), 2)
+	assert.Equal(t, "35129528", args[1])
 }
 
 func TestCommandForURL_zhuanlan(t *testing.T) {
-	// zhuanlan.zhihu.com should go to web read
 	adapter, args := CommandForURL("https://zhuanlan.zhihu.com/p/123456789")
-	if adapter != "web" {
-		t.Errorf("CommandForURL() adapter = %q, want %q (zhuanlan goes to web read)", adapter, "web")
-	}
-	if len(args) < 1 || args[0] != subcmdRead {
-		t.Errorf("CommandForURL() args[0] = %q, want %q", args[0], subcmdRead)
-	}
+	assert.Equal(t, "web", adapter, "zhuanlan goes to web read")
+	require.GreaterOrEqual(t, len(args), 1)
+	assert.Equal(t, subcmdRead, args[0])
 }
 
 func TestCommandForURL_genericWeb(t *testing.T) {
 	adapter, args := CommandForURL("https://example.com/article")
-	if adapter != "web" {
-		t.Errorf("CommandForURL() adapter = %q, want %q", adapter, "web")
-	}
-	if len(args) < 2 || args[1] != urlFlag {
-		t.Errorf("CommandForURL() args format wrong: %v", args)
-	}
+	assert.Equal(t, "web", adapter)
+	require.GreaterOrEqual(t, len(args), 2)
+	assert.Equal(t, urlFlag, args[1])
 }
 
 func TestIsTcoURL(t *testing.T) {
@@ -180,9 +143,7 @@ func TestIsTcoURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {
-			if got := IsTcoURL(tt.url); got != tt.want {
-				t.Errorf("IsTcoURL(%q) = %v, want %v", tt.url, got, tt.want)
-			}
+			assert.Equal(t, tt.want, IsTcoURL(tt.url))
 		})
 	}
 }
@@ -192,7 +153,6 @@ func TestCleanXMediaSuffix(t *testing.T) {
 		url  string
 		want string
 	}{
-		// X.com URLs with photo/video suffix
 		{
 			"https://x.com/user/status/123456789/photo/1",
 			"https://x.com/user/status/123456789/",
@@ -201,12 +161,10 @@ func TestCleanXMediaSuffix(t *testing.T) {
 			"https://x.com/user/status/123456789/video/1",
 			"https://x.com/user/status/123456789/",
 		},
-		// Twitter.com URLs
 		{
 			"https://twitter.com/user/status/123456789/photo/1",
 			"https://twitter.com/user/status/123456789/",
 		},
-		// Already clean URLs should be unchanged
 		{
 			"https://x.com/user/status/123456789",
 			"https://x.com/user/status/123456789",
@@ -215,7 +173,6 @@ func TestCleanXMediaSuffix(t *testing.T) {
 			"https://x.com/user/status/123456789/",
 			"https://x.com/user/status/123456789/",
 		},
-		// Non-X URLs should be unchanged
 		{
 			"https://example.com/photo/1",
 			"https://example.com/photo/1",
@@ -224,7 +181,6 @@ func TestCleanXMediaSuffix(t *testing.T) {
 			"https://bilibili.com/video/BV1xx/photo/1",
 			"https://bilibili.com/video/BV1xx/photo/1",
 		},
-		// Invalid URLs
 		{
 			"not-a-url",
 			"not-a-url",
@@ -236,25 +192,9 @@ func TestCleanXMediaSuffix(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {
-			if got := CleanXMediaSuffix(tt.url); got != tt.want {
-				t.Errorf("CleanXMediaSuffix(%q) = %q, want %q", tt.url, got, tt.want)
-			}
+			assert.Equal(t, tt.want, CleanXMediaSuffix(tt.url))
 		})
 	}
-}
-
-// stringsContains is a helper for substring matching in slices.
-func stringsContains(s, substr string) bool {
-	return len(s) >= len(substr) && containsSubstr(s, substr)
-}
-
-func containsSubstr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestHasAdapter(t *testing.T) {
@@ -271,15 +211,12 @@ func TestHasAdapter(t *testing.T) {
 		{"https://www.reddit.com/r/test", true},
 		{"https://news.ycombinator.com/item?id=1", true},
 		{"https://zhuanlan.zhihu.com/p/123", true},
-		// t.co no longer has an adapter — resolved by driver layer
 		{"https://t.co/abc123", false},
 		{"https://example.com", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {
-			if got := HasAdapter(tt.url); got != tt.want {
-				t.Errorf("HasAdapter(%q) = %v, want %v", tt.url, got, tt.want)
-			}
+			assert.Equal(t, tt.want, HasAdapter(tt.url))
 		})
 	}
 }

@@ -1,3 +1,5 @@
+//go:generate mockgen -destination=mocks/mock_provider.go -package=mocks github.com/xbpk3t/docs-alfred/internal/transcript Provider
+
 package transcript
 
 import (

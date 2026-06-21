@@ -17,6 +17,7 @@ import (
 	"github.com/mmcdole/gofeed"
 	resend "github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
+	"github.com/samber/mo"
 	"github.com/spf13/cobra"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/html"
@@ -478,14 +479,11 @@ func itemIdentity(feedURL string, item *gofeed.Item) string {
 }
 
 func getItemCreationTime(item *gofeed.Item) time.Time {
-	if item.PublishedParsed != nil {
-		return *item.PublishedParsed
-	}
-	if item.UpdatedParsed != nil {
-		return *item.UpdatedParsed
+	if t, ok := mo.PointerToOption(item.PublishedParsed).Get(); ok {
+		return t
 	}
 
-	return time.Now()
+	return mo.PointerToOption(item.UpdatedParsed).OrElse(time.Now())
 }
 
 // getFeedLatestTime returns the latest item update time from a feed.
@@ -495,23 +493,20 @@ func getFeedLatestTime(feed *gofeed.Feed) time.Time {
 	}
 	// Items are typically sorted by date, check first item
 	first := feed.Items[0]
-	if first.PublishedParsed != nil {
-		return *first.PublishedParsed
-	}
-	if first.UpdatedParsed != nil {
-		return *first.UpdatedParsed
+	if t, ok := mo.PointerToOption(first.PublishedParsed).Get(); ok {
+		return t
 	}
 
-	return time.Time{}
+	return mo.PointerToOption(first.UpdatedParsed).OrElse(time.Time{})
 }
 
 // calcPublishFreq calculates items-per-month frequency from feed items.
 func calcPublishFreq(feed *gofeed.Feed) string {
 	var dates []time.Time
 	for _, item := range feed.Items {
-		if item.PublishedParsed != nil {
-			dates = append(dates, *item.PublishedParsed)
-		}
+		mo.PointerToOption(item.PublishedParsed).ForEach(func(t time.Time) {
+			dates = append(dates, t)
+		})
 	}
 	if len(dates) < 2 {
 		return "-"
@@ -858,10 +853,12 @@ func checkFeed(u *rss.Feeds, config *rss.Config, staleThreshold time.Duration) f
 	}
 
 	latest := time.Now()
-	if len(parsed.Items) > 0 && parsed.Items[0].PublishedParsed != nil {
-		latest = *parsed.Items[0].PublishedParsed
-	} else if len(parsed.Items) > 0 && parsed.Items[0].UpdatedParsed != nil {
-		latest = *parsed.Items[0].UpdatedParsed
+	if len(parsed.Items) > 0 {
+		if t, ok := mo.PointerToOption(parsed.Items[0].PublishedParsed).Get(); ok {
+			latest = t
+		} else {
+			latest = mo.PointerToOption(parsed.Items[0].UpdatedParsed).OrElse(latest)
+		}
 	}
 
 	age := time.Since(latest)

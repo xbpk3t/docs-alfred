@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/samber/mo"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/xbpk3t/docs-alfred/service/data"
@@ -197,11 +198,7 @@ func processItem(ctx context.Context, item *enrich.ItemNode, enricher enrich.Enr
 func buildReport(results []*enrich.EnrichResult, input *EnrichInput) *EnrichResult {
 	flat := make([]enrich.EnrichResult, len(results))
 	for i, r := range results {
-		if r != nil {
-			flat[i] = *r
-		} else {
-			flat[i] = enrich.EnrichResult{Index: i, Name: "(unknown)"}
-		}
+		flat[i] = mo.PointerToOption(r).OrElse(enrich.EnrichResult{Index: i, Name: "(unknown)"})
 	}
 
 	report := &enrich.EnrichReport{
