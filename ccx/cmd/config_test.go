@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 )
 
@@ -22,21 +23,11 @@ func TestLoadExportConfigPrefersFlagsThenEnvThenYAML(t *testing.T) {
 			Model:   "flag-model",
 		},
 	})
-	if err != nil {
-		t.Fatalf("loadExportConfig() error = %v", err)
-	}
-	if got.WikiRoot != "flag-wiki" {
-		t.Fatalf("WikiRoot = %q, want flag override", got.WikiRoot)
-	}
-	if got.AI.APIKey != "env-key" {
-		t.Fatalf("APIKey = %q, want env value", got.AI.APIKey)
-	}
-	if got.AI.BaseURL != "https://flag.example/v1" {
-		t.Fatalf("BaseURL = %q, want flag override", got.AI.BaseURL)
-	}
-	if got.AI.Model != "flag-model" {
-		t.Fatalf("Model = %q, want flag override", got.AI.Model)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "flag-wiki", got.WikiRoot, "WikiRoot should use flag override")
+	require.Equal(t, "env-key", got.AI.APIKey, "APIKey should use env value")
+	require.Equal(t, "https://flag.example/v1", got.AI.BaseURL, "BaseURL should use flag override")
+	require.Equal(t, "flag-model", got.AI.Model, "Model should use flag override")
 }
 
 func TestLoadExportConfigWithoutFileUsesEnvDefaults(t *testing.T) {
@@ -46,23 +37,17 @@ func TestLoadExportConfigWithoutFileUsesEnvDefaults(t *testing.T) {
 	t.Setenv("CCX_WIKI_ROOT", "env-wiki")
 
 	got, err := loadExportConfig("", exportConfigOverrides{})
-	if err != nil {
-		t.Fatalf("loadExportConfig() error = %v", err)
-	}
-	if got.WikiRoot != "env-wiki" {
-		t.Fatalf("WikiRoot = %q, want env value", got.WikiRoot)
-	}
-	if got.AI.APIKey != "env-key" || got.AI.BaseURL != "https://env.example/v1" || got.AI.Model != "env-model" {
-		t.Fatalf("AI config = %+v, want env values", got.AI)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "env-wiki", got.WikiRoot, "WikiRoot should use env value")
+	require.Equal(t, "env-key", got.AI.APIKey)
+	require.Equal(t, "https://env.example/v1", got.AI.BaseURL)
+	require.Equal(t, "env-model", got.AI.Model)
 }
 
 func writeCCXConfig(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "ccx.yml")
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
 	return path
 }

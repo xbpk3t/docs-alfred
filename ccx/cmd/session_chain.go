@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/samber/mo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/ccx/internal"
 )
@@ -52,14 +53,8 @@ func writeJSON(chain []internal.ChainRecord) error {
 
 func writeRaw(chain []internal.ChainRecord) error {
 	for _, entry := range chain {
-		prevSessionID := ""
-		if entry.PrevSessionID != nil {
-			prevSessionID = *entry.PrevSessionID
-		}
-		endedAt := ""
-		if entry.EndedAt != nil {
-			endedAt = *entry.EndedAt
-		}
+		prevSessionID := mo.PointerToOption(entry.PrevSessionID).OrElse("")
+		endedAt := mo.PointerToOption(entry.EndedAt).OrElse("")
 		if _, err := fmt.Fprintf(os.Stdout, "%s\t%s\t%s\t%s\t%s\t%s\t%v\n",
 			entry.SessionID, prevSessionID, entry.StartedAt,
 			endedAt, entry.Display, entry.TranscriptPath, entry.IsSidechain); err != nil {
@@ -75,14 +70,8 @@ func writeHumanReadable(chain []internal.ChainRecord) error {
 		return err
 	}
 	for i, entry := range chain {
-		prevSessionID := "null"
-		if entry.PrevSessionID != nil {
-			prevSessionID = *entry.PrevSessionID
-		}
-		endedAt := "null"
-		if entry.EndedAt != nil {
-			endedAt = *entry.EndedAt
-		}
+		prevSessionID := mo.PointerToOption(entry.PrevSessionID).OrElse("null")
+		endedAt := mo.PointerToOption(entry.EndedAt).OrElse("null")
 		sidechainInfo := ""
 		if entry.IsSidechain {
 			sidechainInfo = " [sidechain]"

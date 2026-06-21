@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestAtomicWriteJSONFileAndReadJSONFile(t *testing.T) {
@@ -16,62 +18,38 @@ func TestAtomicWriteJSONFileAndReadJSONFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "state.json")
 	want := state{Name: "demo", Count: 2}
 
-	if err := AtomicWriteJSONFile(path, want, FilePermPrivate); err != nil {
-		t.Fatalf("AtomicWriteJSONFile() error = %v", err)
-	}
+	require.NoError(t, AtomicWriteJSONFile(path, want, FilePermPrivate))
 
 	got, err := ReadJSONFile[state](path)
-	if err != nil {
-		t.Fatalf("ReadJSONFile() error = %v", err)
-	}
-	if got != want {
-		t.Fatalf("state = %+v, want %+v", got, want)
-	}
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 
 	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
-	}
-	if string(data) != "{\n  \"name\": \"demo\",\n  \"count\": 2\n}" {
-		t.Fatalf("json = %q", data)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "{\n  \"name\": \"demo\",\n  \"count\": 2\n}", string(data))
 
 	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("Stat() error = %v", err)
-	}
-	if gotPerm := info.Mode().Perm(); gotPerm != FilePermPrivate {
-		t.Fatalf("perm = %v, want %v", gotPerm, FilePermPrivate)
-	}
+	require.NoError(t, err)
+	require.Equal(t, FilePermPrivate, info.Mode().Perm())
 }
 
 func TestReadJSONFileMissingFile(t *testing.T) {
 	_, err := ReadJSONFile[map[string]string](filepath.Join(t.TempDir(), "missing.json"))
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("error = %v, want os.ErrNotExist", err)
-	}
+	require.True(t, errors.Is(err, os.ErrNotExist), "error should be os.ErrNotExist")
 }
 
 func TestReadJSONFileInvalidJSON(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bad.json")
-	if err := os.WriteFile(path, []byte(`{"bad"`), FilePermPrivate); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte(`{"bad"`), FilePermPrivate))
 
 	_, err := ReadJSONFile[map[string]string](path)
-	if err == nil {
-		t.Fatal("ReadJSONFile() error = nil, want parse error")
-	}
+	require.Error(t, err, "ReadJSONFile should return parse error")
 }
 
 func TestUnmarshalJSON(t *testing.T) {
 	got, err := UnmarshalJSON[map[string]int]([]byte(`{"count":2}`))
-	if err != nil {
-		t.Fatalf("UnmarshalJSON() error = %v", err)
-	}
-	if got["count"] != 2 {
-		t.Fatalf("count = %d, want 2", got["count"])
-	}
+	require.NoError(t, err)
+	require.Equal(t, 2, got["count"])
 }
 
 func TestUnmarshalJSONIntoPreservesExistingFields(t *testing.T) {
@@ -81,13 +59,7 @@ func TestUnmarshalJSONIntoPreservesExistingFields(t *testing.T) {
 	}
 
 	got := state{Version: 1}
-	if err := UnmarshalJSONInto([]byte(`{"items":{"a":"b"}}`), &got); err != nil {
-		t.Fatalf("UnmarshalJSONInto() error = %v", err)
-	}
-	if got.Version != 1 {
-		t.Fatalf("version = %d, want 1", got.Version)
-	}
-	if got.Items["a"] != "b" {
-		t.Fatalf("items[a] = %q, want b", got.Items["a"])
-	}
+	require.NoError(t, UnmarshalJSONInto([]byte(`{"items":{"a":"b"}}`), &got))
+	require.Equal(t, 1, got.Version)
+	require.Equal(t, "b", got.Items["a"])
 }

@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"os"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRenderHuntHTML(t *testing.T) {
@@ -99,27 +100,14 @@ func TestRenderHuntHTML(t *testing.T) {
 
 	html := renderHuntHTML(report)
 
-	if err := os.WriteFile("/tmp/hunt-test.html", []byte(html), 0o644); err != nil {
-		t.Fatalf("write HTML: %v", err)
-	}
-
+	require.NoError(t, os.WriteFile("/tmp/hunt-test.html", []byte(html), 0o644))
 	t.Logf("Hunt report written to /tmp/hunt-test.html (%d bytes)", len(html))
 
-	if len(html) == 0 {
-		t.Fatal("rendered HTML is empty")
-	}
-	if !strings.Contains(html, "Source Discovery") {
-		t.Error("missing title")
-	}
-	if !strings.Contains(html, "Engineering Blog") {
-		t.Error("missing candidate title")
-	}
-	if !strings.Contains(html, "Rate limit exceeded") {
-		t.Error("missing warning message")
-	}
-	if !strings.Contains(html, "API key invalid") {
-		t.Error("missing failure message")
-	}
+	require.NotEmpty(t, html, "rendered HTML is empty")
+	require.Contains(t, html, "Source Discovery")
+	require.Contains(t, html, "Engineering Blog")
+	require.Contains(t, html, "Rate limit exceeded")
+	require.Contains(t, html, "API key invalid")
 }
 
 func TestRenderTrnsPage(t *testing.T) {
@@ -142,27 +130,14 @@ Jane: A resilient system is one that can continue operating in the presence of f
 
 	html := renderTrnsPage(&view)
 
-	if err := os.WriteFile("/tmp/trns-test.html", []byte(html), 0o644); err != nil {
-		t.Fatalf("write HTML: %v", err)
-	}
-
+	require.NoError(t, os.WriteFile("/tmp/trns-test.html", []byte(html), 0o644))
 	t.Logf("Trns page written to /tmp/trns-test.html (%d bytes)", len(html))
 
-	if len(html) == 0 {
-		t.Fatal("rendered HTML is empty")
-	}
-	if !strings.Contains(html, "Episode 42") {
-		t.Error("missing title")
-	}
-	if !strings.Contains(html, "Software Engineering Daily") {
-		t.Error("missing feed title")
-	}
-	if !strings.Contains(html, "AI Summary") {
-		t.Error("missing AI Summary section")
-	}
-	if !strings.Contains(html, "circuit breakers") {
-		t.Error("missing summary content")
-	}
+	require.NotEmpty(t, html, "rendered HTML is empty")
+	require.Contains(t, html, "Episode 42")
+	require.Contains(t, html, "Software Engineering Daily")
+	require.Contains(t, html, "AI Summary")
+	require.Contains(t, html, "circuit breakers")
 }
 
 func TestRenderTrnsPageWithError(t *testing.T) {
@@ -176,14 +151,8 @@ func TestRenderTrnsPageWithError(t *testing.T) {
 
 	html := renderTrnsPage(&view)
 
-	if err := os.WriteFile("/tmp/trns-error-test.html", []byte(html), 0o644); err != nil {
-		t.Fatalf("write HTML: %v", err)
-	}
+	require.NoError(t, os.WriteFile("/tmp/trns-error-test.html", []byte(html), 0o644))
 
-	if !strings.Contains(html, "AI Summary unavailable") {
-		t.Error("missing summary error section")
-	}
-	if !strings.Contains(html, "connection timeout") {
-		t.Error("missing error message")
-	}
+	require.Contains(t, html, "AI Summary unavailable")
+	require.Contains(t, html, "connection timeout")
 }

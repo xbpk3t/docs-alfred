@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewConfigPreservesExplicitFalseDebug(t *testing.T) {
@@ -13,15 +15,9 @@ func TestNewConfigPreservesExplicitFalseDebug(t *testing.T) {
 env:
   debug: false
 `)
-	if err := os.WriteFile(path, content, 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, content, 0o600))
 
 	cfg, err := NewConfig(path)
-	if err != nil {
-		t.Fatalf("NewConfig() error = %v", err)
-	}
-	if cfg.EnvConfig.Debug {
-		t.Fatal("EnvConfig.Debug = true, want explicit false")
-	}
+	require.NoError(t, err)
+	require.False(t, cfg.EnvConfig.Debug, "EnvConfig.Debug should be false")
 }

@@ -21,18 +21,12 @@ func TestRenderPrompt(t *testing.T) {
 		Content:       "A summary",
 		CandidateTree: "- path: ai/tool/demo | title: Demo | source: test",
 	})
-	if err != nil {
-		t.Fatalf("renderPrompt() error = %v", err)
-	}
+	require.NoError(t, err, "renderPrompt() error")
 
 	for _, want := range []string{"A title", "https://example.com/post", "A summary"} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("rendered prompt missing %q:\n%s", want, prompt)
-		}
+		assert.Contains(t, prompt, want, "rendered prompt should contain %q", want)
 	}
-	if strings.Contains(prompt, "{{") {
-		t.Fatalf("rendered prompt still contains template marker:\n%s", prompt)
-	}
+	assert.NotContains(t, prompt, "{{", "rendered prompt should not contain template marker")
 }
 
 func TestParseAIClassificationAcceptsJSONObject(t *testing.T) {

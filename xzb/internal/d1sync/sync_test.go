@@ -1,4 +1,4 @@
-package d1sync
+package d1sync_test
 
 import (
 	"context"
@@ -6,23 +6,17 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/xzb/internal/d1sync"
+	"github.com/xbpk3t/docs-alfred/xzb/internal/d1sync/mocks"
 	"github.com/xbpk3t/docs-alfred/xzb/internal/model"
+	"go.uber.org/mock/gomock"
 )
 
-type fakeQueryer struct {
-	queries []string
-	params  [][]any
-}
-
-func (f *fakeQueryer) Query(_ context.Context, sql string, params []any) (QueryResult, error) {
-	f.queries = append(f.queries, sql)
-	f.params = append(f.params, params)
-	return QueryResult{RowsWritten: 1}, nil
-}
-
 func TestSyncUsesImportBatchAndUpsert(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	fake := mocks.NewMockQueryer(ctrl)
+
 	now := time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC)
-	fake := &fakeQueryer{}
 	transactions := []model.Transaction{{
 		ID:              "wechat:1",
 		Source:          model.SourceWechat,
@@ -41,13 +35,21 @@ func TestSyncUsesImportBatchAndUpsert(t *testing.T) {
 		UpdatedAt:       now,
 	}}
 
-	summary, err := Sync(context.Background(), fake, transactions, []string{"wechat.csv"}, now)
+	var capturedSQLs []string
+	var capturedParams [][]any
+	fake.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, sql string, params []any) (d1sync.QueryResult, error) {
+			capturedSQLs = append(capturedSQLs, sql)
+			capturedParams = append(capturedParams, params)
+			return d1sync.QueryResult{RowsWritten: 1}, nil
+		}).Times(2)
+
+	summary, err := d1sync.Sync(context.Background(), fake, transactions, []string{"wechat.csv"}, now)
 	require.NoError(t, err)
 	require.Equal(t, 1, summary.Processed)
-	require.Len(t, fake.queries, 2)
-	require.Contains(t, fake.queries[0], "finance_import_batches")
-	require.Contains(t, fake.queries[1], "ON CONFLICT(id)")
-	require.Equal(t, "wechat:1", fake.params[1][0])
+	require.Contains(t, capturedSQLs[0], "finance_import_batches")
+	require.Contains(t, capturedSQLs[1], "ON CONFLICT(id)")
+	require.Equal(t, "wechat:1", capturedParams[1][0])
 }
 
 func TestSQLScriptEscapesValuesAndUsesUpsert(t *testing.T) {
@@ -69,7 +71,7 @@ func TestSQLScriptEscapesValuesAndUsesUpsert(t *testing.T) {
 		UpdatedAt:      now,
 	}}
 
-	script, summary, err := SQLScript(transactions, []string{"wechat.csv"}, now)
+	script, summary, err := d1sync.SQLScript(transactions, []string{"wechat.csv"}, now)
 	require.NoError(t, err)
 	require.Equal(t, 1, summary.Processed)
 	require.Contains(t, script, "BEGIN TRANSACTION;")

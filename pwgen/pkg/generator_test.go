@@ -1,131 +1,108 @@
 package pwgen
 
-//nolint:revive // Test complexity is acceptable
-//func TestGenerate(t *testing.T) {
-//	tests := []struct {
-//		name        string
-//		secretKey   string
-//		website     string
-//		length      int
-//		uppercase   bool
-//		numbers     bool
-//		punctuation bool
-//		expected    string
-//	}{
-//		{
-//			name:        "testsecret + github.com",
-//			secretKey:   "testsecret",
-//			website:     "github.com",
-//			length:      16,
-//			uppercase:   true,
-//			numbers:     true,
-//			punctuation: false,
-//			expected:    "", // Will be filled after first run
-//		},
-//		{
-//			name:        "longsecret + example.com",
-//			secretKey:   "longsecret",
-//			website:     "example.com",
-//			length:      20,
-//			uppercase:   true,
-//			numbers:     true,
-//			punctuation: false,
-//			expected:    "", // Will be filled after first run
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			config := NewConfig(tt.secretKey, tt.length, tt.uppercase, tt.numbers, tt.punctuation)
-//			generator := NewGenerator(config)
-//
-//			result, err := generator.Generate(tt.website)
-//			if err != nil {
-//				t.Fatalf("Generate() error = %v", err)
-//			}
-//
-//			if len(result) != tt.length {
-//				t.Errorf("Generate() length = %d, want %d", len(result), tt.length)
-//			}
-//
-//			// For the first test case, verify exact output
-//			if tt.expected != "" && result != tt.expected {
-//				t.Errorf("Generate() = %v, want %v", result, tt.expected)
-//			}
-//
-//			// Print result for manual verification
-//			t.Logf("Generated password for %s: %s", tt.website, result)
-//		})
-//	}
-//}
-//
-//func TestGenerateDeterministic(t *testing.T) {
-//	// Test that same inputs always produce same output
-//	config := NewConfig("testsecret", 16, true, true, false)
-//	generator := NewGenerator(config)
-//
-//	result1, err := generator.Generate("github.com")
-//	if err != nil {
-//		t.Fatalf("Generate() error = %v", err)
-//	}
-//
-//	result2, err := generator.Generate("github.com")
-//	if err != nil {
-//		t.Fatalf("Generate() error = %v", err)
-//	}
-//
-//	if result1 != result2 {
-//		t.Errorf("Generate() not deterministic: %v != %v", result1, result2)
-//	}
-//}
-//
-//func TestGenerateDifferentWebsites(t *testing.T) {
-//	// Test that different websites produce different passwords
-//	config := NewConfig("testsecret", 16, true, true, false)
-//	generator := NewGenerator(config)
-//
-//	result1, err := generator.Generate("github.com")
-//	if err != nil {
-//		t.Fatalf("Generate() error = %v", err)
-//	}
-//
-//	result2, err := generator.Generate("google.com")
-//	if err != nil {
-//		t.Fatalf("Generate() error = %v", err)
-//	}
-//
-//	if result1 == result2 {
-//		t.Errorf("Generate() same password for different websites: %v", result1)
-//	}
-//}
-//
-////nolint:revive // Test complexity is acceptable
-//func TestGenerateWithPunctuation(t *testing.T) {
-//	config := NewConfig("testsecret", 16, true, true, true)
-//	generator := NewGenerator(config)
-//
-//	result, err := generator.Generate("github.com")
-//	if err != nil {
-//		t.Fatalf("Generate() error = %v", err)
-//	}
-//
-//	// Check that result contains at least one punctuation character
-//	hasPunctuation := false
-//	punctuationChars := "~*-+()!@#$^&"
-//	for _, c := range result {
-//		for _, p := range punctuationChars {
-//			if c == p {
-//				hasPunctuation = true
-//
-//				break
-//			}
-//		}
-//		if hasPunctuation {
-//			break
-//		}
-//	}
-//
-//	if !hasPunctuation {
-//		t.Logf("Warning: Generated password without punctuation: %s", result)
-//	}
-//}
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestGenerateDeterministic(t *testing.T) {
+	config := NewConfig("testsecret", 16, true, true, false)
+	generator := NewGenerator(config)
+
+	result1, err := generator.Generate("github.com")
+	require.NoError(t, err)
+
+	result2, err := generator.Generate("github.com")
+	require.NoError(t, err)
+
+	assert.Equal(t, result1, result2, "same inputs should produce same output")
+}
+
+func TestGenerateDifferentWebsites(t *testing.T) {
+	config := NewConfig("testsecret", 16, true, true, false)
+	generator := NewGenerator(config)
+
+	result1, err := generator.Generate("github.com")
+	require.NoError(t, err)
+
+	result2, err := generator.Generate("google.com")
+	require.NoError(t, err)
+
+	assert.NotEqual(t, result1, result2, "different websites should produce different passwords")
+}
+
+func TestGenerateLength(t *testing.T) {
+	config := NewConfig("testsecret", 16, true, true, false)
+	generator := NewGenerator(config)
+
+	result, err := generator.Generate("github.com")
+	require.NoError(t, err)
+	assert.Equal(t, 16, len(result), "password should match requested length")
+}
+
+func TestGenerateLongerLength(t *testing.T) {
+	config := NewConfig("testsecret", 32, true, true, false)
+	generator := NewGenerator(config)
+
+	result, err := generator.Generate("github.com")
+	require.NoError(t, err)
+	assert.Equal(t, 32, len(result), "password should match requested length")
+}
+
+func TestGenerateWithPunctuation(t *testing.T) {
+	config := NewConfig("testsecret", 16, false, true, true)
+	generator := NewGenerator(config)
+
+	result, err := generator.Generate("github.com")
+	require.NoError(t, err)
+	assert.Equal(t, 16, len(result))
+
+	hasPunctuation := false
+	for _, c := range result {
+		for _, p := range "~*-+()!@#$^&" {
+			if c == p {
+				hasPunctuation = true
+				break
+			}
+		}
+		if hasPunctuation {
+			break
+		}
+	}
+	assert.True(t, hasPunctuation, "password should contain at least one punctuation character")
+}
+
+func TestGenerateWithoutPunctuation(t *testing.T) {
+	config := NewConfig("testsecret", 16, false, true, false)
+	generator := NewGenerator(config)
+
+	result, err := generator.Generate("github.com")
+	require.NoError(t, err)
+	assert.Equal(t, 16, len(result))
+
+	for _, c := range result {
+		for _, p := range "~*-+()!@#$^&" {
+			assert.NotEqual(t, c, p, "password should not contain punctuation when disabled")
+		}
+	}
+}
+
+func TestGenerateWithUppercase(t *testing.T) {
+	config := NewConfig("testsecret", 16, true, true, false)
+	generator := NewGenerator(config)
+
+	result, err := generator.Generate("github.com")
+	require.NoError(t, err)
+	assert.Equal(t, 16, len(result))
+
+	hasUpper := false
+	for _, c := range result {
+		if c >= 'A' && c <= 'Z' {
+			hasUpper = true
+			break
+		}
+	}
+	assert.True(t, hasUpper, "password should contain at least one uppercase letter")
+}

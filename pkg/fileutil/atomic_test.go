@@ -4,28 +4,20 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestAtomicWriteFileCreatesParentAndWritesData(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "state.json")
 
-	if err := AtomicWriteFile(path, []byte(`{"ok":true}`), FilePermPrivate); err != nil {
-		t.Fatalf("AtomicWriteFile() error = %v", err)
-	}
+	require.NoError(t, AtomicWriteFile(path, []byte(`{"ok":true}`), FilePermPrivate))
 
 	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
-	}
-	if string(data) != `{"ok":true}` {
-		t.Fatalf("data = %q", data)
-	}
+	require.NoError(t, err)
+	require.Equal(t, `{"ok":true}`, string(data))
 
 	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("Stat() error = %v", err)
-	}
-	if got := info.Mode().Perm(); got != FilePermPrivate {
-		t.Fatalf("perm = %v, want %v", got, FilePermPrivate)
-	}
+	require.NoError(t, err)
+	require.Equal(t, FilePermPrivate, info.Mode().Perm())
 }

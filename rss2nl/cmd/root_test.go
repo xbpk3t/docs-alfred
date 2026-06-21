@@ -14,23 +14,12 @@ import (
 	"github.com/mmcdole/gofeed"
 	gofeedext "github.com/mmcdole/gofeed/extensions"
 	"github.com/stretchr/testify/assert"
+		"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/transcript"
+	"github.com/xbpk3t/docs-alfred/internal/transcript/mocks"
 	"github.com/xbpk3t/docs-alfred/service/rss"
+	"go.uber.org/mock/gomock"
 )
-
-type recordingTranscriptProvider struct {
-	seen *transcript.EpisodeRef
-}
-
-func (p *recordingTranscriptProvider) Name() string {
-	return "recording"
-}
-
-func (p *recordingTranscriptProvider) Fetch(_ context.Context, ep *transcript.EpisodeRef) (*transcript.TranscriptResult, error) {
-	p.seen = ep
-
-	return &transcript.TranscriptResult{Content: "recorded transcript", ContentType: "plaintext"}, nil
-}
 
 func TestGetItemTitle(t *testing.T) {
 	tests := []struct {
@@ -215,7 +204,7 @@ rss:
         isMedia: true
 `, limit, feedURL)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
+		require.NoError(t, err, "write config")
 	}
 
 	return path
@@ -226,11 +215,11 @@ func readTrnsIndex(t *testing.T, outDir string) []trnsIndexEntry {
 
 	data, err := os.ReadFile(filepath.Join(outDir, "index.json"))
 	if err != nil {
-		t.Fatalf("read index: %v", err)
+		require.NoError(t, err, "read index")
 	}
 	var entries []trnsIndexEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
-		t.Fatalf("parse index: %v", err)
+		require.NoError(t, err, "parse index")
 	}
 
 	return entries
@@ -250,7 +239,8 @@ func TestToTranscriptLinks(t *testing.T) {
 }
 
 func TestFetchAndCacheItemTrnsPassesPodcastTranscriptRefsToPipeline(t *testing.T) {
-	provider := &recordingTranscriptProvider{}
+	ctrl := gomock.NewController(t)
+	provider := mocks.NewMockProvider(ctrl)
 	cache := transcript.NewCache(t.TempDir())
 	item := &NewsletterItem{
 		Title: "Episode",
@@ -261,14 +251,21 @@ func TestFetchAndCacheItemTrnsPassesPodcastTranscriptRefsToPipeline(t *testing.T
 	}
 	key := cache.Key("Feed", "hash", item.Link, item.Title)
 
+	// Set expectations: Name is called during pipeline setup, Fetch is the actual call.
+	provider.EXPECT().Name().Return("mock").AnyTimes()
+	provider.EXPECT().Fetch(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, ep *transcript.EpisodeRef) (*transcript.TranscriptResult, error) {
+			assert.Len(t, ep.TranscriptLinks, 1)
+			assert.Equal(t, "https://example.com/transcript.txt", ep.TranscriptLinks[0].URL)
+			assert.Equal(t, "text/plain", ep.TranscriptLinks[0].Type)
+
+			return &transcript.TranscriptResult{Content: "recorded transcript", ContentType: "plaintext"}, nil
+		})
+
 	got, err := fetchAndCacheItemTrns(item, "Feed", key, cache, provider)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "recorded transcript", got.Content)
-	if assert.NotNil(t, provider.seen) && assert.Len(t, provider.seen.TranscriptLinks, 1) {
-		assert.Equal(t, "https://example.com/transcript.txt", provider.seen.TranscriptLinks[0].URL)
-		assert.Equal(t, "text/plain", provider.seen.TranscriptLinks[0].Type)
-	}
 }
 
 func TestSetupSummarizerUsesConfiguredModelAndBaseURL(t *testing.T) {

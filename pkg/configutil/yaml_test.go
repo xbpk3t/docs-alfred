@@ -6,24 +6,19 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadYAMLBytes(t *testing.T) {
 	k, err := LoadYAMLBytes([]byte("server:\n  port: 8080\n"))
-	if err != nil {
-		t.Fatalf("LoadYAMLBytes() error = %v", err)
-	}
-
-	if got := k.Int("server.port"); got != 8080 {
-		t.Fatalf("server.port = %d, want 8080", got)
-	}
+	require.NoError(t, err)
+	require.Equal(t, 8080, k.Int("server.port"))
 }
 
 func TestLoadYAMLBytesRejectsInvalidYAML(t *testing.T) {
 	_, err := LoadYAMLBytes([]byte("server: ["))
-	if err == nil {
-		t.Fatal("LoadYAMLBytes() error = nil, want parse error")
-	}
+	require.Error(t, err, "LoadYAMLBytes should return parse error")
 }
 
 func TestLoadYAMLConfigPreservesInitialDefaults(t *testing.T) {
@@ -38,12 +33,9 @@ func TestLoadYAMLConfigPreservesInitialDefaults(t *testing.T) {
 		Initial: config{Name: "default", Count: 1},
 	})
 
-	if err != nil {
-		t.Fatalf("LoadYAMLConfig() error = %v", err)
-	}
-	if got.Name != "default" || got.Count != 2 {
-		t.Fatalf("config = %+v, want default name and count 2", got)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "default", got.Name)
+	require.Equal(t, 2, got.Count)
 }
 
 func TestLoadYAMLConfigAppliesAfterUnmarshalAndValidate(t *testing.T) {
@@ -70,12 +62,8 @@ func TestLoadYAMLConfigAppliesAfterUnmarshalAndValidate(t *testing.T) {
 		},
 	})
 
-	if err != nil {
-		t.Fatalf("LoadYAMLConfig() error = %v", err)
-	}
-	if got.Name != "default" {
-		t.Fatalf("Name = %q, want default", got.Name)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "default", got.Name)
 }
 
 func TestLoadYAMLConfigEmptyPathUsesInitialValue(t *testing.T) {
@@ -87,12 +75,8 @@ func TestLoadYAMLConfigEmptyPathUsesInitialValue(t *testing.T) {
 		Initial: config{Name: "initial"},
 	})
 
-	if err != nil {
-		t.Fatalf("LoadYAMLConfig() error = %v", err)
-	}
-	if got.Name != "initial" {
-		t.Fatalf("Name = %q, want initial", got.Name)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "initial", got.Name)
 }
 
 func TestLoadYAMLConfigReturnsValidationError(t *testing.T) {
@@ -105,9 +89,7 @@ func TestLoadYAMLConfigReturnsValidationError(t *testing.T) {
 			return errors.New("invalid")
 		},
 	})
-	if err == nil {
-		t.Fatal("LoadYAMLConfig() error = nil, want validation error")
-	}
+	require.Error(t, err, "LoadYAMLConfig should return validation error")
 }
 
 func TestLoadYAMLConfigAppliesEnvOverrides(t *testing.T) {
@@ -132,12 +114,11 @@ func TestLoadYAMLConfigAppliesEnvOverrides(t *testing.T) {
 			{Name: "TEST_TIMEOUT", Path: "timeout"},
 		},
 	})
-	if err != nil {
-		t.Fatalf("LoadYAMLConfig() error = %v", err)
-	}
-	if got.Name != "env" || got.Count != 7 || !got.Enabled || got.Timeout != 30*time.Second {
-		t.Fatalf("config = %+v, want env overrides applied", got)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "env", got.Name)
+	require.Equal(t, 7, got.Count)
+	require.True(t, got.Enabled)
+	require.Equal(t, 30*time.Second, got.Timeout)
 }
 
 func TestLoadYAMLConfigIgnoresEmptyEnvOverrides(t *testing.T) {
@@ -151,20 +132,14 @@ func TestLoadYAMLConfigIgnoresEmptyEnvOverrides(t *testing.T) {
 		Path:         path,
 		EnvOverrides: []EnvOverride{{Name: "TEST_NAME", Path: "name"}},
 	})
-	if err != nil {
-		t.Fatalf("LoadYAMLConfig() error = %v", err)
-	}
-	if got.Name != "yaml" {
-		t.Fatalf("Name = %q, want YAML value preserved", got.Name)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "yaml", got.Name, "YAML value should be preserved when env is empty")
 }
 
 func writeConfigFile(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yml")
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
 	return path
 }
