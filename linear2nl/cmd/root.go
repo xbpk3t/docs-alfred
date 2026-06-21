@@ -1,13 +1,10 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"os"
-	"strings"
 
 	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
@@ -16,7 +13,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
-	"github.com/yuin/goldmark"
 )
 
 // newReportCmd creates a cobra command for a report subcommand (morning/evening).
@@ -110,53 +106,6 @@ func priorityLabel(p float64) string {
 	default:
 		return ""
 	}
-}
-
-// markdownToHTML converts a markdown string to HTML using goldmark.
-func markdownToHTML(s string) string {
-	var buf bytes.Buffer
-	if err := goldmark.New().Convert([]byte(s), &buf); err != nil {
-		return s
-	}
-
-	return buf.String()
-}
-
-func tmplFuncs() template.FuncMap {
-	return template.FuncMap{
-		"markdownToHTML": func(s string) template.HTML {
-			return template.HTML(markdownToHTML(s)) //nolint:gosec // G203: goldmark output is trusted HTML
-		},
-		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s) //nolint:gosec // G203: intentional safe HTML passthrough
-		},
-		"priorityClass": priorityClass,
-	}
-}
-
-// priorityClass extracts a CSS class name from a priority label.
-func priorityClass(label string) string {
-	switch {
-	case strings.Contains(label, "P0"):
-		return "p0"
-	case strings.Contains(label, "P1"):
-		return "p1"
-	case strings.Contains(label, "P2"):
-		return "p2"
-	case strings.Contains(label, "P3"):
-		return "p3"
-	default:
-		return ""
-	}
-}
-
-func renderHTML(tmpl *template.Template, name string, data any) (string, error) {
-	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
-		return "", fmt.Errorf("execute template: %w", err)
-	}
-
-	return buf.String(), nil
 }
 
 func sendEmail(cfg *internal.Config, subject, htmlBody string) error {

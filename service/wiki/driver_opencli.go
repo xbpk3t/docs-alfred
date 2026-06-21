@@ -8,13 +8,9 @@ import (
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/opencli"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
-	"github.com/yuin/goldmark"
-	gast "github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/extension"
-	geast "github.com/yuin/goldmark/extension/ast"
-	"github.com/yuin/goldmark/text"
 )
 
 // openCLIDriver fetches content via the opencli CLI tool.
@@ -104,7 +100,7 @@ func (d *openCLIDriver) appendBilibiliTranscript(ctx context.Context, result *Co
 		return
 	}
 
-	transcriptLines := bilibiliTranscriptLines(transcript)
+	transcriptLines := md.ExtractTranscriptLines(transcript, 3)
 	if len(transcriptLines) < 5 {
 		return
 	}
@@ -112,71 +108,6 @@ func (d *openCLIDriver) appendBilibiliTranscript(ctx context.Context, result *Co
 	transcriptBlock := "\n\n## 字幕内容\n\n" + strings.Join(transcriptLines, "\n")
 	result.Body += transcriptBlock
 	slog.Info("Bilibili transcript appended", "url", rawURL, "lines", len(transcriptLines))
-}
-
-// transcriptLinesFromTable parses a markdown table using goldmark and returns
-// the text from the specified column index (0-based). Skips table header rows.
-// Used for both bilibili subtitle (| index | from | to | content |, col=3)
-// and YouTube transcript (| timestamp | speaker | text |, col=2) tables.
-func transcriptLinesFromTable(mdBody string, contentCol int) []string {
-	md := goldmark.New(
-		goldmark.WithExtensions(extension.Table),
-	)
-	reader := text.NewReader([]byte(mdBody))
-	doc := md.Parser().Parse(reader)
-
-	var lines []string
-	_ = gast.Walk(doc, func(n gast.Node, entering bool) (gast.WalkStatus, error) {
-		if !entering {
-			return gast.WalkContinue, nil
-		}
-		if n.Kind() != geast.KindTable {
-			return gast.WalkContinue, nil
-		}
-		lines = extractTableLinesFromRow(n, mdBody, contentCol)
-
-		return gast.WalkStop, nil
-	})
-
-	return lines
-}
-
-// extractTableLinesFromRow iterates over table rows and extracts text from the specified column.
-// It skips the header row and returns non-empty cell text.
-func extractTableLinesFromRow(n gast.Node, mdBody string, contentCol int) []string {
-	var lines []string
-	isFirstRow := true
-	for row := n.FirstChild(); row != nil; row = row.NextSibling() {
-		if row.Kind() != geast.KindTableRow {
-			continue
-		}
-		// Skip the header row (first row after the table node).
-		if isFirstRow {
-			isFirstRow = false
-
-			continue
-		}
-		cell := row.FirstChild()
-		for i := 0; i < contentCol && cell != nil; i++ {
-			cell = cell.NextSibling()
-		}
-		if cell == nil || cell.Kind() != geast.KindTableCell {
-			continue
-		}
-		cellText := strings.TrimSpace(string(cell.Text([]byte(mdBody))))
-		if cellText == "" {
-			continue
-		}
-		lines = append(lines, cellText)
-	}
-
-	return lines
-}
-
-// bilibiliTranscriptLines parses the bilibili subtitle markdown table
-// (| index | from | to | content |) using goldmark and returns the content column.
-func bilibiliTranscriptLines(mdBody string) []string {
-	return transcriptLinesFromTable(mdBody, 3)
 }
 
 // resolveTcoURL follows the redirect chain for a t.co shortlink using `curl -sL`
@@ -303,7 +234,7 @@ func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *
 
 	body := string(content)
 	body = textutil.TruncateUTF8(body, d.maxBodySize*3)
-	title := extractTitleFromMarkdown(body)
+	title := md.ExtractTitleFromMarkdown(body)
 
 	slog.Info("weixin: article fetched successfully",
 		"url", rawURL, "title", title, "size", len(body))
@@ -362,21 +293,13 @@ func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extra
 	}
 
 	body = textutil.TruncateUTF8(body, d.maxBodySize*3)
-	title := extractTitleFromMarkdown(body)
+	title := md.ExtractTitleFromMarkdown(body)
 
 	slog.Info("opencli fetch succeeded", "subcommand", subcommand, "bodyLen", len(body))
 
 	return &ContentFetchResult{Title: title, Body: body}
 }
 
-// extractTitleFromMarkdown parses the markdown body with goldmark and returns
-// the title from either:
-//   - the first heading (any level), or
-//   - a metadata-style table (| field | value |) with a "title" field.
-//
-// This handles all opencli adapters — those that return heading-prefixed
-// markdown (twitter, web read, etc.) and those that return metadata tables
-// (bilibili video, etc.).
 // appendYoutubeTranscript runs `opencli youtube transcript <url>` and merges
 // transcript text into the fetch result body.
 func (d *openCLIDriver) appendYoutubeTranscript(ctx context.Context, result *ContentFetchResult, rawURL string) {
@@ -390,7 +313,7 @@ func (d *openCLIDriver) appendYoutubeTranscript(ctx context.Context, result *Con
 	}
 
 	// Parse the YouTube transcript table (| timestamp | speaker | text |) with goldmark.
-	transcriptLines := transcriptLinesFromTable(transcript, 2)
+	transcriptLines := md.ExtractTranscriptLines(transcript, 2)
 
 	if len(transcriptLines) < 5 {
 		return
@@ -399,65 +322,4 @@ func (d *openCLIDriver) appendYoutubeTranscript(ctx context.Context, result *Con
 	transcriptBlock := "\n\n## 字幕内容\n\n" + strings.Join(transcriptLines, "\n")
 	result.Body += transcriptBlock
 	slog.Info("YouTube transcript appended", "url", rawURL, "lines", len(transcriptLines))
-}
-
-func extractTitleFromMarkdown(body string) string {
-	md := goldmark.New(
-		goldmark.WithExtensions(extension.Table),
-	)
-	reader := text.NewReader([]byte(body))
-	doc := md.Parser().Parse(reader)
-
-	var title string
-	_ = gast.Walk(doc, func(n gast.Node, entering bool) (gast.WalkStatus, error) {
-		if !entering {
-			return gast.WalkContinue, nil
-		}
-
-		// First heading (any level) wins.
-		if n.Kind() == gast.KindHeading {
-			title = strings.TrimSpace(string(n.Text([]byte(body))))
-
-			return gast.WalkStop, nil
-		}
-
-		// Table with | field | value | structure — look for a "title" row.
-		if n.Kind() == geast.KindTable {
-			if t := extractTitleFromTable(body, n); t != "" {
-				title = t
-
-				return gast.WalkStop, nil
-			}
-		}
-
-		return gast.WalkContinue, nil
-	})
-
-	return title
-}
-
-// extractTitleFromTable walks a goldmark Table AST node looking for a row
-// whose first cell is "title" and returns the value from the second cell.
-func extractTitleFromTable(body string, table gast.Node) string {
-	for row := table.FirstChild(); row != nil; row = row.NextSibling() {
-		if row.Kind() != geast.KindTableRow {
-			continue
-		}
-		cell := row.FirstChild()
-		if cell == nil || cell.Kind() != geast.KindTableCell {
-			continue
-		}
-		field := strings.TrimSpace(string(cell.Text([]byte(body))))
-		if !strings.EqualFold(field, "title") {
-			continue
-		}
-		valueCell := cell.NextSibling()
-		if valueCell == nil || valueCell.Kind() != geast.KindTableCell {
-			continue
-		}
-
-		return strings.TrimSpace(string(valueCell.Text([]byte(body))))
-	}
-
-	return ""
 }

@@ -1,7 +1,5 @@
 package internal
 
-import "html/template"
-
 // IssueView is a display-ready issue for templates.
 type IssueView struct {
 	Identifier string
@@ -10,7 +8,7 @@ type IssueView struct {
 	TeamName   string
 	DueDate    string
 	URL        string
-	Review     template.HTML // per-issue AI review (HTML) — used by evening
+	Review     string // per-issue AI review (Markdown) — used by evening
 }
 
 // GroupItemView is a single issue within a group in the morning report,
@@ -22,7 +20,7 @@ type GroupItemView struct {
 	TeamName   string
 	DueDate    string
 	URL        string
-	Content    template.HTML
+	Content    string
 	Context    []string
 	Bottleneck []string
 	Advice     []string
@@ -46,7 +44,7 @@ type StateChangeView struct {
 	ToState         string
 	TeamName        string
 	URL             string
-	Review          template.HTML // per-issue AI review (HTML)
+	Review          string // per-issue AI review (Markdown)
 }
 
 // IssueDetail carries full issue data (description + comments) for AI review.
@@ -73,7 +71,6 @@ type Comment struct {
 type MorningData struct {
 	Date      string
 	DayOfWeek string
-	Theme     string
 	Groups    []GroupView
 }
 
@@ -81,8 +78,6 @@ type MorningData struct {
 type EveningData struct {
 	Date         string
 	DayOfWeek    string
-	Theme        string
-	AIReview     string
 	Completed    []IssueView
 	StateChanges []StateChangeView
 	Stats        EveningStats

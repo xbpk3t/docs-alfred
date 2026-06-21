@@ -1,13 +1,9 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"embed"
 	"fmt"
-	"html/template"
 	"log/slog"
-	"strings"
 	"time"
 
 	carbon "github.com/dromara/carbon/v2"
@@ -16,12 +12,9 @@ import (
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
-	"github.com/yuin/goldmark"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"golang.org/x/sync/errgroup"
 )
-
-//go:embed templates/evening.gohtml
-var eveningTemplates embed.FS
 
 func newEveningCmd() *cobra.Command {
 	return newReportCmd("evening", "Send evening report with today's accomplishments", runEvening)
@@ -48,15 +41,14 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 	relevantDetails := filterActiveDetails(completed, changes, updatedDetails)
 	completedViews := toIssueViews(completed)
 	changeViews := toStateChangeViews(changes)
-	summaryHTML := attachPerIssueReviews(aiClient, relevantDetails, completedViews, changeViews)
+
+	buildEveningSummary(aiClient, relevantDetails, completedViews, changeViews)
 
 	now := carbon.Yesterday()
 	data := internal.EveningData{
 		Date:         now.ToDateString(),
 		DayOfWeek:    now.ToShortWeekString(),
-		Theme:        cfg.Theme,
-		AIReview:     summaryHTML,
-		Completed:    completedViews,
+				Completed:    completedViews,
 		StateChanges: changeViews,
 		Stats: internal.EveningStats{
 			Completed:  len(completed),
@@ -64,14 +56,9 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 		},
 	}
 
-	// Render template
-	tmpl, err := template.New("evening.gohtml").Funcs(tmplFuncs()).ParseFS(eveningTemplates, "templates/evening.gohtml")
+	htmlBody, err := buildEveningHTML(&data, completed, changes, completedViews, changeViews)
 	if err != nil {
-		return fmt.Errorf("parse template: %w", err)
-	}
-	htmlBody, err := renderHTML(tmpl, "evening.gohtml", data)
-	if err != nil {
-		return fmt.Errorf("render template: %w", err)
+		return fmt.Errorf("render document: %w", err)
 	}
 
 	subject := fmt.Sprintf("🌙 Linear 今日收获 · %s %s", data.Date, data.DayOfWeek)
@@ -79,14 +66,76 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 	return sendOrWrite(cfg, subject, htmlBody, "evening", dryRun)
 }
 
-type eveningData struct {
+func buildEveningHTML(data *internal.EveningData, completed []linear.Issue, changes []linear.StateChange, completedViews []internal.IssueView, changeViews []internal.StateChangeView) (string, error) {
+	doc := md.NewDocument()
+	doc.Add(md.NamedSection(fmt.Sprintf("Linear 今日收获 · %s %s", data.Date, data.DayOfWeek)))
+
+	if len(completed) > 0 {
+		headers := []string{"ID", "Title", "Team"}
+		var rows [][]string
+		for i := range completed {
+			rows = append(rows, []string{
+				md.Link(completed[i].Identifier, completed[i].URL),
+				completed[i].Title,
+				completed[i].TeamName,
+			})
+		}
+		doc.Add(md.NamedSection(fmt.Sprintf("✅ 完成 · %d", len(completed)), md.Table(headers, rows)))
+	}
+
+	if len(changes) > 0 {
+		headers := []string{"ID", "Title", "Status", "Team"}
+		var rows [][]string
+		for i := range changes {
+			rows = append(rows, []string{
+				md.Link(changes[i].IssueIdentifier, changes[i].URL),
+				changes[i].IssueTitle,
+				fmt.Sprintf("%s → %s", changes[i].FromState, changes[i].ToState),
+				changes[i].TeamName,
+			})
+		}
+		doc.Add(md.NamedSection(fmt.Sprintf("🔄 状态变更 · %d", len(changes)), md.Table(headers, rows)))
+	}
+
+	for i := range completedViews {
+		if completedViews[i].Review != "" {
+			doc.Add(md.NamedSection(fmt.Sprintf("%s %s", completedViews[i].Identifier, completedViews[i].Title), &rawSection{content: completedViews[i].Review}))
+		}
+	}
+	for i := range changeViews {
+		if changeViews[i].Review != "" {
+			doc.Add(md.NamedSection(fmt.Sprintf("%s %s", changeViews[i].IssueIdentifier, changeViews[i].IssueTitle), &rawSection{content: changeViews[i].Review}))
+		}
+	}
+
+	return doc.ToHTML()
+}
+
+func buildEveningSummary(aiClient *internal.AIProvider, details []linear.IssueDetail, completedViews []internal.IssueView, changeViews []internal.StateChangeView) {
+	r := buildPerIssueReviews(aiClient, details)
+	if r == nil {
+		return
+	}
+	for i := range completedViews {
+		if review, ok := r.reviews[completedViews[i].Identifier]; ok {
+			completedViews[i].Review = review
+		}
+	}
+	for i := range changeViews {
+		if review, ok := r.reviews[changeViews[i].IssueIdentifier]; ok {
+			changeViews[i].Review = review
+		}
+	}
+}
+
+type eveningQueryData struct {
 	completed      []linear.Issue
 	changes        []linear.StateChange
 	inProgress     []linear.Issue
 	updatedDetails []linear.IssueDetail
 }
 
-func queryEveningData(ctx context.Context, client *linear.Client, todayStart time.Time) (eveningData, error) {
+func queryEveningData(ctx context.Context, client *linear.Client, todayStart time.Time) (eveningQueryData, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	var completed []linear.Issue
@@ -107,7 +156,7 @@ func queryEveningData(ctx context.Context, client *linear.Client, todayStart tim
 		changes, err = client.GetStateChanges(ctx, todayStart)
 		if err != nil {
 			slog.Warn("query state changes failed", "error", err)
-			changes = nil // graceful degradation
+			changes = nil
 
 			return nil
 		}
@@ -122,7 +171,7 @@ func queryEveningData(ctx context.Context, client *linear.Client, todayStart tim
 		inProgress, err = client.GetInProgressIssues(ctx)
 		if err != nil {
 			slog.Warn("query in-progress issues failed", "error", err)
-			inProgress = nil // graceful degradation
+			inProgress = nil
 
 			return nil
 		}
@@ -136,8 +185,8 @@ func queryEveningData(ctx context.Context, client *linear.Client, todayStart tim
 		var err error
 		updatedDetails, err = client.GetUpdatedIssuesWithDetails(ctx, todayStart)
 		if err != nil {
-			slog.Warn("query updated issues with details failed", "error", err)
-			updatedDetails = nil // graceful degradation
+			slog.Warn("query issue details failed", "error", err)
+			updatedDetails = nil
 
 			return nil
 		}
@@ -147,10 +196,10 @@ func queryEveningData(ctx context.Context, client *linear.Client, todayStart tim
 	})
 
 	if err := g.Wait(); err != nil {
-		return eveningData{}, err
+		return eveningQueryData{}, err
 	}
 
-	return eveningData{
+	return eveningQueryData{
 		completed:      completed,
 		changes:        changes,
 		inProgress:     inProgress,
@@ -171,37 +220,10 @@ func filterActiveDetails(completed []linear.Issue, changes []linear.StateChange,
 	})
 }
 
-// perIssueReviewResult wraps the two return values from parsing AI review JSON.
 type perIssueReviewResult struct {
-	reviews     map[string]string
-	summaryHTML string
+	reviews map[string]string
 }
 
-func attachPerIssueReviews(
-	aiClient *internal.AIProvider, details []linear.IssueDetail,
-	completedViews []internal.IssueView, changeViews []internal.StateChangeView,
-) string {
-	r := buildPerIssueReviews(aiClient, details)
-	if r == nil {
-		return ""
-	}
-	for i := range completedViews {
-		if review, ok := r.reviews[completedViews[i].Identifier]; ok {
-			completedViews[i].Review = template.HTML(review) //nolint:gosec // G203: AI-generated HTML for trusted template
-		}
-	}
-	for i := range changeViews {
-		if review, ok := r.reviews[changeViews[i].IssueIdentifier]; ok {
-			changeViews[i].Review = template.HTML(review) //nolint:gosec // G203: AI-generated HTML for trusted template
-		}
-	}
-
-	return r.summaryHTML
-}
-
-// buildPerIssueReviews generates AI review for the given issues and parses
-// the response into a per-issue map keyed by issue identifier and the summary HTML.
-// Returns nil if AI is unavailable or no issues are provided.
 func buildPerIssueReviews(aiClient *internal.AIProvider, details []linear.IssueDetail) *perIssueReviewResult {
 	if len(details) == 0 || !aiClient.IsConfigured() {
 		return nil
@@ -218,13 +240,11 @@ func buildPerIssueReviews(aiClient *internal.AIProvider, details []linear.IssueD
 	return parsePerIssueReviewJSON(raw)
 }
 
-// AIReviewJSON is the expected JSON structure from the AI evening deep review.
 type AIReviewJSON struct {
 	Reviews []AIReviewItemJSON `json:"reviews"`
 	Summary []string           `json:"summary"`
 }
 
-// AIReviewItemJSON is a single issue review item in the JSON response.
 type AIReviewItemJSON struct {
 	Identifier string   `json:"identifier"`
 	Title      string   `json:"title"`
@@ -233,8 +253,6 @@ type AIReviewItemJSON struct {
 	Review     []string `json:"review"`
 }
 
-// parsePerIssueReviewJSON parses the AI response as JSON and returns
-// a perIssueReviewResult with the per-issue review map and summary HTML.
 func parsePerIssueReviewJSON(raw string) *perIssueReviewResult {
 	result, err := parseAIReviewJSON(raw)
 	if err != nil {
@@ -243,26 +261,22 @@ func parsePerIssueReviewJSON(raw string) *perIssueReviewResult {
 
 	reviews := make(map[string]string, len(result.Reviews))
 	for _, r := range result.Reviews {
-		var sb strings.Builder
-		renderReviewSection(&sb, "决策/进展", r.Progress)
-		renderReviewSection(&sb, "💡 知识点", r.Knowledge)
-		renderReviewSection(&sb, "📊 Review", r.Review)
-		reviews[r.Identifier] = sb.String()
+		var sections []md.ReviewSection
+		if len(r.Progress) > 0 {
+			sections = append(sections, md.ReviewSection{Heading: "决策/进展", Items: r.Progress})
+		}
+		if len(r.Knowledge) > 0 {
+			sections = append(sections, md.ReviewSection{Heading: "知识点", Items: r.Knowledge})
+		}
+		if len(r.Review) > 0 {
+			sections = append(sections, md.ReviewSection{Heading: "Review", Items: r.Review})
+		}
+		reviews[r.Identifier] = md.AIReviewItem(sections...).Markdown()
 	}
 
-	// Render summary
-	var summaryHTML strings.Builder
-	summaryHTML.WriteString(`<div class="ai-summary">`)
-	for _, s := range result.Summary {
-		summaryHTML.WriteString(markdownParagraph(s))
-	}
-	summaryHTML.WriteString(`</div>`)
-
-	return &perIssueReviewResult{reviews: reviews, summaryHTML: summaryHTML.String()}
+	return &perIssueReviewResult{reviews: reviews}
 }
 
-// parseAIReviewJSON attempts to unmarshal the raw string as AIReviewJSON.
-// Falls back to stripping markdown fences and extracting {...} if wrapped.
 func parseAIReviewJSON(raw string) (*AIReviewJSON, error) {
 	var result AIReviewJSON
 	if err := ai.UnmarshalStrictJSON(raw, &result); err != nil {
@@ -272,19 +286,6 @@ func parseAIReviewJSON(raw string) (*AIReviewJSON, error) {
 	}
 
 	return &result, nil
-}
-
-// renderReviewSection appends a section heading and its paragraph items to sb.
-func renderReviewSection(sb *strings.Builder, heading string, items []string) {
-	if len(items) == 0 {
-		return
-	}
-	sb.WriteString("<h3>")
-	sb.WriteString(heading)
-	sb.WriteString("</h3>")
-	for _, item := range items {
-		sb.WriteString(markdownParagraph(item))
-	}
 }
 
 func toIssueDetails(issues []linear.IssueDetail) []internal.IssueDetail {
@@ -304,34 +305,12 @@ func toIssueDetails(issues []linear.IssueDetail) []internal.IssueDetail {
 	})
 }
 
-// markdownParagraph converts a paragraph of markdown text to HTML.
-// Uses goldmark and strips the document wrapper, keeping <p> tags and inline formatting.
-func markdownParagraph(s string) string {
-	if s == "" {
-		return ""
-	}
-	var buf bytes.Buffer
-	if err := goldmark.New().Convert([]byte(s), &buf); err != nil {
-		return "<p>" + template.HTMLEscapeString(s) + "</p>"
-	}
-	full := buf.String()
-	// goldmark wraps output in <html><head></head><body>...</body></html>
-	const bodyOpen = "<body>"
-	const bodyClose = "</body>"
-	start := strings.Index(full, bodyOpen)
-	end := strings.LastIndex(full, bodyClose)
-	if start >= 0 && end > start {
-		return full[start+len(bodyOpen) : end]
-	}
-
-	return full
-}
-
 func sendBriefEveningEmpty(cfg *internal.Config, dryRun bool) error {
 	now := carbon.Now()
 	subject := fmt.Sprintf("🌙 Linear 今日收获 · %s %s", now.ToDateString(), now.ToShortWeekString())
-	html := `<!doctype html><html lang="zh-CN"><body style="font-family:sans-serif;padding:24px;">
-		<h1>` + subject + `</h1><p>今天没有完成记录 🎉</p></body></html>`
+	doc := md.NewDocument()
+	doc.Add(md.Paragraph("今天没有完成记录 🎉"))
+	htmlBody, _ := doc.ToHTML()
 
-	return sendOrWrite(cfg, subject, html, "evening-empty", dryRun)
+	return sendOrWrite(cfg, subject, htmlBody, "evening-empty", dryRun)
 }

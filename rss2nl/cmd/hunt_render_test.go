@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -104,35 +105,19 @@ func TestRenderHuntHTML(t *testing.T) {
 
 	t.Logf("Hunt report written to /tmp/hunt-test.html (%d bytes)", len(html))
 
-	// Basic sanity checks
 	if len(html) == 0 {
 		t.Fatal("rendered HTML is empty")
 	}
-	if !contains(html, "Source Discovery") {
+	if !strings.Contains(html, "Source Discovery") {
 		t.Error("missing title")
 	}
-	if !contains(html, "category-tech") {
-		t.Error("missing category-tech section")
-	}
-	if !contains(html, "category-science") {
-		t.Error("missing category-science section")
-	}
-	if !contains(html, "category-ai") {
-		t.Error("missing category-ai section")
-	}
-	if !contains(html, "Engineering Blog") {
+	if !strings.Contains(html, "Engineering Blog") {
 		t.Error("missing candidate title")
 	}
-	if !contains(html, "data-theme") {
-		t.Error("missing theme toggle")
-	}
-	if !contains(html, "theme-toggle") {
-		t.Error("missing theme toggle button")
-	}
-	if !contains(html, "Rate limit exceeded") {
+	if !strings.Contains(html, "Rate limit exceeded") {
 		t.Error("missing warning message")
 	}
-	if !contains(html, "API key invalid") {
+	if !strings.Contains(html, "API key invalid") {
 		t.Error("missing failure message")
 	}
 }
@@ -163,24 +148,20 @@ Jane: A resilient system is one that can continue operating in the presence of f
 
 	t.Logf("Trns page written to /tmp/trns-test.html (%d bytes)", len(html))
 
-	// Basic sanity checks
 	if len(html) == 0 {
 		t.Fatal("rendered HTML is empty")
 	}
-	if !contains(html, "Episode 42") {
+	if !strings.Contains(html, "Episode 42") {
 		t.Error("missing title")
 	}
-	if !contains(html, "Software Engineering Daily") {
+	if !strings.Contains(html, "Software Engineering Daily") {
 		t.Error("missing feed title")
 	}
-	if !contains(html, "AI Summary") {
+	if !strings.Contains(html, "AI Summary") {
 		t.Error("missing AI Summary section")
 	}
-	if !contains(html, "circuit breakers") {
+	if !strings.Contains(html, "circuit breakers") {
 		t.Error("missing summary content")
-	}
-	if !contains(html, "data-theme") {
-		t.Error("missing theme toggle")
 	}
 }
 
@@ -199,23 +180,10 @@ func TestRenderTrnsPageWithError(t *testing.T) {
 		t.Fatalf("write HTML: %v", err)
 	}
 
-	if !contains(html, "AI Summary unavailable") {
+	if !strings.Contains(html, "AI Summary unavailable") {
 		t.Error("missing summary error section")
 	}
-	if !contains(html, "connection timeout") {
+	if !strings.Contains(html, "connection timeout") {
 		t.Error("missing error message")
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
