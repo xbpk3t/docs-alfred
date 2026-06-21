@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"math"
 	"os"
@@ -23,6 +21,7 @@ import (
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/html"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/service/rss"
 	"golang.org/x/sync/errgroup"
 )
@@ -37,9 +36,6 @@ func newHTMLMinifier() *minify.M {
 
 	return m
 }
-
-//go:embed templates/*.gohtml
-var templates embed.FS
 
 // EmailConfig 邮件配置.
 type EmailConfig struct {
@@ -541,35 +537,128 @@ func (s *NewsletterService) getItemTitle(item *gofeed.Item) string {
 	return item.Title
 }
 
-// -- Template rendering --
+// -- Newsletter rendering with pkg/md --
 
-func (s *NewsletterService) renderTemplate(templateName string, data any) (string, error) {
-	funcMap := template.FuncMap{
-		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s) // #nosec G203
-		},
+// renderNewsletterHTML renders the newsletter as a complete HTML document
+// using pkg/md components.
+func (s *NewsletterService) renderNewsletterHTML(data *TemplateData) (string, error) {
+	doc := md.NewDocument()
+	doc.Add(md.NamedSection(data.Title))
+
+	if data.SourceHuntURL != "" {
+		doc.Add(md.Paragraph(md.Link("Source Discovery: new candidates", data.SourceHuntURL)))
 	}
 
-	tmpl := template.New(templateName).Funcs(funcMap)
-	tmpl, err := tmpl.ParseFS(templates, "templates/"+templateName)
+	addFailedFeedsSection(doc, data)
+	addFeedDetailsSection(doc, data)
+	addFeedCategorySection(doc, data)
+
+	newsletterMD, err := doc.ToHTML()
 	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %w", err)
+		return "", err
 	}
 
-	var tplBytes bytes.Buffer
-	if err := tmpl.Execute(&tplBytes, data); err != nil {
-		return "", fmt.Errorf("failed to render template: %w", err)
-	}
-
-	// Minify HTML to reduce email size.
 	var minified bytes.Buffer
-	if minErr := htmlMinifier.Minify("text/html", &minified, &tplBytes); minErr != nil {
+	if minErr := htmlMinifier.Minify("text/html", &minified, strings.NewReader(newsletterMD)); minErr != nil {
 		slog.Warn("HTML minification failed, using original", "error", minErr)
 
-		return tplBytes.String(), nil
+		return newsletterMD, nil
 	}
 
 	return minified.String(), nil
+}
+
+func addFailedFeedsSection(doc *md.Document, data *TemplateData) {
+	dc := data.DashboardConfig
+	if !dc.IsShowFetchFailedFeeds {
+		return
+	}
+	if data.DashboardData.FailureReport != nil && data.DashboardData.FailureReport.TotalFailures > 0 {
+		var rows [][]string
+		for _, g := range data.DashboardData.FailureReport.Groups {
+			examples := strings.Join(g.ExampleURLs, ", ")
+			if g.RemainingCount > 0 {
+				examples += fmt.Sprintf(" (+%d more)", g.RemainingCount)
+			}
+			rows = append(rows, []string{
+				fmt.Sprintf("%s (%s, %d feeds)", g.Host, g.KindLabel, g.Count),
+				g.Status,
+				examples,
+			})
+		}
+		doc.Add(md.NamedSection("Fetch Failed Feeds", md.Table(
+			[]string{"Source / Error", "Status", "Examples"},
+			rows,
+		)))
+
+		return
+	}
+	if len(data.DashboardData.FailedFeeds) > 0 {
+		var rows [][]string
+		for _, f := range data.DashboardData.FailedFeeds {
+			errMsg := f.Message
+			if f.Err != nil {
+				errMsg = f.Err.Error()
+			}
+			rows = append(rows, []string{f.URL, errMsg})
+		}
+		doc.Add(md.NamedSection("Fetch Failed Feeds", md.Table(
+			[]string{"Feed", "Error"},
+			rows,
+		)))
+	}
+}
+
+func addFeedDetailsSection(doc *md.Document, data *TemplateData) {
+	dc := data.DashboardConfig
+	if !dc.FeedDetail.Enabled || len(data.DashboardData.FeedDetails) == 0 {
+		return
+	}
+	for _, fd := range data.DashboardData.FeedDetails {
+		var rows [][]string
+		for _, f := range fd.Feeds {
+			feedStr := f.Feed
+			if f.URL != "" {
+				feedStr = f.URL
+			}
+			lastUpdated := f.LastUpdated
+			if lastUpdated == "" {
+				lastUpdated = "-"
+			}
+			freq := f.PublishFreq
+			if freq == "" {
+				freq = "-"
+			}
+			rows = append(rows, []string{feedStr, lastUpdated, freq})
+		}
+		if len(rows) > 0 {
+			doc.Add(md.NamedSection(fd.Type, md.Table(
+				[]string{"Feed", "Last Updated", "Publish Freq"},
+				rows,
+			)))
+		}
+	}
+}
+
+func addFeedCategorySection(doc *md.Document, data *TemplateData) {
+	for _, cat := range data.Feeds {
+		var items []string
+		for i := range cat.Items {
+			item := &cat.Items[i]
+			title := item.Title
+			if item.Link != "" {
+				title = md.Link(item.Title, item.Link)
+			}
+			dateStr := ""
+			if item.PubDate != "" {
+				dateStr = " (" + item.PubDate + ")"
+			}
+			items = append(items, title+dateStr)
+		}
+		if len(items) > 0 {
+			doc.Add(md.NamedSection(cat.Category, md.BulletList(items, false)))
+		}
+	}
 }
 
 // RenderNewsletter renders the newsletter template.
@@ -615,7 +704,7 @@ func (s *NewsletterService) RenderNewsletter(
 		},
 	}
 
-	newsletterContent, err := s.renderTemplate("newsletter.gohtml", data)
+	newsletterContent, err := s.renderNewsletterHTML(&data)
 	if err != nil {
 		return nil, err
 	}

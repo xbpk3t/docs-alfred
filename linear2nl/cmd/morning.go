@@ -2,12 +2,9 @@ package cmd
 
 import (
 	"context"
-	"embed"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"sort"
-	"strings"
 
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/samber/lo"
@@ -15,21 +12,24 @@ import (
 	"github.com/xbpk3t/docs-alfred/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 )
 
-// renderMorningIssueContent pre-renders context/bottleneck/advice into HTML,
-// matching the same style as the evening report's per-issue review.
-func renderMorningIssueContent(item *internal.GroupItemView) template.HTML {
-	var sb strings.Builder
-	renderReviewSection(&sb, "上下文", item.Context)
-	renderReviewSection(&sb, "卡点", item.Bottleneck)
-	renderReviewSection(&sb, "建议", item.Advice)
+// renderMorningIssueContent renders AI context/bottleneck/advice as Markdown.
+func renderMorningIssueContent(item *internal.GroupItemView) string {
+	var sections []md.ReviewSection
+	if len(item.Context) > 0 {
+		sections = append(sections, md.ReviewSection{Heading: "上下文", Items: item.Context})
+	}
+	if len(item.Bottleneck) > 0 {
+		sections = append(sections, md.ReviewSection{Heading: "卡点", Items: item.Bottleneck})
+	}
+	if len(item.Advice) > 0 {
+		sections = append(sections, md.ReviewSection{Heading: "建议", Items: item.Advice})
+	}
 
-	return template.HTML(sb.String()) //nolint:gosec // G203: AI-generated content for trusted template
+	return md.AIReviewItem(sections...).Markdown()
 }
-
-//go:embed templates/morning.gohtml
-var morningTemplates embed.FS
 
 func newMorningCmd() *cobra.Command {
 	return newReportCmd("morning", "Send morning report with today's tasks", runMorning)
@@ -86,20 +86,26 @@ func runMorning(cfg *internal.Config, dryRun bool) error {
 	data := internal.MorningData{
 		Date:      now.ToDateString(),
 		DayOfWeek: now.ToShortWeekString(),
-		Theme:     cfg.Theme,
-		Groups:    groups,
+				Groups:    groups,
 	}
 
-	// Render template
-	tmpl, err := template.New("morning.gohtml").Funcs(tmplFuncs()).Funcs(template.FuncMap{
-		"groupCSSClass": groupCSSClass,
-	}).ParseFS(morningTemplates, "templates/morning.gohtml")
-	if err != nil {
-		return fmt.Errorf("parse template: %w", err)
+	// Render document using pkg/md components.
+	doc := md.NewDocument()
+	doc.Add(md.NamedSection(fmt.Sprintf("Linear 今日任务 · %s %s", data.Date, data.DayOfWeek)))
+	for gi := range data.Groups {
+		for ii := range data.Groups[gi].Issues {
+			issue := &data.Groups[gi].Issues[ii]
+			s := md.NamedSection(md.Link(fmt.Sprintf("%s %s", issue.Identifier, issue.Title), issue.URL))
+			if issue.Content != "" {
+				s.Add(md.NamedSection("AI 分析", &rawSection{content: issue.Content}))
+			}
+			doc.Add(s)
+		}
 	}
-	htmlBody, err := renderHTML(tmpl, "morning.gohtml", data)
+
+	htmlBody, err := doc.ToHTML()
 	if err != nil {
-		return fmt.Errorf("render template: %w", err)
+		return fmt.Errorf("render document: %w", err)
 	}
 
 	subject := fmt.Sprintf("Linear 今日任务 · %s %s", data.Date, data.DayOfWeek)
@@ -107,38 +113,16 @@ func runMorning(cfg *internal.Config, dryRun bool) error {
 	return sendOrWrite(cfg, subject, htmlBody, "morning", dryRun)
 }
 
-// groupEmoji returns the emoji for a group. Now unused by the template — emoji removed.
-func groupEmoji(name string) string {
-	return ""
+// rawSection is a Section that renders pre-built Markdown content directly.
+type rawSection struct {
+	content string
 }
 
-// groupCSSClass maps group names to CSS class suffixes.
-func groupCSSClass(name string) string {
-	switch name {
-	case "FIXME":
-		return "fixme"
-	case "MAYBE":
-		return "maybe"
-	case "REMOVE":
-		return "remove"
-	default:
-		return "uncategorized"
-	}
+func (r *rawSection) Markdown() string {
+	return r.content
 }
 
-// groupOrder returns a sort key for groups: FIXME=0, MAYBE=1, REMOVE=2, others=3.
-func groupOrder(name string) int {
-	switch name {
-	case "FIXME":
-		return 0
-	case "MAYBE":
-		return 1
-	case "REMOVE":
-		return 2
-	default:
-		return 3
-	}
-}
+func (r *rawSection) Add(_ ...md.Section) {}
 
 const fallbackGroupName = "Uncategorized"
 
@@ -154,8 +138,6 @@ func fallbackGroup(views []internal.IssueView) []internal.GroupView {
 }
 
 // buildMorningGroups generates the grouped view of issues using AI classification (stage 1).
-// Takes metadata-only IssueView for fast FIXME/MAYBE/REMOVE grouping.
-// Falls back to a flat uncategorized group if AI is unavailable or returns invalid JSON.
 func buildMorningGroups(aiClient *internal.AIProvider, views []internal.IssueView) []internal.GroupView {
 	if !aiClient.IsConfigured() || len(views) == 0 {
 		slog.Info("AI not configured or no issues; using fallback flat group")
@@ -195,13 +177,27 @@ func buildGroupsFromResult(result *internal.MorningReviewJSON, views []internal.
 
 		return internal.GroupView{
 			Name:   g.Name,
-			Emoji:  groupEmoji(g.Name),
+			Emoji:  "",
 			Issues: items,
 		}, true
 	})
 
 	sort.SliceStable(groups, func(i, j int) bool {
-		return groupOrder(groups[i].Name) < groupOrder(groups[j].Name)
+		// order: FIXME(0), MAYBE(1), REMOVE(2), others(3)
+		order := func(name string) int {
+			switch name {
+			case "FIXME":
+				return 0
+			case "MAYBE":
+				return 1
+			case "REMOVE":
+				return 2
+			default:
+				return 3
+			}
+		}
+
+		return order(groups[i].Name) < order(groups[j].Name)
 	})
 
 	// Add uncategorized issues (fetched but not mentioned by AI).
@@ -215,7 +211,7 @@ func buildGroupsFromResult(result *internal.MorningReviewJSON, views []internal.
 	if len(uncategorized) > 0 {
 		groups = append(groups, internal.GroupView{
 			Name:   fallbackGroupName,
-			Emoji:  "📋",
+			Emoji:  "",
 			Issues: uncategorized,
 		})
 	}
@@ -302,11 +298,9 @@ func toIssueViewsFromDetails(details []linear.IssueDetail) []internal.IssueView 
 var activeGroupNames = map[string]bool{"FIXME": true, "MAYBE": true}
 
 // enrichActiveGroups performs stage-2 deep analysis on FIXME + MAYBE groups.
-// Sends their full IssueDetail (description + comments) to AI for context/bottleneck/advice.
 func enrichActiveGroups(aiClient *internal.AIProvider, groups []internal.GroupView, allDetails []internal.IssueDetail) {
 	detailMap := lo.KeyBy(allDetails, func(d internal.IssueDetail) string { return d.Identifier })
 
-	// Collect identifiers from FIXME + MAYBE groups, tracking positions for merging.
 	groupIdx := make(map[string]int)
 	itemIdx := make(map[string]int)
 
@@ -330,7 +324,6 @@ func enrichActiveGroups(aiClient *internal.AIProvider, groups []internal.GroupVi
 		return
 	}
 
-	// Collect IssueDetail for active groups only.
 	activeDetails := lo.FilterMap(activeIdentifiers, func(id string, _ int) (internal.IssueDetail, bool) {
 		d, ok := detailMap[id]
 
@@ -355,7 +348,6 @@ func enrichActiveGroups(aiClient *internal.AIProvider, groups []internal.GroupVi
 		return
 	}
 
-	// Merge analysis results into groups.
 	for _, review := range result.Reviews {
 		gi, okGI := groupIdx[review.Identifier]
 		ii, okII := itemIdx[review.Identifier]
@@ -383,10 +375,11 @@ func parseMorningAnalysisJSON(raw string) (*internal.MorningAnalysisJSON, error)
 func sendBriefEmptyEmail(cfg *internal.Config, subject, body string, dryRun bool) error {
 	now := carbon.Now()
 	fullSubject := fmt.Sprintf("%s · %s %s", subject, now.ToDateString(), now.ToShortWeekString())
-	html := fmt.Sprintf(`<!doctype html><html lang="zh-CN"><body style="font-family:sans-serif;padding:24px;">
-		<h1>%s</h1><p>%s</p></body></html>`, fullSubject, body)
+	doc := md.NewDocument()
+	doc.Add(md.Paragraph(body))
+	htmlBody, _ := doc.ToHTML()
 
-	return sendOrWrite(cfg, fullSubject, html, "morning-empty", dryRun)
+	return sendOrWrite(cfg, fullSubject, htmlBody, "morning-empty", dryRun)
 }
 
 func sendOrWrite(cfg *internal.Config, subject, htmlBody, suffix string, dryRun bool) error {

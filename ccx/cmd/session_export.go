@@ -64,27 +64,23 @@ This command:
 
 func writeExportResult(result *internal.ExportResult) error {
 	if result.DryRun {
-		if _, err := fmt.Fprintf(os.Stdout, "Dry run: would write to %s\n", result.OutputPath); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintf(os.Stdout, "Topic: %s\n", result.TopicPath); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintf(os.Stdout, "Title: %s\n", result.Title); err != nil {
-			return err
-		}
-
-		return nil
+		return writeLines("Dry run: would write to %s", result)
 	}
 
-	if _, err := fmt.Fprintf(os.Stdout, "Exported session to %s\n", result.OutputPath); err != nil {
-		return err
+	return writeLines("Exported session to %s", result)
+}
+
+func writeLines(prefix string, result *internal.ExportResult) error {
+	lines := []struct{ f, v string }{
+		{prefix, result.OutputPath},
+		{"Topic: %s", result.TopicPath},
+		{"Title: %s", result.Title},
+		{"EngTitle: %s", result.EngTitle},
 	}
-	if _, err := fmt.Fprintf(os.Stdout, "Topic: %s\n", result.TopicPath); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(os.Stdout, "Title: %s\n", result.Title); err != nil {
-		return err
+	for _, l := range lines {
+		if _, err := fmt.Fprintf(os.Stdout, l.f+"\n", l.v); err != nil {
+			return err
+		}
 	}
 
 	return nil

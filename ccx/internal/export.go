@@ -36,7 +36,8 @@ type ExportInput struct {
 type ExportResult struct {
 	OutputPath string
 	TopicPath  string
-	Title      string
+	Title      string // Original AI-generated title (may contain Chinese)
+	EngTitle   string // English ASCII-safe title for filename
 	DryRun     bool
 }
 
@@ -87,11 +88,12 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 		return nil, err
 	}
 
-	topicPath, title := classifyAndGenerateTitle(mergedMessages, input)
-	outputPath := determineOutputPath(input, title, topicPath)
+	topicPath, title, engTitle := classifyAndGenerateTitle(mergedMessages, input)
+	outputPath := determineOutputPath(input, engTitle, topicPath)
 
 	if input.Verbose {
 		fmt.Fprintf(os.Stderr, "Generated title: %s\n", title)
+		fmt.Fprintf(os.Stderr, "Generated engTitle: %s\n", engTitle)
 		fmt.Fprintf(os.Stderr, "Topic path: %s\n", topicPath)
 	}
 
@@ -100,6 +102,7 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 			OutputPath: outputPath,
 			TopicPath:  topicPath,
 			Title:      title,
+			EngTitle:   engTitle,
 			DryRun:     true,
 		}, nil
 	}
@@ -112,6 +115,7 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 		OutputPath: outputPath,
 		TopicPath:  topicPath,
 		Title:      title,
+		EngTitle:   engTitle,
 	}, nil
 }
 
@@ -149,17 +153,19 @@ func extractAndMergeSessions(chain []ChainRecord, verbose bool) ([]Message, erro
 	return mergedMessages, nil
 }
 
-// classifyAndGenerateTitle classifies content and generates AI title.
-func classifyAndGenerateTitle(messages []Message, input ExportInput) (string, string) {
+// classifyAndGenerateTitle classifies content and generates AI title + engTitle.
+func classifyAndGenerateTitle(messages []Message, input ExportInput) (string, string, string) {
 	content := renderToMarkdown(messages)
 	topicPath := classifyWithFallback(content, input.WikiRoot, input.Verbose, input.AIConfig)
 
-	title, err := generateAITitle(messages, input.AIConfig)
+	title, engTitle, err := generateTitles(messages, input.AIConfig)
 	if err != nil {
-		title = fallbackTitle(extractUserMessages(messages))
+		fallback := fallbackTitle(extractUserMessages(messages))
+
+		return topicPath, fallback, fallback
 	}
 
-	return topicPath, title
+	return topicPath, title, engTitle
 }
 
 // extractUserMessages extracts user messages from the message list.
@@ -371,8 +377,9 @@ func mergeSessions(sessions []SessionJSON) []Message {
 	return allMessages
 }
 
-// generateAITitle generates a semantic title using AI.
-func generateAITitle(messages []Message, aiConfig *ai.ClientConfig) (string, error) {
+// generateTitles generates a semantic title and an English filename-safe slug using AI.
+// Returns (title, engTitle, error).
+func generateTitles(messages []Message, aiConfig *ai.ClientConfig) (string, string, error) {
 	// Extract user messages
 	var userMessages []string
 	for _, msg := range messages {
@@ -382,7 +389,9 @@ func generateAITitle(messages []Message, aiConfig *ai.ClientConfig) (string, err
 	}
 
 	if len(userMessages) == 0 {
-		return time.Now().Format("2006-01-02-15-04-05"), nil
+		ts := time.Now().Format("2006-01-02-15-04-05")
+
+		return ts, ts, nil
 	}
 
 	// Select: first 3 + last 1
@@ -394,7 +403,13 @@ func generateAITitle(messages []Message, aiConfig *ai.ClientConfig) (string, err
 		content = content[:200]
 	}
 
-	systemMsg := "Generate a short semantic title (max 50 chars) for this conversation. Output ONLY the title, nothing else. No quotes, no punctuation, no explanation. Just the title."
+	systemMsg := `Output exactly two lines about this conversation:
+TITLE: a short semantic title of the topic (any language, max 50 chars)
+ENGLISH-TITLE: a short ASCII-only filename-safe slug (English, lowercase, hyphen-separated, max 50 chars)
+
+Example:
+TITLE: 用 Go 重写用户认证模块
+ENGLISH-TITLE: go-user-auth-rewrite`
 	userMsg := "User messages:\n" + content
 
 	aiMessages := []ai.Message{
@@ -405,24 +420,65 @@ func generateAITitle(messages []Message, aiConfig *ai.ClientConfig) (string, err
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	title, err := ai.ChatContext(ctx, aiConfig, aiMessages)
+	response, err := ai.ChatContext(ctx, aiConfig, aiMessages)
 	if err != nil {
-		// Fallback: use first user message snippet as title
-		return fallbackTitle(userMessages), nil
+		return "", "", fmt.Errorf("AI title generation: %w", err)
 	}
 
-	// Clean up and limit length
-	title = slugTitle(strings.TrimSpace(title))
+	title, engTitle := parseTitles(response)
+	trimmedTitle := trimTitle(title)
+	trimmedEng := trimEngTitle(engTitle)
+
+	// If either is empty after trimming, fall back
+	if trimmedTitle == "" || trimmedEng == "" {
+		fallback := fallbackTitle(userMessages)
+
+		return fallback, fallback, nil
+	}
+
+	return trimmedTitle, trimmedEng, nil
+}
+
+// parseTitles extracts TITLE and ENGLISH-TITLE from AI response.
+func parseTitles(response string) (string, string) {
+	title := ""
+	engTitle := ""
+
+	for line := range strings.SplitSeq(response, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if after, ok := strings.CutPrefix(trimmed, "TITLE:"); ok {
+			title = strings.TrimSpace(after)
+		} else if after, ok := strings.CutPrefix(trimmed, "ENGLISH-TITLE:"); ok {
+			engTitle = strings.TrimSpace(after)
+		}
+	}
+
+	return title, engTitle
+}
+
+// trimTitle cleans up a semantic title (remove quotes, truncate to 50).
+func trimTitle(title string) string {
+	title = strings.TrimSpace(title)
+	title = strings.Trim(title, `"'「」『』`)
 	if len(title) > 50 {
 		title = title[:50]
 	}
 
-	// If AI returned empty, use fallback
-	if title == "" {
-		return fallbackTitle(userMessages), nil
+	return title
+}
+
+// trimEngTitle cleans up an English title for use as filename.
+func trimEngTitle(engTitle string) string {
+	engTitle = strings.TrimSpace(engTitle)
+	engTitle = strings.Trim(engTitle, `"'「」『』`)
+	// Apply slugification for safety (gosimple/slug will not transliterate
+	// if input is already ASCII, serving as a sanitizer)
+	engTitle = slugTitle(engTitle)
+	if len(engTitle) > 50 {
+		engTitle = engTitle[:50]
 	}
 
-	return title, nil
+	return engTitle
 }
 
 // fallbackTitle generates a fallback title from the first user message.

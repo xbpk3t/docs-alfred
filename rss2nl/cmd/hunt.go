@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gosimple/slug"
 	"github.com/mmcdole/gofeed"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/litter"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 	"github.com/xbpk3t/docs-alfred/service/rss"
 )
@@ -958,169 +956,66 @@ func renderHuntMarkdown(report *huntReport) string {
 	return b.String()
 }
 
-// -- Hunt report HTML view types (matching hunt-report.gohtml) --
+// -- Hunt report document rendering with pkg/md --
 
-type huntReportView struct {
-	Title                 string
-	GeneratedAt           string
-	Mode                  string
-	Stats                 []huntStatView
-	Warnings              []huntWarningView
-	Failures              []huntFailureView
-	Categories            []huntCategoryView
-	HasWarnings           bool
-	HasFailures           bool
-	HasMultipleCategories bool
-	HasNoCandidates       bool
-}
-
-type huntStatView struct {
-	Value any
-	Label string
-}
-
-type huntWarningView struct {
-	Message string
-}
-
-type huntFailureView struct {
-	Message string
-}
-
-type huntCategoryView struct {
-	Name       string
-	ID         string
-	Candidates []huntCandidateView
-	Count      int
-}
-
-type huntCandidateView struct {
-	Title         string
-	URL           string
-	Status        string
-	Reason        string
-	Provider      string
-	CandidateType string
-	Domain        string
-	Confidence    string
-	EvidenceURLs  []string
-	HasEvidence   bool
-}
-
-func buildHuntReportView(report *huntReport) huntReportView {
-	categories := groupCandidatesByCategory(report.Candidates)
-
-	return huntReportView{
-		Title:       "Source Discovery " + report.GeneratedAt[:10],
-		GeneratedAt: report.GeneratedAt,
-		Mode:        huntReportMode(report.DryRun),
-		Stats: []huntStatView{
-			{Label: "Accepted", Value: report.Stats.AcceptedCandidates},
-			{Label: "Categories", Value: report.Stats.CategoriesScanned},
-			{Label: "Provider calls", Value: report.Stats.ProviderCalls},
-			{Label: "Successful calls", Value: report.Stats.SuccessfulCalls},
-			{Label: "Raw candidates", Value: report.Stats.RawCandidates},
-			{Label: "Filtered", Value: report.Stats.FilteredCandidates},
-		},
-		HasWarnings:           len(report.Warnings) > 0,
-		Warnings:              buildWarningViews(report.Warnings),
-		HasFailures:           len(report.Failures) > 0,
-		Failures:              buildFailureViews(report.Failures),
-		HasMultipleCategories: len(categories) > 1,
-		HasNoCandidates:       len(categories) == 0,
-		Categories:            categories,
-	}
-}
-
-func buildWarningViews(warnings []huntWarning) []huntWarningView {
-	views := make([]huntWarningView, len(warnings))
-	for i, w := range warnings {
-		parts := []string{}
-		if w.Provider != "" {
-			parts = append(parts, string(w.Provider))
-		}
-		if w.Category != "" {
-			parts = append(parts, w.Category)
-		}
-		msg := w.Message
-		if len(parts) > 0 {
-			msg = strings.Join(parts, "/") + ": " + msg
-		}
-		views[i] = huntWarningView{Message: msg}
-	}
-
-	return views
-}
-
-func buildFailureViews(failures []huntFailure) []huntFailureView {
-	views := make([]huntFailureView, len(failures))
-	for i, f := range failures {
-		views[i] = huntFailureView{
-			Message: fmt.Sprintf("%s/%s: %s", f.Provider, f.Category, f.Message),
-		}
-	}
-
-	return views
-}
-
-func groupCandidatesByCategory(candidates []huntCandidate) []huntCategoryView {
+func groupCandidatesByCategory(candidates []huntCandidate) []huntCategoryGroup {
 	groups := lo.GroupBy(candidates, func(candidate huntCandidate) string {
 		return candidate.Category
 	})
 
-	// Sort category names for stable output
 	names := lo.Keys(groups)
 	slices.Sort(names)
 
-	views := make([]huntCategoryView, 0, len(names))
+	views := make([]huntCategoryGroup, 0, len(names))
 	for _, name := range names {
 		group := groups[name]
-		candidateViews := make([]huntCandidateView, len(group))
+		var items []huntCategoryItem
 		for i := range group {
-			candidateViews[i] = buildCandidateView(&group[i])
+			c := &group[i]
+			title := c.Title
+			if title == "" {
+				title = c.NormalizedURL
+			}
+			reason := c.Reason
+			if reason == "" {
+				reason = "No reason provided."
+			}
+			items = append(items, huntCategoryItem{
+				Title:         title,
+				URL:           c.NormalizedURL,
+				Reason:        reason,
+				EvidenceURLs:  c.EvidenceURLs,
+				Provider:      string(c.Provider),
+				CandidateType: string(c.CandidateType),
+				Domain:        c.Domain,
+				Confidence:    formatConfidence(c.Confidence),
+			})
 		}
-		views = append(views, huntCategoryView{
-			Name:       name,
-			ID:         categoryID(name),
-			Count:      len(group),
-			Candidates: candidateViews,
+		views = append(views, huntCategoryGroup{
+			Name:  name,
+			Count: len(group),
+			Items: items,
 		})
 	}
 
 	return views
 }
 
-func buildCandidateView(c *huntCandidate) huntCandidateView {
-	title := c.Title
-	if title == "" {
-		title = c.NormalizedURL
-	}
-
-	reason := c.Reason
-	if reason == "" {
-		reason = "No reason provided."
-	}
-
-	return huntCandidateView{
-		Title:         title,
-		URL:           c.NormalizedURL,
-		Status:        candidateStatus(c),
-		Reason:        reason,
-		HasEvidence:   len(c.EvidenceURLs) > 0,
-		EvidenceURLs:  c.EvidenceURLs,
-		Provider:      string(c.Provider),
-		CandidateType: string(c.CandidateType),
-		Domain:        c.Domain,
-		Confidence:    formatConfidence(c.Confidence),
-	}
+type huntCategoryGroup struct {
+	Name  string
+	Items []huntCategoryItem
+	Count int
 }
 
-func candidateStatus(c *huntCandidate) string {
-	if c.IsNew {
-		return "new"
-	}
-
-	return fmt.Sprintf("seen %dx", c.SeenCount)
+type huntCategoryItem struct {
+	Title         string
+	URL           string
+	Reason        string
+	Provider      string
+	CandidateType string
+	Domain        string
+	Confidence    string
+	EvidenceURLs  []string
 }
 
 func formatConfidence(f float64) string {
@@ -1131,43 +1026,73 @@ func formatConfidence(f float64) string {
 	return fmt.Sprintf("%.2f", f)
 }
 
-func categoryID(name string) string {
-	s := slug.Make(name)
-	if s == "" {
-		s = "unknown"
-	}
-
-	return "category-" + s
-}
-
-func huntReportMode(dryRun bool) string {
-	if dryRun {
-		return "dry-run"
-	}
-
-	return "stateful"
-}
-
 func renderHuntHTML(report *huntReport) string {
-	view := buildHuntReportView(report)
+	doc := md.NewDocument()
 
-	funcMap := template.FuncMap{}
+	statItems := []md.StatItem{
+		{Label: "Accepted", Value: report.Stats.AcceptedCandidates},
+		{Label: "Categories", Value: report.Stats.CategoriesScanned},
+		{Label: "Provider calls", Value: report.Stats.ProviderCalls},
+		{Label: "Successful calls", Value: report.Stats.SuccessfulCalls},
+		{Label: "Raw candidates", Value: report.Stats.RawCandidates},
+		{Label: "Filtered", Value: report.Stats.FilteredCandidates},
+	}
 
-	tmpl, err := template.New("hunt-report.gohtml").Funcs(funcMap).ParseFS(templates, "templates/hunt-report.gohtml")
+	mode := "stateful"
+	if report.DryRun {
+		mode = "dry-run"
+	}
+
+	doc.Add(md.NamedSection("Source Discovery "+report.GeneratedAt[:10],
+		md.Paragraph(fmt.Sprintf("Generated: %s. Mode: %s.", report.GeneratedAt, mode)),
+		md.StatsGrid(statItems),
+	))
+
+	for _, w := range report.Warnings {
+		doc.Add(md.Notice("Warning", w.Message))
+	}
+
+	for _, f := range report.Failures {
+		doc.Add(md.Notice("Failure", f.Message))
+	}
+
+	if len(report.Candidates) > 0 {
+		categories := groupCandidatesByCategory(report.Candidates)
+		for _, cat := range categories {
+			var candidateItems []string
+			for i := range cat.Items {
+				c := &cat.Items[i]
+				lines := []string{md.Link(c.Title, c.URL)}
+				if c.Reason != "" {
+					lines = append(lines, c.Reason)
+				}
+				lines = append(lines, c.EvidenceURLs...)
+				meta := fmt.Sprintf("%s · %s · %s", c.Provider, c.CandidateType, c.Domain)
+				if c.Confidence != "" {
+					meta += " · " + c.Confidence
+				}
+				lines = append(lines, meta)
+				candidateItems = append(candidateItems, strings.Join(lines, "\n  "))
+			}
+			doc.Add(md.NamedSection(fmt.Sprintf("%s (%d candidates)", cat.Name, cat.Count),
+				md.BulletList(candidateItems, true),
+			))
+		}
+	} else {
+		doc.Add(md.NamedSection("Candidates", md.Paragraph("No candidates accepted.")))
+	}
+
+	htmlBody, err := doc.ToHTML()
 	if err != nil {
-		slog.Warn("Failed to parse hunt HTML template", "error", err)
-
-		return fmt.Sprintf("<pre>%s</pre>", renderHuntMarkdown(report))
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, view); err != nil {
 		slog.Warn("Failed to render hunt HTML", "error", err)
+		doc2 := md.NewDocument()
+		doc2.Add(md.Paragraph(renderHuntMarkdown(report)))
+		html2, _ := doc2.ToHTML()
 
-		return fmt.Sprintf("<pre>%s</pre>", renderHuntMarkdown(report))
+		return html2
 	}
 
-	return buf.String()
+	return htmlBody
 }
 
 // -- Parsing --

@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -17,6 +15,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/litter"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/service/rss"
 )
 
@@ -562,26 +561,35 @@ type itemTrnsSummary struct {
 }
 
 func renderTrnsPage(view *trnsPageView) string {
-	funcMap := template.FuncMap{}
+	doc := md.NewDocument()
+	doc.Add(md.NamedSection(view.Title))
 
-	tmpl, err := template.New("trns-page.gohtml").Funcs(funcMap).ParseFS(templates, "templates/trns-page.gohtml")
-	if err != nil {
-		slog.Warn("Failed to parse trns page template", "error", err)
+	var metaPairs []md.MdPair
+	metaPairs = append(metaPairs, md.MdPair{Key: "Feed", Value: view.FeedTitle})
+	if view.EpisodeURL != "" {
+		metaPairs = append(metaPairs, md.MdPair{Key: "Episode", Value: md.Link(view.EpisodeURL, view.EpisodeURL)})
+	}
+	metaPairs = append(metaPairs, md.MdPair{Key: "Status", Value: view.Status})
+	doc.Add(md.Metadata(metaPairs...))
 
-		return fmt.Sprintf("<pre>%s</pre>", view.Content)
+	if view.Summary != "" {
+		doc.Add(md.NamedSection("AI Summary", md.Paragraph(view.Summary)))
+	}
+	if view.SummaryError != "" {
+		doc.Add(md.Notice("AI Summary unavailable", view.SummaryError))
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, view); err != nil {
+	doc.Add(md.Paragraph(view.Content))
+
+	htmlBody, err := doc.ToHTML()
+	if err != nil {
 		slog.Warn("Failed to render trns page", "error", err)
 
 		return fmt.Sprintf("<pre>%s</pre>", view.Content)
 	}
 
-	return buf.String()
+	return htmlBody
 }
-
-// -- Newsletter trns integration --
 
 // ProcessNewsletterTrns fetches transcripts for podcast newsletter items,
 // renders HTML pages, uploads to Litterbox, sets TrnsURL on items, and returns a best-effort report.
