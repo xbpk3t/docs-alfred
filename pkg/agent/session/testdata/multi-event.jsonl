@@ -1,0 +1,13 @@
+{"type":"last-prompt","lastPrompt":"...","sessionId":"test"}
+{"type":"queue-operation","operation":"enqueue"}
+{"type":"user","message":{"role":"user","content":"这个项目里用了哪些设计模式？"},"timestamp":"2026-06-20T14:00:00Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Let me explore the codebase first..."}]},"timestamp":"2026-06-20T14:00:02Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"grep -r 'pattern' src/"}}]},"timestamp":"2026-06-20T14:00:03Z"}
+{"type":"user","message":{"content":[{"type":"tool_result","content":[{"type":"text","text":"found patterns in 3 files"}}]},"timestamp":"2026-06-20T14:00:10Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"我看了项目代码，发现使用了以下几种设计模式："}]},"timestamp":"2026-06-20T14:00:12Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"1. **策略模式** — `pkg/auth` 里有多个认证策略实现\n2. **工厂模式** — `service/creator.go` 里根据类型创建不同实例\n3. **观察者模式** — 事件系统里的 listener 注册"}]},"timestamp":"2026-06-20T14:00:14Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"cat src/main.go"}}]},"timestamp":"2026-06-20T14:00:15Z"}
+{"type":"user","message":{"content":[{"type":"tool_result","content":[{"type":"text","text":"package main"}}]},"timestamp":"2026-06-20T14:00:20Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"另外 `main.go` 里还用了单例模式初始化数据库连接。"}]},"timestamp":"2026-06-20T14:00:22Z"}
+{"type":"mode","mode":"normal","sessionId":"test"}
+{"type":"permission-mode","permissionMode":"plan","sessionId":"test"}

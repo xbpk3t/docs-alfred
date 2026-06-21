@@ -1,0 +1,6 @@
+{"type":"user","message":{"role":"user","content":"我想优化的代码"},"timestamp":"2026-06-21T10:00:00Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"API Error: 500 Internal Server Error"}]},"timestamp":"2026-06-21T10:00:01Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Good question"}]},"timestamp":"2026-06-21T10:00:02Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Now let me look at the code"}]},"timestamp":"2026-06-21T10:00:03Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All right"}]},"timestamp":"2026-06-21T10:00:04Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Sure, here's the fix:\n\n```go\nfmt.Println(\"hello\")\n```"}]},"timestamp":"2026-06-21T10:00:05Z"}

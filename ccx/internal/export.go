@@ -2,25 +2,22 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
-	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
+	session "github.com/xbpk3t/docs-alfred/pkg/agent/session"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	wikisvc "github.com/xbpk3t/docs-alfred/service/wiki"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	roleUser      = "user"
-	roleAssistant = "assistant"
+	roleUser = "user"
 )
 
 // ExportInput contains inputs for session export.
@@ -39,21 +36,6 @@ type ExportResult struct {
 	Title      string // Original AI-generated title (may contain Chinese)
 	EngTitle   string // English ASCII-safe title for filename
 	DryRun     bool
-}
-
-// SessionJSON represents the JSON structure from claude-extract.
-type SessionJSON struct {
-	SessionID    string    `json:"session_id"`
-	Date         string    `json:"date"`
-	Messages     []Message `json:"messages"`
-	MessageCount int       `json:"message_count"`
-}
-
-// Message represents a single message in the conversation.
-type Message struct {
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Timestamp string `json:"timestamp"`
 }
 
 // Frontmatter represents the YAML frontmatter for wiki files.
@@ -83,12 +65,17 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 		fmt.Fprintf(os.Stderr, "Found %d sessions in chain\n", len(chain))
 	}
 
-	mergedMessages, err := extractAndMergeSessions(chain, input.Verbose)
+	// Parse all sessions directly from JSONL (no claude-extract needed)
+	messages, err := extractAndMergeSessions(chain, input.Verbose)
 	if err != nil {
 		return nil, err
 	}
 
-	topicPath, title, engTitle := classifyAndGenerateTitle(mergedMessages, input)
+	if len(messages) == 0 {
+		return nil, errors.New("no messages found after parsing and filtering")
+	}
+
+	topicPath, title, engTitle := classifyAndGenerateTitle(messages, input)
 	outputPath := determineOutputPath(input, engTitle, topicPath)
 
 	if input.Verbose {
@@ -107,7 +94,7 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 		}, nil
 	}
 
-	if err := writeExportFile(outputPath, title, mergedMessages); err != nil {
+	if err := writeExportFile(outputPath, title, messages); err != nil {
 		return nil, err
 	}
 
@@ -137,25 +124,40 @@ func validateExportInput(input ExportInput) error {
 	return nil
 }
 
-// extractAndMergeSessions extracts and merges all sessions in the chain.
-func extractAndMergeSessions(chain []ChainRecord, verbose bool) ([]Message, error) {
-	sessions, err := extractAllSessions(chain, verbose)
-	if err != nil {
-		return nil, err
+// extractAndMergeSessions parses all session JSONL files for the chain,
+// filters out noise, and returns the clean messages.
+// This replaces the old claude-extract pipeline.
+func extractAndMergeSessions(chain []ChainRecord, verbose bool) ([]session.Message, error) {
+	// Build list of transcript paths from the chain
+	paths := make([]string, len(chain))
+	for i, c := range chain {
+		paths[i] = c.TranscriptPath
 	}
 
-	mergedMessages := mergeSessions(sessions)
+	// Parse all sessions directly from JSONL (no external tool needed)
+	messages, err := session.ParseAll(paths)
+	if err != nil {
+		return nil, fmt.Errorf("parse sessions: %w", err)
+	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "Merged %d messages\n", len(mergedMessages))
+		fmt.Fprintf(os.Stderr, "Parsed %d raw messages\n", len(messages))
 	}
 
-	return mergedMessages, nil
+	// Filter out noise (API errors, transition sentences, emoji, etc.)
+	messages = session.Filter(messages)
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "After filter: %d messages\n", len(messages))
+	}
+
+	return messages, nil
 }
 
 // classifyAndGenerateTitle classifies content and generates AI title + engTitle.
-func classifyAndGenerateTitle(messages []Message, input ExportInput) (string, string, string) {
-	content := renderToMarkdown(messages)
+func classifyAndGenerateTitle(messages []session.Message, input ExportInput) (string, string, string) {
+	// Build plain text for AI classification (Turn formatting is visual noise for AI)
+	content := messagesToPlainText(messages)
 	topicPath := classifyWithFallback(content, input.WikiRoot, input.Verbose, input.AIConfig)
 
 	title, engTitle, err := generateTitles(messages, input.AIConfig)
@@ -168,8 +170,20 @@ func classifyAndGenerateTitle(messages []Message, input ExportInput) (string, st
 	return topicPath, title, engTitle
 }
 
+// messagesToPlainText joins message contents into a simple text representation
+// for AI classification, without any Turn formatting.
+func messagesToPlainText(messages []session.Message) string {
+	var sb strings.Builder
+	for _, msg := range messages {
+		sb.WriteString(msg.Content)
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
 // extractUserMessages extracts user messages from the message list.
-func extractUserMessages(messages []Message) []string {
+func extractUserMessages(messages []session.Message) []string {
 	var userMessages []string
 	for _, msg := range messages {
 		if msg.Role == roleUser {
@@ -180,11 +194,11 @@ func extractUserMessages(messages []Message) []string {
 	return userMessages
 }
 
-// writeExportFile writes the final markdown file.
-func writeExportFile(outputPath, title string, messages []Message) error {
+// writeExportFile writes the final markdown file with Turn-structured formatting.
+func writeExportFile(outputPath, title string, messages []session.Message) error {
 	frontmatter := generateFrontmatter(title)
-	content := renderToMarkdown(messages)
-	finalContent := frontmatter + content
+	body := session.FormatMessages(messages)
+	finalContent := frontmatter + body
 
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
 		return fmt.Errorf("create output dir: %w", err)
@@ -197,196 +211,24 @@ func writeExportFile(outputPath, title string, messages []Message) error {
 	return nil
 }
 
-// extractAllSessions extracts JSON for all sessions in the chain.
-func extractAllSessions(chain []ChainRecord, verbose bool) ([]SessionJSON, error) {
-	sessions := make([]SessionJSON, 0, len(chain))
-
-	for _, entry := range chain {
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Extracting session %s\n", entry.SessionID)
-		}
-
-		session, err := extractSessionJSON(entry.TranscriptPath)
-		if err != nil {
-			return nil, fmt.Errorf("extract session %s: %w", entry.SessionID, err)
-		}
-
-		sessions = append(sessions, *session)
+// generateFrontmatter generates YAML frontmatter for the wiki file.
+func generateFrontmatter(title string) string {
+	fm := Frontmatter{
+		Type:   "research",
+		Title:  title,
+		Date:   time.Now().Format("2006-01-02"),
+		Source: "claude-code",
 	}
 
-	return sessions, nil
-}
+	data, _ := yaml.Marshal(fm)
 
-// extractSessionJSON extracts a single session as JSON using claude-extract.
-func extractSessionJSON(sessionPath string) (*SessionJSON, error) {
-	if _, ok := cmdutil.LookPath("claude-extract"); !ok {
-		return nil, errors.New("claude-extract not found (install with: uv tool install claude-conversation-extractor)")
-	}
-
-	tmpDir, err := os.MkdirTemp("", "ccx-session-*")
-	if err != nil {
-		return nil, fmt.Errorf("create temp dir: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	if err := symlinkSessionFile(sessionPath, tmpDir); err != nil {
-		return nil, err
-	}
-
-	if err := runClaudeExtract(tmpDir); err != nil {
-		return nil, err
-	}
-
-	return findAndParseJSON(tmpDir)
-}
-
-// symlinkSessionFile creates a symlink to the session file in the temp directory.
-func symlinkSessionFile(sessionPath, tmpDir string) error {
-	err := os.Symlink(sessionPath, filepath.Join(tmpDir, filepath.Base(sessionPath)))
-	if err != nil {
-		return fmt.Errorf("symlink session file: %w", err)
-	}
-
-	return nil
-}
-
-// runClaudeExtract runs claude-extract to export the session as JSON.
-func runClaudeExtract(tmpDir string) error {
-	_, err := cmdutil.RunStdout(context.Background(), "claude-extract",
-		"--extract", "1",
-		"--output", tmpDir,
-		"--format", "json",
-	)
-	if err != nil {
-		return fmt.Errorf("claude-extract: %w", err)
-	}
-
-	return nil
-}
-
-// findAndParseJSON finds the JSON file in the directory and parses it.
-func findAndParseJSON(tmpDir string) (*SessionJSON, error) {
-	entries, err := os.ReadDir(tmpDir)
-	if err != nil {
-		return nil, fmt.Errorf("read output dir: %w", err)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-
-		return parseJSONFile(filepath.Join(tmpDir, entry.Name()))
-	}
-
-	return nil, errors.New("no JSON file found in output")
-}
-
-// parseJSONFile reads and parses a JSON file.
-func parseJSONFile(filePath string) (*SessionJSON, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("read output file: %w", err)
-	}
-
-	var session SessionJSON
-	if err := json.Unmarshal(data, &session); err != nil {
-		return nil, fmt.Errorf("parse JSON: %w", err)
-	}
-
-	return &session, nil
-}
-
-// filterMessages filters messages to only include non-empty user/assistant messages.
-func filterMessages(messages []Message) []Message {
-	filtered := make([]Message, 0, len(messages))
-
-	for _, msg := range messages {
-		// Skip empty messages
-		if strings.TrimSpace(msg.Content) == "" {
-			continue
-		}
-
-		// Only keep user/assistant
-		if msg.Role != roleUser && msg.Role != roleAssistant {
-			continue
-		}
-
-		// Clean up system-generated wrapper content
-		content := unwrapSystemContent(msg.Content)
-		if content == "" {
-			continue
-		}
-
-		msg.Content = content
-		filtered = append(filtered, msg)
-	}
-
-	return filtered
-}
-
-// unwrapSystemContent extracts meaningful content from system-wrapped messages.
-// Returns empty string if the message is purely system noise.
-func unwrapSystemContent(content string) string {
-	// Skip pure system output injections
-	if strings.Contains(content, "<local-command-stdout>") {
-		return ""
-	}
-	if strings.Contains(content, "session-scoped Stop hook") {
-		return ""
-	}
-
-	// Extract content from <command-name> wrappers (user's actual input)
-	if strings.Contains(content, "<command-name>") {
-		return extractCommandContent(content)
-	}
-
-	return content
-}
-
-// extractCommandContent extracts the meaningful content from a command-wrapped message.
-func extractCommandContent(content string) string {
-	// Extract content from <command-args>...</command-args> if present
-	if start := strings.Index(content, "<command-args>"); start >= 0 {
-		start += len("<command-args>")
-		if end := strings.Index(content, "</command-args>"); end > start {
-			return strings.TrimSpace(content[start:end])
-		}
-	}
-
-	// Fallback: extract from <command-message>...</command-message>
-	if start := strings.Index(content, "<command-message>"); start >= 0 {
-		start += len("<command-message>")
-		if end := strings.Index(content, "</command-message>"); end > start {
-			return strings.TrimSpace(content[start:end])
-		}
-	}
-
-	return ""
-}
-
-// mergeSessions merges multiple sessions into a single message list.
-func mergeSessions(sessions []SessionJSON) []Message {
-	var allMessages []Message
-
-	for _, s := range sessions {
-		filtered := filterMessages(s.Messages)
-		allMessages = append(allMessages, filtered...)
-	}
-
-	return allMessages
+	return "---\n" + string(data) + "---\n\n"
 }
 
 // generateTitles generates a semantic title and an English filename-safe slug using AI.
 // Returns (title, engTitle, error).
-func generateTitles(messages []Message, aiConfig *ai.ClientConfig) (string, string, error) {
-	// Extract user messages
-	var userMessages []string
-	for _, msg := range messages {
-		if msg.Role == roleUser {
-			userMessages = append(userMessages, msg.Content)
-		}
-	}
+func generateTitles(messages []session.Message, aiConfig *ai.ClientConfig) (string, string, error) {
+	userMessages := extractUserMessages(messages)
 
 	if len(userMessages) == 0 {
 		ts := time.Now().Format("2006-01-02-15-04-05")
@@ -518,109 +360,18 @@ func selectMessages(messages []string, head, tail int) []string {
 	return result
 }
 
-// generateFrontmatter generates YAML frontmatter for the wiki file.
-func generateFrontmatter(title string) string {
-	fm := Frontmatter{
-		Type:   "research",
-		Title:  title,
-		Date:   time.Now().Format("2006-01-02"),
-		Source: "claude-code",
+// classifyWithFallback classifies content and returns empty string on failure.
+func classifyWithFallback(content, wikiRoot string, verbose bool, aiConfig *ai.ClientConfig) string {
+	topicPath, err := wikisvc.ClassifyContent(content, wikiRoot, aiConfig)
+	if err != nil {
+		if verbose {
+			fmt.Fprintf(os.Stderr, "Classification failed: %v\n", err)
+		}
+
+		return ""
 	}
 
-	data, _ := yaml.Marshal(fm)
-
-	return "---\n" + string(data) + "---\n\n"
-}
-
-// renderToMarkdown renders messages to markdown format.
-func renderToMarkdown(messages []Message) string {
-	var sb strings.Builder
-
-	for _, msg := range messages {
-		// Add header
-		if msg.Role == roleUser {
-			sb.WriteString("## User\n\n")
-		} else {
-			sb.WriteString("## Claude\n\n")
-		}
-
-		// Sanitize content: remove emoji, strip embedded section headers
-		content := sanitizeContent(msg.Content)
-		sb.WriteString(content)
-		sb.WriteString("\n\n---\n\n")
-	}
-
-	return sb.String()
-}
-
-// sanitizeContent removes emoji and embedded section headers from message content.
-func sanitizeContent(content string) string {
-	// Remove emoji characters (Unicode category So, Sk, and supplementary planes)
-	content = removeEmoji(content)
-
-	// Strip embedded section headers (## ...) that come from assistant's markdown
-	// These would conflict with the ## User / ## Claude headers
-	lines := strings.Split(content, "\n")
-	var filtered []string
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// Skip lines that look like section headers (## ...) but not code blocks
-		if strings.HasPrefix(trimmed, "## ") && !strings.HasPrefix(trimmed, "## User") && !strings.HasPrefix(trimmed, "## Claude") {
-			// Replace with the text content only (remove the ## prefix)
-			headerText := strings.TrimPrefix(trimmed, "## ")
-			filtered = append(filtered, headerText)
-
-			continue
-		}
-		filtered = append(filtered, line)
-	}
-
-	result := strings.Join(filtered, "\n")
-
-	// Collapse multiple spaces on each line (from emoji removal)
-	collapsed := make([]string, 0, len(filtered))
-	for line := range strings.SplitSeq(result, "\n") {
-		// Collapse 2+ spaces into 1
-		for strings.Contains(line, "  ") {
-			line = strings.ReplaceAll(line, "  ", " ")
-		}
-		collapsed = append(collapsed, line)
-	}
-
-	return strings.Join(collapsed, "\n")
-}
-
-// removeEmoji removes emoji characters from a string.
-func removeEmoji(s string) string {
-	return strings.Map(func(r rune) rune {
-		// Keep normal ASCII and common punctuation (including backtick U+0060)
-		if r < 0x2600 {
-			return r
-		}
-		// Remove variation selectors (U+FE00-U+FE0F)
-		if r >= 0xFE00 && r <= 0xFE0F {
-			return -1
-		}
-		// Remove emoji and symbol ranges (but not Sk which includes backtick)
-		if unicode.Is(unicode.So, r) {
-			return -1
-		}
-		// Remove supplemental symbols (0x1F000+)
-		if r >= 0x1F000 {
-			return -1
-		}
-		// Remove dingbats (0x2700-0x27BF)
-		if r >= 0x2700 && r <= 0x27BF {
-			return -1
-		}
-		// Remove miscellaneous symbols (0x2600-0x26FF)
-		if r >= 0x2600 && r <= 0x26FF {
-			return -1
-		}
-		// Keep everything else (CJK, Latin extended, etc.)
-		return r
-	}, s)
+	return topicPath
 }
 
 // determineOutputPath determines the output path for the exported session.
@@ -647,20 +398,6 @@ func determineOutputPath(input ExportInput, title, topicPath string) string {
 	}
 
 	return filepath.Join(baseDir, filename)
-}
-
-// classifyWithFallback classifies content and returns empty string on failure.
-func classifyWithFallback(content, wikiRoot string, verbose bool, aiConfig *ai.ClientConfig) string {
-	topicPath, err := wikisvc.ClassifyContent(content, wikiRoot, aiConfig)
-	if err != nil {
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Classification failed: %v\n", err)
-		}
-
-		return ""
-	}
-
-	return topicPath
 }
 
 func slugTitle(value string) string {
