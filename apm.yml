@@ -1,0 +1,16 @@
+name: docs-alfred
+version: 0.1.0
+description: Project-level APM manifest for the docs repository
+author: luck
+license: MIT
+targets:
+  - claude
+  - codex
+includes:
+  - .apm/instructions
+dependencies:
+  apm:
+    - git: https://github.com/cxuu/golang-skills
+compilation:
+  exclude:
+    - go-testing

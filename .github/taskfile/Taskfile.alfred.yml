@@ -1,7 +1,8 @@
 version: "3"
 
 vars:
-  OUTPUT: gh-alfred.alfredworkflow
+  BINARY_NAME: "{{.BINARY_NAME}}"
+  OUTPUT: "{{.BINARY_NAME}}.alfredworkflow"
 
 tasks:
   default:
@@ -13,16 +14,16 @@ tasks:
       - task: release
         vars:
           ARCH: arm64
-      - lipo -create -output .workflow/gh-alfred gh-alfred_amd64 gh-alfred_arm64
-      - rm gh-alfred_amd64 gh-alfred_arm64
+      - lipo -create -output .workflow/{{.BINARY_NAME}} {{.BINARY_NAME}}_amd64 {{.BINARY_NAME}}_arm64
+      - rm {{.BINARY_NAME}}_amd64 {{.BINARY_NAME}}_arm64
       - cd .workflow && zip -r ../"{{.OUTPUT}}" .
 
   release:
     desc: Build for a specific architecture
     cmds:
-      - GOOS=darwin GOARCH={{.ARCH}} CGO_ENABLED=1 go build -ldflags "-s -w" -o gh-alfred_{{.ARCH}} .
+      - GOOS=darwin GOARCH={{.ARCH}} CGO_ENABLED=1 go build -ldflags "-s -w" -o {{.BINARY_NAME}}_{{.ARCH}} .
 
   build:
     desc: Build for current architecture (dev)
     cmds:
-      - go build -o .workflow/gh-alfred .
+      - go build -o .workflow/{{.BINARY_NAME}} .
