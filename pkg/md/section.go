@@ -75,15 +75,20 @@ func (s *emptySection) Markdown() string {
 
 func (s *emptySection) Add(_ ...Section) {}
 
-// ToHTML concatenates all sections' Markdown output and converts to HTML.
-func (d *Document) ToHTML() (string, error) {
+// Markdown concatenates all sections' Markdown output.
+func (d *Document) Markdown() string {
 	var sb strings.Builder
 	for _, s := range d.sections {
 		sb.WriteString(s.Markdown())
 		sb.WriteString("\n\n")
 	}
 
-	return ToHTML(sb.String())
+	return sb.String()
+}
+
+// ToHTML concatenates all sections' Markdown output and converts to HTML.
+func (d *Document) ToHTML() (string, error) {
+	return ToHTML(d.Markdown())
 }
 
 // compile-time interface checks.

@@ -930,30 +930,7 @@ func writeHuntReports(report *huntReport, mdPath, htmlPath, jsonPath string) {
 }
 
 func renderHuntMarkdown(report *huntReport) string {
-	var b strings.Builder
-	b.WriteString("# Source Discovery Report\n\n")
-	fmt.Fprintf(&b, "**Generated:** %s\n", report.GeneratedAt)
-	fmt.Fprintf(&b, "**Categories:** %d\n", report.Stats.CategoriesScanned)
-	fmt.Fprintf(&b, "**Candidates:** %d\n\n", report.Stats.AcceptedCandidates)
-
-	for _, w := range report.Warnings {
-		fmt.Fprintf(&b, "> ⚠ %s\n\n", w.Message)
-	}
-
-	for ci := range report.Candidates {
-		c := report.Candidates[ci]
-		scoreStr := fmt.Sprintf("%.1f%%", c.Score*100)
-		if c.IsNew {
-			scoreStr = "**NEW** " + scoreStr
-		}
-		fmt.Fprintf(&b, "- [%s](%s) (%s, %s, %s)\n",
-			c.Title, c.URL, c.Category, c.Provider, scoreStr)
-		if c.Reason != "" {
-			fmt.Fprintf(&b, "  - %s\n", c.Reason)
-		}
-	}
-
-	return b.String()
+	return buildHuntDocument(report).Markdown()
 }
 
 // -- Hunt report document rendering with pkg/md --
@@ -1027,6 +1004,21 @@ func formatConfidence(f float64) string {
 }
 
 func renderHuntHTML(report *huntReport) string {
+	htmlBody, err := buildHuntDocument(report).ToHTML()
+	if err != nil {
+		slog.Warn("Failed to render hunt HTML", "error", err)
+		doc2 := md.NewDocument()
+		doc2.Add(md.Paragraph(renderHuntMarkdown(report)))
+		html2, _ := doc2.ToHTML()
+
+		return html2
+	}
+
+	return htmlBody
+}
+
+// buildHuntDocument builds the shared md document for both HTML and Markdown output.
+func buildHuntDocument(report *huntReport) *md.Document {
 	doc := md.NewDocument()
 
 	statItems := []md.StatItem{
@@ -1059,40 +1051,18 @@ func renderHuntHTML(report *huntReport) string {
 	if len(report.Candidates) > 0 {
 		categories := groupCandidatesByCategory(report.Candidates)
 		for _, cat := range categories {
-			var candidateItems []string
+			items := make([]string, 0, len(cat.Items))
 			for i := range cat.Items {
 				c := &cat.Items[i]
-				lines := []string{md.Link(c.Title, c.URL)}
-				if c.Reason != "" {
-					lines = append(lines, c.Reason)
-				}
-				lines = append(lines, c.EvidenceURLs...)
-				meta := fmt.Sprintf("%s · %s · %s", c.Provider, c.CandidateType, c.Domain)
-				if c.Confidence != "" {
-					meta += " · " + c.Confidence
-				}
-				lines = append(lines, meta)
-				candidateItems = append(candidateItems, strings.Join(lines, "\n  "))
+				items = append(items, md.Link(c.Title, c.URL))
 			}
-			doc.Add(md.NamedSection(fmt.Sprintf("%s (%d candidates)", cat.Name, cat.Count),
-				md.BulletList(candidateItems, true),
-			))
+			doc.Add(md.NamedSection(cat.Name, md.BulletList(items, false)))
 		}
 	} else {
 		doc.Add(md.NamedSection("Candidates", md.Paragraph("No candidates accepted.")))
 	}
 
-	htmlBody, err := doc.ToHTML()
-	if err != nil {
-		slog.Warn("Failed to render hunt HTML", "error", err)
-		doc2 := md.NewDocument()
-		doc2.Add(md.Paragraph(renderHuntMarkdown(report)))
-		html2, _ := doc2.ToHTML()
-
-		return html2
-	}
-
-	return htmlBody
+	return doc
 }
 
 // -- Parsing --

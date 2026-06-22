@@ -13,6 +13,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/linear2nl/linear"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
 // newReportCmd creates a cobra command for a report subcommand (morning/evening).
@@ -43,6 +44,7 @@ func newReportCmd(use, short string, runFunc func(*internal.Config, bool) error)
 // Execute is the entry point for linear2nl.
 func Execute() {
 	carboninit.Setup()
+	validator.Setup()
 
 	rootCmd := &cobra.Command{
 		Use:   "linear2nl",

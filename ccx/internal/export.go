@@ -25,6 +25,7 @@ type ExportInput struct {
 	AIConfig  *ai.ClientConfig
 	WikiRoot  string
 	OutputDir string
+	SessionID string // Explicit session ID; overrides CLAUDE_CODE_SESSION_ID env var.
 	DryRun    bool
 	Verbose   bool
 }
@@ -52,7 +53,7 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 		return nil, err
 	}
 
-	chain, err := WalkSessionChain()
+	chain, err := WalkSessionChain(input.SessionID)
 	if err != nil {
 		return nil, fmt.Errorf("walk session chain: %w", err)
 	}

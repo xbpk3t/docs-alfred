@@ -108,6 +108,9 @@ func TestRenderHuntHTML(t *testing.T) {
 	require.Contains(t, html, "Engineering Blog")
 	require.Contains(t, html, "Rate limit exceeded")
 	require.Contains(t, html, "API key invalid")
+	require.NotContains(t, html, "Similar to existing")
+	require.NotContains(t, html, "tavily ·")
+	require.NotContains(t, html, "exa ·")
 }
 
 func TestRenderTrnsPage(t *testing.T) {

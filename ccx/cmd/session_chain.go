@@ -12,6 +12,7 @@ import (
 
 func newSessionChainCmd() *cobra.Command {
 	var flags struct {
+		session    string
 		jsonOutput bool
 		rawOutput  bool
 	}
@@ -21,7 +22,7 @@ func newSessionChainCmd() *cobra.Command {
 		Short: "Walk session chain",
 		Long:  `Walk the Claude Code session chain by following parentUuid links.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			chain, err := internal.WalkSessionChain()
+			chain, err := internal.WalkSessionChain(flags.session)
 			if err != nil {
 				return fmt.Errorf("walk session chain: %w", err)
 			}
@@ -40,6 +41,7 @@ func newSessionChainCmd() *cobra.Command {
 
 	cmd.Flags().BoolVar(&flags.jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&flags.rawOutput, "raw", false, "Output as tab-separated values")
+	cmd.Flags().StringVar(&flags.session, "session", "", "Session ID (overrides CLAUDE_CODE_SESSION_ID)")
 
 	return cmd
 }

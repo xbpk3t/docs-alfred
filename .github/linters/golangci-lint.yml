@@ -158,6 +158,7 @@ linters:
           arguments:
             - "json,inline"
             - "bson,outline,gnu"
+            - "!validate"          # gookit/validate 使用自定义 tag 语法，跳过检查
 
         - name: unnecessary-stmt   # 不必要的语句检查 - 简化代码
           arguments: [true]

@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/creasty/defaults"
-	"github.com/go-playground/validator/v10"
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
+	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
 // Config is the top-level configuration for linear2nl.
 type Config struct {
 	Resend  ResendConfig  `koanf:"resend"`
-	Theme   string        `default:"dark"  koanf:"theme" validate:"oneof=dark light"`
+	Theme   string        `default:"dark"  koanf:"theme" validate:"in:dark,light"`
 	Morning MorningConfig `koanf:"morning"`
 	AI      AIConfig      `koanf:"ai"`
 	Linear  LinearConfig  `koanf:"linear"`
@@ -21,13 +21,13 @@ type Config struct {
 
 // LinearConfig holds Linear API configuration.
 type LinearConfig struct {
-	APIKey   string   `koanf:"apiKey"`
+	APIKey   string   `koanf:"apiKey"   validate:"required"`
 	TeamKeys []string `koanf:"teamKeys"`
 }
 
 // MorningConfig holds morning report configuration.
 type MorningConfig struct {
-	Strategy string `default:"all_assigned" koanf:"strategy" validate:"oneof=all_assigned focused"`
+	Strategy string `default:"all_assigned" koanf:"strategy" validate:"in:all_assigned,focused"`
 }
 
 // AIConfig holds AI summary configuration.
@@ -41,9 +41,9 @@ type AIConfig struct {
 
 // ResendConfig holds Resend email configuration.
 type ResendConfig struct {
-	Token    string   `koanf:"token"`
+	Token    string   `koanf:"token"        validate:"required"`
 	FromName string   `default:"Linear Bot" koanf:"fromName"`
-	MailTo   []string `koanf:"mailTo"`
+	MailTo   []string `koanf:"mailTo"       validate:"required|min_len:1"`
 }
 
 // LoadConfig reads and validates configuration from the given YAML file.
@@ -107,28 +107,7 @@ func applyDefaults(cfg *Config) {
 }
 
 func validateConfig(cfg *Config) error {
-	if cfg.Linear.APIKey == "" {
-		return errors.New("linear API key is required (set linear.apiKey or LINEAR_API_KEY)")
-	}
-	if cfg.Resend.Token == "" {
-		return errors.New("resend token is required (set resend.token or RESEND_TOKEN)")
-	}
-	if len(cfg.Resend.MailTo) == 0 {
-		return errors.New("resend.mailTo is required")
-	}
-	if err := validator.New().Struct(cfg); err != nil {
-		var validationErrors validator.ValidationErrors
-		if errors.As(err, &validationErrors) {
-			for _, validationErr := range validationErrors {
-				switch validationErr.Namespace() {
-				case "Config.Morning.Strategy":
-					return fmt.Errorf("morning.strategy must be 'all_assigned' or 'focused', got %q", cfg.Morning.Strategy)
-				case "Config.Theme":
-					return fmt.Errorf("theme must be 'dark' or 'light', got %q", cfg.Theme)
-				}
-			}
-		}
-
+	if err := validator.Struct(cfg); err != nil {
 		return fmt.Errorf("validate config: %w", err)
 	}
 

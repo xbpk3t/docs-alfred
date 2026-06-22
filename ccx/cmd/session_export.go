@@ -13,6 +13,7 @@ func newSessionExportCmd() *cobra.Command {
 		config    string
 		wikiRoot  string
 		outputDir string
+		session   string
 		dryRun    bool
 		verbose   bool
 	}
@@ -41,6 +42,7 @@ This command:
 				Verbose:   flags.verbose,
 				WikiRoot:  cfg.WikiRoot,
 				OutputDir: flags.outputDir,
+				SessionID: flags.session,
 				AIConfig:  buildAIConfig(cfg),
 			}
 
@@ -58,6 +60,7 @@ This command:
 	cmd.Flags().BoolVar(&flags.verbose, "verbose", false, "Verbose output")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory")
 	cmd.Flags().StringVar(&flags.outputDir, "output-dir", "", "Output directory (overrides wiki-root)")
+	cmd.Flags().StringVar(&flags.session, "session", "", "Session ID to export (overrides CLAUDE_CODE_SESSION_ID)")
 
 	return cmd
 }
