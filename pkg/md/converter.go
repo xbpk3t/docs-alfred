@@ -1,15 +1,15 @@
-package htmlutil
+package md
 
 import (
 	"strings"
 
-	md "github.com/JohannesKaufmann/html-to-markdown"
+	html2md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/JohannesKaufmann/html-to-markdown/plugin"
 )
 
-// ToMarkdown converts HTML into GitHub-flavored Markdown.
-func ToMarkdown(input string) (string, error) {
-	converter := md.NewConverter("", true, nil)
+// HTMLToMarkdown converts HTML into GitHub-flavored Markdown.
+func HTMLToMarkdown(input string) (string, error) {
+	converter := html2md.NewConverter("", true, nil)
 	converter.Use(plugin.GitHubFlavored())
 
 	markdown, err := converter.ConvertString(input)

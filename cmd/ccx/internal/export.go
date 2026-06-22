@@ -11,7 +11,7 @@ import (
 	"time"
 
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
-	session "github.com/xbpk3t/docs-alfred/pkg/agent/session"
+	session "github.com/xbpk3t/docs-alfred/pkg/ai/session"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"gopkg.in/yaml.v3"

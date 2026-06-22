@@ -16,7 +16,7 @@ import (
 	"github.com/asticode/go-astisub"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
-	"github.com/xbpk3t/docs-alfred/pkg/htmlutil"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
@@ -321,7 +321,7 @@ func normalizeTranscriptContent(content, contentType string) string {
 	case "json":
 		return content // Pass through JSON as-is
 	case "html":
-		markdown, err := htmlutil.ToMarkdown(content)
+		markdown, err := md.HTMLToMarkdown(content)
 		if err == nil && strings.TrimSpace(markdown) != "" {
 			return markdown
 		}
