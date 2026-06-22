@@ -1,13 +1,13 @@
 ---
 description: rss2nl newsletter, transcript, source hunt, template, and side-effect rules
-applyTo: "rss2nl/**"
+applyTo: "cmd/rss2nl/**"
 ---
 
 # rss2nl Rules
 
 ## 命令结构
 
-- `rss2nl` 使用 Cobra，入口在 `rss2nl/cmd/root.go`。
+- `rss2nl` 使用 Cobra，入口在 `cmd/rss2nl/cmd/root.go`。
 - 当前子命令：`send`、`trns`、`trns check`、`hunt`。
 - 保持默认 config path、flag 名和输出路径兼容，除非任务明确要求迁移。
 
@@ -21,8 +21,8 @@ applyTo: "rss2nl/**"
 ## 配置与密钥
 
 - `RESEND_TOKEN`、AI key、provider key 只能来自 env 或配置，不写死到代码、测试、模板。
-- `rss2nl/rss2newsletter.yml` 可作为本地/示例配置参考；不要提交真实 token 或私密收件人变更。
-- 配置默认值集中在 `pkg/rss/config.go` 或已有 config loader，不在调用点散落。
+- `cmd/rss2nl/rss2newsletter.yml` 可作为本地/示例配置参考；不要提交真实 token 或私密收件人变更。
+- 配置默认值集中在 `internal/rss/feed/config.go` 或已有 config loader，不在调用点散落。
 
 ## RSS、网络、模板
 
@@ -34,6 +34,6 @@ applyTo: "rss2nl/**"
 
 ## 验证
 
-- 改 `pkg/rss` 跑 `go test ./pkg/rss`。
-- 改 `rss2nl/cmd` 跑 `go test ./rss2nl/cmd`。
-- 改 transcript pipeline 跑 `go test ./rss2nl/...`，并使用 fixture/mock 避免真实网络和 ASR。
+- 改 `internal/rss/feed` 跑 `go test ./internal/rss/feed`。
+- 改 `cmd/rss2nl/cmd` 跑 `go test ./cmd/rss2nl/cmd`。
+- 改 transcript pipeline 跑 `go test ./cmd/rss2nl/...`，并使用 fixture/mock 避免真实网络和 ASR。

@@ -4,7 +4,7 @@
 
 ```shell
 
-go install github.com/xbpk3t/docs-alfred/docs-cli@main
+go install github.com/xbpk3t/docs-alfred/cmd/docs-cli@main
 
 ```
 
@@ -25,7 +25,7 @@ docs-cli wiki inbox process
 
 ```shell
 
-go install github.com/xbpk3t/docs-alfred/data-cli@main
+go install github.com/xbpk3t/docs-alfred/cmd/data-cli@main
 
 ```
 
@@ -42,7 +42,7 @@ data-cli gh append-record --url <url> --des <description>
 
 ```shell
 
-go install github.com/xbpk3t/docs-alfred/rss2nl@main
+go install github.com/xbpk3t/docs-alfred/cmd/rss2nl@main
 
 ```
 
@@ -52,7 +52,7 @@ go install github.com/xbpk3t/docs-alfred/rss2nl@main
 
 ```shell
 
-go install github.com/xbpk3t/docs-alfred/linear2nl@main
+go install github.com/xbpk3t/docs-alfred/cmd/linear2nl@main
 
 ```
 
@@ -71,7 +71,7 @@ mv linear2nl_*.md /tmp/
 
 ```shell
 
-go install github.com/xbpk3t/docs-alfred/gh-alfred@main
+go install github.com/xbpk3t/docs-alfred/cmd/gh-alfred@main
 
 ```
 
@@ -87,6 +87,6 @@ gh-alfred validate
 
 ```shell
 
-go install github.com/xbpk3t/docs-alfred/pwgen@main
+go install github.com/xbpk3t/docs-alfred/cmd/pwgen@main
 
 ```

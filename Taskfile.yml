@@ -2,16 +2,16 @@ version: "3"
 
 includes:
   r2n:
-    taskfile: ./rss2nl/Taskfile.yml
-    dir: rss2nl
+    taskfile: ./cmd/rss2nl/Taskfile.yml
+    dir: cmd/rss2nl
   alfred:
     taskfile: .github/taskfile/Taskfile.alfred.yml
-    dir: gh-alfred
+    dir: cmd/gh-alfred
     vars:
       BINARY_NAME: gh-alfred
   pwgen:
     taskfile: .github/taskfile/Taskfile.alfred.yml
-    dir: pwgen
+    dir: cmd/pwgen
     vars:
       BINARY_NAME: pwgen
 

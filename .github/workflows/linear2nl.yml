@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go run ./linear2nl morning
+      - run: go run ./cmd/linear2nl morning
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           RESEND_TOKEN: ${{ secrets.RESEND_TOKEN }}
@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go run ./linear2nl evening
+      - run: go run ./cmd/linear2nl evening
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           RESEND_TOKEN: ${{ secrets.RESEND_TOKEN }}
