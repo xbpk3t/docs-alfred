@@ -54,7 +54,7 @@ func FetchURLWithRetry(ctx context.Context, url string, cfg *Config) (*gofeed.Fe
 
 	fp := createFeedParser(cfg)
 
-	var attempts uint = 0
+	var attempts uint
 	var lastError error
 	var feed *gofeed.Feed
 

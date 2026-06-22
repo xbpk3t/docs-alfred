@@ -97,8 +97,11 @@ func runEnrich(resource enrich.ResourceType, flags enrichFlags) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		<-sigCh
-		cancel()
+		select {
+		case <-sigCh:
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 
 	result, err := dataops.RunEnrich(ctx, &dataops.EnrichInput{

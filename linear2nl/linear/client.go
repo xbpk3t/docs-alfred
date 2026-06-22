@@ -100,7 +100,7 @@ func (c *Client) GetStateChanges(ctx context.Context, since time.Time) ([]StateC
 		return nil, fmt.Errorf("query state changes: %w", err)
 	}
 
-	changes := make([]StateChange, 0)
+	changes := make([]StateChange, 0, len(resp.Viewer.AssignedIssues.Nodes))
 	for i := range resp.Viewer.AssignedIssues.Nodes {
 		n := &resp.Viewer.AssignedIssues.Nodes[i]
 		for _, h := range n.History.Nodes {

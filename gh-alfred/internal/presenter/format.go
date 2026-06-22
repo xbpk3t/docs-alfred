@@ -12,7 +12,7 @@ import (
 // FormatAlfredItems builds Alfred items for the given repos.
 // When query is non-empty and no repos match, a "Search GitHub" fallback item is appended.
 func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredItem {
-	var items []wf.AlfredItem
+	items := make([]wf.AlfredItem, 0)
 
 	for _, repo := range repos {
 		fullName := repo.FullName()

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -119,8 +120,23 @@ type huntRunConfig struct {
 	max             int
 	perCat          int
 	seedLimit       int
+	providerMax     int
 	newOnly         bool
 	dryRun          bool
+}
+
+// ApiKey returns the API key for the given provider.
+func (hc *huntRunConfig) ApiKey(provider huntProvider) string {
+	return hc.apiKeys[provider]
+}
+
+// huntCategoryContext holds per-category ephemeral state passed through the processing pipeline.
+type huntCategoryContext struct {
+	categoryType string
+	seedURLs     []string
+	seedDescs    []string
+	recentTopics []string
+	providerMax  int
 }
 
 // -- Default blocklist --
@@ -265,6 +281,7 @@ func initHuntRun(opts *struct {
 		max:             maxVal,
 		perCat:          perCatVal,
 		seedLimit:       seedLimitVal,
+		providerMax:     opts.providerMax,
 		newOnly:         opts.newOnly || cfg.HuntConfig.NewOnly,
 		dryRun:          opts.dryRun,
 		now:             now,
@@ -285,8 +302,7 @@ func runHunt(opts *struct {
 	}
 
 	for _, category := range hc.categories {
-		processCategory(category, hc.providerNames, hc.seedLimit, hc.perCat, opts.providerMax,
-			hc.newOnly, hc.report, hc.state, hc.blockedSet, hc.now, hc.providerWeights, hc.typeWeights, hc.apiKeys)
+		processCategory(category, hc)
 	}
 
 	sortCandidatesByScore(hc.report.Candidates)
@@ -414,20 +430,10 @@ func filterByExcept(categories []rss.FeedsDetail, except map[string]bool) []rss.
 	})
 }
 
-func processCategory(
-	category rss.FeedsDetail,
-	providerNames []huntProvider,
-	seedLimit, perCat, providerMax int,
-	newOnly bool,
-	report *huntReport,
-	state *huntState,
-	blockedSet map[string]bool,
-	now time.Time,
-	providerWeights, typeWeights map[string]float64,
-	apiKeys map[huntProvider]string,
-) {
+func processCategory(category rss.FeedsDetail, hc *huntRunConfig) {
 	slog.Info("Scanning category", "type", category.Type)
 
+	seedLimit := hc.seedLimit
 	if seedLimit <= 0 {
 		seedLimit = 10
 	}
@@ -436,18 +442,25 @@ func processCategory(
 		return
 	}
 
+	perCat := hc.perCat
 	if perCat <= 0 {
 		perCat = 10
 	}
+	providerMax := hc.providerMax
 	if providerMax <= 0 {
 		providerMax = perCat * 2
 	}
 
-	recentTopics := enrichTopics(category.Feeds)
+	catCtx := huntCategoryContext{
+		categoryType: category.Type,
+		seedURLs:     seedURLs,
+		seedDescs:    seedDescs,
+		recentTopics: enrichTopics(category.Feeds),
+		providerMax:  providerMax,
+	}
 
-	for _, provider := range providerNames {
-		processCategoryProvider(provider, category.Type, seedURLs, seedDescs, providerMax,
-			recentTopics, report, state, blockedSet, newOnly, now, providerWeights, typeWeights, apiKeys)
+	for _, provider := range hc.providerNames {
+		processCategoryProvider(provider, &catCtx, hc)
 	}
 }
 
@@ -470,30 +483,17 @@ func buildSeeds(category rss.FeedsDetail, seedLimit int) (seedURLs, seedDescs []
 	return
 }
 
-func processCategoryProvider(
-	provider huntProvider,
-	categoryType string,
-	seedURLs, seedDescs []string,
-	providerMax int,
-	recentTopics []string,
-	report *huntReport,
-	state *huntState,
-	blockedSet map[string]bool,
-	newOnly bool,
-	now time.Time,
-	providerWeights, typeWeights map[string]float64,
-	apiKeys map[huntProvider]string,
-) {
-	candidates := discoverWithProvider(provider, categoryType, seedURLs, seedDescs, providerMax, recentTopics, apiKeys[provider])
-	report.Stats.RawCandidates += len(candidates)
+func processCategoryProvider(provider huntProvider, catCtx *huntCategoryContext, hc *huntRunConfig) {
+	candidates := discoverWithProvider(provider, catCtx, hc.ApiKey(provider))
+	hc.report.Stats.RawCandidates += len(candidates)
 	if len(candidates) > 0 {
-		report.Stats.SuccessfulCalls++
+		hc.report.Stats.SuccessfulCalls++
 	}
-	report.Stats.ProviderCalls++
+	hc.report.Stats.ProviderCalls++
 
-	before := len(report.Candidates)
-	processCandidates(candidates, provider, categoryType, report, state, blockedSet, newOnly, now, providerWeights, typeWeights)
-	report.Stats.FilteredCandidates += len(candidates) - (len(report.Candidates) - before)
+	before := len(hc.report.Candidates)
+	processCandidates(candidates, provider, catCtx.categoryType, hc)
+	hc.report.Stats.FilteredCandidates += len(candidates) - (len(hc.report.Candidates) - before)
 }
 
 func enrichTopics(urls []rss.Feeds) []string {
@@ -524,60 +524,50 @@ func enrichTopics(urls []rss.Feeds) []string {
 	return topics
 }
 
-func processCandidates(
-	candidates []huntCandidate,
-	provider huntProvider,
-	category string,
-	report *huntReport,
-	state *huntState,
-	blockedSet map[string]bool,
-	newOnly bool,
-	now time.Time,
-	providerWeights, typeWeights map[string]float64,
-) {
+func processCandidates(candidates []huntCandidate, provider huntProvider, category string, hc *huntRunConfig) {
 	for ci := range candidates {
 		c := &candidates[ci]
 		c.NormalizedURL = normalizeURL(c.URL)
 		c.Domain = extractDomain(c.URL)
 
-		if blockedSet[c.Domain] || isBlocked(c.Domain, blockedSet) {
+		if hc.blockedSet[c.Domain] || isBlocked(c.Domain, hc.blockedSet) {
 			continue
 		}
 
-		if _, muted := state.Muted[c.NormalizedURL]; muted {
+		if _, muted := hc.state.Muted[c.NormalizedURL]; muted {
 			continue
 		}
-		if _, muted := state.Muted[c.Domain]; muted {
-			continue
-		}
-
-		if !processCandidateSeen(c, state, newOnly, now) {
+		if _, muted := hc.state.Muted[c.Domain]; muted {
 			continue
 		}
 
-		c.Score = computeCandidateScore(c, providerWeights, typeWeights)
+		if !processCandidateSeen(c, hc) {
+			continue
+		}
 
-		report.Candidates = append(report.Candidates, *c)
-		report.Stats.AcceptedCandidates++
+		c.Score = computeCandidateScore(c, hc)
+
+		hc.report.Candidates = append(hc.report.Candidates, *c)
+		hc.report.Stats.AcceptedCandidates++
 	}
 }
 
-func processCandidateSeen(c *huntCandidate, state *huntState, newOnly bool, now time.Time) bool {
-	if rec, ok := state.Seen[c.NormalizedURL]; ok {
+func processCandidateSeen(c *huntCandidate, hc *huntRunConfig) bool {
+	if rec, ok := hc.state.Seen[c.NormalizedURL]; ok {
 		c.IsNew = false
 		c.SeenCount = rec.Count
 		c.FirstSeenAt = rec.FirstSeenAt
-		if newOnly {
+		if hc.newOnly {
 			return false
 		}
 	} else {
 		c.IsNew = true
-		if state.Seen == nil {
-			state.Seen = make(map[string]huntSeenRecord)
+		if hc.state.Seen == nil {
+			hc.state.Seen = make(map[string]huntSeenRecord)
 		}
-		state.Seen[c.NormalizedURL] = huntSeenRecord{
-			FirstSeenAt: now.Format(time.RFC3339),
-			LastSeenAt:  now.Format(time.RFC3339),
+		hc.state.Seen[c.NormalizedURL] = huntSeenRecord{
+			FirstSeenAt: hc.now.Format(time.RFC3339),
+			LastSeenAt:  hc.now.Format(time.RFC3339),
 			Count:       1,
 		}
 	}
@@ -585,12 +575,12 @@ func processCandidateSeen(c *huntCandidate, state *huntState, newOnly bool, now 
 	return true
 }
 
-func computeCandidateScore(c *huntCandidate, providerWeights, typeWeights map[string]float64) float64 {
-	pw := providerWeights[string(c.Provider)]
+func computeCandidateScore(c *huntCandidate, hc *huntRunConfig) float64 {
+	pw := hc.providerWeights[string(c.Provider)]
 	if pw == 0 {
 		pw = 0.8
 	}
-	tw := typeWeights[string(c.CandidateType)]
+	tw := hc.typeWeights[string(c.CandidateType)]
 	if tw == 0 {
 		tw = 0.5
 	}
@@ -617,34 +607,30 @@ func sortCandidatesByScore(candidates []huntCandidate) {
 
 // -- Provider implementations --
 
-func discoverWithProvider(
-	provider huntProvider, category string,
-	seedURLs, seedDescs []string, maxResults int, recentTopics []string,
-	apiKey string,
-) []huntCandidate {
+func discoverWithProvider(provider huntProvider, catCtx *huntCategoryContext, apiKey string) []huntCandidate {
 	switch provider {
 	case providerExa:
 
-		return discoverExa(category, seedURLs, seedDescs, maxResults, recentTopics, apiKey)
+		return discoverExa(catCtx, apiKey)
 	case providerTavily:
 
-		return discoverTavily(category, seedURLs, seedDescs, maxResults, recentTopics, apiKey)
+		return discoverTavily(catCtx, apiKey)
 	}
 
 	return nil
 }
 
-func discoverExa(category string, seedURLs, seedDescs []string, maxResults int, recentTopics []string, apiKey string) []huntCandidate {
+func discoverExa(catCtx *huntCategoryContext, apiKey string) []huntCandidate {
 	if apiKey == "" {
 		return nil
 	}
 
-	query := buildDiscoveryQuery(category, seedURLs, seedDescs, recentTopics)
+	query := buildDiscoveryQuery(catCtx.categoryType, catCtx.seedURLs, catCtx.seedDescs, catCtx.recentTopics)
 
 	payload := map[string]any{
 		"query":      query,
 		"type":       "neural",
-		"numResults": maxResults,
+		"numResults": catCtx.providerMax,
 		"contents": map[string]any{
 			"text":       true,
 			"highlights": true,
@@ -678,11 +664,11 @@ func discoverExa(category string, seedURLs, seedDescs []string, maxResults int, 
 		candidates = append(candidates, huntCandidate{
 			URL:           r.URL,
 			Title:         r.Title,
-			Category:      category,
+			Category:      catCtx.categoryType,
 			CandidateType: classifyCandidate(r.URL, r.Title),
 			Provider:      providerExa,
-			Reason:        buildReason(category, seedDescs, "Exa", summary),
-			EvidenceURLs:  seedURLs[:min(3, len(seedURLs))],
+			Reason:        buildReason(catCtx.categoryType, catCtx.seedDescs, "Exa", summary),
+			EvidenceURLs:  catCtx.seedURLs[:min(3, len(catCtx.seedURLs))],
 			Confidence:    normalizeConfidence(r.Score, 0.72),
 		})
 	}
@@ -690,18 +676,18 @@ func discoverExa(category string, seedURLs, seedDescs []string, maxResults int, 
 	return candidates
 }
 
-func discoverTavily(category string, seedURLs, seedDescs []string, maxResults int, recentTopics []string, apiKey string) []huntCandidate {
+func discoverTavily(catCtx *huntCategoryContext, apiKey string) []huntCandidate {
 	if apiKey == "" {
 		return nil
 	}
 
-	query := buildTavilyQuery(category, seedURLs, recentTopics)
+	query := buildTavilyQuery(catCtx.categoryType, catCtx.seedURLs, catCtx.recentTopics)
 
 	payload := map[string]any{
 		"api_key":             apiKey, // Tavily: api_key in JSON body
 		"query":               query,
 		"search_depth":        "advanced",
-		"max_results":         maxResults,
+		"max_results":         catCtx.providerMax,
 		"include_answer":      false,
 		"include_raw_content": false,
 	}
@@ -729,11 +715,11 @@ func discoverTavily(category string, seedURLs, seedDescs []string, maxResults in
 		candidates = append(candidates, huntCandidate{
 			URL:           r.URL,
 			Title:         r.Title,
-			Category:      category,
+			Category:      catCtx.categoryType,
 			CandidateType: classifyCandidate(r.URL, r.Title),
 			Provider:      providerTavily,
-			Reason:        buildReason(category, seedDescs, "Tavily", r.Content),
-			EvidenceURLs:  seedURLs[:min(3, len(seedURLs))],
+			Reason:        buildReason(catCtx.categoryType, catCtx.seedDescs, "Tavily", r.Content),
+			EvidenceURLs:  catCtx.seedURLs[:min(3, len(catCtx.seedURLs))],
 			Confidence:    normalizeConfidence(r.Score, 0.62),
 		})
 	}
@@ -918,13 +904,19 @@ func writeHuntReports(report *huntReport, mdPath, htmlPath, jsonPath string) {
 
 		return
 	}
-	_ = fileutil.AtomicWriteFile(jsonPath, jsonData, fileutil.FilePermPrivate)
+	if err := fileutil.AtomicWriteFile(jsonPath, jsonData, fileutil.FilePermPrivate); err != nil {
+		slog.Warn("Failed to write JSON report", "path", jsonPath, "error", err)
+	}
 
 	mdContent := renderHuntMarkdown(report)
-	_ = fileutil.AtomicWriteFile(mdPath, []byte(mdContent), fileutil.FilePermPrivate)
+	if err := fileutil.AtomicWriteFile(mdPath, []byte(mdContent), fileutil.FilePermPrivate); err != nil {
+		slog.Warn("Failed to write MD report", "path", mdPath, "error", err)
+	}
 
 	htmlContent := renderHuntHTML(report)
-	_ = fileutil.AtomicWriteFile(htmlPath, []byte(htmlContent), fileutil.FilePermPrivate)
+	if err := fileutil.AtomicWriteFile(htmlPath, []byte(htmlContent), fileutil.FilePermPrivate); err != nil {
+		slog.Warn("Failed to write HTML report", "path", htmlPath, "error", err)
+	}
 
 	fmt.Fprintln(os.Stdout, mdContent) //nolint:errcheck
 }
@@ -1000,7 +992,7 @@ func formatConfidence(f float64) string {
 		return ""
 	}
 
-	return fmt.Sprintf("%.2f", f)
+	return strconv.FormatFloat(f, 'f', 2, 64)
 }
 
 func renderHuntHTML(report *huntReport) string {

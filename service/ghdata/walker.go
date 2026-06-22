@@ -50,7 +50,7 @@ func WalkGhRepos(ghRoot string, fn func(WalkerEvent) error) error {
 		relPath, _ := filepath.Rel(ghRoot, absPath)
 
 		if err := processYAMLFile(absPath, relPath, fn); err != nil {
-			return err
+			return fmt.Errorf("process %s: %w", relPath, err)
 		}
 	}
 
@@ -62,7 +62,7 @@ func processYAMLFile(absPath, relPath string, fn func(WalkerEvent) error) error 
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		if err2 := fn(WalkerEvent{Type: evUnreadable, File: relPath}); err2 != nil {
-			return err2
+			return fmt.Errorf("callback for unreadable %s: %w", relPath, err2)
 		}
 
 		return nil
@@ -71,7 +71,7 @@ func processYAMLFile(absPath, relPath string, fn func(WalkerEvent) error) error 
 	content := string(data)
 	if strings.TrimSpace(content) == "" {
 		if err2 := fn(WalkerEvent{Type: evEmpty, File: relPath}); err2 != nil {
-			return err2
+			return fmt.Errorf("callback for empty %s: %w", relPath, err2)
 		}
 
 		return nil
@@ -79,7 +79,7 @@ func processYAMLFile(absPath, relPath string, fn func(WalkerEvent) error) error 
 
 	lineCount := len(strings.Split(strings.TrimSuffix(content, "\n"), "\n"))
 	if err2 := fn(WalkerEvent{Type: evFile, File: relPath, Content: content, LineCount: lineCount}); err2 != nil {
-		return err2
+		return fmt.Errorf("callback for file %s: %w", relPath, err2)
 	}
 
 	filenameStem := strings.TrimSuffix(filepath.Base(absPath), filepath.Ext(absPath))
@@ -95,7 +95,7 @@ func processYAMLContent(content, relPath, filenameStem string, fn func(WalkerEve
 		var doc any
 		if err := decoder.Decode(&doc); err != nil {
 			if !errors.Is(err, io.EOF) {
-				return err
+				return fmt.Errorf("decode YAML doc %d in %s: %w", docIndex, relPath, err)
 			}
 
 			break
@@ -105,7 +105,7 @@ func processYAMLContent(content, relPath, filenameStem string, fn func(WalkerEve
 		}
 
 		if err := processYAMLDoc(doc, relPath, filenameStem, fn, docIndex); err != nil {
-			return err
+			return fmt.Errorf("process doc %d in %s: %w", docIndex, relPath, err)
 		}
 		docIndex++
 	}
@@ -127,11 +127,11 @@ func processYAMLDoc(doc any, relPath, filenameStem string, fn func(WalkerEvent) 
 		}
 
 		if err := emitSectionEvent(fn, relPath, filenameStem, sectionIdx, section); err != nil {
-			return err
+			return fmt.Errorf("section %d in %s: %w", sectionIdx, relPath, err)
 		}
 
 		if err := emitRepoEvents(fn, relPath, filenameStem, sectionIdx, section); err != nil {
-			return err
+			return fmt.Errorf("repos in section %d of %s: %w", sectionIdx, relPath, err)
 		}
 	}
 

@@ -549,9 +549,8 @@ func isPodcastLikeURL(lowerURL string) bool {
 }
 
 func isRSSFeedLike(lowerURL string) bool {
-	parsed, err := url.Parse(lowerURL)
 	path := lowerURL
-	if err == nil {
+	if parsed, err := url.Parse(lowerURL); err == nil {
 		path = strings.ToLower(parsed.Path)
 	}
 	path = strings.TrimRight(path, "/")
@@ -561,9 +560,8 @@ func isRSSFeedLike(lowerURL string) bool {
 }
 
 func isDirectAudioURL(lowerURL string) bool {
-	parsed, err := url.Parse(lowerURL)
 	urlPath := lowerURL
-	if err == nil {
+	if parsed, err := url.Parse(lowerURL); err == nil {
 		urlPath = strings.ToLower(parsed.Path)
 	}
 	for _, suffix := range []string{".mp3", ".m4a", ".aac", ".wav", ".flac", ".ogg", ".opus"} {

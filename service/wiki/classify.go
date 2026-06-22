@@ -729,7 +729,7 @@ func metadataToMap(m *EntryMetadata) map[string]string {
 	if m == nil {
 		return nil
 	}
-	kv := make(map[string]string)
+	kv := make(map[string]string, 2)
 	for _, f := range [...][2]string{
 		{"Type", m.ContentType},
 		{"quality", m.Quality},

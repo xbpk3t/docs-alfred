@@ -835,7 +835,8 @@ func (s *NewsletterService) generateEmailSubject(tplType TemplateType) string {
 type feedHealthStatus int
 
 const (
-	healthOK feedHealthStatus = iota
+	healthInvalid feedHealthStatus = iota
+	healthOK
 	healthStale
 	healthFailed
 )

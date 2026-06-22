@@ -14,6 +14,12 @@ type ContentDriver interface {
 	FetchContent(ctx context.Context, urlStr string, contentType string) *ContentFetchResult
 }
 
+// Compile-time interface assertions.
+var (
+	_ ContentDriver = (*openCLIDriver)(nil)
+	_ ContentDriver = (*httpDriver)(nil)
+)
+
 // NewDriver creates a ContentDriver by name.
 func NewDriver(name string, opts DriverOptions) (ContentDriver, error) {
 	switch name {

@@ -377,7 +377,10 @@ func sendBriefEmptyEmail(cfg *internal.Config, subject, body string, dryRun bool
 	fullSubject := fmt.Sprintf("%s · %s %s", subject, now.ToDateString(), now.ToShortWeekString())
 	doc := md.NewDocument()
 	doc.Add(md.Paragraph(body))
-	htmlBody, _ := doc.ToHTML()
+	htmlBody, err := doc.ToHTML()
+	if err != nil {
+		return fmt.Errorf("render morning empty email body: %w", err)
+	}
 
 	return sendOrWrite(cfg, fullSubject, htmlBody, "morning-empty", dryRun)
 }

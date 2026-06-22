@@ -41,6 +41,14 @@ type Provider interface {
 	Fetch(ctx context.Context, ep *EpisodeRef) (*TranscriptResult, error)
 }
 
+// Compile-time interface assertions.
+var (
+	_ Provider = (*RssTranscriptProvider)(nil)
+	_ Provider = (*DescriptionLinkProvider)(nil)
+	_ Provider = (*AudioTranscriptionProvider)(nil)
+	_ Provider = (*XiaoyuzhouProvider)(nil)
+)
+
 const (
 	plaintextContentType = "plaintext"
 	vttContentType       = "vtt"
