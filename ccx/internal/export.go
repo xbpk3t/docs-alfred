@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,7 +222,12 @@ func generateFrontmatter(title string) string {
 		Source: "claude-code",
 	}
 
-	data, _ := yaml.Marshal(fm)
+	data, err := yaml.Marshal(fm)
+	if err != nil {
+		slog.Warn("Failed to marshal frontmatter, using fallback", "error", err)
+
+		return "---\n---\n\n"
+	}
 
 	return "---\n" + string(data) + "---\n\n"
 }

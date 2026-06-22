@@ -75,14 +75,14 @@ type route struct {
 // routes is the URL-to-opencli-command mapping table.
 // Ordered by specificity — more precise domains come first.
 var routes = []route{
-	{AdapterYoutube, subcmdVideo, []string{"youtube.com", "youtu.be"}},
-	{AdapterTwitter, "thread", []string{"x.com", "twitter.com", "mobile.twitter.com"}},
-	{AdapterWeb, subcmdRead, []string{"zhuanlan.zhihu.com"}},
-	{AdapterZhihu, "question", []string{"zhihu.com"}},
-	{AdapterBilibili, subcmdVideo, []string{"bilibili.com", "b23.tv"}},
-	{AdapterWeixin, "download", []string{"mp.weixin.qq.com"}},
-	{AdapterReddit, subcmdRead, []string{"reddit.com"}},
-	{AdapterHN, "item", []string{"news.ycombinator.com"}},
+	{adapter: AdapterYoutube, subcmd: subcmdVideo, domains: []string{"youtube.com", "youtu.be"}},
+	{adapter: AdapterTwitter, subcmd: "thread", domains: []string{"x.com", "twitter.com", "mobile.twitter.com"}},
+	{adapter: AdapterWeb, subcmd: subcmdRead, domains: []string{"zhuanlan.zhihu.com"}},
+	{adapter: AdapterZhihu, subcmd: "question", domains: []string{"zhihu.com"}},
+	{adapter: AdapterBilibili, subcmd: subcmdVideo, domains: []string{"bilibili.com", "b23.tv"}},
+	{adapter: AdapterWeixin, subcmd: "download", domains: []string{"mp.weixin.qq.com"}},
+	{adapter: AdapterReddit, subcmd: subcmdRead, domains: []string{"reddit.com"}},
+	{adapter: AdapterHN, subcmd: "item", domains: []string{"news.ycombinator.com"}},
 }
 
 // HasAdapter reports whether the URL matches a known site-specific adapter.

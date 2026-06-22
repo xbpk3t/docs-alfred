@@ -4,7 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha512"
 	"encoding/base64"
-	"log"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -100,21 +100,11 @@ func (g *Generator) sha512(sk, website string) string {
 
 	// 字符串转数组
 	source := strings.Split(hexTwo, "")
-	if source == nil {
-		log.Printf("Error converting hex string to array")
-
-		return ""
-	}
 	rule := strings.Split(hexThree, "")
-	if rule == nil {
-		log.Printf("Error converting hex string to array")
-
-		return ""
-	}
 
 	for i := range source {
 		if i >= len(rule) {
-			log.Printf("Error converting hex string to array")
+			slog.Warn("hex string length mismatch", "source_len", len(source), "rule_len", len(rule))
 
 			continue
 		}
@@ -141,14 +131,14 @@ func (g *Generator) generatePwd(hash string, length int, isPunc, isUseUpper bool
 	vm := goja.New()
 	_, err := vm.RunString(js)
 	if err != nil {
-		log.Println(err)
+		slog.Error("failed to run password JS", "error", err)
 
 		return ""
 	}
 	var seekPassword func(hash string, length, isPunc, isUpper int) string
 	err = vm.ExportTo(vm.Get("seekPassword"), &seekPassword)
 	if err != nil {
-		log.Println(err)
+		slog.Error("failed to export seekPassword function", "error", err)
 		panic(err)
 	}
 

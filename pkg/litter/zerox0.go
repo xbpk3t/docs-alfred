@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/http"
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
@@ -46,7 +47,7 @@ func (z *ZeroX0) Upload(ctx context.Context, filename, content string) (*Result,
 	}
 
 	body := resp.Body()
-	if resp.StatusCode() != 200 {
+	if resp.StatusCode() != http.StatusOK {
 		return nil, fmt.Errorf("upload failed (HTTP %d): %s", resp.StatusCode(), string(body))
 	}
 

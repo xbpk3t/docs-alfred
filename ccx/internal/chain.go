@@ -361,7 +361,7 @@ func saveChainToFile(projectDir string, chain []ChainRecord) error {
 
 	file, err := os.Create(filepath.Clean(chainFile))
 	if err != nil {
-		return err
+		return fmt.Errorf("create chain file: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 
@@ -371,13 +371,13 @@ func saveChainToFile(projectDir string, chain []ChainRecord) error {
 	for _, record := range chain {
 		data, err := json.Marshal(record)
 		if err != nil {
-			return err
+			return fmt.Errorf("marshal chain record: %w", err)
 		}
 		if _, err := writer.Write(data); err != nil {
-			return err
+			return fmt.Errorf("write chain record: %w", err)
 		}
 		if _, err := writer.WriteString("\n"); err != nil {
-			return err
+			return fmt.Errorf("write chain newline: %w", err)
 		}
 	}
 

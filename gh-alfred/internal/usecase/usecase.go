@@ -26,8 +26,7 @@ func RunSearch(input SearchInput) (*SearchResult, error) {
 	manager := ghindex.NewManager(input.CachePath, input.ConfigURL)
 
 	if input.MaxAge != "" {
-		d, err := time.ParseDuration(input.MaxAge)
-		if err == nil {
+		if d, err := time.ParseDuration(input.MaxAge); err == nil {
 			manager.SetTTL(d)
 		}
 	}

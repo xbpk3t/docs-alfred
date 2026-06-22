@@ -52,6 +52,9 @@ type Queryer interface {
 	Query(ctx context.Context, sql string, params []any) (QueryResult, error)
 }
 
+// Compile-time interface assertion.
+var _ Queryer = (*CloudflareQueryer)(nil)
+
 type QueryResult struct {
 	RowsWritten int64
 }

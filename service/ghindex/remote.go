@@ -2,6 +2,7 @@ package ghindex
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -111,7 +112,7 @@ func (m *Manager) LoadWithCacheTTL() error {
 		// Cache is stale: try to sync
 		if syncErr := m.Sync(); syncErr != nil {
 			// Sync failed: warn and use stale cache
-			fmt.Fprintf(os.Stderr, "WARNING: cache refresh failed, using stale cache: %v\n", syncErr)
+			slog.Warn("cache refresh failed, using stale cache", "error", syncErr)
 			if loadErr := m.loadFromFile(); loadErr != nil {
 				return fmt.Errorf("stale cache also unreadable: %w", loadErr)
 			}
@@ -125,7 +126,7 @@ func (m *Manager) LoadWithCacheTTL() error {
 	// Cache is fresh: load from file. If the cache was polluted by a bad
 	// remote response from an older version, ignore it and try to refresh.
 	if err := m.loadFromFile(); err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: cached config invalid, refreshing cache: %v\n", err)
+		slog.Warn("cached config invalid, refreshing cache", "error", err)
 		if syncErr := m.Sync(); syncErr != nil {
 			return fmt.Errorf("cached config invalid and sync failed: %w", syncErr)
 		}
@@ -147,7 +148,7 @@ func (m *Manager) LoadWithBackgroundSync() error {
 
 	if time.Since(info.ModTime()) > m.maxAge {
 		if err := backgroundSyncStarter(m); err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: background sync unavailable, using cached config: %v\n", err)
+			slog.Warn("background sync unavailable, using cached config", "error", err)
 		}
 	}
 

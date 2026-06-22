@@ -24,6 +24,13 @@ type Uploader interface {
 	Name() string
 }
 
+// Compile-time interface assertions.
+var (
+	_ Uploader = (*Litterbox)(nil)
+	_ Uploader = (*ZeroX0)(nil)
+	_ Uploader = (*FileIO)(nil)
+)
+
 // Fallback tries each uploader in order, returning the first success.
 // If all fail, it returns a combined error with every driver's failure reason.
 type Fallback struct {

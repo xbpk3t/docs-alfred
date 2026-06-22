@@ -151,10 +151,14 @@ func loadCredentials(path string) (*xiaoyuzhouCredentials, error) {
 func saveCredentials(path string, creds *xiaoyuzhouCredentials) error {
 	data, err := json.MarshalIndent(creds, "", "  ") //nolint:gosec // G117: intentional credential file write
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal credentials: %w", err)
 	}
 
-	return os.WriteFile(path, append(data, '\n'), 0o600)
+	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
+		return fmt.Errorf("write credential file %s: %w", path, err)
+	}
+
+	return nil
 }
 
 func refreshToken(ctx context.Context, creds *xiaoyuzhouCredentials) (*xiaoyuzhouCredentials, error) {

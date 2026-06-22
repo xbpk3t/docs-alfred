@@ -1,6 +1,7 @@
 package dotfiles
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -32,19 +33,32 @@ func RunCheck(dotfilesDir, ghDir string) (*CheckResult, error) {
 		prefix string
 	}
 
-	if info, err := os.Stat(basePath); err == nil && info.IsDir() {
-		sources = append(sources, struct {
-			path   string
-			prefix string
-		}{basePath, "home/base"})
-	} else {
+	info, err := os.Stat(basePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			result.Issues = append(result.Issues, checkutil.Issue{
+				File: basePath, Severity: checkutil.SeverityError,
+				Message: "home/base not found in dotfiles",
+			})
+
+			return result, nil
+		}
+
+		return result, fmt.Errorf("stat dotfiles base: %w", err)
+	}
+	if !info.IsDir() {
 		result.Issues = append(result.Issues, checkutil.Issue{
 			File: basePath, Severity: checkutil.SeverityError,
-			Message: "home/base not found in dotfiles",
+			Message: "home/base is not a directory",
 		})
 
 		return result, nil
 	}
+
+	sources = append(sources, struct {
+		path   string
+		prefix string
+	}{basePath, "home/base"})
 
 	if info, err := os.Stat(corePath); err == nil && info.IsDir() {
 		sources = append(sources, struct {
@@ -83,7 +97,7 @@ func compareCategories(result *CheckResult, dfCats map[string]bool, ghCats []str
 
 	for cat := range allCats {
 		hasDf := dfCats[cat]
-		hasGh := contains(ghCats, cat)
+		hasGh := slices.Contains(ghCats, cat)
 
 		if hasDf && hasGh {
 			result.SharedCount++
@@ -218,8 +232,4 @@ func isYAMLFileNoDotfiles(path string) bool {
 	}
 
 	return true
-}
-
-func contains(slice []string, s string) bool {
-	return slices.Contains(slice, s)
 }

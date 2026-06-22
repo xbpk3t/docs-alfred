@@ -73,7 +73,15 @@ func lockPath(path string) func() {
 
 	mu.Lock()
 
-	return mu.Unlock
+	return func() {
+		mu.Unlock()
+		// Clean up the map entry if no other goroutine is waiting.
+		pathLocks.mu.Lock()
+		if pathLocks.locks[key] == mu {
+			delete(pathLocks.locks, key)
+		}
+		pathLocks.mu.Unlock()
+	}
 }
 
 // WriteSummary writes a structured summary.md entry with YAML frontmatter.

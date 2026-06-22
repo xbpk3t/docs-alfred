@@ -310,7 +310,10 @@ func sendBriefEveningEmpty(cfg *internal.Config, dryRun bool) error {
 	subject := fmt.Sprintf("🌙 Linear 今日收获 · %s %s", now.ToDateString(), now.ToShortWeekString())
 	doc := md.NewDocument()
 	doc.Add(md.Paragraph("今天没有完成记录 🎉"))
-	htmlBody, _ := doc.ToHTML()
+	htmlBody, err := doc.ToHTML()
+	if err != nil {
+		return fmt.Errorf("render evening empty email body: %w", err)
+	}
 
 	return sendOrWrite(cfg, subject, htmlBody, "evening-empty", dryRun)
 }

@@ -327,8 +327,7 @@ func IsTranscriptURL(rawURL string) bool {
 }
 
 func urlExtension(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err == nil {
+	if parsed, err := url.Parse(rawURL); err == nil {
 		return strings.ToLower(path.Ext(parsed.Path))
 	}
 

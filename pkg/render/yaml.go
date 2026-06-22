@@ -9,7 +9,8 @@ import (
 type ParseMode int
 
 const (
-	ParseSingle ParseMode = iota
+	ParseModeInvalid ParseMode = iota
+	ParseSingle
 	ParseMulti
 	ParseFlatten
 )

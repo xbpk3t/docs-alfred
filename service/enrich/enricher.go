@@ -108,6 +108,13 @@ type Enricher interface {
 	Enrich(ctx context.Context, name, publishAt string) (*EnrichFields, error)
 }
 
+// Compile-time interface assertions.
+var (
+	_ Enricher = (*TMDBMovieEnricher)(nil)
+	_ Enricher = (*TMDBTVEnricher)(nil)
+	_ Enricher = (*BooksEnricher)(nil)
+)
+
 // EnricherFor returns the appropriate enricher for the given resource type.
 func EnricherFor(rt ResourceType, apiKey string) Enricher {
 	switch rt {
