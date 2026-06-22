@@ -1,6 +1,7 @@
 package rss
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -504,7 +505,7 @@ func loadFeedFailureState(path string) (feedFailureState, error) {
 	if len(data) == 0 {
 		return state, nil
 	}
-	if err := fileutil.UnmarshalJSONInto(data, &state); err != nil {
+	if err := json.Unmarshal(data, &state); err != nil {
 		return feedFailureState{}, fmt.Errorf("parse feed failure state: %w", err)
 	}
 	if state.Feeds == nil {

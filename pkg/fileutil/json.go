@@ -14,7 +14,7 @@ func ReadJSONFile[T any](path string) (T, error) {
 	if err != nil {
 		return value, fmt.Errorf("read json %s: %w", path, err)
 	}
-	if err := UnmarshalJSONInto(data, &value); err != nil {
+	if err := json.Unmarshal(data, &value); err != nil {
 		return value, fmt.Errorf("parse json %s: %w", path, err)
 	}
 
@@ -24,16 +24,11 @@ func ReadJSONFile[T any](path string) (T, error) {
 // UnmarshalJSON unmarshals JSON bytes into T.
 func UnmarshalJSON[T any](data []byte) (T, error) {
 	var value T
-	if err := UnmarshalJSONInto(data, &value); err != nil {
+	if err := json.Unmarshal(data, &value); err != nil {
 		return value, err
 	}
 
 	return value, nil
-}
-
-// UnmarshalJSONInto unmarshals JSON bytes into target.
-func UnmarshalJSONInto(data []byte, target any) error {
-	return json.Unmarshal(data, target)
 }
 
 // MarshalJSON marshals value as indented JSON using the repository's standard

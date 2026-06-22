@@ -5,7 +5,6 @@ package httputil
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -99,38 +98,12 @@ func PostJSONWithResult(ctx context.Context, url string, payload, result any, op
 	return resp.Body(), nil
 }
 
-// NewClient creates an HTTP client with the given timeout.
-// Retained for callers that need a plain *http.Client without retry.
-func NewClient(timeout time.Duration) *http.Client {
+// StdHTTPClient returns a plain *http.Client with the given timeout.
+// For third-party libraries that require *http.Client (e.g. gofeed, go-github).
+func StdHTTPClient(timeout time.Duration) *http.Client {
 	if timeout <= 0 {
 		timeout = DefaultClientTimeout
 	}
 
 	return &http.Client{Timeout: timeout}
-}
-
-// Get performs an HTTP GET and returns the response bytes.
-func Get(client *http.Client, url string) ([]byte, error) {
-	if client == nil {
-		client = NewClient(DefaultClientTimeout)
-	}
-
-	req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
-	if err != nil {
-		return nil, fmt.Errorf("create get request: %w", err)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("get %s: %w", url, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-
-		return nil, fmt.Errorf("GET %s: HTTP %d: %s", url, resp.StatusCode, string(respBody))
-	}
-
-	return io.ReadAll(resp.Body)
 }

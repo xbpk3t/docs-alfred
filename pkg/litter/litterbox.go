@@ -1,12 +1,9 @@
 package litter
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"mime/multipart"
 	"net/http"
 	"strings"
 
@@ -36,7 +33,11 @@ func NewLitterbox(expiration string) *Litterbox {
 func (l *Litterbox) Name() string { return "litterbox" }
 
 func (l *Litterbox) Upload(ctx context.Context, filename, content string) (*Result, error) {
-	buf, contentType, err := buildLitterboxMultipart(filename, content, l.Expiration)
+	extra := map[string]string{
+		"reqtype": "fileupload",
+		"time":    l.Expiration,
+	}
+	buf, contentType, err := buildMultipart("fileToUpload", filename, content, extra)
 	if err != nil {
 		return nil, err
 	}
@@ -62,28 +63,4 @@ func (l *Litterbox) Upload(ctx context.Context, filename, content string) (*Resu
 	}
 
 	return &Result{URL: url, Driver: "litterbox", Expiration: l.Expiration}, nil
-}
-
-func buildLitterboxMultipart(filename, content, expiration string) (*bytes.Buffer, string, error) {
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-
-	if err := w.WriteField("reqtype", "fileupload"); err != nil {
-		return nil, "", fmt.Errorf("write reqtype: %w", err)
-	}
-	if err := w.WriteField("time", expiration); err != nil {
-		return nil, "", fmt.Errorf("write time: %w", err)
-	}
-	fw, err := w.CreateFormFile("fileToUpload", filename)
-	if err != nil {
-		return nil, "", fmt.Errorf("create form file: %w", err)
-	}
-	if _, copyErr := io.Copy(fw, strings.NewReader(content)); copyErr != nil {
-		return nil, "", fmt.Errorf("copy content: %w", copyErr)
-	}
-	if closeErr := w.Close(); closeErr != nil {
-		return nil, "", fmt.Errorf("close multipart: %w", closeErr)
-	}
-
-	return &buf, w.FormDataContentType(), nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"slices"
 	"strconv"
@@ -503,7 +502,7 @@ func enrichTopics(urls []rss.Feeds) []string {
 			continue
 		}
 		fp := gofeed.NewParser()
-		fp.Client = &http.Client{Timeout: 10 * time.Second}
+		fp.Client = httputil.StdHTTPClient(10 * time.Second)
 		parsed, err := fp.ParseURL(u.Feed)
 		if err != nil {
 			continue

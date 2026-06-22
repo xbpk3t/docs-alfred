@@ -3,12 +3,12 @@ package rss
 import (
 	"context"
 	"log/slog"
-	"net/http"
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/mmcdole/gofeed"
+	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -17,20 +17,11 @@ import (
 const DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
 	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-// NewHTTPClient creates an HTTP client with timeout from config.
-func NewHTTPClient(cfg *Config) *http.Client {
-	return &http.Client{
-		Timeout: time.Duration(cfg.FeedConfig.Timeout) * time.Second,
-	}
-}
-
 // createFeedParser 创建Feed解析器.
 func createFeedParser(cfg *Config) *gofeed.Parser {
 	fp := gofeed.NewParser()
 	fp.UserAgent = DefaultUserAgent
-	fp.Client = &http.Client{
-		Timeout: time.Duration(cfg.FeedConfig.Timeout) * time.Second,
-	}
+	fp.Client = httputil.StdHTTPClient(time.Duration(cfg.FeedConfig.Timeout) * time.Second)
 
 	return fp
 }

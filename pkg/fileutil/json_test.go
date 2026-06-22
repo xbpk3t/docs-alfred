@@ -1,6 +1,7 @@
 package fileutil
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -52,14 +53,14 @@ func TestUnmarshalJSON(t *testing.T) {
 	require.Equal(t, 2, got["count"])
 }
 
-func TestUnmarshalJSONIntoPreservesExistingFields(t *testing.T) {
+func TestJSONUnmarshalPreservesExistingFields(t *testing.T) {
 	type state struct {
 		Version int               `json:"version"`
 		Items   map[string]string `json:"items"`
 	}
 
 	got := state{Version: 1}
-	require.NoError(t, UnmarshalJSONInto([]byte(`{"items":{"a":"b"}}`), &got))
+	require.NoError(t, json.Unmarshal([]byte(`{"items":{"a":"b"}}`), &got))
 	require.Equal(t, 1, got.Version)
 	require.Equal(t, "b", got.Items["a"])
 }

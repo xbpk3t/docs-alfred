@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
@@ -39,15 +39,21 @@ func parseASTFile(f *ast.File) []*ItemNode {
 	var items []*ItemNode
 	for _, doc := range f.Docs {
 		if doc == nil || doc.Body == nil {
+			slog.Debug("skipping empty YAML document")
+
 			continue
 		}
 		seq, ok := doc.Body.(*ast.SequenceNode)
 		if !ok {
+			slog.Debug("skipping non-sequence YAML body", "type", fmt.Sprintf("%T", doc.Body))
+
 			continue
 		}
 		for i, val := range seq.Values {
 			mapping, ok := val.(*ast.MappingNode)
 			if !ok {
+				slog.Debug("skipping non-mapping YAML value", "type", fmt.Sprintf("%T", val))
+
 				continue
 			}
 			items = append(items, &ItemNode{
@@ -76,7 +82,6 @@ func (it *ItemNode) GetName() string {
 }
 
 // GetPublishAt returns the value of the "publishAt" field (if any).
-// Handles both string and integer node types.
 func (it *ItemNode) GetPublishAt() string {
 	val := yamlutil.MappingValue(it.Node, "publishAt")
 	if val == nil {
@@ -94,7 +99,6 @@ func (it *ItemNode) GetPublishAt() string {
 }
 
 // GetField returns the string value of a field, or "" if it doesn't exist.
-// Handles both string and integer node types.
 func (it *ItemNode) GetField(field string) string {
 	val := yamlutil.MappingValue(it.Node, field)
 	if yamlutil.IsNullOrEmptyString(val) {
@@ -123,6 +127,10 @@ func (it *ItemNode) FieldExists(field string) bool {
 func (it *ItemNode) SetField(key, value string) error {
 	if key == "" || value == "" {
 		return errors.New("key and value must be non-empty")
+	}
+	// Validate list fields: must use 、as separator
+	if listFieldValues[key] && strings.Contains(value, ",") {
+		return fmt.Errorf("list field %q must use 、as separator, not comma", key)
 	}
 	it.pending[key] = value
 
@@ -270,9 +278,10 @@ func marshalPendingFields(pending map[string]string) ([]string, error) {
 		v := pending[k]
 		var value any
 		if listFieldValues[k] {
+			// List fields: caller must provide 、-separated values
 			value = strings.Split(v, "、")
 		} else {
-			value = maybeInt(v)
+			value = v
 		}
 		m := map[string]any{k: value}
 		yamlBytes, err := yaml.Marshal(m)
@@ -294,14 +303,3 @@ var listFieldValues = map[string]bool{
 
 // readFile is a variable so it can be overridden in tests.
 var readFile = os.ReadFile
-
-// maybeInt returns s as an int if s is a pure integer string,
-// or s itself otherwise. This keeps numeric YAML values unquoted.
-func maybeInt(s string) any {
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return s
-	}
-
-	return n
-}

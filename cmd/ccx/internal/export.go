@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -198,7 +197,10 @@ func extractUserMessages(messages []session.Message) []string {
 
 // writeExportFile writes the final markdown file with Turn-structured formatting.
 func writeExportFile(outputPath, title string, messages []session.Message) error {
-	frontmatter := generateFrontmatter(title)
+	frontmatter, err := generateFrontmatter(title)
+	if err != nil {
+		return err
+	}
 	body := session.FormatMessages(messages)
 	finalContent := frontmatter + body
 
@@ -214,7 +216,7 @@ func writeExportFile(outputPath, title string, messages []session.Message) error
 }
 
 // generateFrontmatter generates YAML frontmatter for the wiki file.
-func generateFrontmatter(title string) string {
+func generateFrontmatter(title string) (string, error) {
 	fm := Frontmatter{
 		Type:   "research",
 		Title:  title,
@@ -224,12 +226,10 @@ func generateFrontmatter(title string) string {
 
 	data, err := yaml.Marshal(fm)
 	if err != nil {
-		slog.Warn("Failed to marshal frontmatter, using fallback", "error", err)
-
-		return "---\n---\n\n"
+		return "", fmt.Errorf("marshal frontmatter: %w", err)
 	}
 
-	return "---\n" + string(data) + "---\n\n"
+	return "---\n" + string(data) + "---\n\n", nil
 }
 
 // generateTitles generates a semantic title and an English filename-safe slug using AI.

@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"codeberg.org/readeck/go-readability/v2"
 	"github.com/PuerkitoBio/goquery"
@@ -19,7 +17,6 @@ import (
 // httpDriver fetches content via plain HTTP GET + readability extraction.
 // Suitable for VPS environments without a local browser.
 type httpDriver struct {
-	httpClient  *http.Client
 	maxBodySize int
 }
 
@@ -29,20 +26,13 @@ func newHTTPDriver(opts DriverOptions) *httpDriver {
 		maxBody = 5000
 	}
 
-	return &httpDriver{
-		maxBodySize: maxBody,
-		httpClient:  httputil.NewClient(30 * time.Second),
-	}
+	return &httpDriver{maxBodySize: maxBody}
 }
 
 func (d *httpDriver) Name() string { return "http-readability" }
 
 func (d *httpDriver) FetchContent(ctx context.Context, urlStr, contentType string) *ContentFetchResult {
-	timeout := httputil.DefaultClientTimeout
-	if d.httpClient != nil && d.httpClient.Timeout > 0 {
-		timeout = d.httpClient.Timeout
-	}
-	data, err := httputil.GetBytes(ctx, urlStr, httputil.RequestOptions{Timeout: timeout})
+	data, err := httputil.GetBytes(ctx, urlStr, httputil.RequestOptions{})
 	if err != nil {
 		failureKind := FailureFetch
 		errorStr := err.Error()

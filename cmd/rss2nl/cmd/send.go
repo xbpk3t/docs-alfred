@@ -23,6 +23,7 @@ import (
 	"github.com/tdewolff/minify/v2/html"
 	"github.com/xbpk3t/docs-alfred/internal/rss/feed"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"golang.org/x/sync/errgroup"
 )
@@ -844,7 +845,7 @@ const (
 func checkFeed(u *rss.Feeds, config *rss.Config, staleThreshold time.Duration) feedHealthStatus {
 	fp := gofeed.NewParser()
 	fp.UserAgent = rss.DefaultUserAgent
-	fp.Client = rss.NewHTTPClient(config)
+	fp.Client = httputil.StdHTTPClient(time.Duration(config.FeedConfig.Timeout) * time.Second)
 
 	parsed, err := fp.ParseURL(u.Feed)
 	if err != nil {

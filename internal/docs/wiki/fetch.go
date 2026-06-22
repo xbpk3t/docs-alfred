@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/cloudflare/ahocorasick"
+	"github.com/go-resty/resty/v2"
 	"github.com/google/go-github/v70/github"
 	"github.com/mmcdole/gofeed"
 	"github.com/samber/lo"
@@ -32,8 +32,7 @@ type ContentFetchResult struct {
 // Fetcher handles fetching content from various sources.
 type Fetcher struct {
 	driver       ContentDriver
-	GHClient     *http.Client
-	HTTPClient   *http.Client
+	GHClient     *resty.Client
 	GHBaseURL    string
 	MaxBodySize  int
 	MediaEnabled bool
@@ -55,8 +54,7 @@ func WithMediaEnabled(enabled bool) FetcherOption {
 // NewFetcher creates a new Fetcher with default settings.
 func NewFetcher(opts ...FetcherOption) *Fetcher {
 	f := &Fetcher{
-		GHClient:     httputil.NewClient(30 * time.Second),
-		HTTPClient:   httputil.NewClient(30 * time.Second),
+		GHClient:     httputil.NewRestyClient(30*time.Second, 0),
 		GHBaseURL:    "https://api.github.com",
 		MaxBodySize:  5000,
 		MediaEnabled: true,
@@ -161,7 +159,7 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFe
 }
 
 func (f *Fetcher) githubClient() (*github.Client, error) {
-	client := github.NewClient(f.GHClient)
+	client := github.NewClient(f.GHClient.GetClient())
 	client.UserAgent = "rss2nl-wiki"
 
 	baseURL := strings.TrimSpace(f.GHBaseURL)

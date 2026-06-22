@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -311,17 +312,7 @@ func (c *Classifier) classifyOnly(
 
 func parseClassifyOnlyResult(raw string) (*classifyOnlyResult, error) {
 	var result classifyOnlyResult
-	err := ai.UnmarshalStrictJSON(raw, &result)
-	if err != nil {
-		repaired := repairInvalidJSONStringEscapes(raw)
-		if repaired != raw {
-			if retryErr := ai.UnmarshalStrictJSON(repaired, &result); retryErr != nil {
-				return nil, fmt.Errorf("%w; repaired JSON parse failed: %w", err, retryErr)
-			}
-
-			return &result, nil
-		}
-
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		return nil, err
 	}
 
@@ -756,105 +747,11 @@ func metadataToMap(m *EntryMetadata) map[string]string {
 
 func parseAIClassification(raw string) (*aiClassification, error) {
 	var result aiClassification
-	err := ai.UnmarshalStrictJSON(raw, &result)
-	if err != nil {
-		// Try repair for common AI JSON escape issues.
-		repaired := repairInvalidJSONStringEscapes(raw)
-		if repaired == raw {
-			return nil, err
-		}
-		if retryErr := ai.UnmarshalStrictJSON(repaired, &result); retryErr != nil {
-			return nil, fmt.Errorf("%w; repaired JSON parse failed: %w", err, retryErr)
-		}
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		return nil, err
 	}
 
 	return &result, nil
-}
-
-// repairInvalidJSONStringEscapes fixes AI-generated JSON escape issues that sonic
-// doesn't handle natively. Sonic already tolerates unescaped \n, \r, \t in strings,
-// so this only repairs invalid backslash escapes (e.g. \k) and stray control chars.
-func repairInvalidJSONStringEscapes(raw string) string {
-	var b strings.Builder
-	b.Grow(len(raw))
-	inString := false
-
-	for i := 0; i < len(raw); i++ {
-		ch := raw[i]
-		if !inString {
-			b.WriteByte(ch)
-			if ch == '"' {
-				inString = true
-			}
-
-			continue
-		}
-		switch ch {
-		case '"':
-			b.WriteByte(ch)
-			inString = false
-		case '\\':
-			i = repairBackslash(raw, i, &b)
-		default:
-			if ch < 0x20 {
-				fmt.Fprintf(&b, `\u%04x`, ch)
-			} else {
-				b.WriteByte(ch)
-			}
-		}
-	}
-
-	return b.String()
-}
-
-// repairBackslash handles a backslash escape sequence starting at position i.
-// Valid JSON escapes are passed through; invalid ones are double-escaped.
-func repairBackslash(raw string, i int, b *strings.Builder) int {
-	if i+1 >= len(raw) {
-		b.WriteString(`\\`)
-
-		return i
-	}
-	next := raw[i+1]
-	if isValidJSONEscape(next) {
-		b.WriteByte('\\')
-		b.WriteByte(next)
-
-		return i + 1
-	}
-	if next == 'u' && i+5 < len(raw) && isHex4(raw[i+2:i+6]) {
-		b.WriteString(raw[i : i+6])
-
-		return i + 5
-	}
-	b.WriteString(`\\`)
-
-	return i
-}
-
-func isValidJSONEscape(ch byte) bool {
-	switch ch {
-	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
-		return true
-	}
-
-	return false
-}
-
-func isHex4(s string) bool {
-	if len(s) != 4 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F') {
-			continue
-		}
-
-		return false
-	}
-
-	return true
 }
 
 func (c *Classifier) validateAIClassification(

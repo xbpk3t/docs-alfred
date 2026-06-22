@@ -1,12 +1,9 @@
 package litter
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"mime/multipart"
 	"net/http"
 	"strings"
 
@@ -21,25 +18,16 @@ type FileIO struct{}
 func (f *FileIO) Name() string { return "fileio" }
 
 func (f *FileIO) Upload(ctx context.Context, filename, content string) (*Result, error) {
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-
-	fw, err := w.CreateFormFile("file", filename)
+	buf, contentType, err := buildMultipart("file", filename, content, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create form file: %w", err)
-	}
-	if _, copyErr := io.Copy(fw, strings.NewReader(content)); copyErr != nil {
-		return nil, fmt.Errorf("copy content: %w", copyErr)
-	}
-	if closeErr := w.Close(); closeErr != nil {
-		return nil, fmt.Errorf("close multipart: %w", closeErr)
+		return nil, err
 	}
 
 	resp, err := httputil.NewRestyClient(httputil.DefaultClientTimeout, httputil.DefaultMaxRetries).
 		R().
 		SetContext(ctx).
-		SetHeader("Content-Type", w.FormDataContentType()).
-		SetBody(&buf).
+		SetHeader("Content-Type", contentType).
+		SetBody(buf).
 		Post(fileioBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("upload request: %w", err)

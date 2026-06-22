@@ -583,6 +583,11 @@ func cleanFlushedInboxLine(line string) string {
 	for strings.Contains(line, "  ") {
 		line = strings.ReplaceAll(line, "  ", " ")
 	}
+	// Fix punctuation artifacts from URL removal.
+	if strings.Contains(line, "- ,") || strings.Contains(line, "- .") ||
+		strings.Contains(line, "- ;") || strings.Contains(line, "- :") {
+		slog.Debug("cleaning punctuation artifacts from flushed inbox line", "original", line)
+	}
 	line = strings.ReplaceAll(line, "- ,", "-")
 	line = strings.ReplaceAll(line, "- .", "-")
 	line = strings.ReplaceAll(line, "- ;", "-")

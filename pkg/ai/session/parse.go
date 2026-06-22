@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -71,7 +72,9 @@ func Parse(path string) ([]Message, error) {
 	// Allow reading lines up to 1MB (JSONL events can be large)
 	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
 
+	lineNum := 0
 	for scanner.Scan() {
+		lineNum++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
@@ -79,7 +82,9 @@ func Parse(path string) ([]Message, error) {
 
 		var raw json.RawMessage
 		if err := json.Unmarshal([]byte(line), &raw); err != nil {
-			continue // skip malformed lines
+			slog.Warn("skipping malformed JSONL line", "error", err, "line_num", lineNum)
+
+			continue
 		}
 
 		messages = append(messages, parseEvent(raw)...)

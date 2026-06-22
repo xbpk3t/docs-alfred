@@ -37,11 +37,10 @@ func TestParseAIClassificationAcceptsJSONObject(t *testing.T) {
 	assert.Equal(t, TypeDeepDive, parsed.WikiType)
 }
 
-func TestParseAIClassificationRepairsInvalidStringEscapes(t *testing.T) {
-	parsed, err := parseAIClassification(`{"topicPath":"ai/tool/demo","wikiType":"research","contentType":"text","summary":{"overview":"1. ok \3. bad","keyPoints":["p1"],"worthNoting":"n"},"confidence":0.9}`)
+func TestParseAIClassificationRejectsInvalidStringEscapes(t *testing.T) {
+	_, err := parseAIClassification(`{"topicPath":"ai/tool/demo","wikiType":"research","contentType":"text","summary":{"overview":"1. ok \3. bad","keyPoints":["p1"],"worthNoting":"n"},"confidence":0.9}`)
 
-	require.NoError(t, err)
-	assert.Equal(t, `1. ok \3. bad`, parsed.Summary.Overview)
+	require.Error(t, err)
 }
 
 func TestParseAIClassificationRejectsInvalidJSON(t *testing.T) {
