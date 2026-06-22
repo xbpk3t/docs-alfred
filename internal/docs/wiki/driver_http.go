@@ -11,7 +11,7 @@ import (
 
 	"codeberg.org/readeck/go-readability/v2"
 	"github.com/PuerkitoBio/goquery"
-	"github.com/xbpk3t/docs-alfred/pkg/htmlutil"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 )
@@ -135,7 +135,7 @@ func isHTTPBlockError(err error) bool {
 }
 
 func markdownFallbackBody(data []byte) string {
-	body, err := htmlutil.ToMarkdown(string(data))
+	body, err := md.HTMLToMarkdown(string(data))
 	if err == nil && strings.TrimSpace(body) != "" {
 		return body
 	}

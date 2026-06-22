@@ -2,11 +2,11 @@ package rss //nolint:revive
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/creasty/defaults"
 
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
-	"github.com/xbpk3t/docs-alfred/pkg/errcode"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
@@ -201,11 +201,11 @@ func wrapConfigLoadError(err error) error {
 
 	switch loadErr.Stage {
 	case configutil.StageRead:
-		return errcode.WithError(errcode.ErrReadConfig, loadErr.Err)
+		return fmt.Errorf("read config: %w", loadErr.Err)
 	case configutil.StageValidate:
-		return errcode.WithError(errcode.ErrValidateConfig, loadErr.Err)
+		return fmt.Errorf("validate config: %w", loadErr.Err)
 	default:
-		return errcode.WithError(errcode.ErrUnmarshalConfig, loadErr.Err)
+		return fmt.Errorf("unmarshal config: %w", loadErr.Err)
 	}
 }
 
