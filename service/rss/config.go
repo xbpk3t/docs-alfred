@@ -2,13 +2,12 @@ package rss //nolint:revive
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/creasty/defaults"
-	"github.com/go-playground/validator/v10"
 
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
 	"github.com/xbpk3t/docs-alfred/pkg/errcode"
+	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
 // Config 主配置结构.
@@ -32,15 +31,15 @@ type ResendConfig struct {
 
 // NewsletterConfig 新闻通讯配置.
 type NewsletterConfig struct {
-	Schedule            string `validate:"oneof=daily weekly" yaml:"schedule"`
+	Schedule            string `validate:"in:daily,weekly" yaml:"schedule"`
 	IsHideAuthorInTitle bool   `yaml:"isHideAuthorInTitle"`
 }
 
 // FeedConfig Feed相关配置.
 type FeedConfig struct {
-	Timeout   int `default:"30" validate:"gte=0" yaml:"timeout"`   // HTTP请求超时时间（秒）
-	MaxTries  int `default:"3"  validate:"gte=0" yaml:"maxTries"`  // 最大重试次数
-	FeedLimit int `default:"30" validate:"gte=0" yaml:"feedLimit"` // Feed数量限制
+	Timeout   int `default:"30" validate:"gte:0" yaml:"timeout"`   // HTTP请求超时时间（秒）
+	MaxTries  int `default:"3"  validate:"gte:0" yaml:"maxTries"`  // 最大重试次数
+	FeedLimit int `default:"30" validate:"gte:0" yaml:"feedLimit"` // Feed数量限制
 }
 
 type DashboardConfig struct {
@@ -216,16 +215,7 @@ func (c *Config) applyDefaults() {
 
 // Validate 验证通用配置（各命令共享的校验）.
 func (c *Config) Validate() error {
-	if err := validator.New().Struct(c); err != nil {
-		var validationErrors validator.ValidationErrors
-		if errors.As(err, &validationErrors) {
-			for _, validationErr := range validationErrors {
-				if validationErr.Namespace() == "Config.NewsletterConfig.Schedule" {
-					return fmt.Errorf("invalid schedule: %s", c.NewsletterConfig.Schedule)
-				}
-			}
-		}
-
+	if err := validator.Struct(c); err != nil {
 		return err
 	}
 

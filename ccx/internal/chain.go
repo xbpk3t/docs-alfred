@@ -25,11 +25,12 @@ type ChainRecord struct {
 
 // WalkSessionChain walks the session chain based on parentUuid relationships.
 // This finds the main session and all its sub-agents (sidechains).
-func WalkSessionChain() ([]ChainRecord, error) {
+// If sessionIDOverride is non-empty, it is used directly instead of auto-detection.
+func WalkSessionChain(sessionIDOverride string) ([]ChainRecord, error) {
 	projectDir := getProjectDir()
 
 	// Get session ID
-	sessionID, err := getSessionID(projectDir)
+	sessionID, err := getSessionID(projectDir, sessionIDOverride)
 	if err != nil {
 		return nil, fmt.Errorf("get session ID: %w", err)
 	}
@@ -227,13 +228,19 @@ func getProjectDir() string {
 }
 
 // getSessionID returns the session ID.
-func getSessionID(projectDir string) (string, error) {
-	// Try environment variable first
+// Priority: sessionIDOverride > CLAUDE_CODE_SESSION_ID env var > error.
+func getSessionID(projectDir, sessionIDOverride string) (string, error) {
+	// 1. Explicit override (e.g. --session flag)
+	if sessionIDOverride != "" {
+		return sessionIDOverride, nil
+	}
+
+	// 2. Environment variable set by Claude Code
 	if sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID"); sessionID != "" {
 		return sessionID, nil
 	}
 
-	// Fallback: find the most recently modified JSONL in the session dir
+	// 3. No session ID available — report all sessions and exit
 	pathKey := strings.ReplaceAll(projectDir, "/", "-")
 	sessionDir := filepath.Join(os.Getenv("HOME"), ".claude", "projects", pathKey)
 
@@ -242,30 +249,19 @@ func getSessionID(projectDir string) (string, error) {
 		return "", fmt.Errorf("read session dir: %w", err)
 	}
 
-	var mostRecent string
-	var mostRecentMod int64
-
+	var sessions []string
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
 			continue
 		}
-
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-
-		if info.ModTime().UnixMilli() > mostRecentMod {
-			mostRecentMod = info.ModTime().UnixMilli()
-			mostRecent = entry.Name()
-		}
+		sessions = append(sessions, strings.TrimSuffix(entry.Name(), ".jsonl"))
 	}
 
-	if mostRecent == "" {
+	if len(sessions) == 0 {
 		return "", fmt.Errorf("no session files found in %s", sessionDir)
 	}
 
-	return strings.TrimSuffix(mostRecent, ".jsonl"), nil
+	return "", fmt.Errorf("no session ID specified (CLAUDE_CODE_SESSION_ID not set); use --session <id> to specify one; available sessions: %s", strings.Join(sessions, ", "))
 }
 
 // extractDisplay extracts the first user message as display text (max 80 chars).

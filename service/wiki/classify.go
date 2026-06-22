@@ -20,6 +20,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
+	"github.com/xbpk3t/docs-alfred/pkg/validator"
 	"github.com/xbpk3t/docs-alfred/service/ghindex"
 )
 
@@ -291,6 +292,10 @@ func (c *Classifier) classifyOnly(
 		return nil, fmt.Errorf("parse classify JSON: %w", err)
 	}
 
+	if err := validateClassifyResult(parsed); err != nil {
+		return nil, fmt.Errorf("validate classify result: %w", err)
+	}
+
 	// Convert to aiClassification for reuse of validation methods.
 	return &aiClassification{
 		TopicPath:         parsed.TopicPath,
@@ -321,6 +326,29 @@ func parseClassifyOnlyResult(raw string) (*classifyOnlyResult, error) {
 	}
 
 	return &result, nil
+}
+
+// validateClassifyResult validates the parsed classification result using struct tags.
+// Returns an error if any field violates its constraints (e.g., tags is not an array,
+// quality format is invalid, required fields are missing).
+func validateClassifyResult(result *classifyOnlyResult) error {
+	if result == nil {
+		return errors.New("nil classify result")
+	}
+
+	if result.Summary != nil {
+		if err := validator.Struct(result.Summary); err != nil {
+			return fmt.Errorf("summary: %w", err)
+		}
+	}
+
+	if result.Metadata != nil {
+		if err := validator.Struct(result.Metadata); err != nil {
+			return fmt.Errorf("metadata: %w", err)
+		}
+	}
+
+	return nil
 }
 
 type promptData struct {
@@ -583,24 +611,24 @@ func formatTopicCandidates(candidates []ghindex.TopicCandidate) string {
 
 // StructuredSummary holds the AI-generated summary broken into sections.
 type StructuredSummary struct {
-	Overview         string   `json:"overview"`
+	Overview         string   `json:"overview"                   validate:"required"`
 	WorthNoting      string   `json:"worthNoting"`
 	Detail           string   `json:"detail,omitempty"`
-	KeyPoints        []string `json:"keyPoints"`
+	KeyPoints        []string `json:"keyPoints"                  validate:"required|min_len:1"`
 	ActionableAdvice []string `json:"actionableAdvice,omitempty"`
 }
 
 // EntryMetadata holds additional metadata fields from AI classification.
 type EntryMetadata struct {
-	ContentType       string   `json:"contentType"`
-	Quality           string   `json:"quality,omitempty"`
+	ContentType       string   `json:"contentType"                 validate:"required|in:text,media,repo"`
+	Quality           string   `json:"quality,omitempty"           validate:"quality"`
 	Author            string   `json:"author,omitempty"`
 	Uncertainties     string   `json:"uncertainties,omitempty"`
-	Duration          string   `json:"duration,omitempty"`
-	TranscriptQuality string   `json:"transcriptQuality,omitempty"`
-	Verdict           string   `json:"verdict,omitempty"`
+	Duration          string   `json:"duration,omitempty"          validate:"duration"`
+	TranscriptQuality string   `json:"transcriptQuality,omitempty" validate:"in:good,fair,poor"`
+	Verdict           string   `json:"verdict,omitempty"           validate:"in:watch,skip,try"`
 	Language          string   `json:"language,omitempty"`
-	Tags              []string `json:"tags,omitempty"`
+	Tags              []string `json:"tags,omitempty"              validate:"required|min_len:3|max_len:8"`
 	Stars             int      `json:"stars,omitempty"`
 }
 

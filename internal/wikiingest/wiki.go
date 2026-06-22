@@ -13,12 +13,12 @@ import (
 
 	"github.com/avast/retry-go/v4"
 	"github.com/creasty/defaults"
-	"github.com/go-playground/validator/v10"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
+	"github.com/xbpk3t/docs-alfred/pkg/validator"
 	"github.com/xbpk3t/docs-alfred/service/ghindex"
 	wikisvc "github.com/xbpk3t/docs-alfred/service/wiki"
 )
@@ -44,13 +44,13 @@ type Config struct {
 // WikiConfig contains wiki-specific workflow settings.
 type WikiConfig struct {
 	WikiRoot          string          `default:"wiki"                        validate:"required"     yaml:"wikiRoot"`
-	GhTopicsURL       string          `default:"https://cdn.lucc.dev/gh.yml" validate:"required,url" yaml:"ghTopicsURL"`
+	GhTopicsURL       string          `default:"https://cdn.lucc.dev/gh.yml" validate:"required|url" yaml:"ghTopicsURL"`
 	GhTopicsCachePath string          `yaml:"ghTopicsCachePath"`
 	GhTopicsMaxAge    string          `default:"24h"                         validate:"required"     yaml:"ghTopicsMaxAge"`
 	Driver            string          `default:"opencli"                     yaml:"driver"`
-	Concurrency       int             `default:"3"                           validate:"gte=1"        yaml:"concurrency"`
-	PerURLTimeout     int             `default:"600"                         validate:"gte=1"        yaml:"perURLTimeout"`
-	MaxRetries        int             `default:"6"                           validate:"gte=0"        yaml:"maxRetries"`
+	Concurrency       int             `default:"3"                           validate:"gte:1"        yaml:"concurrency"`
+	PerURLTimeout     int             `default:"600"                         validate:"gte:1"        yaml:"perURLTimeout"`
+	MaxRetries        int             `default:"6"                           validate:"gte:0"        yaml:"maxRetries"`
 	MaxContentSize    int             `default:"20000"                       yaml:"maxContentSize"`
 	Media             wikiMediaConfig `yaml:"media"`
 }
@@ -64,7 +64,7 @@ type wikiMediaConfig struct {
 type AIConfig struct {
 	APIKey      string  `yaml:"apiKey"`
 	Model       string  `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
-	BaseURL     string  `default:"https://api.lucc.dev/v1" validate:"required,url" yaml:"baseUrl"`
+	BaseURL     string  `default:"https://api.lucc.dev/v1" validate:"required|url" yaml:"baseUrl"`
 	Temperature float64 `default:"0.3"                     yaml:"temperature"`
 }
 
@@ -81,7 +81,7 @@ func LoadConfig(configPath, wikiRootOverride string) (*Config, error) {
 			return nil
 		},
 		Validate: func(cfg *Config) error {
-			if err := validator.New().Struct(cfg); err != nil {
+			if err := validator.Struct(cfg); err != nil {
 				return err
 			}
 			if _, err := parseGHTopicsMaxAge(cfg); err != nil {

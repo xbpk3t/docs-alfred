@@ -41,7 +41,7 @@ func newRootCmd() *cobra.Command {
 
 			secret = resolveSecret(secret, cfg)
 			if secret == "" {
-				return errors.New("secret key is required (set via --secret, config file, or PWGEN_SECRET environment variable)")
+				return errors.New("secret key is required (set via --secret, config file, or DEFAULT_PWGEN environment variable)")
 			}
 
 			resolveConfigDefaults(cmd, cfg, &length, &uppercase, &numbers, &punctuation, &outputFormat)
@@ -86,7 +86,7 @@ func resolveSecret(flagValue string, cfg *koanf.Koanf) string {
 		return v
 	}
 
-	return os.Getenv("PWGEN_SECRET")
+	return os.Getenv("DEFAULT_PWGEN")
 }
 
 func resolveConfigDefaults(cmd *cobra.Command, cfg *koanf.Koanf, length *int, uppercase, numbers, punctuation *bool, outputFormat *string) {

@@ -6,9 +6,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/ccx/cmd"
+	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
+	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
 func main() {
+	carboninit.Setup()
+	validator.Setup()
+
 	rootCmd := &cobra.Command{
 		Use:   "ccx",
 		Short: "Claude Code eXtend - Session management tools",

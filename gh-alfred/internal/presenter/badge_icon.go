@@ -101,7 +101,7 @@ func renderBadgeIconSVG(state badgeState) string {
 }
 
 func docBadgeSVG(active bool) string {
-	return textBadgeSVG(4, 7.5, badgeFill(active, "#06B6D4"), badgeText(active, "#FFFFFF"), "D")
+	return textBadgeSVG(4, 7.5, badgeFill(active, "#F97316"), badgeText(active, "#FFFFFF"), "D")
 }
 
 func nixBadgeSVG(active bool) string {

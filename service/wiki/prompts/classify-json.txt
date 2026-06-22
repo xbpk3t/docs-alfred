@@ -39,7 +39,7 @@
 - 其他情况 metadata.contentType = "text"
 
 ## metadata 字段说明
-- tags: 逗号分隔的关键词标签，3-8 个
+- tags: JSON 数组格式的关键词标签，3-8 个，如 ["tag1", "tag2", "tag3"]
 - quality: 综合质量评分，格式 "X/5"（如 "4/5"）
 - author: 作者/UP主/仓库所有者（有则填，无则空字符串）
 - uncertainties: 正文中不确定或需要核实的信息（可选，无则为空字符串）
@@ -48,6 +48,12 @@
 - verdict: 仓库评测结论（仅 repo 类型，"watch"|"skip"|"try"）
 - stars: GitHub stars 数量（仅 repo 类型，数字）
 - language: 仓库主要语言（仅 repo 类型，如 "Python"）
+
+## 类型约束
+以下字段必须是 JSON 数组（不是逗号分隔的字符串）：
+- tags: string[]
+- summary.keyPoints: string[]
+- summary.actionableAdvice: string[]
 
 ## 输出要求
 只返回一个 JSON object，不要 Markdown code fence，不要额外解释。字段如下：
