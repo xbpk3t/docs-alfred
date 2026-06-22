@@ -5,8 +5,15 @@ includes:
     taskfile: ./rss2nl/Taskfile.yml
     dir: rss2nl
   alfred:
-    taskfile: ./gh-alfred/Taskfile.yml
+    taskfile: .github/taskfile/Taskfile.alfred.yml
     dir: gh-alfred
+    vars:
+      BINARY_NAME: gh-alfred
+  pwgen:
+    taskfile: .github/taskfile/Taskfile.alfred.yml
+    dir: pwgen
+    vars:
+      BINARY_NAME: pwgen
 
 tasks:
   pre-commit:

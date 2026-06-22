@@ -200,9 +200,17 @@ docs.yml
 /xzb/wechat.csv
 /.cache/
 /.claude/
+/.agents/
 /.codegraph/
+CLAUDE.md
+AGENTS.md
 
 # devenv generated
 .pre-commit-config.yaml
 .devenv/
 /gh-alfred/.workflow/gh-alfred
+
+
+# APM dependencies
+apm_modules/
+apm.lock.yaml

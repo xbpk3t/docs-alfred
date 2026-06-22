@@ -2,6 +2,8 @@ module github.com/xbpk3t/docs-alfred
 
 go 1.25.0
 
+ignore ./apm_modules
+
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.1
 	github.com/BurntSushi/toml v0.3.1
