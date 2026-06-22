@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
+	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
 
 // GraphQL field/argument keys used in Linear filters.
@@ -29,7 +30,7 @@ func NewClient(apiKey string, teamKeys []string) *Client {
 		apiKey:   apiKey,
 		teamKeys: teamKeys,
 		apiURL:   linearAPI,
-		http:     &http.Client{Timeout: 30 * time.Second},
+		http:     httputil.StdHTTPClient(30 * time.Second),
 	}
 }
 
@@ -222,9 +223,9 @@ func (c *Client) graphQLClient() graphql.Client {
 		endpoint = linearAPI
 	}
 
-	httpClient := http.Client{Timeout: 30 * time.Second}
+	httpClient := httputil.StdHTTPClient(30 * time.Second)
 	if c.http != nil {
-		httpClient = *c.http
+		httpClient = c.http
 	}
 	base := httpClient.Transport
 	if base == nil {
@@ -232,7 +233,7 @@ func (c *Client) graphQLClient() graphql.Client {
 	}
 	httpClient.Transport = authTransport{token: c.apiKey, base: base}
 
-	return graphql.NewClient(endpoint, &httpClient)
+	return graphql.NewClient(endpoint, httpClient)
 }
 
 const linearAPI = "https://api.linear.app/graphql"

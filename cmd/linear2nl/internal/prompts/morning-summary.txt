@@ -32,7 +32,7 @@
 
 ## 注意事项
 
-- **不要添加任何 markdown 代码块包裹 JSON**（不要 ```json）
+- **只返回一个 JSON object，不要 Markdown code fence，不要额外解释**（不要 ```json）
 - **不要添加任何额外文字说明**，只输出 JSON 对象本身
 - 如果某个组没有任务，该组可以省略（不在 JSON 中输出）
 

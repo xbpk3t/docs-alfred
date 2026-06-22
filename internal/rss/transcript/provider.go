@@ -6,18 +6,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"mime"
-	"net/http"
 	"net/url"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/asticode/go-astisub"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
-	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -80,14 +79,10 @@ type TranscriptLink struct {
 
 // RssTranscriptProvider fetches transcripts from podcast:transcript tags.
 // TS equivalent: rss-transcript.ts — actually fetches the URL content.
-type RssTranscriptProvider struct {
-	HTTPClient *http.Client
-}
+type RssTranscriptProvider struct{}
 
 func NewRssTranscriptProvider() *RssTranscriptProvider {
-	return &RssTranscriptProvider{
-		HTTPClient: httputil.NewClient(30 * time.Second),
-	}
+	return &RssTranscriptProvider{}
 }
 
 func (p *RssTranscriptProvider) Name() string {
@@ -99,19 +94,12 @@ func (p *RssTranscriptProvider) Fetch(ctx context.Context, ep *EpisodeRef) (*Tra
 		return nil, errors.New("RSS item has no podcast:transcript tag")
 	}
 
-	// Pick best link (plaintext > vtt > srt > json)
 	best := pickBestTranscriptLink(ep.TranscriptLinks)
 	if best == nil {
 		return nil, errors.New("no suitable transcript link found")
 	}
 
-	// Actually fetch the transcript URL (like TS rss-transcript.ts does)
-	client := p.HTTPClient
-	if client == nil {
-		client = httputil.NewClient(30 * time.Second)
-	}
-
-	data, err := httputil.Get(client, best.URL)
+	data, err := httputil.GetBytes(ctx, best.URL, httputil.RequestOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("fetch transcript URL: %w", err)
 	}
@@ -163,14 +151,10 @@ func getLinkScore(link *TranscriptLink, rank map[string]int) int {
 // TS equivalent: description-link.ts — extracts transcript URLs from description/content
 // using href regex + URL regex patterns.
 
-type DescriptionLinkProvider struct {
-	HTTPClient *http.Client
-}
+type DescriptionLinkProvider struct{}
 
 func NewDescriptionLinkProvider() *DescriptionLinkProvider {
-	return &DescriptionLinkProvider{
-		HTTPClient: httputil.NewClient(30 * time.Second),
-	}
+	return &DescriptionLinkProvider{}
 }
 
 func (p *DescriptionLinkProvider) Name() string {
@@ -191,13 +175,7 @@ func (p *DescriptionLinkProvider) Fetch(ctx context.Context, ep *EpisodeRef) (*T
 		return nil, errors.New("description/content has no transcript link")
 	}
 
-	// Fetch the first matching URL
-	client := p.HTTPClient
-	if client == nil {
-		client = httputil.NewClient(30 * time.Second)
-	}
-
-	data, err := httputil.Get(client, links[0])
+	data, err := httputil.GetBytes(ctx, links[0], httputil.RequestOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("fetch description link: %w", err)
 	}
@@ -351,8 +329,14 @@ func cleanSubtitle(content, contentType string) string {
 	case "srt":
 		sub, err = astisub.ReadFromSRT(r)
 	}
-	if err != nil || sub == nil {
-		// Fallback: return content stripped of obvious timestamp lines
+	if err != nil {
+		slog.Warn("failed to parse WebVTT subtitles, falling back to text extraction", "error", err)
+
+		return fallbackCleanSubtitle(content)
+	}
+	if sub == nil {
+		slog.Warn("WebVTT parsing returned nil, falling back to text extraction")
+
 		return fallbackCleanSubtitle(content)
 	}
 
@@ -421,20 +405,6 @@ func contentTypeFromMediaType(t string) (string, bool) {
 		return v, true
 	}
 
-	// Fallback: check by substring
-	switch {
-	case strings.Contains(mediaType, "plain"):
-		return plaintextContentType, true
-	case strings.Contains(mediaType, "vtt"):
-		return vttContentType, true
-	case strings.Contains(mediaType, "srt") || strings.Contains(mediaType, "subrip"):
-		return srtContentType, true
-	case strings.Contains(mediaType, "json"):
-		return jsonContentType, true
-	case strings.Contains(mediaType, "html"):
-		return htmlContentType, true
-	}
-
 	return "", false
 }
 
@@ -444,10 +414,24 @@ func normalizeMediaType(t string) string {
 		return ""
 	}
 
+	// Fix common non-standard MIME types before parsing
+	// Some servers return "text/vtt" as "text/vtt;charset=utf-8" or similar
+	if strings.HasPrefix(t, "text/vtt") {
+		return "text/vtt"
+	}
+	if strings.HasPrefix(t, "application/srt") || strings.HasPrefix(t, "text/srt") {
+		return "application/srt"
+	}
+	if strings.HasPrefix(t, "application/x-subrip") {
+		return "application/x-subrip"
+	}
+
 	mediaType, _, err := mime.ParseMediaType(t)
 	if err == nil {
 		return mediaType
 	}
+
+	slog.Warn("failed to parse MIME type, using raw value", "raw", t, "error", err)
 
 	return t
 }

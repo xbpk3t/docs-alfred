@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -11,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/cmd/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/internal/linear"
-	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 )
 
@@ -246,7 +246,7 @@ func buildGroupItems(g internal.MorningGroupJSON, viewMap map[string]internal.Is
 // parseMorningReviewJSON attempts to unmarshal the AI response as MorningReviewJSON.
 func parseMorningReviewJSON(raw string) (*internal.MorningReviewJSON, error) {
 	var result internal.MorningReviewJSON
-	if err := ai.UnmarshalStrictJSON(raw, &result); err != nil {
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		return nil, err
 	}
 
@@ -365,7 +365,7 @@ func enrichActiveGroups(aiClient *internal.AIProvider, groups []internal.GroupVi
 // parseMorningAnalysisJSON attempts to unmarshal the AI response as MorningAnalysisJSON.
 func parseMorningAnalysisJSON(raw string) (*internal.MorningAnalysisJSON, error) {
 	var result internal.MorningAnalysisJSON
-	if err := ai.UnmarshalStrictJSON(raw, &result); err != nil {
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		return nil, err
 	}
 

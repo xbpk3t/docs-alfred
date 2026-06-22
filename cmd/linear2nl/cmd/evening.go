@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/cmd/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/internal/linear"
-	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"golang.org/x/sync/errgroup"
 )
@@ -279,7 +279,7 @@ func parsePerIssueReviewJSON(raw string) *perIssueReviewResult {
 
 func parseAIReviewJSON(raw string) (*AIReviewJSON, error) {
 	var result AIReviewJSON
-	if err := ai.UnmarshalStrictJSON(raw, &result); err != nil {
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		slog.Warn("failed to parse AI review JSON", "error", err)
 
 		return nil, err

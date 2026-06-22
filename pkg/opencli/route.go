@@ -5,6 +5,7 @@ package opencli
 
 import (
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/samber/lo"
@@ -106,16 +107,9 @@ func extractZhihuQuestionID(path string) string {
 }
 
 func isNumeric(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
+	_, err := strconv.Atoi(s)
 
-	return true
+	return err == nil
 }
 
 // argsForRoute builds the opencli command arguments for a matched route.

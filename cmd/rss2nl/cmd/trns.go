@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/rss/transcript"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/litter"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 )
@@ -266,7 +266,7 @@ func runTrnsCheck(source string, flags *trnsFlags) error {
 			}
 
 			fp := gofeed.NewParser()
-			fp.Client = rss.NewHTTPClient(cfg)
+			fp.Client = httputil.StdHTTPClient(time.Duration(cfg.FeedConfig.Timeout) * time.Second)
 			parsed, err := fp.ParseURL(u.Feed)
 			if err != nil {
 				slog.Warn("Feed parse failed", "feed", u.Feed, "error", err)
@@ -363,7 +363,7 @@ func processFeedURL(
 	}
 
 	fp := gofeed.NewParser()
-	fp.Client = &http.Client{Timeout: 30 * time.Second}
+	fp.Client = httputil.StdHTTPClient(30 * time.Second)
 
 	parsed, err := fp.ParseURL(u.Feed)
 	if err != nil {

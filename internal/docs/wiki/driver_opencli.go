@@ -260,22 +260,12 @@ func extractWeixinSavedPath(yamlOutput string) string {
 // extractSavedPathFromLine extracts the saved file path from a YAML line
 // containing the "saved:" field. Returns empty string if no path found.
 func extractSavedPathFromLine(line string) string {
-	prefix := "  saved: "
-	_, after, ok := strings.Cut(line, prefix)
-	if ok {
-		path := strings.TrimSpace(after)
-		if path != "" {
-			return path
-		}
+	_, after, ok := strings.Cut(line, "saved: ")
+	if !ok {
+		return ""
 	}
 
-	// Fallback: handle "saved: " with varying whitespace.
-	_, after, ok = strings.Cut(line, "saved: ")
-	if ok {
-		return strings.TrimSpace(after)
-	}
-
-	return ""
+	return strings.TrimSpace(after)
 }
 
 func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extraArgs []string) *ContentFetchResult {

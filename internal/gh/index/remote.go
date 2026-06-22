@@ -1,6 +1,7 @@
 package ghindex
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -76,7 +77,7 @@ func (m *Manager) Sync() error {
 }
 
 func (m *Manager) download() ([]byte, error) {
-	data, err := httputil.Get(httputil.NewClient(httputil.DefaultClientTimeout), m.configURL)
+	data, err := httputil.GetBytes(context.Background(), m.configURL, httputil.RequestOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to download config: %w", err)
 	}

@@ -32,7 +32,7 @@
 - progress、knowledge、review 字段使用纯文本，不要包含 HTML 标签
 - 可以在文本中使用 markdown 行内格式（如 **加粗**、`代码`、*斜体*）
 - 评论中可能会有一来一回的对话，关注其中与决策、方案相关的部分
-- **不要添加任何 markdown 代码块包裹 JSON**（不要 ```json），直接输出纯 JSON
+- **只返回一个 JSON object，不要 Markdown code fence，不要额外解释**（不要 ```json），直接输出纯 JSON
 - **不要添加任何额外文字说明**，只输出 JSON 对象本身
 - 每个数组元素对应一段文字，建议每段包含一个完整的信息点
 
