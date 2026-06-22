@@ -1,6 +1,6 @@
 ---
 description: wiki URL classification, AI prompt, workspace write, and inbox rules
-applyTo: "wiki/**"
+applyTo: "cmd/wiki/**"
 ---
 
 # Wiki CLI Rules
@@ -8,14 +8,14 @@ applyTo: "wiki/**"
 ## 职责
 
 - `wiki` CLI 负责 URL fetch、AI 分类、摘要生成、写入 wiki workspace。
-- `wiki/cmd` 负责 Cobra wiring 和流程入口；核心 fetch/classify/write 逻辑放在 `service/wiki`。
-- prompt 位于 `service/wiki/prompts/`，修改时要保持输出结构兼容。
+- `cmd/wiki/cmd` 负责 Cobra wiring 和流程入口；核心 fetch/classify/write 逻辑放在 `internal/docs/wiki`。
+- prompt 位于 `internal/docs/wiki/prompts/`，修改时要保持输出结构兼容。
 
 ## 副作用
 
 - `wiki --inbox` 会处理并刷新 `wiki/inbox.md`，属于真实 workspace 写入。
 - 默认只能使用 dry-run、测试 fixture 或临时目录；真实写入必须任务明确要求。
-- `service/wiki.WriteOptions.DryRun` 是优先验证方式。
+- `internal/docs/wiki.WriteOptions.DryRun` 是优先验证方式。
 - 网络 fetch、opencli fallback、AI 调用都属于外部副作用；测试中使用 mock/fake。
 
 ## 配置与密钥
@@ -33,6 +33,6 @@ applyTo: "wiki/**"
 
 ## 验证
 
-- 改写入逻辑跑 `go test ./service/wiki`。
-- 改 CLI inbox/URL 流程跑 `go test ./wiki/...`。
+- 改写入逻辑跑 `go test ./internal/docs/wiki`。
+- 改 CLI inbox/URL 流程跑 `go test ./cmd/wiki/...`。
 - 改 prompt 或分类 schema 时，补 fixture 或 dry-run 验证分类、摘要、失败落盘路径。

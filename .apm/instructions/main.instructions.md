@@ -8,19 +8,20 @@ description: docs-alfred global project rules, safety boundaries, and validation
 
 ## 项目结构
 
-- `docs-cli/`：docs 内容、catalog、workspace consistency 的 CLI。
-- `rss2nl/`：RSS newsletter、transcript、source hunt 工具。
-- `linear2nl/`：Linear morning/evening 邮件报告工具。
-- `wiki/`：URL 分类、摘要、写入 wiki workspace 的 CLI。
-- `pwgen/`：确定性密码生成工具。
+- `cmd/`：所有 CLI 入口（docs-cli、rss2nl、linear2nl、ccx、gh-alfred、xzb、pwgen、data-cli）。
+- `internal/`：按领域分组的内部包。
+  - `internal/gh/`：GitHub 数据领域（data、domrules、index、content、goods、task、enrich）。
+  - `internal/docs/`：文档/wiki 领域（wiki、ingest、workspace、check）。
+  - `internal/rss/`：RSS + 播客领域（feed、transcript）。
+  - `internal/linear/`：Linear GraphQL client。
+  - `internal/data/`：跨领域数据处理（ops、render）。
 - `pkg/`：跨 CLI 复用的基础能力，不依赖具体 CLI。
-- `service/`：领域服务与渲染逻辑。
 
 ## 分层约束
 
 - `cmd/` 只做 Cobra command 注册、flag/arg 解析、用户可见输出和 exit code。
 - CLI 级业务编排放在 `internal/usecase` 或当前 CLI 已有服务层。
-- 通用能力放入现有 `pkg/*`；领域能力放入现有 `service/*`。
+- 通用能力放入现有 `pkg/*`；领域能力放入现有 `internal/*`。
 - 新文件优先放进现有领域目录，不为了单个函数新建抽象包。
 - 触碰到的旧代码如果存在明显、低风险、可测试的问题，可以顺手修；不要为了符合规则做无关大重构。
 - 不新增或修改 `.apm/commands`，除非任务明确要求命令工作流。
@@ -49,6 +50,8 @@ description: docs-alfred global project rules, safety boundaries, and validation
 - 不随意改 `go.sum`；只有新增/移除依赖或合理的 `go mod tidy` 结果才保留。
 
 ## 验证策略
+
+MUST 使用 testify 使用写测试用例
 
 - 小改动优先跑相关 package 的 `go test`。
 - 触碰 `pkg/`、`service/` 或跨 CLI 行为时，优先跑 `go test ./...`。
