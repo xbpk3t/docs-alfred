@@ -73,3 +73,94 @@ func TestDomainBlocked(t *testing.T) {
 	require.True(t, DomainBlocked("blog.example.com", blocked), "expected registrable domain match")
 	require.False(t, DomainBlocked("example.org", blocked), "unexpected blocked domain")
 }
+
+func TestDomain(t *testing.T) {
+	require.Equal(t, "example.com", Domain("https://example.com/path"))
+	require.Equal(t, "example.com", Domain("https://Example.COM:8080/path"))
+	require.Equal(t, "", Domain("%zz"))
+}
+
+func TestNormalize_TrailingSlash(t *testing.T) {
+	result := Normalize("https://example.com/path/")
+	require.Equal(t, "https://example.com/path", result)
+}
+
+func TestNormalize_BasicURL(t *testing.T) {
+	result := Normalize("HTTPS://Example.COM:443/path#frag")
+	require.NotEmpty(t, result)
+	require.Contains(t, result, "example.com")
+}
+
+func TestRegistrableDomain(t *testing.T) {
+	require.Equal(t, "example.com", RegistrableDomain("sub.example.com"))
+	require.Equal(t, "example.co.uk", RegistrableDomain("sub.example.co.uk"))
+	require.Equal(t, "", RegistrableDomain("localhost"))
+	require.Equal(t, "", RegistrableDomain(""))
+}
+
+func TestDomainBlocked_EmptyDomain(t *testing.T) {
+	require.False(t, DomainBlocked("", map[string]bool{"example.com": true}))
+	require.False(t, DomainBlocked("  ", map[string]bool{"example.com": true}))
+}
+
+func TestDomainBlocked_ExactMatch(t *testing.T) {
+	require.True(t, DomainBlocked("example.com", map[string]bool{"example.com": true}))
+}
+
+func TestDomainBlocked_SuffixMatch(t *testing.T) {
+	// For an IP address, RegistrableDomain returns "", so the suffix loop runs.
+	// The suffix loop checks full suffixes starting from the last part.
+	blocked := map[string]bool{"1": true}
+	require.True(t, DomainBlocked("127.0.0.1", blocked), "should match suffix '1'")
+	// "10.0.0.0" has no matching suffix in the blocked set
+	require.False(t, DomainBlocked("10.0.0.0", blocked))
+}
+
+func TestDomainBlocked_ReturnsFalse(t *testing.T) {
+	// IP address not matching any blocked suffix
+	require.False(t, DomainBlocked("192.168.1.1", map[string]bool{"10.0.0.0": true}))
+}
+
+func TestDomainBlocked_NotBlocked(t *testing.T) {
+	require.False(t, DomainBlocked("safe.org", map[string]bool{"example.com": true}))
+}
+
+func TestRepoName_ParsePath(t *testing.T) {
+	// When url.Parse succeeds and path is non-empty, use repoNameFromPath
+	require.Equal(t, "repo", RepoName("https://github.com/owner/repo"))
+}
+
+func TestRepoName_Fallback(t *testing.T) {
+	// When url.Parse succeeds but path is empty, fall back to stripping scheme prefix
+	require.Equal(t, "example.com", RepoName("https://example.com"))
+}
+
+func TestRepoNameFromPath_Empty(t *testing.T) {
+	require.Equal(t, "", repoNameFromPath(""))
+	require.Equal(t, "repo", repoNameFromPath("/owner/repo"))
+	require.Equal(t, "repo", repoNameFromPath("/owner/repo.git"))
+}
+
+func TestSourceRepo_ParseError(t *testing.T) {
+	_, ok := SourceRepo("%zz")
+	require.False(t, ok)
+}
+
+func TestSourceRepo_InsufficientParts(t *testing.T) {
+	_, ok := SourceRepo("https://github.com/only-owner")
+	require.False(t, ok)
+}
+
+func TestIsSourceRepo_False(t *testing.T) {
+	require.False(t, IsSourceRepo("https://example.com/owner/repo"))
+}
+
+func TestCountURLs(t *testing.T) {
+	count := CountURLs("Visit https://a.com and https://b.com")
+	require.Equal(t, 2, count)
+}
+
+func TestCountURLs_Empty(t *testing.T) {
+	require.Equal(t, 0, CountURLs(""))
+	require.Equal(t, 0, CountURLs("no urls here"))
+}

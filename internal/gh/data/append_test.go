@@ -44,6 +44,144 @@ func TestAppendRecord_NoFileFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "no file contains URL")
 }
 
+func TestAppendRecord_WithExplicitFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "repos.yml")
+	content := `- type: dev
+  repo:
+    - url: https://github.com/owner/repo
+  topics:
+    - topic: repo
+      record:
+        - date: 2024-01-01
+          des: existing
+`
+	require.NoError(t, os.WriteFile(file, []byte(content), 0600))
+
+	result, err := AppendRecord(&AppendRecordOptions{
+		File:  file,
+		URL:   "https://github.com/owner/repo",
+		Date:  "2024-06-15",
+		Des:   "new entry",
+		Topic: "repo",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, file, result.File)
+	assert.True(t, result.Confirmed)
+	assert.Contains(t, result.Des, "new entry")
+}
+
+func TestAppendRecord_ExplicitFileEmptyURL(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "repos.yml")
+	content := `- type: dev
+  repo:
+    - url: https://github.com/owner/repo
+  record:
+    - date: 2024-01-01
+      des: existing
+`
+	require.NoError(t, os.WriteFile(file, []byte(content), 0600))
+
+	result, err := AppendRecord(&AppendRecordOptions{
+		File: file,
+		URL:  "https://github.com/owner/repo",
+		Date: "2024-06-15",
+		Des:  "section-level",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.Confirmed)
+}
+
+func TestAppendRecord_FileNotFound(t *testing.T) {
+	result, err := AppendRecord(&AppendRecordOptions{
+		File: "/nonexistent/file.yml",
+		URL:  "https://github.com/owner/repo",
+		Date: "2024-01-01",
+		Des:  "test",
+	})
+	require.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestFindFileByURL_Found(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.yml"), []byte(`- type: language
+  repo:
+    - url: https://github.com/acme/tool
+      des: a tool
+`), 0644))
+
+	found, err := findFileByURL(dir, "https://github.com/acme/tool")
+	require.NoError(t, err)
+	assert.NotEmpty(t, found)
+	assert.Contains(t, found, "go.yml")
+}
+
+func TestFindFileByURL_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.yml"), []byte(`- type: language
+  repo:
+    - url: https://github.com/acme/tool
+`), 0644))
+
+	_, err := findFileByURL(dir, "https://github.com/nonexistent/repo")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no file contains URL")
+}
+
+func TestFindFileByURL_MultipleMatches(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.yml"), []byte(`- type: lang
+  repo:
+    - url: https://github.com/acme/tool
+`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.yml"), []byte(`- type: other
+  repo:
+    - url: https://github.com/acme/tool
+`), 0644))
+
+	_, err := findFileByURL(dir, "https://github.com/acme/tool")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple files")
+}
+
+func TestFindFileByURL_EmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	_, err := findFileByURL(dir, "https://github.com/acme/tool")
+	require.Error(t, err)
+}
+
+func TestAppendRecord_WithInferredTopic(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "repos.yml")
+	content := `- type: dev
+  repo:
+    - url: https://github.com/owner/myrepo
+  topics:
+    - topic: myrepo
+      record:
+        - date: 2024-01-01
+          des: existing
+`
+	require.NoError(t, os.WriteFile(file, []byte(content), 0600))
+
+	result, err := AppendRecord(&AppendRecordOptions{
+		File: file,
+		URL:  "https://github.com/owner/myrepo",
+		Date: "2024-06-15",
+		Des:  "inferred topic",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.Confirmed)
+}
+
 func TestFindFileByURL_NonExistent(t *testing.T) {
 	found, err := findFileByURL("/tmp/nonexistent-gh-dir-12345", "https://github.com/owner/repo")
 	require.Error(t, err)

@@ -1,12 +1,21 @@
 // Package litter provides temporary file upload with automatic fallback across
 // multiple hosting services (Litterbox, 0x0.st, file.io). Drivers are configured
 // via rss2nl.yml; the Fallback uploader tries each in order until one succeeds.
+//
+//go:generate mockgen -destination=mocks/mock_uploader.go -package=mocks github.com/xbpk3t/docs-alfred/pkg/litter Uploader
 package litter
 
 import (
 	"context"
 	"errors"
 	"fmt"
+)
+
+// Driver name constants used across the litter package.
+const (
+	driverLitterbox = "litterbox"
+	driverZerox0    = "zerox0"
+	driverFileio    = "fileio"
 )
 
 // Result holds the outcome of a successful upload.
@@ -67,11 +76,11 @@ func NewFromNames(names []string, expiration string) *Fallback {
 	var uploaders []Uploader
 	for _, name := range names {
 		switch name {
-		case "litterbox":
+		case driverLitterbox:
 			uploaders = append(uploaders, NewLitterbox(expiration))
-		case "zerox0":
+		case driverZerox0:
 			uploaders = append(uploaders, &ZeroX0{})
-		case "fileio":
+		case driverFileio:
 			uploaders = append(uploaders, &FileIO{})
 		}
 	}

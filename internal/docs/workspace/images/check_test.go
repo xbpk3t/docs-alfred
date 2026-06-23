@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	ghdata "github.com/xbpk3t/docs-alfred/internal/gh/data"
 )
 
 func TestDuplicateFileRe(t *testing.T) {
@@ -243,4 +244,142 @@ func TestCheckResult_ReportNoApply(t *testing.T) {
 	}
 	report := r.ReportResult(CheckConfig{})
 	assert.True(t, strings.Contains(report, "ERROR some/dir") || strings.Contains(report, "some/dir"))
+}
+
+func TestRunImagesCheck_WithApply(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a duplicate file pair
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "photo.jpg"), []byte("original"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "photo__1.jpg"), []byte("duplicate"), 0644))
+
+	result, err := RunImagesCheck(CheckConfig{
+		DataDir:   dir,
+		ImagesDir: dir,
+		Apply:     true,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestRunImagesCheck_WithApplyExtraDir(t *testing.T) {
+	dir := t.TempDir()
+	extraDir := filepath.Join(dir, "extra")
+	require.NoError(t, os.MkdirAll(extraDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(extraDir, "file.txt"), []byte("data"), 0644))
+
+	result, err := RunImagesCheck(CheckConfig{
+		DataDir:   dir,
+		ImagesDir: dir,
+		Apply:     true,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestCheckResult_IssuesNoFlags(t *testing.T) {
+	r := &CheckResult{
+		Warnings:       []string{"warn1"},
+		Errors:         []string{"err1"},
+		DuplicateFiles: []string{"dup.jpg"},
+		MissingDirs:    []string{"missing"},
+		ExtraDirs:      []string{"extra"},
+	}
+	issues := r.Issues(CheckConfig{})
+	assert.NotEmpty(t, issues)
+	// Should have warn + error + duplicate + missing + extra
+	assert.True(t, len(issues) >= 5)
+}
+
+func TestCheckResult_ReportWithList(t *testing.T) {
+	r := &CheckResult{
+		ExpectedDirs: []string{"a", "b"},
+		ExistingDirs: []string{"c"},
+	}
+	report := r.ReportResult(CheckConfig{List: true})
+	assert.Contains(t, report, "expected: a")
+	assert.Contains(t, report, "existing: c")
+}
+
+func TestApplyFixes_NoFixesNeeded(t *testing.T) {
+	result := &CheckResult{
+		ActualFiles: []string{},
+	}
+	applyFixes(result, CheckConfig{Apply: true})
+	assert.Contains(t, result.ApplyActions, "No fixes needed")
+}
+
+func TestMoveExtraFilesSkipsHiddenFiles(t *testing.T) {
+	dir := t.TempDir()
+	// Create a hidden file at root level
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".hidden-file"), []byte("hidden"), 0o644))
+	// Create a visible file at root level
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "visible.txt"), []byte("visible"), 0o644))
+
+	actualFiles := []string{".hidden-file", "visible.txt"}
+	moved := moveExtraFiles(dir, nil, actualFiles)
+	assert.Equal(t, 1, moved, "should move only visible file")
+
+	// Verify hidden file was NOT moved
+	_, err := os.Stat(filepath.Join(dir, ".hidden-file"))
+	assert.NoError(t, err, "hidden file should remain")
+}
+
+func TestCollectExistingFilesAndDirsNonExistentDir(t *testing.T) {
+	_, _, err := collectExistingFilesAndDirs("/tmp/nonexistent-images-dir-12345")
+	require.Error(t, err)
+}
+
+func TestCollectExpectedImageDirsNoType(t *testing.T) {
+	dataDir := t.TempDir()
+	// YAML without type field should be skipped
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "cat"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "cat", "notype.yml"), []byte(`- name: test`), 0o600))
+
+	dirs, err := collectExpectedImageDirs(dataDir)
+	require.NoError(t, err)
+	assert.Empty(t, dirs)
+}
+
+func TestCollectExpectedImageDirsShortPath(t *testing.T) {
+	dataDir := t.TempDir()
+	// YAML at root level (dirParts < 2) should be skipped
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "root.yml"), []byte(`- type: test`), 0o600))
+
+	dirs, err := collectExpectedImageDirs(dataDir)
+	require.NoError(t, err)
+	assert.Empty(t, dirs)
+}
+
+func TestCollectRepoTopicDirsEmptyURL(t *testing.T) {
+	var dirs []string
+	// Empty URL should result in empty repoName, causing early return
+	collectRepoTopicDirs(&ghdata.Repo{URL: ""}, "base", &dirs, false)
+	assert.Empty(t, dirs)
+}
+
+func TestCollectTopicDirsEmptyDirName(t *testing.T) {
+	var dirs []string
+	// Topic with empty DirName should be skipped
+	collectTopicDirs([]ghdata.Topic{{}}, "base", &dirs)
+	assert.Empty(t, dirs)
+}
+
+func TestRunImagesCheckNoDataYAML(t *testing.T) {
+	dir := t.TempDir()
+	result, err := RunImagesCheck(CheckConfig{
+		DataDir:   dir,
+		ImagesDir: dir,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Empty(t, result.ExpectedDirs)
+	assert.Empty(t, result.MissingDirs)
+}
+
+func TestCheckResult_ReportNoApplyNoActions(t *testing.T) {
+	r := &CheckResult{}
+	report := r.ReportResult(CheckConfig{Apply: true})
+	// Should still produce valid output even with no actions
+	assert.NotEmpty(t, report)
 }

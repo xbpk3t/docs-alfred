@@ -27,6 +27,12 @@ func Link(text, url string) string {
 	return fmt.Sprintf("[%s](%s)", text, url)
 }
 
+// Label returns bold inline text: **text**.
+// Use for visual emphasis badges (e.g. media indicators).
+func Label(text string) string {
+	return fmt.Sprintf("**%s**", text)
+}
+
 // Paragraph returns a Section containing text as a plain paragraph.
 func Paragraph(text string) Section {
 	return &paragraphSection{text: text}

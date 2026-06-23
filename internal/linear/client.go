@@ -10,10 +10,13 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
 
-// GraphQL field/argument keys used in Linear filters.
+// GraphQL field/argument keys and state values used in Linear filters.
 const (
 	keyIn  = "in"
 	keyKey = "key"
+
+	stateStarted   = "started"
+	stateUnstarted = "unstarted"
 )
 
 // Client communicates with the Linear GraphQL API.
@@ -34,6 +37,16 @@ func NewClient(apiKey string, teamKeys []string) *Client {
 	}
 }
 
+// NewClientWithHTTP creates a Linear API client with a custom HTTP client for testing.
+func NewClientWithHTTP(apiKey string, teamKeys []string, apiURL string, httpClient *http.Client) *Client {
+	return &Client{
+		apiKey:   apiKey,
+		teamKeys: teamKeys,
+		apiURL:   apiURL,
+		http:     httpClient,
+	}
+}
+
 // GetActiveIssues returns non-completed issues assigned to the viewer.
 func (c *Client) GetActiveIssues(ctx context.Context) ([]Issue, error) {
 	resp, err := AssignedIssues(ctx, c.graphQLClient(), c.baseFilter(), 50)
@@ -48,7 +61,7 @@ func (c *Client) GetActiveIssues(ctx context.Context) ([]Issue, error) {
 func (c *Client) GetFocusedIssues(ctx context.Context, date string) ([]Issue, error) {
 	filter := map[string]any{
 		"dueDate": map[string]any{"eq": date},
-		"state":   map[string]any{"type": map[string]any{keyIn: []string{"started", "unstarted"}}},
+		"state":   map[string]any{"type": map[string]any{keyIn: []string{stateStarted, stateUnstarted}}},
 	}
 	c.applyTeamFilter(filter)
 
@@ -78,7 +91,7 @@ func (c *Client) GetCompletedTodayIssues(ctx context.Context, since time.Time) (
 // GetInProgressIssues returns currently in-progress issues.
 func (c *Client) GetInProgressIssues(ctx context.Context) ([]Issue, error) {
 	filter := map[string]any{
-		"state": map[string]any{"type": map[string]any{"eq": "started"}},
+		"state": map[string]any{"type": map[string]any{"eq": stateStarted}},
 	}
 	c.applyTeamFilter(filter)
 

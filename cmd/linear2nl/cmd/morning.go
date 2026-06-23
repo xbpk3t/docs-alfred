@@ -15,6 +15,9 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 )
 
+// Group name constants for issue triage priority.
+const groupFIXME = "FIXME"
+
 // renderMorningIssueContent renders AI context/bottleneck/advice as Markdown.
 func renderMorningIssueContent(item *internal.GroupItemView) string {
 	var sections []md.ReviewSection
@@ -186,7 +189,7 @@ func buildGroupsFromResult(result *internal.MorningReviewJSON, views []internal.
 		// order: FIXME(0), MAYBE(1), REMOVE(2), others(3)
 		order := func(name string) int {
 			switch name {
-			case "FIXME":
+			case groupFIXME:
 				return 0
 			case "MAYBE":
 				return 1

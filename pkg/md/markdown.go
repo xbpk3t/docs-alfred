@@ -2,19 +2,18 @@
 //
 // The main entry point is Document, which collects Section components
 // (Table, SectionList, AIReviewItem, etc.) and renders them through
-// goldmark into a complete HTML document.
+// goldmark into HTML fragments. Use ToPage for standalone HTML documents.
 //
 // Usage:
 //
 //	doc := md.NewDocument()
 //	doc.Add(md.Section("Title", md.Table(headers, rows)))
 //	doc.Add(md.SectionList("Context", []string{"item1", "item2"}))
-//	html, err := doc.ToHTML()
+//	html, err := doc.ToPage()
 package md
 
 import (
 	"bytes"
-	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -49,8 +48,8 @@ var gfm = goldmark.New(
 	),
 )
 
-// ToHTML converts a full Markdown string to a complete HTML document.
-// The output includes <html><head></head><body>...</body></html> wrappers.
+// ToHTML converts a Markdown string to an HTML fragment.
+// The output does not include document-level wrappers.
 func ToHTML(mdStr string) (string, error) {
 	if mdStr == "" {
 		return "", nil
@@ -64,27 +63,9 @@ func ToHTML(mdStr string) (string, error) {
 	return buf.String(), nil
 }
 
-// ToHTMLParagraph converts a Markdown string to inline HTML content
-// by stripping the <html><head></head><body>...</body></html> wrapper.
-// Useful for embedding content fragments in larger documents.
+// ToHTMLParagraph converts a Markdown string to inline HTML content.
+// Since goldmark outputs HTML fragments directly, this function is equivalent
+// to ToHTML and is kept for backward compatibility.
 func ToHTMLParagraph(mdStr string) (string, error) {
-	if mdStr == "" {
-		return "", nil
-	}
-
-	full, err := ToHTML(mdStr)
-	if err != nil {
-		return "", err
-	}
-
-	// goldmark wraps output in <html><head></head><body>...</body></html>
-	const bodyOpen = "<body>"
-	const bodyClose = "</body>"
-	start := strings.Index(full, bodyOpen)
-	end := strings.LastIndex(full, bodyClose)
-	if start >= 0 && end > start {
-		return full[start+len(bodyOpen) : end], nil
-	}
-
-	return full, nil
+	return ToHTML(mdStr)
 }

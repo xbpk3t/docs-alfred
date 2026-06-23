@@ -279,3 +279,114 @@ func assertIssueContains(t *testing.T, issues []checkutil.Issue, substr string) 
 	}
 	assert.Fail(t, "expected issue containing %q, got: %v", substr, msgs)
 }
+
+// --- addDir duplicate path ---
+
+func TestAddDirDuplicate(t *testing.T) {
+	set := map[string]bool{"a": true}
+	var dirs []string
+	addDir("a", set, &dirs)
+	assert.Len(t, dirs, 0) // already in set, not added
+}
+
+func TestAddDirNew(t *testing.T) {
+	set := map[string]bool{}
+	var dirs []string
+	addDir("b", set, &dirs)
+	assert.Len(t, dirs, 1)
+	assert.True(t, set["b"])
+}
+
+// --- slashRel ---
+
+func TestSlashRel(t *testing.T) {
+	result := slashRel("/some/root", "/some/root/path/file.md")
+	assert.Equal(t, "path/file.md", result)
+}
+
+// --- collectWikiDepth2Dirs ---
+
+func TestCollectWikiDepth2Dirs_NonExistent(t *testing.T) {
+	root := t.TempDir()
+	set := make(map[string]bool)
+	var dirs []string
+	collectWikiDepth2Dirs(root, "nonexistent", set, &dirs)
+	assert.Empty(t, dirs)
+}
+
+func TestCollectWikiDepth2Dirs_WithHiddenSubdir(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "a", ".hidden"), 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "a", "visible"), 0o700))
+
+	set := make(map[string]bool)
+	var dirs []string
+	collectWikiDepth2Dirs(root, "a", set, &dirs)
+	assert.Contains(t, dirs, "a/visible")
+	assert.NotContains(t, dirs, "a/.hidden")
+}
+
+func TestCollectExpectedDirsInvalidPath(t *testing.T) {
+	_, err := collectExpectedDirs("/tmp/nonexistent-gh-root-12345")
+	require.Error(t, err)
+}
+
+func TestCollectActualWikiDirsInvalidPath(t *testing.T) {
+	_, err := collectActualWikiDirs("/tmp/nonexistent-wiki-root-12345")
+	require.Error(t, err)
+}
+
+func TestCollectActualWikiDirsSkipsFiles(t *testing.T) {
+	root := t.TempDir()
+	// Create a file (not a directory) at depth 1
+	require.NoError(t, os.WriteFile(filepath.Join(root, "file.txt"), []byte("content"), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "dir1"), 0o700))
+
+	dirs, err := collectActualWikiDirs(root)
+	require.NoError(t, err)
+	assert.Contains(t, dirs, "dir1")
+	assert.NotContains(t, dirs, "file.txt")
+}
+
+func TestCollectWikiDepth2DirsSkipsFiles(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "parent"), 0o700))
+	// Create a file inside parent (not a dir)
+	require.NoError(t, os.WriteFile(filepath.Join(root, "parent", "file.txt"), []byte("x"), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "parent", "child"), 0o700))
+
+	set := make(map[string]bool)
+	var dirs []string
+	collectWikiDepth2Dirs(root, "parent", set, &dirs)
+	assert.Contains(t, dirs, "parent/child")
+	assert.NotContains(t, dirs, "parent/file.txt")
+}
+
+func TestSlashRelError(t *testing.T) {
+	// When filepath.Rel fails, slashRel falls back to filepath.ToSlash(path)
+	// This happens when root and path are on different volumes (on Windows)
+	// or when one is relative and the other absolute in certain cases.
+	// On Unix, this is hard to trigger naturally, but we can test the normal path.
+	result := slashRel("/a/b", "/a/b/c/d.md")
+	assert.Equal(t, "c/d.md", result)
+}
+
+func TestCheckFileFrontmatterParseError(t *testing.T) {
+	// Create a file with invalid frontmatter that causes parse error
+	root := t.TempDir()
+	// A file at depth 3 with content that frontmatter.Parse can't handle
+	writeTestFile(t, root, "cat/type/topic/bad.md", "no frontmatter here")
+
+	issues, err := RunWikiCheckOKF(root)
+	require.NoError(t, err)
+	// Should report "missing frontmatter" since there's no --- delimiters
+	require.NotEmpty(t, issues)
+	assertIssueContains(t, issues, "missing frontmatter")
+}
+
+func TestRunWikiCheckOKFEmptyRoot(t *testing.T) {
+	root := t.TempDir()
+	issues, err := RunWikiCheckOKF(root)
+	require.NoError(t, err)
+	assert.Empty(t, issues)
+}

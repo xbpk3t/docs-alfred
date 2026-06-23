@@ -7,6 +7,11 @@ import (
 	"github.com/xbpk3t/docs-alfred/cmd/xzb/internal/model"
 )
 
+const (
+	inOutIncome  = "收入"
+	inOutExpense = "支出"
+)
+
 type Summary struct {
 	Months            []MonthSummary    `json:"months"`
 	Categories        []CategorySummary `json:"categories"`
@@ -46,10 +51,10 @@ func Build(transactions []model.Transaction) Summary {
 			month.TransactionCount++
 
 			switch t.InOut {
-			case "收入":
+			case inOutIncome:
 				summary.TotalIncomeCents += t.AmountCents
 				month.IncomeCents += t.AmountCents
-			case "支出":
+			case inOutExpense:
 				summary.TotalExpenseCents += t.AmountCents
 				month.ExpenseCents += t.AmountCents
 				if t.BudgetIncluded {

@@ -220,3 +220,54 @@ func TestHasAdapter(t *testing.T) {
 		})
 	}
 }
+
+func TestURLMatchesDomain_InvalidURL(t *testing.T) {
+	// Invalid URLs should not match any domain
+	assert.False(t, urlMatchesDomain("%zz", []string{"example.com"}))
+}
+
+func TestURLMatchesDomain_Subdomain(t *testing.T) {
+	assert.True(t, urlMatchesDomain("https://www.example.com/path", []string{"example.com"}))
+	assert.True(t, urlMatchesDomain("https://example.com/path", []string{"example.com"}))
+	assert.False(t, urlMatchesDomain("https://notexample.com/path", []string{"example.com"}))
+}
+
+func TestExtractZhihuQuestionID_NoQuestionPrefix(t *testing.T) {
+	assert.Equal(t, "", extractZhihuQuestionID("/answer/123"))
+}
+
+func TestExtractZhihuQuestionID_NonNumericID(t *testing.T) {
+	assert.Equal(t, "", extractZhihuQuestionID("/question/abc"))
+}
+
+func TestExtractZhihuQuestionID_EmptyPath(t *testing.T) {
+	assert.Equal(t, "", extractZhihuQuestionID("/"))
+}
+
+func TestExtractZhihuQuestionID_RootOnly(t *testing.T) {
+	assert.Equal(t, "", extractZhihuQuestionID(""))
+}
+
+func TestIsTcoURL_InvalidURL(t *testing.T) {
+	assert.False(t, IsTcoURL("%zz"))
+}
+
+func TestCleanXMediaSuffix_InvalidURL(t *testing.T) {
+	assert.Equal(t, "%zz", CleanXMediaSuffix("%zz"))
+}
+
+func TestIsNumeric(t *testing.T) {
+	assert.True(t, isNumeric("123"))
+	assert.True(t, isNumeric("0"))
+	assert.False(t, isNumeric("abc"))
+	assert.False(t, isNumeric(""))
+	assert.False(t, isNumeric("12a"))
+}
+
+func TestCommandForURL_zhihuNoQuestionID(t *testing.T) {
+	adapter, args := CommandForURL("https://www.zhihu.com/hot")
+	assert.Equal(t, "zhihu", adapter)
+	// Without a valid question ID, args should fall through to generic format with full URL
+	require.GreaterOrEqual(t, len(args), 2)
+	assert.Equal(t, "https://www.zhihu.com/hot", args[1])
+}

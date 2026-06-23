@@ -37,4 +37,11 @@ tasks:
 
 
   test:
-    cmd: set -o pipefail && go test ./... -json | tparse -all
+    desc: run all tests with coverage
+    cmd: set -o pipefail && go test ./... -cover -json | tparse -all
+
+  test-coverprofile:
+    desc: generate coverage profile for IDE/CI
+    cmds:
+      - go test ./... -coverprofile=coverage.out -covermode=atomic
+      - go tool cover -func=coverage.out | tail -1

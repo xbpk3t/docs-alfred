@@ -62,3 +62,150 @@ func assertCatalogHas(t *testing.T, catalog []TopicCandidate, path, source strin
 
 	assert.Failf(t, "missing catalog path", "path=%s source=%s catalog=%v", path, source, catalog)
 }
+
+func TestIsCatalogPathSafe(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"tag/type/topic", true},
+		{"", false},
+		{"/absolute", false},
+		{"has/./dot", false},
+		{"has/../parent", false},
+		{"has//empty", false},
+		{"has/\x00null", false},
+		{"has/\nnewline", false},
+		{"simple", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			assert.Equal(t, tt.want, isCatalogPathSafe(tt.path))
+		})
+	}
+}
+
+func TestCleanCatalogPath(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"  tag/type  ", "tag/type"},
+		{"tag\\type", "tag/type"},
+		{"", ""},
+		{"  ", ""},
+		{"tag/type/", "tag/type"},
+		{"/tag/type", "tag/type"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.want, cleanCatalogPath(tt.input))
+		})
+	}
+}
+
+func TestJoinPath(t *testing.T) {
+	tests := []struct {
+		parts []string
+		want  string
+	}{
+		{[]string{"a", "b", "c"}, "a/b/c"},
+		{[]string{"a", "", "c"}, "a/c"},
+		{[]string{"", "", ""}, ""},
+		{[]string{}, ""},
+		{[]string{"a"}, "a"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			assert.Equal(t, tt.want, joinPath(tt.parts...))
+		})
+	}
+}
+
+func TestTopicBase(t *testing.T) {
+	assert.Equal(t, "tag/type", topicBase("tag", "type"))
+	assert.Equal(t, "", topicBase("", "type"))
+	assert.Equal(t, "", topicBase("tag", ""))
+	assert.Equal(t, "", topicBase("", ""))
+}
+
+func TestTopicDirName(t *testing.T) {
+	assert.Equal(t, "topic-name", topicDirName(&content.Topic{Topic: "topic-name"}))
+	assert.Equal(t, "slug", topicDirName(&content.Topic{Topic: "t", Meta: &content.TopicMeta{Slug: "slug"}}))
+	assert.Equal(t, "", topicDirName(nil))
+	assert.Equal(t, "topic", topicDirName(&content.Topic{Topic: "topic", Meta: &content.TopicMeta{}}))
+}
+
+func TestTopicCatalog_NilConfig(t *testing.T) {
+	cr := ConfigRepos{nil}
+	catalog := cr.TopicCatalog()
+	assert.Empty(t, catalog)
+}
+
+func TestCanonicalTopicPath_NilTopic(t *testing.T) {
+	path := canonicalTopicPath(nil, "base/path")
+	assert.Equal(t, "base/path", path)
+}
+
+func TestCanonicalTopicPath_WithPicDir(t *testing.T) {
+	topic := &content.Topic{Topic: "t", PicDir: "custom/path"}
+	path := canonicalTopicPath(topic, "base")
+	assert.Equal(t, "custom/path", path)
+}
+
+func TestTopicCatalog_WithReplacedAndRelatedRepos(t *testing.T) {
+	repos := ConfigRepos{{
+		Tag:  "kernel",
+		Type: "tool",
+		Repos: Repos{{
+			URL: "https://github.com/acme/main",
+			Topics: content.Topics{{Topic: "Main Topic", Meta: &content.TopicMeta{Slug: "main-topic"}}},
+			ReplacedRepos: Repos{{
+				URL:    "https://github.com/acme/old",
+				Topics: content.Topics{{Topic: "Old Topic"}},
+			}},
+			RelatedRepos: Repos{{
+				URL:    "https://github.com/acme/related",
+				Topics: content.Topics{{Topic: "Related Topic"}},
+			}},
+		}},
+	}}
+
+	catalog := repos.TopicCatalog()
+	assertCatalogHas(t, catalog, "kernel/tool/main/main-topic", "gh:repo")
+	assertCatalogHas(t, catalog, "kernel/tool/old/Old Topic", "gh:repo")
+	assertCatalogHas(t, catalog, "kernel/tool/related/Related Topic", "gh:repo")
+}
+
+func TestTopicCatalog_DuplicatePaths(t *testing.T) {
+	// Same topic path should only appear once
+	repos := ConfigRepos{{
+		Tag:    "kernel",
+		Type:   "tool",
+		Topics: content.Topics{{Topic: "same", Meta: &content.TopicMeta{Slug: "same"}}},
+	}}
+
+	catalog := repos.TopicCatalog()
+	count := 0
+	for _, c := range catalog {
+		if c.Path == "kernel/tool/same" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count)
+}
+
+func TestTopicCatalog_EmptyRepos(t *testing.T) {
+	repos := ConfigRepos{}
+	catalog := repos.TopicCatalog()
+	assert.Empty(t, catalog)
+}
+
+func TestAppendRepoTopicCandidates_NilRepo(t *testing.T) {
+	var candidates []TopicCandidate
+	seen := make(map[string]bool)
+	repos := Repos{nil}
+	// Should not panic
+	appendRepoTopicCandidates(&candidates, seen, repos, "tag", "type")
+	assert.Empty(t, candidates)
+}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tmc/langchaingo/llms"
 )
 
 func TestDefaultConfig_Defaults(t *testing.T) {
@@ -185,4 +186,181 @@ func TestChatResponse_Error(t *testing.T) {
 	}
 	require.NotNil(t, r.Error)
 	assert.Equal(t, "rate limit exceeded", r.Error.Message)
+}
+
+func TestConfigWithOverrides_AllSet(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("LLM_AxonHub", "")
+
+	cfg := ConfigWithOverrides("sk-override", "https://custom.api.com/v1", "custom-model")
+	assert.Equal(t, "sk-override", cfg.APIKey)
+	assert.Equal(t, "https://custom.api.com/v1", cfg.BaseURL)
+	assert.Equal(t, "custom-model", cfg.Model)
+}
+
+func TestConfigWithOverrides_EmptyOverridesUseDefaults(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "sk-env")
+	t.Setenv("OPENAI_BASE_URL", "")
+	t.Setenv("LLM_AxonHub", "")
+	t.Setenv("LLM_MODEL", "")
+
+	cfg := ConfigWithOverrides("", "", "")
+	assert.Equal(t, "sk-env", cfg.APIKey)
+	assert.Equal(t, "https://api.lucc.dev/v1", cfg.BaseURL)
+	assert.Equal(t, "deepseek-v4-flash", cfg.Model)
+}
+
+func TestConfigWithOverrides_PartialOverrides(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("LLM_AxonHub", "")
+	t.Setenv("OPENAI_BASE_URL", "")
+	t.Setenv("LLM_MODEL", "")
+
+	cfg := ConfigWithOverrides("sk-partial", "", "new-model")
+	assert.Equal(t, "sk-partial", cfg.APIKey)
+	assert.Equal(t, "https://api.lucc.dev/v1", cfg.BaseURL)
+	assert.Equal(t, "new-model", cfg.Model)
+}
+
+func TestToLLMSRole_System(t *testing.T) {
+	assert.Equal(t, llms.ChatMessageTypeSystem, toLLMSRole(RoleSystem))
+}
+
+func TestToLLMSRole_Assistant(t *testing.T) {
+	assert.Equal(t, llms.ChatMessageTypeAI, toLLMSRole(RoleAssistant))
+}
+
+func TestToLLMSRole_User(t *testing.T) {
+	assert.Equal(t, llms.ChatMessageTypeHuman, toLLMSRole(RoleUser))
+}
+
+func TestToLLMSRole_Unknown(t *testing.T) {
+	assert.Equal(t, llms.ChatMessageTypeGeneric, toLLMSRole("unknown"))
+}
+
+func TestExtractContentAndValidate_NilResponse(t *testing.T) {
+	_, err := extractContentAndValidate(nil)
+	require.Error(t, err)
+	assert.Equal(t, "no choices returned", err.Error())
+}
+
+func TestExtractContentAndValidate_EmptyChoices(t *testing.T) {
+	_, err := extractContentAndValidate(&llms.ContentResponse{Choices: []*llms.ContentChoice{}})
+	require.Error(t, err)
+	assert.Equal(t, "no choices returned", err.Error())
+}
+
+func TestExtractContentAndValidate_EmptyContent(t *testing.T) {
+	_, err := extractContentAndValidate(&llms.ContentResponse{
+		Choices: []*llms.ContentChoice{{Content: "", ReasoningContent: ""}},
+	})
+	require.Error(t, err)
+	assert.Equal(t, "empty response from AI model", err.Error())
+}
+
+func TestExtractContentAndValidate_ValidContent(t *testing.T) {
+	content, err := extractContentAndValidate(&llms.ContentResponse{
+		Choices: []*llms.ContentChoice{{Content: "hello"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "hello", content)
+}
+
+func TestExtractContentAndValidate_ReasoningOnly(t *testing.T) {
+	content, err := extractContentAndValidate(&llms.ContentResponse{
+		Choices: []*llms.ContentChoice{{Content: "", ReasoningContent: "thinking"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "thinking", content)
+}
+
+func TestExtractChoiceContent_ContentPreferred(t *testing.T) {
+	assert.Equal(t, "content", extractChoiceContent(&llms.ContentChoice{
+		Content:          "content",
+		ReasoningContent: "reasoning",
+	}))
+}
+
+func TestExtractChoiceContent_Empty(t *testing.T) {
+	assert.Equal(t, "", extractChoiceContent(&llms.ContentChoice{}))
+}
+
+func TestChat_WithTemperature(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"temp result"}}]}`))
+	}))
+	defer server.Close()
+
+	got, err := Chat(&ClientConfig{
+		APIKey:      "sk-test",
+		BaseURL:     server.URL,
+		Model:       "test-model",
+		Timeout:     time.Second,
+		Temperature: 0.7,
+	}, []Message{{Role: RoleUser, Content: "hello"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, "temp result", got)
+}
+
+func TestChat_DefaultTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer server.Close()
+
+	// Zero timeout should use default (not fail)
+	got, err := Chat(&ClientConfig{
+		APIKey:  "sk-test",
+		BaseURL: server.URL,
+		Model:   "test-model",
+		Timeout: 0, // should default to DefaultAITimeout
+	}, []Message{{Role: RoleUser, Content: "hello"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, "ok", got)
+}
+
+func TestChat_SystemMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req ChatRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.Len(t, req.Messages, 2)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"response"}}]}`))
+	}))
+	defer server.Close()
+
+	got, err := Chat(&ClientConfig{
+		APIKey:  "sk-test",
+		BaseURL: server.URL,
+		Model:   "test-model",
+		Timeout: time.Second,
+	}, []Message{
+		{Role: RoleSystem, Content: "You are helpful"},
+		{Role: RoleUser, Content: "hello"},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "response", got)
+}
+
+func TestChat_EmptyBothContentAndReasoning(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{}}]}`))
+	}))
+	defer server.Close()
+
+	_, err := Chat(&ClientConfig{
+		APIKey:  "sk-test",
+		BaseURL: server.URL,
+		Model:   "test-model",
+		Timeout: time.Second,
+	}, []Message{{Role: RoleUser, Content: "hello"}})
+
+	require.Error(t, err)
+	assert.Equal(t, "empty response from AI model", err.Error())
 }

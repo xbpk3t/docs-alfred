@@ -195,6 +195,14 @@ repos:
 
   - repo: local
     hooks:
+      - id: go-build
+        name: go-build
+        description: Fast compilation check (~3s)
+        entry: go build ./...
+        types: [go]
+        language: system
+        pass_filenames: false
+
       - id: golangci-lint-config-verify
         name: golangci-lint-config-verify
         entry: golangci-lint config verify -c .github/linters/golangci-lint.yml

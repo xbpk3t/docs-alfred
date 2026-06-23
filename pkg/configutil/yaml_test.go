@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -142,4 +143,130 @@ func writeConfigFile(t *testing.T, content string) string {
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
 	return path
+}
+
+func TestLoadError_Error(t *testing.T) {
+	e := &LoadError{Stage: StageRead, Err: errors.New("file not found")}
+	assert.Equal(t, "read config: file not found", e.Error())
+}
+
+func TestLoadError_Unwrap(t *testing.T) {
+	inner := errors.New("inner error")
+	e := &LoadError{Stage: StageParse, Err: inner}
+	assert.Equal(t, inner, e.Unwrap())
+	assert.True(t, errors.Is(e, inner))
+}
+
+func TestLoadError_StageConstants(t *testing.T) {
+	assert.Equal(t, "read", StageRead)
+	assert.Equal(t, "parse", StageParse)
+	assert.Equal(t, "unmarshal", StageUnmarshal)
+	assert.Equal(t, "validate", StageValidate)
+}
+
+func TestBytesProvider_Read(t *testing.T) {
+	p := bytesProvider([]byte("data"))
+	_, err := p.Read()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "bytes provider requires a parser")
+}
+
+func TestBytesProvider_ReadBytes(t *testing.T) {
+	p := bytesProvider([]byte("hello"))
+	data, err := p.ReadBytes()
+	require.NoError(t, err)
+	assert.Equal(t, []byte("hello"), data)
+}
+
+func TestLoadYAMLConfig_ReadError(t *testing.T) {
+	type config struct {
+		Name string `yaml:"name"`
+	}
+
+	_, err := LoadYAMLConfig(LoadYAMLConfigOptions[config]{
+		Path: "/nonexistent/path/config.yml",
+	})
+	require.Error(t, err)
+	var loadErr *LoadError
+	require.True(t, errors.As(err, &loadErr))
+	assert.Equal(t, StageRead, loadErr.Stage)
+}
+
+func TestLoadYAMLConfig_ParseError(t *testing.T) {
+	type config struct {
+		Name string `yaml:"name"`
+	}
+	path := writeConfigFile(t, "invalid: [")
+
+	_, err := LoadYAMLConfig(LoadYAMLConfigOptions[config]{
+		Path: path,
+	})
+	require.Error(t, err)
+	var loadErr *LoadError
+	require.True(t, errors.As(err, &loadErr))
+	assert.Equal(t, StageParse, loadErr.Stage)
+}
+
+func TestLoadYAMLConfig_AfterUnmarshalError(t *testing.T) {
+	type config struct {
+		Name string `yaml:"name"`
+	}
+	path := writeConfigFile(t, "name: test\n")
+
+	_, err := LoadYAMLConfig(LoadYAMLConfigOptions[config]{
+		Path: path,
+		AfterUnmarshal: func(cfg *config) error {
+			return errors.New("hook failed")
+		},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "hook failed")
+}
+
+func TestLoadYAMLConfig_CustomTag(t *testing.T) {
+	type config struct {
+		Name string `custom:"name"`
+	}
+	path := writeConfigFile(t, "name: test\n")
+
+	got, err := LoadYAMLConfig(LoadYAMLConfigOptions[config]{
+		Path: path,
+		Tag:  "custom",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "test", got.Name)
+}
+
+func TestLoadYAMLConfig_NilHooks(t *testing.T) {
+	type config struct {
+		Name string `yaml:"name"`
+	}
+	path := writeConfigFile(t, "name: test\n")
+
+	got, err := LoadYAMLConfig(LoadYAMLConfigOptions[config]{
+		Path:           path,
+		AfterUnmarshal: nil,
+		Validate:       nil,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "test", got.Name)
+}
+
+func TestLoadYAMLConfig_EnvOverrideUnmarshalError(t *testing.T) {
+	type config struct {
+		Count int `yaml:"count"`
+	}
+	path := writeConfigFile(t, "count: 1\n")
+	t.Setenv("TEST_COUNT", "not-a-number")
+
+	_, err := LoadYAMLConfig(LoadYAMLConfigOptions[config]{
+		Path: path,
+		EnvOverrides: []EnvOverride{
+			{Name: "TEST_COUNT", Path: "count"},
+		},
+	})
+	require.Error(t, err)
+	var loadErr *LoadError
+	require.True(t, errors.As(err, &loadErr))
+	assert.Equal(t, StageUnmarshal, loadErr.Stage)
 }

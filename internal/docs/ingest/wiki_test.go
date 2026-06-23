@@ -454,9 +454,10 @@ func (f *fakeDeps) dependencies() *dependencies {
 }
 
 type fakeFetcher struct {
-	results map[string]*wikisvc.ContentFetchResult
-	blocks  map[string]chan struct{}
-	started map[string]chan struct{}
+	results   map[string]*wikisvc.ContentFetchResult
+	blocks    map[string]chan struct{}
+	started   map[string]chan struct{}
+	returnNil bool
 }
 
 func (f *fakeFetcher) FetchContent(_ context.Context, urlStr, _ string) *wikisvc.ContentFetchResult {
@@ -465,6 +466,9 @@ func (f *fakeFetcher) FetchContent(_ context.Context, urlStr, _ string) *wikisvc
 	}
 	if ch, ok := f.blocks[urlStr]; ok {
 		<-ch
+	}
+	if f.returnNil {
+		return nil
 	}
 	if result, ok := f.results[urlStr]; ok {
 		return result

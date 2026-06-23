@@ -13,24 +13,36 @@ import (
 // Content-Type header value, and any error encountered during construction.
 func buildMultipart(fieldName, filename, content string, extraFields map[string]string) (*bytes.Buffer, string, error) {
 	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
+	contentType, err := buildMultipartTo(&buf, fieldName, filename, content, extraFields)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &buf, contentType, nil
+}
+
+// buildMultipartTo writes a multipart/form-data body into dst. It is the
+// testable core of buildMultipart: callers can supply a failing writer to
+// exercise error paths that bytes.Buffer never triggers.
+func buildMultipartTo(dst io.Writer, fieldName, filename, content string, extraFields map[string]string) (string, error) {
+	w := multipart.NewWriter(dst)
 
 	for key, val := range extraFields {
 		if err := w.WriteField(key, val); err != nil {
-			return nil, "", fmt.Errorf("write field %s: %w", key, err)
+			return "", fmt.Errorf("write field %s: %w", key, err)
 		}
 	}
 
 	fw, err := w.CreateFormFile(fieldName, filename)
 	if err != nil {
-		return nil, "", fmt.Errorf("create form file: %w", err)
+		return "", fmt.Errorf("create form file: %w", err)
 	}
 	if _, copyErr := io.Copy(fw, strings.NewReader(content)); copyErr != nil {
-		return nil, "", fmt.Errorf("copy content: %w", copyErr)
+		return "", fmt.Errorf("copy content: %w", copyErr)
 	}
 	if closeErr := w.Close(); closeErr != nil {
-		return nil, "", fmt.Errorf("close multipart: %w", closeErr)
+		return "", fmt.Errorf("close multipart: %w", closeErr)
 	}
 
-	return &buf, w.FormDataContentType(), nil
+	return w.FormDataContentType(), nil
 }

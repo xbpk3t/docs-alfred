@@ -645,11 +645,18 @@ func addFeedCategorySection(doc *md.Document, data *TemplateData) {
 			if item.Link != "" {
 				title = md.Link(item.Title, item.Link)
 			}
+			if item.IsMedia {
+				title = md.Label(title)
+			}
 			dateStr := ""
 			if item.PubDate != "" {
 				dateStr = " (" + item.PubDate + ")"
 			}
-			items = append(items, title+dateStr)
+			extra := ""
+			if item.TrnsURL != "" {
+				extra = " " + md.Link("trns", item.TrnsURL)
+			}
+			items = append(items, title+dateStr+extra)
 		}
 		if len(items) > 0 {
 			doc.Add(md.NamedSection(cat.Category, md.BulletList(items, false)))

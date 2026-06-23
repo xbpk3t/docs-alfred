@@ -10,7 +10,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
 
-const (
+var (
 	litterboxBaseURL = "https://litterbox.catbox.moe"
 	litterboxAPIPath = "/resources/internals/api.php"
 )
@@ -18,6 +18,8 @@ const (
 // Litterbox uploads files to litterbox.catbox.moe (temporary, up to 1 GB).
 type Litterbox struct {
 	Expiration string // "1h", "12h", "24h", "72h"
+	// BaseURL overrides the default litterbox endpoint. Empty uses the production URL.
+	BaseURL string
 }
 
 // NewLitterbox creates a Litterbox uploader. Empty expiration defaults to "72h".
@@ -30,7 +32,7 @@ func NewLitterbox(expiration string) *Litterbox {
 	return &Litterbox{Expiration: expiration}
 }
 
-func (l *Litterbox) Name() string { return "litterbox" }
+func (l *Litterbox) Name() string { return driverLitterbox }
 
 func (l *Litterbox) Upload(ctx context.Context, filename, content string) (*Result, error) {
 	extra := map[string]string{
@@ -42,12 +44,17 @@ func (l *Litterbox) Upload(ctx context.Context, filename, content string) (*Resu
 		return nil, err
 	}
 
+	base := l.BaseURL
+	if base == "" {
+		base = litterboxBaseURL + litterboxAPIPath
+	}
+
 	resp, err := httputil.NewRestyClient(httputil.DefaultClientTimeout, httputil.DefaultMaxRetries).
 		R().
 		SetContext(ctx).
 		SetHeader("Content-Type", contentType).
 		SetBody(buf).
-		Post(litterboxBaseURL + litterboxAPIPath)
+		Post(base)
 	if err != nil {
 		return nil, fmt.Errorf("upload request: %w", err)
 	}
@@ -62,5 +69,5 @@ func (l *Litterbox) Upload(ctx context.Context, filename, content string) (*Resu
 		return nil, errors.New("empty response from litterbox")
 	}
 
-	return &Result{URL: url, Driver: "litterbox", Expiration: l.Expiration}, nil
+	return &Result{URL: url, Driver: driverLitterbox, Expiration: l.Expiration}, nil
 }

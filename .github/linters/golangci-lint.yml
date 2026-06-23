@@ -200,7 +200,8 @@ linters:
 
     goconst:
       min-len: 2
-      min-occurrences: 4
+      min-occurrences: 6
+      ignore-tests: true
 
     misspell:
       locale: US

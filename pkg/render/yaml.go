@@ -46,6 +46,9 @@ func (j *YAMLRenderer) Render(data []byte) (string, error) {
 	// 转换为string格式的YAML
 	result, err := yaml.Marshal(dataToEncode)
 	if err != nil {
+		// Unreachable: ParseData only returns map/slice primitives produced by
+		// goccy/go-yaml, which are always marshallable.  Keeping the branch
+		// because yaml.Marshal's signature still returns error.
 		return "", err
 	}
 

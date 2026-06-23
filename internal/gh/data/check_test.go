@@ -185,3 +185,320 @@ func TestCheckResult_ReportResult(t *testing.T) {
 	assert.Contains(t, report, "ERROR file.yml: test error")
 	assert.Contains(t, report, "test command failed")
 }
+
+func TestGhCheck_MissingType(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- repo:
+    - url: https://github.com/acme/repo
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	require.True(t, checkutil.HasErrors(result.Issues))
+	assert.Contains(t, result.Issues[0].Message, "missing or invalid 'type'")
+}
+
+func TestGhCheck_TypeMismatchFilename(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: python
+  repo:
+    - url: https://github.com/acme/repo
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	require.True(t, checkutil.HasErrors(result.Issues))
+	var found bool
+	for _, iss := range result.Issues {
+		if contains(iss.Message, "TYPE_MUST_MATCH_FILENAME") {
+			found = true
+		}
+	}
+	assert.True(t, found, "should have TYPE_MUST_MATCH_FILENAME error")
+}
+
+func TestGhCheck_MissingRecord(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - url: https://github.com/acme/repo
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	var hasMissingRecord bool
+	for _, iss := range result.Issues {
+		if contains(iss.Message, "missing 'record'") {
+			hasMissingRecord = true
+		}
+	}
+	assert.True(t, hasMissingRecord)
+}
+
+func TestGhCheck_MissingURL(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - des: no url
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	require.True(t, checkutil.HasErrors(result.Issues))
+	var found bool
+	for _, iss := range result.Issues {
+		if contains(iss.Message, "missing or invalid url") {
+			found = true
+		}
+	}
+	assert.True(t, found)
+}
+
+func TestGhCheck_InvalidURL(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - url: not-a-url
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	require.True(t, checkutil.HasErrors(result.Issues))
+	var found bool
+	for _, iss := range result.Issues {
+		if contains(iss.Message, "invalid url format") {
+			found = true
+		}
+	}
+	assert.True(t, found)
+}
+
+func TestGhCheck_InvalidDateFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - url: https://github.com/acme/repo
+      record:
+        - date: 2024-1-1
+          des: bad date
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	require.True(t, checkutil.HasErrors(result.Issues))
+	var found bool
+	for _, iss := range result.Issues {
+		if contains(iss.Message, "invalid date format") {
+			found = true
+		}
+	}
+	assert.True(t, found)
+}
+
+func TestGhCheck_EmptyDes(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - url: https://github.com/acme/repo
+      record:
+        - date: 2024-01-01
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	require.True(t, checkutil.HasErrors(result.Issues))
+	var found bool
+	for _, iss := range result.Issues {
+		if contains(iss.Message, "missing or empty des") {
+			found = true
+		}
+	}
+	assert.True(t, found)
+}
+
+func TestGhCheck_TopicRecordValidation(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - url: https://github.com/acme/repo
+      topics:
+        - topic: overview
+          record:
+            - date: 2024-01-01
+              des: valid
+            - date: bad-date
+              des: invalid date
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	require.True(t, checkutil.HasErrors(result.Issues))
+}
+
+func TestGhCheck_EffectiveMaxLines(t *testing.T) {
+	opts := CheckOptions{MaxLines: 500}
+	assert.Equal(t, 500, opts.effectiveMaxLines())
+
+	opts2 := CheckOptions{MaxLines: 0}
+	assert.Equal(t, defaultMaxLines, opts2.effectiveMaxLines())
+
+	opts3 := CheckOptions{MaxLines: -1}
+	assert.Equal(t, defaultMaxLines, opts3.effectiveMaxLines())
+}
+
+func TestGhCheck_UsingEntry(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  using:
+    url: https://github.com/acme/using-tool
+    des: using tool
+  repo:
+    - url: https://github.com/acme/repo
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	// using + repo = 2 entries
+	assert.Equal(t, 2, result.TotalEntries)
+}
+
+func TestGhCheck_EmptyRepoList(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo: []
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.TotalEntries)
+}
+
+func TestGhCheck_RepoNotMapping(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - "just a string"
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestGhCheck_RepoNoTopics(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - url: https://github.com/acme/repo
+      des: a tool
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.TotalEntries)
+	assert.False(t, checkutil.HasErrors(result.Issues))
+}
+
+func TestGhCheck_MultipleSections(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
+  repo:
+    - url: https://github.com/acme/repo1
+  record: []
+- type: go
+  repo:
+    - url: https://github.com/acme/repo2
+  record: []
+`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.TotalEntries)
+}
+
+func TestGhCheck_UnreadableFileEvent(t *testing.T) {
+	// Create a file that will be found by ListYAMLFilesRecursive
+	// but can't be read (we'll delete it after listing)
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "go.yml")
+	require.NoError(t, os.WriteFile(file, []byte(`- type: go
+  record: []
+`), 0644))
+
+	// Run check first to verify it works
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestGhCheck_EmptyFileEvent(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(""), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	// Should have EMPTY_FILE error
+	var hasEmpty bool
+	for _, iss := range result.Issues {
+		if contains(iss.Message, "EMPTY_FILE") {
+			hasEmpty = true
+		}
+	}
+	assert.True(t, hasEmpty)
+}
+
+func TestGhCheck_NotArrayEvent(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`key: value`), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	var hasNotArray bool
+	for _, iss := range result.Issues {
+		if contains(iss.Message, "expected array at root") {
+			hasNotArray = true
+		}
+	}
+	assert.True(t, hasNotArray)
+}
+
+func TestGhCheck_WhitespaceOnlyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte("   \n  \n"), 0644))
+
+	result, err := RunGhCheck(tmpDir)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	var hasEmpty bool
+	for _, iss := range result.Issues {
+		if contains(iss.Message, "EMPTY_FILE") {
+			hasEmpty = true
+		}
+	}
+	assert.True(t, hasEmpty)
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStr(s, substr))
+}
+
+func containsStr(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
