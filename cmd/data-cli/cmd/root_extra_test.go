@@ -61,34 +61,66 @@ func TestExecuteDoesNotPanic(t *testing.T) {
 // newRenderCmd – RunE paths
 // ---------------------------------------------------------------------------
 
-func TestNewRenderCmdRunEDefaultConfig(t *testing.T) {
+func TestNewRenderCmdRequiresDomain(t *testing.T) {
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"render"})
 	err := cmd.Execute()
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "accepts 1 arg(s)")
 }
 
-func TestNewRenderCmdRunECustomConfig(t *testing.T) {
+func TestNewRenderCmdInvalidDomain(t *testing.T) {
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"render", "-c", "/tmp/__no_such_config__.yml"})
+	cmd.SetArgs([]string{"render", "bogus"})
 	err := cmd.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown data domain")
+}
+
+func TestNewRenderCmdDefaultPath(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"render", "gh"})
+	err := cmd.Execute()
+	// Fails because data/gh doesn't exist in test env, but validates arg parsing.
 	require.Error(t, err)
 }
 
-func TestNewRenderCmdRunEExtractTopicsNoOut(t *testing.T) {
+func TestNewRenderCmdWithCustomPath(t *testing.T) {
+	ghDir := writeGhFiles(t, map[string]string{"dev/tool.yml": validGhYAML})
+	outDir := t.TempDir()
+
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"render", "--extract", "topics"})
+	cmd.SetArgs([]string{"render", "gh", "--path", ghDir, "--out-dir", outDir, "--format", "yaml"})
 	err := cmd.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--out is required")
+	require.NoError(t, err)
 }
 
-func TestNewRenderCmdRunEExtractTopicsWithOut(t *testing.T) {
+func TestNewRenderCmdWithJSONFormat(t *testing.T) {
+	ghDir := writeGhFiles(t, map[string]string{"dev/tool.yml": validGhYAML})
+	outDir := t.TempDir()
+
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"render", "--extract", "topics", "--out", "/tmp/topics.json"})
+	cmd.SetArgs([]string{"render", "gh", "--path", ghDir, "--out-dir", outDir, "--format", "json"})
 	err := cmd.Execute()
-	// Fails because docs/public/gh.json doesn't exist, but RunE is covered.
-	require.Error(t, err)
+	require.NoError(t, err)
+}
+
+func TestNewRenderCmdGoodsDomain(t *testing.T) {
+	goodsDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(goodsDir, "goods.yml"), []byte(`---
+- type: 耳机
+  tag: EDC
+  score: 3
+  item:
+    - name: C50
+      price: ¥179
+`), 0644))
+	outDir := t.TempDir()
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"render", "goods", "--path", goodsDir, "--out-dir", outDir})
+	err := cmd.Execute()
+	require.NoError(t, err)
 }
 
 // ---------------------------------------------------------------------------

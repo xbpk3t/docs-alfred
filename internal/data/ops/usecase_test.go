@@ -109,12 +109,6 @@ func TestRunDomainDuplicate_GHDomain(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
-func TestRunRender_ExtractTopicsNoOut(t *testing.T) {
-	_, err := RunRender(RenderInput{Extract: "topics"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--out is required")
-}
-
 func TestRunDomainCheck_DefaultPath(t *testing.T) {
 	result, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainGH})
 	if err == nil {
@@ -122,36 +116,11 @@ func TestRunDomainCheck_DefaultPath(t *testing.T) {
 	}
 }
 
-func TestExtractTopics_EmptyOut(t *testing.T) {
-	_, err := extractTopics(extractTopicsInput{Out: ""})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--out is required")
-}
-
 func TestRunDomainDuplicate_DefaultPath(t *testing.T) {
 	_, err := RunDomainDuplicate(DomainDuplicateInput{Domain: data.DomainBooks})
 	if err != nil {
 		// Expected - default path may not exist
 	}
-}
-
-func TestRunRender_NonExtractPath(t *testing.T) {
-	tmpDir := t.TempDir()
-	srcDir := filepath.Join(tmpDir, "data")
-	require.NoError(t, os.MkdirAll(srcDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "test.yml"), []byte("- name: test\n"), 0644))
-
-	configPath := filepath.Join(tmpDir, "docs.yml")
-	require.NoError(t, os.WriteFile(configPath, []byte(`---
-- src: `+srcDir+`
-  cmd: default
-  yaml:
-    dst: `+filepath.Join(tmpDir, "out")+`
-`), 0644))
-
-	result, err := RunRender(RenderInput{Config: configPath})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.ConfigCount)
 }
 
 func TestRunDomainCheck_YAMLParseOnlyError(t *testing.T) {
@@ -181,4 +150,110 @@ func TestRunDomainCheck_StructuredCheckDomain(t *testing.T) {
 	result, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainBooks, Path: tmpDir})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
+}
+
+// ---------------------------------------------------------------------------
+// RunDomainRender
+// ---------------------------------------------------------------------------
+
+func TestRunDomainRender_UnknownDomain(t *testing.T) {
+	_, err := RunDomainRender(DomainRenderInput{Domain: data.DataDomain("unknown")})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown data domain")
+}
+
+func TestRunDomainRender_GHD(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "data", "gh")
+	tagDir := filepath.Join(src, "dev")
+	require.NoError(t, os.MkdirAll(tagDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "tool.yml"), []byte(`- type: tool
+  repo:
+    - url: https://github.com/acme/main-tool
+      des: Main tool
+`), 0644))
+	outDir := filepath.Join(tmpDir, "public")
+
+	result, err := RunDomainRender(DomainRenderInput{
+		Domain: data.DomainGH,
+		Path:   src,
+		OutDir: outDir,
+	})
+	require.NoError(t, err)
+	assert.Len(t, result.OutputFiles, 2) // json + yaml
+}
+
+func TestRunDomainRender_Goods(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "data")
+	require.NoError(t, os.MkdirAll(src, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(src, "goods.yml"), []byte(`---
+- type: 耳机
+  tag: EDC
+  score: 3
+  item:
+    - name: C50
+      price: ¥179
+`), 0644))
+	outDir := filepath.Join(tmpDir, "public")
+
+	result, err := RunDomainRender(DomainRenderInput{
+		Domain: data.DomainGoods,
+		Path:   src,
+		OutDir: outDir,
+	})
+	require.NoError(t, err)
+	assert.Len(t, result.OutputFiles, 1) // json only
+}
+
+func TestRunDomainRender_Task(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "data")
+	require.NoError(t, os.MkdirAll(src, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(src, "task.yml"), []byte(`---
+- task: test task
+  date: "2024-01-01"
+`), 0644))
+	outDir := filepath.Join(tmpDir, "public")
+
+	result, err := RunDomainRender(DomainRenderInput{
+		Domain: data.DomainTask,
+		Path:   src,
+		OutDir: outDir,
+	})
+	require.NoError(t, err)
+	assert.Len(t, result.OutputFiles, 1) // yaml only
+}
+
+func TestRunDomainRender_Defaults(t *testing.T) {
+	// Test with default path (which may not exist) - should error
+	_, err := RunDomainRender(DomainRenderInput{Domain: data.DomainGH})
+	require.Error(t, err)
+}
+
+func TestRunDomainRender_CustomFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "data")
+	require.NoError(t, os.MkdirAll(src, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(src, "task.yml"), []byte(`---
+- task: test task
+`), 0644))
+	outDir := filepath.Join(tmpDir, "public")
+
+	// Override format to json
+	result, err := RunDomainRender(DomainRenderInput{
+		Domain: data.DomainTask,
+		Path:   src,
+		OutDir: outDir,
+		Format: "json",
+	})
+	require.NoError(t, err)
+	assert.Len(t, result.OutputFiles, 1)
+}
+
+func TestRunDomainRender_DefaultRenderFormat(t *testing.T) {
+	assert.Equal(t, "json,yaml", defaultRenderFormat(data.DomainGH))
+	assert.Equal(t, "json", defaultRenderFormat(data.DomainGoods))
+	assert.Equal(t, "yaml", defaultRenderFormat(data.DomainTask))
+	assert.Equal(t, "yaml", defaultRenderFormat(data.DomainBooks))
 }

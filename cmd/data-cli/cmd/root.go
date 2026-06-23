@@ -12,57 +12,68 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
-type renderFlags struct {
-	config  string
-	extract string
-	out     string
-}
-
 // Execute is the entry point for the data-cli binary.
 func Execute() error {
 	return newRootCmd().Execute()
 }
 
 func newRootCmd() *cobra.Command {
+	var dataPath string
+
 	rootCmd := &cobra.Command{
 		Use:   "data-cli",
 		Short: "Data rendering and validation commands",
 	}
 
-	rootCmd.AddCommand(newRenderCmd())
-	rootCmd.AddCommand(newCheckCmd())
-	rootCmd.AddCommand(newDuplicateCmd())
+	rootCmd.PersistentFlags().StringVar(&dataPath, "path", "", "Override data directory")
+
+	rootCmd.AddCommand(newRenderCmd(&dataPath))
+	rootCmd.AddCommand(newCheckCmd(&dataPath))
+	rootCmd.AddCommand(newDuplicateCmd(&dataPath))
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	return rootCmd
 }
 
-func newRenderCmd() *cobra.Command {
-	var flags renderFlags
+func newRenderCmd(dataPath *string) *cobra.Command {
+	var outDir, format string
 
 	cmd := &cobra.Command{
-		Use:   "render",
-		Short: "Render YAML data into outputs",
+		Use:   "render <domain>",
+		Short: "Render YAML data for a domain",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := dataops.RunRender(dataops.RenderInput{
-				Config:  flags.config,
-				Extract: flags.extract,
-				Out:     flags.out,
-			})
+			domain, err := parseDataDomainArg(args[0])
+			if err != nil {
+				return err
+			}
 
-			return err
+			result, err := dataops.RunDomainRender(dataops.DomainRenderInput{
+				Domain: domain,
+				Path:   *dataPath,
+				OutDir: outDir,
+				Format: format,
+			})
+			if err != nil {
+				return err
+			}
+
+			for _, f := range result.OutputFiles {
+				slog.Info("Rendered", "domain", string(domain), "output", f)
+			}
+
+			return nil
 		},
 	}
 
-	cmd.Flags().StringVarP(&flags.config, "config", "c", "docs.yml", "Render config path")
-	cmd.Flags().StringVar(&flags.extract, "extract", "", "Extract backbone: topics")
-	cmd.Flags().StringVar(&flags.out, "out", "", "Output path for extracted backbone")
+	cmd.Flags().StringVar(&outDir, "out-dir", "docs/public", "Output directory")
+	cmd.Flags().StringVar(&format, "format", "", "Output format: json, yaml, json,yaml (default depends on domain)")
 
 	return cmd
 }
 
-func newCheckCmd() *cobra.Command {
-	var dataPath, ruleScope string
+func newCheckCmd(dataPath *string) *cobra.Command {
+	var ruleScope string
 	var ghMaxLines int
 
 	cmd := &cobra.Command{
@@ -75,11 +86,10 @@ func newCheckCmd() *cobra.Command {
 				return err
 			}
 
-			return runDomainCheck(domain, dataPath, ruleScope, ghMaxLines)
+			return runDomainCheck(domain, *dataPath, ruleScope, ghMaxLines)
 		},
 	}
 
-	cmd.Flags().StringVar(&dataPath, "path", "", "Override data directory")
 	cmd.Flags().IntVar(&ghMaxLines, "max-lines", 0, "Override data/gh maximum YAML file line count for gh checks")
 	cmd.Flags().StringVar(&ruleScope, "rule-scope", "", "Override structured data check rule scope")
 	_ = cmd.Flags().MarkHidden("rule-scope")
@@ -110,9 +120,7 @@ func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string, ghMaxLin
 	return nil
 }
 
-func newDuplicateCmd() *cobra.Command {
-	var dataPath string
-
+func newDuplicateCmd(dataPath *string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "duplicate <domain>",
 		Short: "Find duplicate records for a domain",
@@ -123,11 +131,9 @@ func newDuplicateCmd() *cobra.Command {
 				return err
 			}
 
-			return runDomainDuplicate(domain, dataPath)
+			return runDomainDuplicate(domain, *dataPath)
 		},
 	}
-
-	cmd.Flags().StringVar(&dataPath, "path", "", "Override data directory")
 
 	return cmd
 }

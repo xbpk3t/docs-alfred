@@ -1,7 +1,6 @@
 package dataops
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 
@@ -159,58 +158,56 @@ func RunDomainDuplicate(input DomainDuplicateInput) (*DomainDuplicateResult, err
 	return &DomainDuplicateResult{Report: report}, nil
 }
 
-// RenderInput holds input for data rendering.
-type RenderInput struct {
-	Config  string
-	Extract string
-	Out     string
+// DomainRenderInput holds input for domain rendering.
+type DomainRenderInput struct {
+	Domain data.DataDomain
+	Path   string // empty = default for domain
+	OutDir string // empty = "docs/public"
+	Format string // empty = domain default
 }
 
-// RenderResult holds the data render outcome.
-type RenderResult struct {
-	OutputPath  string
-	ConfigCount int
-	Extracted   bool
-}
+// DomainRenderResult holds the result of a domain render.
+type DomainRenderResult = datarender.DomainRenderResult
 
-// RunRender renders YAML data into outputs.
-func RunRender(input RenderInput) (*RenderResult, error) {
-	if input.Extract == "topics" {
-		if input.Out == "" {
-			return nil, errors.New("--out is required when --extract is set")
-		}
-
-		result, err := extractTopics(extractTopicsInput{Out: input.Out})
-		if err != nil {
-			return nil, err
-		}
-
-		return &RenderResult{Extracted: true, OutputPath: result.OutputPath}, nil
+// RunDomainRender renders a single domain's data into output files.
+func RunDomainRender(input DomainRenderInput) (*DomainRenderResult, error) {
+	spec, ok := data.SpecForDomain(input.Domain)
+	if !ok {
+		return nil, fmt.Errorf("unknown data domain %q", input.Domain)
 	}
 
-	configCount, err := datarender.Run(input.Config)
-	if err != nil {
-		return nil, err
+	src := input.Path
+	if src == "" {
+		src = spec.DefaultPath
 	}
 
-	return &RenderResult{ConfigCount: configCount}, nil
-}
-
-type extractTopicsInput struct {
-	Out string
-}
-
-type extractTopicsResult struct {
-	OutputPath string
-}
-
-func extractTopics(input extractTopicsInput) (*extractTopicsResult, error) {
-	if input.Out == "" {
-		return nil, errors.New("--out is required")
-	}
-	if err := data.ExtractTopics(input.Out); err != nil {
-		return nil, err
+	outDir := input.OutDir
+	if outDir == "" {
+		outDir = "docs/public"
 	}
 
-	return &extractTopicsResult{OutputPath: input.Out}, nil
+	format := input.Format
+	if format == "" {
+		format = defaultRenderFormat(input.Domain)
+	}
+
+	slog.Info("Rendering domain", "domain", input.Domain, "src", src, "outDir", outDir, "format", format)
+
+	return datarender.RunDomainRender(datarender.DomainRenderConfig{
+		Domain: string(input.Domain),
+		Src:    src,
+		OutDir: outDir,
+		Format: format,
+	})
+}
+
+func defaultRenderFormat(domain data.DataDomain) string {
+	switch domain {
+	case data.DomainGH:
+		return "json,yaml"
+	case data.DomainGoods:
+		return "json"
+	default:
+		return "yaml"
+	}
 }
