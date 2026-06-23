@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/xbpk3t/docs-alfred/internal/data/render"
 	"github.com/xbpk3t/docs-alfred/internal/gh/data"
@@ -214,92 +213,4 @@ func extractTopics(input extractTopicsInput) (*extractTopicsResult, error) {
 	}
 
 	return &extractTopicsResult{OutputPath: input.Out}, nil
-}
-
-// GhFindInput holds input for local gh entry search.
-type GhFindInput struct {
-	Root  string
-	Query string
-	URL   string
-	Limit int
-}
-
-// GhFindResult holds search results.
-type GhFindResult struct {
-	Entries []ghdata.FindEntry
-}
-
-// RunGhFind searches local data/gh entries.
-func RunGhFind(input GhFindInput) (*GhFindResult, error) {
-	root := input.Root
-	if root == "" {
-		root = data.DefaultPathForDomain(data.DomainGH)
-	}
-
-	slog.Info("Searching data/gh", "query", input.Query, "url", input.URL, "limit", input.Limit)
-
-	entries, err := ghdata.FindEntries(root, input.Query, input.URL)
-	if err != nil {
-		return nil, err
-	}
-
-	ghdata.SortEntries(entries)
-
-	if input.Limit > 0 && input.Limit < len(entries) {
-		entries = entries[:input.Limit]
-	}
-
-	return &GhFindResult{Entries: entries}, nil
-}
-
-// GhAppendInput holds input for appending a record.
-type GhAppendInput struct {
-	File  string
-	URL   string
-	Date  string
-	Des   string
-	Topic string
-}
-
-// GhAppendResult holds the result of appending a record.
-type GhAppendResult struct {
-	File string
-	Diff string
-}
-
-// RunGhAppend appends a record to a data/gh entry.
-func RunGhAppend(input *GhAppendInput) (*GhAppendResult, error) {
-	if input == nil {
-		return nil, errors.New("append input is required")
-	}
-	if input.URL == "" && input.File == "" {
-		return nil, errors.New("either --url or --file is required")
-	}
-	if input.Des == "" {
-		return nil, errors.New("--des is required")
-	}
-	date := resolveGhAppendDate(input.Date)
-
-	slog.Info("Appending record", "url", input.URL, "date", date, "des", input.Des)
-
-	result, err := ghdata.AppendRecord(&ghdata.AppendRecordOptions{
-		File:  input.File,
-		URL:   input.URL,
-		Date:  date,
-		Des:   input.Des,
-		Topic: input.Topic,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("append-record failed: %w", err)
-	}
-
-	return &GhAppendResult{File: result.File, Diff: result.Diff}, nil
-}
-
-func resolveGhAppendDate(date string) string {
-	if date != "" {
-		return date
-	}
-
-	return time.Now().Format(time.DateOnly)
 }
