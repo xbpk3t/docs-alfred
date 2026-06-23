@@ -1,7 +1,6 @@
 package datarender
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -20,11 +19,156 @@ import (
 type fileType string
 
 const (
-	fileTypeJSON  fileType = "json"
-	fileTypeYAML  fileType = "yml"
-	commandGithub          = "gh"
-	commandTask            = "task"
+	fileTypeJSON fileType = "json"
+	fileTypeYAML fileType = "yml"
 )
+
+// DomainRenderConfig holds configuration for rendering a single domain.
+type DomainRenderConfig struct {
+	Domain string
+	Src    string
+	OutDir string
+	Format string // "json", "yaml", "json,yaml"
+}
+
+// DomainRenderResult holds the result of a domain render.
+type DomainRenderResult struct {
+	OutputFiles []string
+}
+
+// RunDomainRender renders a single domain's data into the specified output formats.
+func RunDomainRender(cfg DomainRenderConfig) (*DomainRenderResult, error) {
+	src, err := filepath.Abs(cfg.Src)
+	if err != nil {
+		return nil, fmt.Errorf("get absolute path: %w", err)
+	}
+
+	fi, err := os.Stat(src)
+	if err != nil {
+		return nil, fmt.Errorf("stat source path %s: %w", src, err)
+	}
+
+	isSourceDir := fi.IsDir()
+	formats := strings.Split(cfg.Format, ",")
+
+	renderer, err := createRendererForDomain(cfg.Domain)
+	if err != nil {
+		return nil, err
+	}
+
+	var outputFiles []string
+
+	for _, f := range formats {
+		f = strings.TrimSpace(f)
+		ft := normalizeFormat(f)
+		if ft == "" {
+			return nil, fmt.Errorf("unsupported format %q", f)
+		}
+
+		proc := newDocProcessor(ft)
+		proc.Dst = cfg.OutDir
+
+		if cfg.Domain == "gh" && isSourceDir {
+			if err := processGithubDirDomain(src, ft, proc); err != nil {
+				return nil, fmt.Errorf("process gh dir: %w", err)
+			}
+		} else {
+			if err := proc.processFile(src, renderer); err != nil {
+				return nil, fmt.Errorf("process %s: %w", ft, err)
+			}
+		}
+
+		outputFiles = append(outputFiles, filepath.Join(cfg.OutDir, proc.getOutputFilename(src)))
+	}
+
+	return &DomainRenderResult{OutputFiles: outputFiles}, nil
+}
+
+// createRendererForDomain returns the appropriate renderer for a domain.
+func createRendererForDomain(domain string) (render.Renderer, error) {
+	var renderer render.Renderer
+	switch domain {
+	case "task":
+		renderer = task.NewTaskYAMLRender()
+	case "gh":
+		renderer = ghindex.NewGithubYAMLRender("")
+	case "goods":
+		renderer = goods.NewGoodsYAMLRender()
+	default:
+		renderer = render.NewYAMLRenderer(domain, true)
+	}
+
+	parseMode, exists := serviceParseModeMap()[domain]
+	if !exists {
+		parseMode = render.ParseSingle
+	}
+
+	type parseModeRenderer interface {
+		WithParseMode(mode render.ParseMode)
+	}
+
+	r, ok := renderer.(parseModeRenderer)
+	if !ok {
+		return nil, errors.New("renderer does not support parse mode configuration")
+	}
+	r.WithParseMode(parseMode)
+
+	return renderer, nil
+}
+
+// processGithubDirDomain handles the gh domain's special directory-based rendering.
+func processGithubDirDomain(src string, ft fileType, proc *docProcessor) error {
+	allRepos, err := ghindex.LoadConfigReposFromDir(src)
+	if err != nil {
+		return err
+	}
+
+	result, err := yaml.Marshal(allRepos)
+	if err != nil {
+		return fmt.Errorf("marshal gh repos: %w", err)
+	}
+
+	content := string(result)
+	if ft == fileTypeJSON {
+		jsonData, err := yaml.YAMLToJSON([]byte(content))
+		if err != nil {
+			return fmt.Errorf("convert gh to json: %w", err)
+		}
+		content = string(jsonData)
+	}
+
+	outputFilename := proc.getOutputFilename(src)
+	if err := proc.writeOutput(content, outputFilename); err != nil {
+		return fmt.Errorf("write gh output: %w", err)
+	}
+
+	return nil
+}
+
+// normalizeFormat converts user-facing format names to internal fileType.
+func normalizeFormat(f string) fileType {
+	switch f {
+	case "json":
+		return fileTypeJSON
+	case "yaml", "yml":
+		return fileTypeYAML
+	default:
+		return ""
+	}
+}
+
+// serviceParseModeMap returns the parse mode for each domain.
+func serviceParseModeMap() map[string]render.ParseMode {
+	return map[string]render.ParseMode{
+		"goods": render.ParseFlatten,
+		"task":  render.ParseMulti,
+		"gh":    render.ParseFlatten,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// docProcessor — file I/O and output helpers
+// ---------------------------------------------------------------------------
 
 type docProcessor struct {
 	Dst             string `yaml:"dst"`
@@ -33,77 +177,8 @@ type docProcessor struct {
 	fileType        fileType
 }
 
-type docsConfig struct {
-	JSON  *docProcessor `yaml:"json"`
-	YAML  *docProcessor `yaml:"yaml"`
-	Src   string        `yaml:"src"`
-	Cmd   string        `yaml:"cmd"`
-	IsDir bool          `yaml:"-"`
-}
-
-// Run renders all configured data sources from cfgFile and returns the config count.
-func Run(cfgFile string) (int, error) {
-	configs, err := loadRenderConfigs(cfgFile)
-	if err != nil {
-		return 0, err
-	}
-	if err := processRenderConfigs(configs); err != nil {
-		return 0, err
-	}
-
-	return len(configs), nil
-}
-
 func newDocProcessor(fileType fileType) *docProcessor {
 	return &docProcessor{fileType: fileType}
-}
-
-func loadRenderConfigs(cfgFile string) ([]docsConfig, error) {
-	configData, err := os.ReadFile(cfgFile)
-	if err != nil {
-		return nil, err
-	}
-
-	var rawConfigs []docsConfig
-	if err := yaml.NewDecoder(bytes.NewReader(configData)).Decode(&rawConfigs); err != nil {
-		return nil, err
-	}
-
-	configs := make([]docsConfig, 0, len(rawConfigs))
-	for i := range rawConfigs {
-		configs = append(configs, processRenderConfig(rawConfigs[i]))
-	}
-
-	return configs, nil
-}
-
-func processRenderConfig(raw docsConfig) docsConfig {
-	config := docsConfig{
-		Src: raw.Src,
-		Cmd: raw.Cmd,
-	}
-	if raw.JSON != nil {
-		config.JSON = newDocProcessor(fileTypeJSON)
-		config.JSON.Dst = raw.JSON.Dst
-		config.JSON.MergeOutputFile = raw.JSON.MergeOutputFile
-	}
-	if raw.YAML != nil {
-		config.YAML = newDocProcessor(fileTypeYAML)
-		config.YAML.Dst = raw.YAML.Dst
-		config.YAML.MergeOutputFile = raw.YAML.MergeOutputFile
-	}
-
-	return config
-}
-
-func processRenderConfigs(configs []docsConfig) error {
-	for i := range configs {
-		if err := configs[i].process(); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (p *docProcessor) setCurrentFile(filename string) {
@@ -200,81 +275,35 @@ func (p *docProcessor) writeOutput(content, filename string) error {
 	return nil
 }
 
-func (dc *docsConfig) process() error {
-	if err := dc.initializePath(); err != nil {
-		return err
-	}
+// ---------------------------------------------------------------------------
+// Legacy support — docsConfig is kept for marshalAndWriteGithubOutput helper
+// ---------------------------------------------------------------------------
 
-	processors := dc.getProcessors()
-
-	return dc.processAll(processors)
+type docsConfig struct {
+	JSON  *docProcessor `yaml:"json"`
+	YAML  *docProcessor `yaml:"yaml"`
+	Src   string        `yaml:"src"`
+	Cmd   string        `yaml:"cmd"`
+	IsDir bool          `yaml:"-"`
 }
 
-func (dc *docsConfig) initializePath() error {
-	absPath, err := filepath.Abs(dc.Src)
-	if err != nil {
-		return fmt.Errorf("get absolute path error: %w", err)
+func processRenderConfig(raw docsConfig) docsConfig {
+	config := docsConfig{
+		Src: raw.Src,
+		Cmd: raw.Cmd,
 	}
-	dc.Src = absPath
-
-	fileInfo, err := os.Stat(dc.Src)
-	if err != nil {
-		return fmt.Errorf("stat path error: %w", err)
+	if raw.JSON != nil {
+		config.JSON = newDocProcessor(fileTypeJSON)
+		config.JSON.Dst = raw.JSON.Dst
+		config.JSON.MergeOutputFile = raw.JSON.MergeOutputFile
 	}
-	dc.IsDir = fileInfo.IsDir()
-
-	return nil
-}
-
-func (dc *docsConfig) getProcessors() map[fileType]*docProcessor {
-	return map[fileType]*docProcessor{
-		fileTypeJSON: dc.JSON,
-		fileTypeYAML: dc.YAML,
-	}
-}
-
-func (dc *docsConfig) processAll(processors map[fileType]*docProcessor) error {
-	for fileType, processor := range processors {
-		if processor == nil {
-			continue
-		}
-
-		if err := dc.processSingle(fileType, processor); err != nil {
-			return err
-		}
+	if raw.YAML != nil {
+		config.YAML = newDocProcessor(fileTypeYAML)
+		config.YAML.Dst = raw.YAML.Dst
+		config.YAML.MergeOutputFile = raw.YAML.MergeOutputFile
 	}
 
-	return nil
-}
-
-func (dc *docsConfig) processSingle(fileType fileType, processor *docProcessor) error {
-	if dc.Cmd == commandGithub && dc.IsDir {
-		return dc.processGithubDir(fileType, processor)
-	}
-
-	renderer, err := dc.createRenderer()
-	if err != nil {
-		slog.Error("create renderer error", "type", string(fileType), "file", dc.Src)
-
-		return fmt.Errorf("create renderer error for %s: %w", fileType, err)
-	}
-
-	if err := processor.processFile(dc.Src, renderer); err != nil {
-		slog.Error("process file error", "type", string(fileType), "file", dc.Src)
-
-		return fmt.Errorf("process %s error: %w", fileType, err)
-	}
-
-	return nil
-}
-
-func (dc *docsConfig) processGithubDir(fileType fileType, processor *docProcessor) error {
-	allRepos, err := ghindex.LoadConfigReposFromDir(dc.Src)
-	if err != nil {
-		return err
-	}
-
-	return dc.marshalAndWriteGithubOutput(allRepos, fileType, processor)
+	return config
 }
 
 func (dc *docsConfig) marshalAndWriteGithubOutput(
@@ -302,55 +331,4 @@ func (dc *docsConfig) marshalAndWriteGithubOutput(
 	}
 
 	return nil
-}
-
-func (dc *docsConfig) createRenderer() (render.Renderer, error) {
-	var renderer render.Renderer
-	switch dc.Cmd {
-	case commandTask:
-		renderer = task.NewTaskYAMLRender()
-	case commandGithub:
-		renderer = ghindex.NewGithubYAMLRender("")
-	case "goods":
-		renderer = goods.NewGoodsYAMLRender()
-	default:
-		renderer = render.NewYAMLRenderer(dc.Cmd, true)
-	}
-
-	return dc.configureRenderer(renderer)
-}
-
-func (dc *docsConfig) configureRenderer(renderer render.Renderer) (render.Renderer, error) {
-	if err := dc.configureParseMode(renderer); err != nil {
-		return nil, err
-	}
-
-	return renderer, nil
-}
-
-func (dc *docsConfig) configureParseMode(renderer any) error {
-	type parseModeRenderer interface {
-		WithParseMode(mode render.ParseMode)
-	}
-
-	r, ok := renderer.(parseModeRenderer)
-	if !ok {
-		return errors.New("renderer does not support parse mode configuration")
-	}
-
-	parseMode, exists := serviceParseModeMap()[dc.Cmd]
-	if !exists {
-		parseMode = render.ParseSingle
-	}
-	r.WithParseMode(parseMode)
-
-	return nil
-}
-
-func serviceParseModeMap() map[string]render.ParseMode {
-	return map[string]render.ParseMode{
-		"goods": render.ParseFlatten,
-		"task":  render.ParseMulti,
-		"gh":    render.ParseFlatten,
-	}
 }

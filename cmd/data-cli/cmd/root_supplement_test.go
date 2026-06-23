@@ -21,25 +21,25 @@ func TestNewRootCmdHelpText(t *testing.T) {
 }
 
 func TestNewRenderCmdShortDescription(t *testing.T) {
-	cmd := newRenderCmd()
+	cmd := newRenderCmd(new(string))
 	require.Equal(t, "render", cmd.Name())
 	require.Contains(t, cmd.Short, "Render")
 }
 
 func TestNewCheckCmdShortDescription(t *testing.T) {
-	cmd := newCheckCmd()
+	cmd := newCheckCmd(new(string))
 	require.Equal(t, "check", cmd.Name())
 	require.Contains(t, cmd.Short, "Check")
 }
 
 func TestNewDuplicateCmdShortDescription(t *testing.T) {
-	cmd := newDuplicateCmd()
+	cmd := newDuplicateCmd(new(string))
 	require.Equal(t, "duplicate", cmd.Name())
 	require.Contains(t, cmd.Short, "duplicate")
 }
 
 func TestNewCheckCmdWithValidDomain(t *testing.T) {
-	cmd := newCheckCmd()
+	cmd := newCheckCmd(new(string))
 	cmd.SetArgs([]string{"gh"})
 	// This calls parseDataDomainArg("gh") then runDomainCheck
 	err := cmd.Execute()
@@ -48,7 +48,7 @@ func TestNewCheckCmdWithValidDomain(t *testing.T) {
 }
 
 func TestNewCheckCmdWithInvalidDomain(t *testing.T) {
-	cmd := newCheckCmd()
+	cmd := newCheckCmd(new(string))
 	cmd.SetArgs([]string{"invalid-domain"})
 	err := cmd.Execute()
 	require.Error(t, err)
@@ -56,14 +56,14 @@ func TestNewCheckCmdWithInvalidDomain(t *testing.T) {
 }
 
 func TestNewDuplicateCmdWithValidDomain(t *testing.T) {
-	cmd := newDuplicateCmd()
+	cmd := newDuplicateCmd(new(string))
 	cmd.SetArgs([]string{"gh"})
 	err := cmd.Execute()
 	_ = err
 }
 
 func TestNewDuplicateCmdWithInvalidDomain(t *testing.T) {
-	cmd := newDuplicateCmd()
+	cmd := newDuplicateCmd(new(string))
 	cmd.SetArgs([]string{"invalid"})
 	err := cmd.Execute()
 	require.Error(t, err)
@@ -78,14 +78,6 @@ func TestRunDomainCheckWithValidDomain(t *testing.T) {
 
 func TestRunDomainDuplicateWithValidDomain(t *testing.T) {
 	err := runDomainDuplicate("gh", "")
-	_ = err
-}
-
-func TestNewRenderCmdExecution(t *testing.T) {
-	cmd := newRenderCmd()
-	cmd.SetArgs([]string{"--config", "/nonexistent/config.yml"})
-	err := cmd.Execute()
-	// May fail but tests the RunE path
 	_ = err
 }
 
@@ -141,15 +133,24 @@ func TestParseDataDomainArgUnknown(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNewRenderCmdFlags(t *testing.T) {
-	cmd := newRenderCmd()
+	cmd := newRenderCmd(new(string))
 
 	require.Equal(t, "render", cmd.Name())
-	require.NotNil(t, cmd.Flag("config"))
-	require.NotNil(t, cmd.Flag("extract"))
-	require.NotNil(t, cmd.Flag("out"))
+	require.NotNil(t, cmd.Flag("out-dir"))
+	require.NotNil(t, cmd.Flag("format"))
 
-	// Check default for --config.
-	require.Equal(t, "docs.yml", cmd.Flag("config").DefValue)
+	// Check defaults.
+	require.Equal(t, "docs/public", cmd.Flag("out-dir").DefValue)
+	require.Equal(t, "", cmd.Flag("format").DefValue)
+}
+
+func TestNewRenderCmdRequiresExactlyOneArg(t *testing.T) {
+	cmd := newRenderCmd(new(string))
+
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "accepts 1 arg(s)")
 }
 
 // ---------------------------------------------------------------------------
@@ -157,11 +158,10 @@ func TestNewRenderCmdFlags(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNewCheckCmdFlags(t *testing.T) {
-	cmd := newCheckCmd()
+	cmd := newCheckCmd(new(string))
 
 	require.Equal(t, "check", cmd.Name())
 	require.Equal(t, "check <domain>", cmd.Use)
-	require.NotNil(t, cmd.Flag("path"))
 	require.NotNil(t, cmd.Flag("max-lines"))
 	require.NotNil(t, cmd.Flag("rule-scope"))
 
@@ -170,7 +170,7 @@ func TestNewCheckCmdFlags(t *testing.T) {
 }
 
 func TestNewCheckCmdRequiresExactlyOneArg(t *testing.T) {
-	cmd := newCheckCmd()
+	cmd := newCheckCmd(new(string))
 
 	cmd.SetArgs([]string{})
 	err := cmd.Execute()
@@ -183,15 +183,14 @@ func TestNewCheckCmdRequiresExactlyOneArg(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNewDuplicateCmdFlags(t *testing.T) {
-	cmd := newDuplicateCmd()
+	cmd := newDuplicateCmd(new(string))
 
 	require.Equal(t, "duplicate", cmd.Name())
 	require.Equal(t, "duplicate <domain>", cmd.Use)
-	require.NotNil(t, cmd.Flag("path"))
 }
 
 func TestNewDuplicateCmdRequiresExactlyOneArg(t *testing.T) {
-	cmd := newDuplicateCmd()
+	cmd := newDuplicateCmd(new(string))
 
 	cmd.SetArgs([]string{})
 	err := cmd.Execute()
