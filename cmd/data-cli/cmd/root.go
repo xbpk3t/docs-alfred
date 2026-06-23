@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/internal/data/ops"
-	"github.com/xbpk3t/docs-alfred/internal/gh/data"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
@@ -18,8 +17,6 @@ type renderFlags struct {
 	extract string
 	out     string
 }
-
-const ghCommandName = "gh"
 
 // Execute is the entry point for the data-cli binary.
 func Execute() error {
@@ -35,8 +32,6 @@ func newRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newRenderCmd())
 	rootCmd.AddCommand(newCheckCmd())
 	rootCmd.AddCommand(newDuplicateCmd())
-	rootCmd.AddCommand(newEnrichCmd())
-	rootCmd.AddCommand(newGhCmd())
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	return rootCmd
@@ -169,105 +164,4 @@ func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
 	fmt.Fprint(os.Stderr, data.FormatDuplicateReport(report))
 
 	return fmt.Errorf("data duplicate %s found duplicates", domain)
-}
-
-func newGhCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   ghCommandName,
-		Short: "GitHub data entry operations",
-	}
-
-	cmd.AddCommand(newGhFindCmd())
-	cmd.AddCommand(newGhAppendCmd())
-
-	return cmd
-}
-
-func newGhFindCmd() *cobra.Command {
-	var query, findURL string
-	var limit int
-
-	cmd := &cobra.Command{
-		Use:   "find",
-		Short: "Search local data/gh entries",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			q := query
-			if q == "" && len(args) > 0 {
-				q = args[0]
-			}
-			if q == "" && findURL == "" {
-				return errors.New("provide a query, --query, or --url")
-			}
-
-			return runGhFind(q, findURL, limit)
-		},
-	}
-
-	cmd.Flags().StringVarP(&query, "query", "q", "", "Search query")
-	cmd.Flags().StringVar(&findURL, "url", "", "Repository URL to find")
-	cmd.Flags().IntVar(&limit, "limit", 20, "Max results")
-
-	return cmd
-}
-
-func runGhFind(query, findURL string, limit int) error {
-	result, err := dataops.RunGhFind(dataops.GhFindInput{
-		Query: query,
-		URL:   findURL,
-		Limit: limit,
-	})
-	if err != nil {
-		return err
-	}
-
-	_, err = os.Stdout.WriteString(ghdata.FormatEntriesResult(result.Entries))
-
-	return err
-}
-
-func newGhAppendCmd() *cobra.Command {
-	var opts struct {
-		file  string
-		url   string
-		date  string
-		des   string
-		topic string
-	}
-
-	cmd := &cobra.Command{
-		Use:   "append-record",
-		Short: "Append a record to a data/gh entry",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGhAppend(opts.file, opts.url, opts.date, opts.des, opts.topic)
-		},
-	}
-
-	cmd.Flags().StringVar(&opts.file, "file", "", "Target YAML file path")
-	cmd.Flags().StringVar(&opts.url, "url", "", "Repository URL (required unless --file is given)")
-	cmd.Flags().StringVar(&opts.date, "date", "", "Record date (YYYY-MM-DD; default: today)")
-	cmd.Flags().StringVar(&opts.des, "des", "", "Record description")
-	cmd.Flags().StringVar(&opts.topic, "topic", "", "Topic name (default: inferred from URL)")
-
-	return cmd
-}
-
-func runGhAppend(file, url, date, des, topic string) error {
-	result, err := dataops.RunGhAppend(&dataops.GhAppendInput{
-		File:  file,
-		URL:   url,
-		Date:  date,
-		Des:   des,
-		Topic: topic,
-	})
-	if err != nil {
-		return err
-	}
-
-	slog.Info("Record appended", "file", result.File)
-	if result.Diff != "" {
-		slog.Info("Git diff", "diff", result.Diff)
-	}
-
-	return nil
 }

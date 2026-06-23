@@ -33,8 +33,6 @@ go install github.com/xbpk3t/docs-alfred/cmd/data-cli@main
 data-cli render
 data-cli check gh
 data-cli duplicate gh
-data-cli gh find <query>
-data-cli gh append-record --url <url> --des <description>
 ```
 
 

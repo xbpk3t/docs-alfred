@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 )
 
 func TestExecuteReturnsError(t *testing.T) {
@@ -35,42 +36,6 @@ func TestNewDuplicateCmdShortDescription(t *testing.T) {
 	cmd := newDuplicateCmd()
 	require.Equal(t, "duplicate", cmd.Name())
 	require.Contains(t, cmd.Short, "duplicate")
-}
-
-func TestNewGhCmdStructure(t *testing.T) {
-	cmd := newGhCmd()
-	require.Equal(t, ghCommandName, cmd.Name())
-	requireCommandNames(t, cmd.Commands(), []string{"append-record", "find"})
-}
-
-func TestNewGhFindCmdWithQueryArg(t *testing.T) {
-	cmd := newGhFindCmd()
-	cmd.SetArgs([]string{"test-query"})
-	// This will call runGhFind which may fail due to missing data, but tests the arg parsing path
-	err := cmd.Execute()
-	// We don't check for nil error because runGhFind may fail if data dir doesn't exist
-	_ = err
-}
-
-func TestNewGhFindCmdWithUrlFlag(t *testing.T) {
-	cmd := newGhFindCmd()
-	cmd.SetArgs([]string{"--url", "https://github.com/test/repo"})
-	err := cmd.Execute()
-	_ = err
-}
-
-func TestNewGhFindCmdWithQueryFlag(t *testing.T) {
-	cmd := newGhFindCmd()
-	cmd.SetArgs([]string{"--query", "test"})
-	err := cmd.Execute()
-	_ = err
-}
-
-func TestNewGhAppendCmdWithFlags(t *testing.T) {
-	cmd := newGhAppendCmd()
-	cmd.SetArgs([]string{"--url", "https://github.com/test/repo", "--date", "2026-01-01", "--des", "test desc"})
-	err := cmd.Execute()
-	_ = err
 }
 
 func TestNewCheckCmdWithValidDomain(t *testing.T) {
@@ -105,42 +70,6 @@ func TestNewDuplicateCmdWithInvalidDomain(t *testing.T) {
 	require.Contains(t, err.Error(), "unknown data domain")
 }
 
-func TestNewEnrichCmdWithMovieArg(t *testing.T) {
-	t.Setenv("TMDB_API_KEY", "")
-	cmd := newEnrichCmd()
-	cmd.SetArgs([]string{"movie"})
-	// This will fail because TMDB_API_KEY is not set
-	err := cmd.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "TMDB_API_KEY")
-}
-
-func TestNewEnrichCmdWithTVArg(t *testing.T) {
-	t.Setenv("TMDB_API_KEY", "")
-	cmd := newEnrichCmd()
-	cmd.SetArgs([]string{"tv"})
-	err := cmd.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "TMDB_API_KEY")
-}
-
-func TestNewEnrichCmdWithBookArg(t *testing.T) {
-	t.Setenv("GOOGLE_CLOUD_API_KEY", "")
-	cmd := newEnrichCmd()
-	cmd.SetArgs([]string{"book"})
-	err := cmd.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "GOOGLE_CLOUD_API_KEY")
-}
-
-func TestNewEnrichCmdWithInvalidResource(t *testing.T) {
-	cmd := newEnrichCmd()
-	cmd.SetArgs([]string{"music"})
-	err := cmd.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "unsupported enrichment resource")
-}
-
 func TestRunDomainCheckWithValidDomain(t *testing.T) {
 	// Test with gh domain and default path - may fail due to missing data but tests path
 	err := runDomainCheck("gh", "", "", 0)
@@ -149,26 +78,6 @@ func TestRunDomainCheckWithValidDomain(t *testing.T) {
 
 func TestRunDomainDuplicateWithValidDomain(t *testing.T) {
 	err := runDomainDuplicate("gh", "")
-	_ = err
-}
-
-func TestRunGhFindWithQuery(t *testing.T) {
-	err := runGhFind("test", "", 10)
-	_ = err
-}
-
-func TestRunGhFindWithURL(t *testing.T) {
-	err := runGhFind("", "https://github.com/test/repo", 10)
-	_ = err
-}
-
-func TestRunGhAppendWithFile(t *testing.T) {
-	err := runGhAppend("/nonexistent/file.yml", "", "", "", "")
-	_ = err
-}
-
-func TestRunGhAppendWithURL(t *testing.T) {
-	err := runGhAppend("", "https://github.com/test/repo", "2026-01-01", "test", "")
 	_ = err
 }
 
@@ -184,4 +93,108 @@ func TestRunDomainCheckZeroMaxLines(t *testing.T) {
 	err := runDomainCheck("gh", "", "", 0)
 	// Tests the non-negative max-lines path
 	_ = err
+}
+
+// ---------------------------------------------------------------------------
+// parseDataDomainArg
+// ---------------------------------------------------------------------------
+
+func TestParseDataDomainArgValid(t *testing.T) {
+	tests := []struct {
+		input string
+		want  data.DataDomain
+	}{
+		{"gh", data.DomainGH},
+		{"books", data.DomainBooks},
+		{"movie", data.DomainMovie},
+		{"tv", data.DomainTV},
+		{"music", data.DomainMusic},
+		{"diary", data.DomainDiary},
+		{"goods", data.DomainGoods},
+		{"task", data.DomainTask},
+		{"ntl", data.DomainNtl},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := parseDataDomainArg(tt.input)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestParseDataDomainArgUnknown(t *testing.T) {
+	tests := []string{"unknown", "podcast", "", "GH"}
+
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			_, err := parseDataDomainArg(input)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "unknown data domain")
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// newRenderCmd
+// ---------------------------------------------------------------------------
+
+func TestNewRenderCmdFlags(t *testing.T) {
+	cmd := newRenderCmd()
+
+	require.Equal(t, "render", cmd.Name())
+	require.NotNil(t, cmd.Flag("config"))
+	require.NotNil(t, cmd.Flag("extract"))
+	require.NotNil(t, cmd.Flag("out"))
+
+	// Check default for --config.
+	require.Equal(t, "docs.yml", cmd.Flag("config").DefValue)
+}
+
+// ---------------------------------------------------------------------------
+// newCheckCmd
+// ---------------------------------------------------------------------------
+
+func TestNewCheckCmdFlags(t *testing.T) {
+	cmd := newCheckCmd()
+
+	require.Equal(t, "check", cmd.Name())
+	require.Equal(t, "check <domain>", cmd.Use)
+	require.NotNil(t, cmd.Flag("path"))
+	require.NotNil(t, cmd.Flag("max-lines"))
+	require.NotNil(t, cmd.Flag("rule-scope"))
+
+	// rule-scope is hidden.
+	require.True(t, cmd.Flag("rule-scope").Hidden)
+}
+
+func TestNewCheckCmdRequiresExactlyOneArg(t *testing.T) {
+	cmd := newCheckCmd()
+
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "accepts 1 arg(s)")
+}
+
+// ---------------------------------------------------------------------------
+// newDuplicateCmd
+// ---------------------------------------------------------------------------
+
+func TestNewDuplicateCmdFlags(t *testing.T) {
+	cmd := newDuplicateCmd()
+
+	require.Equal(t, "duplicate", cmd.Name())
+	require.Equal(t, "duplicate <domain>", cmd.Use)
+	require.NotNil(t, cmd.Flag("path"))
+}
+
+func TestNewDuplicateCmdRequiresExactlyOneArg(t *testing.T) {
+	cmd := newDuplicateCmd()
+
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "accepts 1 arg(s)")
 }

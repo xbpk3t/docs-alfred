@@ -23,7 +23,6 @@ applyTo: "cmd/docs-cli/**"
 
 - `/Users/luck/Desktop/docs` 是 `data/gh`、docs-images、blog、dotfiles 映射规则的 source of truth。
 - 不在本仓库凭空修改 YAML schema、topic 目录规则、record 规则或 image mapping。
-- `data gh append-record` 会写 YAML；只有任务明确要求写数据时才运行或扩展。
 - `images --apply` 会修复/创建内容；默认只跑 check/list 类行为。
 - 输出格式如果走 `pkg/wf`，必须保持 Alfred/plain/raw/rofi 兼容。
 

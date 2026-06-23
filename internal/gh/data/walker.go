@@ -22,6 +22,9 @@ const (
 	evRepo       = "repo"
 )
 
+// Relation type constants for walker events.
+const evTypeRepo = "repo"
+
 // WalkerEvent types for the gh YAML walker.
 type WalkerEvent struct {
 	Type         string

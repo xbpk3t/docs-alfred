@@ -96,7 +96,7 @@ description: docs-alfred global project rules, safety boundaries, and validation
 
 - 默认允许运行 `check`、`dry-run`、mock、局部测试。
 - 真实发送邮件、真实 Linear/API/AI/付费搜索、大规模网络抓取、真实写 wiki workspace，必须任务明确要求。
-- 会写 repo-tracked 内容的命令只有任务明确要求才执行，例如 `append-record`、`data render`、`images --apply`。
+- 会写 repo-tracked 内容的命令只有任务明确要求才执行，例如 `data render`、`images --apply`。
 - 修改 GitHub Actions schedule、secret 名、release 配置或任何会触发真实发送/发布的 workflow 时，必须明确说明影响。
 
 
