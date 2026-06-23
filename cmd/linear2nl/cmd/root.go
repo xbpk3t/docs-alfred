@@ -35,7 +35,7 @@ func newReportCmd(use, short string, runFunc func(*internal.Config, bool) error)
 		},
 	}
 
-	cmd.Flags().StringVarP(&cfgFile, "config", "c", "linear2nl/linear2nl.yml", "config file path")
+	cmd.Flags().StringVarP(&cfgFile, "config", "c", "cmd/linear2nl/linear2nl.yml", "config file path")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print HTML to stdout instead of sending email")
 
 	return cmd

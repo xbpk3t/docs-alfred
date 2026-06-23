@@ -56,7 +56,7 @@ Default: JSON, last 2 days, written to linear2nl_export_<date>.json.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&cfgFile, "config", "c", "linear2nl/linear2nl.yml", "config file path")
+	cmd.Flags().StringVarP(&cfgFile, "config", "c", "cmd/linear2nl/linear2nl.yml", "config file path")
 	cmd.Flags().IntVar(&days, "days", 2, "export issues updated in the last N days")
 	cmd.Flags().StringVar(&format, "format", "json", "output format: json or md")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "output file path (default: linear2nl_export_<date>.<ext>)")
