@@ -995,17 +995,17 @@ func formatConfidence(f float64) string {
 }
 
 func renderHuntHTML(report *huntReport) string {
-	htmlBody, err := buildHuntDocument(report).ToHTML()
+	page, err := buildHuntDocument(report).ToPage()
 	if err != nil {
 		slog.Warn("Failed to render hunt HTML", "error", err)
 		doc2 := md.NewDocument()
 		doc2.Add(md.Paragraph(renderHuntMarkdown(report)))
-		html2, _ := doc2.ToHTML()
+		html2, _ := doc2.ToPage()
 
 		return html2
 	}
 
-	return htmlBody
+	return page
 }
 
 // buildHuntDocument builds the shared md document for both HTML and Markdown output.

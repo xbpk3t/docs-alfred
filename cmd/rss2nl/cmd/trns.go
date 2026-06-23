@@ -581,14 +581,14 @@ func renderTrnsPage(view *trnsPageView) string {
 
 	doc.Add(md.Paragraph(view.Content))
 
-	htmlBody, err := doc.ToHTML()
+	page, err := doc.ToPage()
 	if err != nil {
 		slog.Warn("Failed to render trns page", "error", err)
 
 		return fmt.Sprintf("<pre>%s</pre>", view.Content)
 	}
 
-	return htmlBody
+	return page
 }
 
 // ProcessNewsletterTrns fetches transcripts for podcast newsletter items,

@@ -15,10 +15,12 @@ type DomainSpec struct {
 	YAMLParseOnly   bool
 }
 
+const defaultPathBooks = "data/books"
+
 var domainSpecs = []DomainSpec{
-	{Domain: DomainBooks, DefaultPath: "data/books", RuleScope: ScopeBooks, StructuredCheck: true, DuplicateCheck: true},
-	{Domain: DomainMovie, DefaultPath: "data/books", RuleScope: ScopeMovie, StructuredCheck: true},
-	{Domain: DomainTV, DefaultPath: "data/books", RuleScope: ScopeMovie, StructuredCheck: true},
+	{Domain: DomainBooks, DefaultPath: defaultPathBooks, RuleScope: ScopeBooks, StructuredCheck: true, DuplicateCheck: true},
+	{Domain: DomainMovie, DefaultPath: defaultPathBooks, RuleScope: ScopeMovie, StructuredCheck: true},
+	{Domain: DomainTV, DefaultPath: defaultPathBooks, RuleScope: ScopeMovie, StructuredCheck: true},
 	{Domain: DomainMusic, DefaultPath: "data/music", RuleScope: ScopeMusic, StructuredCheck: true, DuplicateCheck: true},
 	{Domain: DomainDiary, DefaultPath: "data/diary", RuleScope: ScopeDiary, StructuredCheck: true},
 	{Domain: DomainGH, DefaultPath: "data/gh", DuplicateCheck: true},

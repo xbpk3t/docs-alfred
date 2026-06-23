@@ -1,6 +1,7 @@
 package session
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -130,4 +131,48 @@ func TestFormatMessages_NoDuplicateDateAnnotation(t *testing.T) {
 	assert.Contains(t, result, "# Turn 3")
 	// No date annotations since all are on the same day
 	assert.NotContains(t, result, "[2026-06-21]")
+}
+
+func TestExtractDatePart_ShortTimestamp(t *testing.T) {
+	assert.Equal(t, "", extractDatePart("abc"))
+	assert.Equal(t, "", extractDatePart(""))
+	assert.Equal(t, "", extractDatePart("12345"))
+}
+
+func TestExtractDatePart_Valid(t *testing.T) {
+	assert.Equal(t, "2026-06-21", extractDatePart("2026-06-21T10:00:00Z"))
+	assert.Equal(t, "2026-06-21", extractDatePart("2026-06-21"))
+}
+
+func TestCoalesceDate_EmptyTimestampFallsBack(t *testing.T) {
+	assert.Equal(t, "2026-06-20", coalesceDate("", "2026-06-20"))
+}
+
+func TestCoalesceDate_ValidTimestamp(t *testing.T) {
+	assert.Equal(t, "2026-06-21", coalesceDate("2026-06-21T10:00:00Z", "2026-06-20"))
+}
+
+func TestCoalesceDate_BothEmpty(t *testing.T) {
+	assert.Equal(t, "", coalesceDate("", ""))
+}
+
+func TestMergeSameRole_SingleMessage(t *testing.T) {
+	msgs := []Message{{Role: "user", Content: "hello"}}
+	merged := mergeSameRole(msgs)
+	assert.Len(t, merged, 1)
+	assert.Equal(t, "hello", merged[0].Content)
+}
+
+func TestWriteUserContent_EndsWithNewline(t *testing.T) {
+	var sb strings.Builder
+	writeUserContent(&sb, "hello\n")
+	result := sb.String()
+	assert.Equal(t, "```markdown\nhello\n```", result)
+}
+
+func TestWriteUserContent_NoTrailingNewline(t *testing.T) {
+	var sb strings.Builder
+	writeUserContent(&sb, "hello")
+	result := sb.String()
+	assert.Equal(t, "```markdown\nhello\n```", result)
 }

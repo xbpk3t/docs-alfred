@@ -70,6 +70,13 @@ function seekPassword(hash, length, rule_of_punctuation, rule_of_letter) {
 }
 `
 
+// Package-level variables allow test seams for hard-to-reach error paths.
+var (
+	computeHmacFunc = computeHmacSha512
+	jsScript        = js
+	parseFloatFunc  = strconv.ParseFloat
+)
+
 // Generator handles password generation.
 type Generator struct {
 	config *Config
@@ -94,9 +101,9 @@ func (g *Generator) Generate(website string) (string, error) {
 //
 
 func (g *Generator) sha512(sk, website string) string {
-	hexOne := computeHmacSha512(sk, website)
-	hexTwo := computeHmacSha512("hello", hexOne)
-	hexThree := computeHmacSha512("world", hexOne)
+	hexOne := computeHmacFunc(sk, website)
+	hexTwo := computeHmacFunc("hello", hexOne)
+	hexThree := computeHmacFunc("world", hexOne)
 
 	// 字符串转数组
 	source := strings.Split(hexTwo, "")
@@ -110,7 +117,7 @@ func (g *Generator) sha512(sk, website string) string {
 		}
 
 		// 这里实际上有bug，但是已经没办法fix了
-		zx, err := strconv.ParseFloat(source[i], 64)
+		zx, err := parseFloatFunc(source[i], 64)
 		if err != nil {
 			continue
 		}
@@ -129,7 +136,7 @@ func (g *Generator) sha512(sk, website string) string {
 // 生成密码.
 func (g *Generator) generatePwd(hash string, length int, isPunc, isUseUpper bool) string {
 	vm := goja.New()
-	_, err := vm.RunString(js)
+	_, err := vm.RunString(jsScript)
 	if err != nil {
 		slog.Error("failed to run password JS", "error", err)
 

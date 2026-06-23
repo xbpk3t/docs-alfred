@@ -23,6 +23,7 @@ const (
 	fileTypeJSON  fileType = "json"
 	fileTypeYAML  fileType = "yml"
 	commandGithub          = "gh"
+	commandTask            = "task"
 )
 
 type docProcessor struct {
@@ -306,7 +307,7 @@ func (dc *docsConfig) marshalAndWriteGithubOutput(
 func (dc *docsConfig) createRenderer() (render.Renderer, error) {
 	var renderer render.Renderer
 	switch dc.Cmd {
-	case "task":
+	case commandTask:
 		renderer = task.NewTaskYAMLRender()
 	case commandGithub:
 		renderer = ghindex.NewGithubYAMLRender("")

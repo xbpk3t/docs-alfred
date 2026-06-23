@@ -12,6 +12,8 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
+const codeFence = "```"
+
 // canonicalSectionHeadings are the only allowed #### section headings in summary entries.
 var canonicalSectionHeadings = map[string]bool{
 	"概述":    true,
@@ -251,7 +253,7 @@ func auditCodeblockFields(file string, lines []string) []checkutil.Issue {
 	inCodeblock := false
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "```" || strings.HasPrefix(trimmed, "```") {
+		if trimmed == codeFence || strings.HasPrefix(trimmed, codeFence) {
 			inCodeblock = !inCodeblock
 
 			continue

@@ -76,3 +76,55 @@ func TestGithubYAMLRenderNormalizesTopicDisplayFields(t *testing.T) {
 	assert.Equal(t, "kernel/HTTP/main-repo/parent-topic/child-topic", child.PicDir)
 	assert.Nil(t, child.Meta)
 }
+
+func TestGithubYAMLRender_InvalidInput(t *testing.T) {
+	r := NewGithubYAMLRender("test")
+	_, err := r.Render([]byte("invalid: [yaml: broken"))
+	require.Error(t, err)
+}
+
+func TestGithubYAMLRender_EmptyInput(t *testing.T) {
+	r := NewGithubYAMLRender("test")
+	result, err := r.Render([]byte("[]"))
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestGithubYAMLRender_TagAlreadySet(t *testing.T) {
+	input := []byte(`---
+- type: tool
+  tag: custom-tag
+  repo:
+    - url: https://github.com/acme/repo
+`)
+	r := NewGithubYAMLRender("default-tag")
+	rendered, err := r.Render(input)
+	require.NoError(t, err)
+	assert.Contains(t, rendered, "custom-tag")
+}
+
+func TestNormalizeRepoTopics_NilRepo(t *testing.T) {
+	// Should not panic
+	normalizeRepoTopics(nil, "base", false)
+}
+
+func TestNormalizeRepoTopics_EmptyURL(t *testing.T) {
+	repo := &Repository{
+		URL: "",
+	}
+	normalizeRepoTopics(repo, "base", false)
+	// Should not panic; empty repo name means return early
+}
+
+func TestNormalizeRepoTopics_UseBase(t *testing.T) {
+	repo := &Repository{
+		URL: "https://github.com/acme/repo",
+	}
+	normalizeRepoTopics(repo, "base", true)
+	// Should not panic
+}
+
+func TestGithubYAMLRender_GetCurrentFileName(t *testing.T) {
+	r := NewGithubYAMLRender("test")
+	assert.Equal(t, "", r.GetCurrentFileName())
+}

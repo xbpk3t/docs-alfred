@@ -157,7 +157,7 @@ func FetchURLsWithMeta(ctx context.Context, urls []string, cfg *Config) ([]*gofe
 	meta := make([]FetchResult, 0, len(urls))
 	failedFeeds := make([]*FeedError, 0)
 	for i, result := range results {
-		meta = append(meta, FetchResult{URL: urls[i], Feed: result.feed, Err: result.err})
+		meta = append(meta, FetchResult{URL: urls[i], Feed: result.feed, Err: result.err}) //nolint:gosec // G602: results and urls have identical length
 		if result.err != nil {
 			slog.Error("Failed to fetch feed",
 				slog.String(LogKeyURL, result.err.URL),

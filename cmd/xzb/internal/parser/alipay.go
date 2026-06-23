@@ -9,14 +9,14 @@ import (
 )
 
 var alipayRequiredColumns = []string{
-	"交易号",
-	"交易创建时间",
-	"类型",
-	"交易对方",
-	"商品名称",
-	"金额（元）",
-	"收/支",
-	"交易状态",
+	colTradeNo,
+	colTradeCreateTime,
+	colTradeType,
+	colCounterparty,
+	colItemName,
+	colAmountCN,
+	colInOut,
+	colTradeStatus,
 }
 
 func ParseAlipayFiles(paths []string) (ParseResult, error) {
@@ -55,7 +55,7 @@ func parseAlipayTransaction(
 		return model.ParsedTransaction{}, false, nil
 	}
 
-	inOut := get(row, indexes, "收/支")
+	inOut := get(row, indexes, colInOut)
 	if shouldSkipAlipayTransaction(inOut) {
 		return model.ParsedTransaction{}, false, nil
 	}
@@ -65,7 +65,7 @@ func parseAlipayTransaction(
 		return model.ParsedTransaction{}, false, err
 	}
 
-	occurredAt, err := ParseTime(get(row, indexes, "交易创建时间", "交易付款时间", "付款时间"))
+	occurredAt, err := ParseTime(get(row, indexes, colTradeCreateTime, "交易付款时间", "付款时间"))
 	if err != nil {
 		return model.ParsedTransaction{}, false, fmt.Errorf("row %d time: %w", rowNumber, err)
 	}
@@ -78,7 +78,7 @@ func shouldSkipAlipayTransaction(inOut string) bool {
 }
 
 func alipayAmountCents(row []string, indexes map[string]int, rowNumber int) (int64, error) {
-	amountCents, err := AmountCents(get(row, indexes, "金额（元）", "金额(元)"))
+	amountCents, err := AmountCents(get(row, indexes, colAmountCN, colAmountCNAlt))
 	if err != nil {
 		return 0, fmt.Errorf("row %d amount: %w", rowNumber, err)
 	}
@@ -102,15 +102,15 @@ func alipayTransaction(
 		OccurredAt:      occurredAt,
 		Source:          model.SourceAlipay,
 		SourceFile:      sourceFile(path),
-		SourceTradeNo:   cleanSlash(get(row, indexes, "交易号")),
+		SourceTradeNo:   cleanSlash(get(row, indexes, colTradeNo)),
 		MerchantTradeNo: cleanSlash(get(row, indexes, "商家订单号", "商户单号")),
 		AccountType:     "支付宝",
 		InOut:           inOut,
-		TransactionType: cleanSlash(get(row, indexes, "类型", "交易类型")),
-		Counterparty:    cleanSlash(get(row, indexes, "交易对方")),
-		ItemName:        cleanSlash(get(row, indexes, "商品名称", "商品")),
+		TransactionType: cleanSlash(get(row, indexes, colTradeType, colTransactionType)),
+		Counterparty:    cleanSlash(get(row, indexes, colCounterparty)),
+		ItemName:        cleanSlash(get(row, indexes, colItemName, "商品")),
 		PaymentMethod:   cleanSlash(get(row, indexes, "交易来源地")),
-		Status:          strings.TrimSpace(cleanSlash(get(row, indexes, "交易状态"))),
+		Status:          strings.TrimSpace(cleanSlash(get(row, indexes, colTradeStatus))),
 		Remark:          cleanSlash(get(row, indexes, "备注")),
 		AmountCents:     amountCents,
 	}

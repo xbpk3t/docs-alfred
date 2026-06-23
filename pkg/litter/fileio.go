@@ -10,12 +10,15 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 )
 
-const fileioBaseURL = "https://file.io"
+var fileioBaseURL = "https://file.io"
 
 // FileIO uploads files to file.io (temporary, up to 4 GB, 14-day default expiry).
-type FileIO struct{}
+type FileIO struct {
+	// BaseURL overrides the default file.io endpoint. Empty uses the production URL.
+	BaseURL string
+}
 
-func (f *FileIO) Name() string { return "fileio" }
+func (f *FileIO) Name() string { return driverFileio }
 
 func (f *FileIO) Upload(ctx context.Context, filename, content string) (*Result, error) {
 	buf, contentType, err := buildMultipart("file", filename, content, nil)
@@ -23,12 +26,17 @@ func (f *FileIO) Upload(ctx context.Context, filename, content string) (*Result,
 		return nil, err
 	}
 
+	base := f.BaseURL
+	if base == "" {
+		base = fileioBaseURL
+	}
+
 	resp, err := httputil.NewRestyClient(httputil.DefaultClientTimeout, httputil.DefaultMaxRetries).
 		R().
 		SetContext(ctx).
 		SetHeader("Content-Type", contentType).
 		SetBody(buf).
-		Post(fileioBaseURL)
+		Post(base)
 	if err != nil {
 		return nil, fmt.Errorf("upload request: %w", err)
 	}
@@ -51,5 +59,5 @@ func (f *FileIO) Upload(ctx context.Context, filename, content string) (*Result,
 		return nil, fmt.Errorf("file.io error: %s", result.Message)
 	}
 
-	return &Result{URL: result.Link, Driver: "fileio"}, nil
+	return &Result{URL: result.Link, Driver: driverFileio}, nil
 }

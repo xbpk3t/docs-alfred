@@ -1,6 +1,9 @@
 package md
 
-import "strings"
+import (
+	"html/template"
+	"strings"
+)
 
 // Section is the interface implemented by all document components.
 // Each component renders itself as a Markdown string fragment.
@@ -87,8 +90,40 @@ func (d *Document) Markdown() string {
 }
 
 // ToHTML concatenates all sections' Markdown output and converts to HTML.
+// The output is an HTML fragment without document-level wrappers.
 func (d *Document) ToHTML() (string, error) {
 	return ToHTML(d.Markdown())
+}
+
+// pageTmpl is a minimal standalone HTML page template with UTF-8 charset.
+var pageTmpl = template.Must(template.New("page").Parse(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+{{.Content}}
+</body>
+</html>`))
+
+// ToPage renders the document as a complete standalone HTML page
+// with DOCTYPE, charset, and viewport meta tags.
+// Use this for HTML files that will be served directly (e.g. uploaded to Litterbox).
+func (d *Document) ToPage() (string, error) {
+	fragment, err := d.ToHTML()
+	if err != nil {
+		return "", err
+	}
+
+	var buf strings.Builder
+	if err := pageTmpl.Execute(&buf, map[string]any{
+		"Content": template.HTML(fragment), //nolint:gosec // goldmark output is safe HTML
+	}); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }
 
 // compile-time interface checks.

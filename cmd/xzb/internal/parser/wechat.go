@@ -11,13 +11,13 @@ import (
 )
 
 var wechatRequiredColumns = []string{
-	"交易时间",
-	"交易类型",
-	"交易对方",
-	"收/支",
-	"金额(元)",
-	"当前状态",
-	"交易单号",
+	colTradeTime,
+	colTransactionType,
+	colCounterparty,
+	colInOut,
+	colAmountCNAlt,
+	colCurrentStatus,
+	colTradeOrderNo,
 }
 
 func ParseWechatFiles(paths []string) (ParseResult, error) {
@@ -76,13 +76,13 @@ func parseWechatTransaction(
 		return model.ParsedTransaction{}, false, nil
 	}
 
-	inOut := get(row, indexes, "收/支")
+	inOut := get(row, indexes, colInOut)
 	remark := cleanSlash(get(row, indexes, "备注"))
-	if shouldSkipWechatTransaction(inOut, remark, cleanSlash(get(row, indexes, "当前状态"))) {
+	if shouldSkipWechatTransaction(inOut, remark, cleanSlash(get(row, indexes, colCurrentStatus))) {
 		return model.ParsedTransaction{}, false, nil
 	}
 
-	amountCents, err := AmountCents(get(row, indexes, "金额(元)", "金额（元）"))
+	amountCents, err := AmountCents(get(row, indexes, colAmountCNAlt, colAmountCN))
 	if err != nil {
 		return model.ParsedTransaction{}, false, fmt.Errorf("row %d amount: %w", rowNumber, err)
 	}
@@ -90,7 +90,7 @@ func parseWechatTransaction(
 		return model.ParsedTransaction{}, false, nil
 	}
 
-	occurredAt, err := ParseTime(get(row, indexes, "交易时间"))
+	occurredAt, err := ParseTime(get(row, indexes, colTradeTime))
 	if err != nil {
 		return model.ParsedTransaction{}, false, fmt.Errorf("row %d time: %w", rowNumber, err)
 	}
@@ -115,15 +115,15 @@ func wechatTransaction(
 		OccurredAt:      occurredAt,
 		Source:          model.SourceWechat,
 		SourceFile:      sourceFile(path),
-		SourceTradeNo:   cleanSlash(get(row, indexes, "交易单号")),
+		SourceTradeNo:   cleanSlash(get(row, indexes, colTradeOrderNo)),
 		MerchantTradeNo: cleanSlash(get(row, indexes, "商户单号")),
 		AccountType:     "微信",
 		InOut:           inOut,
-		TransactionType: cleanSlash(get(row, indexes, "交易类型")),
-		Counterparty:    cleanSlash(get(row, indexes, "交易对方")),
+		TransactionType: cleanSlash(get(row, indexes, colTransactionType)),
+		Counterparty:    cleanSlash(get(row, indexes, colCounterparty)),
 		ItemName:        cleanSlash(get(row, indexes, "商品", "商品名称")),
 		PaymentMethod:   cleanSlash(get(row, indexes, "支付方式")),
-		Status:          cleanSlash(get(row, indexes, "当前状态")),
+		Status:          cleanSlash(get(row, indexes, colCurrentStatus)),
 		Remark:          remark,
 		AmountCents:     amountCents,
 	}
