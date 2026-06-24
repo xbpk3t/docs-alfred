@@ -11,14 +11,15 @@ import (
 
 // mockUploader is a hand-written mock implementing Uploader without import cycle.
 type mockUploader struct {
-	name     string
 	uploadFn func(ctx context.Context, filename, content string) (*Result, error)
+	name     string
 }
 
 func (m *mockUploader) Upload(ctx context.Context, filename, content string) (*Result, error) {
 	if m.uploadFn != nil {
 		return m.uploadFn(ctx, filename, content)
 	}
+
 	return &Result{URL: "https://example.com/default"}, nil
 }
 
@@ -35,6 +36,7 @@ func TestFallback_FirstSuccess(t *testing.T) {
 		name: "first",
 		uploadFn: func(_ context.Context, _, _ string) (*Result, error) {
 			called++
+
 			return &Result{URL: "https://example.com/a", Driver: "first"}, nil
 		},
 	}
@@ -42,6 +44,7 @@ func TestFallback_FirstSuccess(t *testing.T) {
 		name: "second",
 		uploadFn: func(_ context.Context, _, _ string) (*Result, error) {
 			t.Error("second uploader should not be called when first succeeds")
+
 			return nil, nil
 		},
 	}
@@ -114,6 +117,7 @@ func TestFallback_SingleUploaderSucceeds(t *testing.T) {
 		uploadFn: func(_ context.Context, filename, content string) (*Result, error) {
 			assert.Equal(t, "doc.pdf", filename)
 			assert.Equal(t, "binary-content", content)
+
 			return &Result{URL: "https://example.com/doc", Driver: "only"}, nil
 		},
 	}
@@ -148,10 +152,12 @@ func TestFallback_ThreeUploadersFirstSucceeds(t *testing.T) {
 	}}
 	up2 := &mockUploader{name: "b", uploadFn: func(_ context.Context, _, _ string) (*Result, error) {
 		t.Error("b should not be called")
+
 		return nil, nil
 	}}
 	up3 := &mockUploader{name: "c", uploadFn: func(_ context.Context, _, _ string) (*Result, error) {
 		t.Error("c should not be called")
+
 		return nil, nil
 	}}
 
@@ -170,6 +176,7 @@ func TestFallback_ThreeUploadersMiddleSucceeds(t *testing.T) {
 	}}
 	up3 := &mockUploader{name: "c", uploadFn: func(_ context.Context, _, _ string) (*Result, error) {
 		t.Error("c should not be called")
+
 		return nil, nil
 	}}
 

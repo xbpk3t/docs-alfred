@@ -24,6 +24,7 @@ func writeGhFiles(t *testing.T, files map[string]string) string {
 		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
 		require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
 	}
+
 	return dir
 }
 

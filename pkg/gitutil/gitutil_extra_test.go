@@ -223,7 +223,7 @@ func TestCountLines(t *testing.T) {
 }
 
 func TestNormalizeDiffText(t *testing.T) {
-	assert.Equal(t, "", normalizeDiffText(""))
+	assert.Empty(t, normalizeDiffText(""))
 	assert.Equal(t, "a\n", normalizeDiffText("a"))
 	assert.Equal(t, "a\nb\n", normalizeDiffText("a\nb"))
 	assert.Equal(t, "a\nb\n", normalizeDiffText("a\nb\n"))

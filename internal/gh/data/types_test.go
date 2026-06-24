@@ -114,15 +114,15 @@ func TestRepoFromMap_InvalidRecord(t *testing.T) {
 
 func TestTopicsFromAny(t *testing.T) {
 	tests := []struct {
-		name  string
 		input any
+		name  string
 		want  int
 	}{
-		{"nil", nil, 0},
-		{"not slice", "string", 0},
-		{"empty slice", []any{}, 0},
-		{"valid", []any{map[string]any{"topic": "t1"}}, 1},
-		{"mixed", []any{map[string]any{"topic": "t1"}, "invalid"}, 1},
+		{nil, "nil", 0},
+		{"string", "not slice", 0},
+		{[]any{}, "empty slice", 0},
+		{[]any{map[string]any{"topic": "t1"}}, "valid", 1},
+		{[]any{map[string]any{"topic": "t1"}, "invalid"}, "mixed", 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -158,12 +158,12 @@ func TestTopicFromMap(t *testing.T) {
 func TestTopic_DirName(t *testing.T) {
 	tests := []struct {
 		name  string
-		topic Topic
 		want  string
+		topic Topic
 	}{
-		{"with slug", Topic{Topic: "t", Meta: TopicMeta{Slug: "my-slug"}}, "my-slug"},
-		{"without slug", Topic{Topic: "topic-name"}, "topic-name"},
-		{"empty", Topic{}, ""},
+		{"with slug", "my-slug", Topic{Topic: "t", Meta: TopicMeta{Slug: "my-slug"}}},
+		{"without slug", "topic-name", Topic{Topic: "topic-name"}},
+		{"empty", "", Topic{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -191,16 +191,16 @@ func TestTopic_HasPicture(t *testing.T) {
 
 func TestRecordsFromAny(t *testing.T) {
 	tests := []struct {
-		name      string
 		input     any
+		name      string
 		wantLen   int
 		wantValid bool
 	}{
-		{"nil", nil, 0, false},
-		{"not slice", "string", 0, false},
-		{"empty", []any{}, 0, true},
-		{"valid", []any{map[string]any{"date": "2024-01-01", "des": "test"}}, 1, true},
-		{"mixed", []any{map[string]any{"date": "2024-01-01", "des": "test"}, "bad"}, 1, true},
+		{nil, "nil", 0, false},
+		{"string", "not slice", 0, false},
+		{[]any{}, "empty", 0, true},
+		{[]any{map[string]any{"date": "2024-01-01", "des": "test"}}, "valid", 1, true},
+		{[]any{map[string]any{"date": "2024-01-01", "des": "test"}, "bad"}, "mixed", 1, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -274,7 +274,7 @@ func TestSectionFromMap_WithRecord(t *testing.T) {
 
 func TestSectionFromMap_EmptyMap(t *testing.T) {
 	section := sectionFromMap(map[string]any{})
-	assert.Equal(t, "", section.Type)
+	assert.Empty(t, section.Type)
 	assert.Nil(t, section.Using)
 	assert.Empty(t, section.Repos)
 	assert.Empty(t, section.Topics)

@@ -90,13 +90,13 @@ func TestMapAssignedIssues_FiltersSubIssues(t *testing.T) {
 			Url:        "https://linear.app/eng/issue/ENG-2",
 		},
 		{
-			Id:         "3",
-			Title:      "Top Level 2",
-			Identifier: "ENG-3",
-			Priority:   3,
-			State:      AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssueStateWorkflowState{Name: "Done", Type: "completed"},
-			Team:       AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssueTeam{Name: "Eng", Key: "ENG"},
-			Url:        "https://linear.app/eng/issue/ENG-3",
+			Id:          "3",
+			Title:       "Top Level 2",
+			Identifier:  "ENG-3",
+			Priority:    3,
+			State:       AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssueStateWorkflowState{Name: "Done", Type: "completed"},
+			Team:        AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssueTeam{Name: "Eng", Key: "ENG"},
+			Url:         "https://linear.app/eng/issue/ENG-3",
 			CompletedAt: "2024-06-01T12:00:00Z",
 		},
 	}
@@ -169,7 +169,7 @@ func TestAuthTransport_SetsAuthorizationHeader(t *testing.T) {
 		capturedToken = req.Header.Get("Authorization")
 	}}
 	at := authTransport{base: inner, token: "Bearer test-token"}
-	req, _ := http.NewRequest("GET", "https://example.com", nil)
+	req, _ := http.NewRequest(http.MethodGet, "https://example.com", nil)
 	_, err := at.RoundTrip(req)
 	require.NoError(t, err)
 	assert.Equal(t, "Bearer test-token", capturedToken)
@@ -181,7 +181,7 @@ func TestAuthTransport_EmptyToken(t *testing.T) {
 		capturedHasAuth = req.Header.Get("Authorization") != ""
 	}}
 	at := authTransport{base: inner, token: ""}
-	req, _ := http.NewRequest("GET", "https://example.com", nil)
+	req, _ := http.NewRequest(http.MethodGet, "https://example.com", nil)
 	_, err := at.RoundTrip(req)
 	require.NoError(t, err)
 	assert.False(t, capturedHasAuth)
@@ -296,24 +296,24 @@ func TestGetStateChanges_WithMockServer(t *testing.T) {
 							"history": map[string]any{
 								"nodes": []any{
 									map[string]any{
-										"fromState":  map[string]any{"name": "Todo"},
-										"toState":    map[string]any{"name": "In Progress"},
-										"createdAt":  "2024-06-01T10:00:00Z",
+										"fromState": map[string]any{"name": "Todo"},
+										"toState":   map[string]any{"name": "In Progress"},
+										"createdAt": "2024-06-01T10:00:00Z",
 									},
 									map[string]any{
-										"fromState":  map[string]any{"name": "In Progress"},
-										"toState":    map[string]any{"name": "Todo"},
-										"createdAt":  "2024-05-01T00:00:00Z", // before since, should be skipped
+										"fromState": map[string]any{"name": "In Progress"},
+										"toState":   map[string]any{"name": "Todo"},
+										"createdAt": "2024-05-01T00:00:00Z", // before since, should be skipped
 									},
 									map[string]any{
-										"fromState":  map[string]any{"name": ""},
-										"toState":    map[string]any{"name": ""},
-										"createdAt":  "2024-06-01T11:00:00Z", // same from/to, should be skipped
+										"fromState": map[string]any{"name": ""},
+										"toState":   map[string]any{"name": ""},
+										"createdAt": "2024-06-01T11:00:00Z", // same from/to, should be skipped
 									},
 									map[string]any{
-										"fromState":  map[string]any{"name": "Todo"},
-										"toState":    map[string]any{"name": "Todo"}, // same from/to, should be skipped
-										"createdAt":  "2024-06-01T12:00:00Z",
+										"fromState": map[string]any{"name": "Todo"},
+										"toState":   map[string]any{"name": "Todo"}, // same from/to, should be skipped
+										"createdAt": "2024-06-01T12:00:00Z",
 									},
 								},
 							},
@@ -471,36 +471,37 @@ type mockRoundTripper struct {
 
 func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	m.handler(req)
-	return &http.Response{StatusCode: 200, Body: http.NoBody}, nil
+
+	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 }
 
 type issueNode struct {
+	State       stateNode  `json:"state"`
+	Team        teamNode   `json:"team"`
+	Parent      parentNode `json:"parent"`
 	Id          string     `json:"id"`
 	Title       string     `json:"title"`
 	Identifier  string     `json:"identifier"`
-	Priority    float64    `json:"priority"`
 	DueDate     string     `json:"dueDate,omitempty"`
 	Url         string     `json:"url"`
 	UpdatedAt   string     `json:"updatedAt"`
 	CompletedAt string     `json:"completedAt,omitempty"`
-	State       stateNode  `json:"state"`
-	Team        teamNode   `json:"team"`
-	Parent      parentNode `json:"parent"`
+	Priority    float64    `json:"priority"`
 }
 
 type detailIssueNode struct {
+	State       stateNode         `json:"state"`
+	Team        teamNode          `json:"team"`
+	Parent      parentNode        `json:"parent"`
 	Id          string            `json:"id"`
 	Identifier  string            `json:"identifier"`
 	Title       string            `json:"title"`
 	Description string            `json:"description"`
-	Priority    float64           `json:"priority"`
 	Url         string            `json:"url"`
 	CompletedAt string            `json:"completedAt,omitempty"`
 	UpdatedAt   string            `json:"updatedAt"`
-	State       stateNode         `json:"state"`
-	Team        teamNode          `json:"team"`
-	Parent      parentNode        `json:"parent"`
 	Comments    commentConnection `json:"comments"`
+	Priority    float64           `json:"priority"`
 }
 
 type stateNode struct {
@@ -523,9 +524,9 @@ type commentConnection struct {
 }
 
 type commentNode struct {
-	Body      string    `json:"body"`
-	CreatedAt string    `json:"createdAt"`
-	User      userNode  `json:"user"`
+	Body      string   `json:"body"`
+	CreatedAt string   `json:"createdAt"`
+	User      userNode `json:"user"`
 }
 
 type userNode struct {
@@ -554,6 +555,7 @@ func updatedIssuesWithDetailsResponse(nodes []detailIssueNode) map[string]any {
 
 func mockLinearServer(t *testing.T, handler func(r *http.Request) any) *httptest.Server {
 	t.Helper()
+
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := handler(r)
 		resp := map[string]any{"data": data}

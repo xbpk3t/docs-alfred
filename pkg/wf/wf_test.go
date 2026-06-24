@@ -128,7 +128,7 @@ func TestAlfredFormatterFormatEmptyString(t *testing.T) {
 	var result AlfredOutput
 	require.NoError(t, json.Unmarshal([]byte(out), &result))
 	require.Len(t, result.Items, 1)
-	assert.Equal(t, "", result.Items[0].Title)
+	assert.Empty(t, result.Items[0].Title)
 }
 
 func TestAlfredFormatterFormatEmptyItems(t *testing.T) {
@@ -193,14 +193,14 @@ func TestPlainFormatterFormatEmptyString(t *testing.T) {
 	f := &PlainFormatter{}
 	out, err := f.Format("")
 	require.NoError(t, err)
-	assert.Equal(t, "", out)
+	assert.Empty(t, out)
 }
 
 func TestPlainFormatterFormatEmptySlice(t *testing.T) {
 	f := &PlainFormatter{}
 	out, err := f.Format([]string{})
 	require.NoError(t, err)
-	assert.Equal(t, "", out)
+	assert.Empty(t, out)
 }
 
 // --- RawFormatter tests ---
@@ -283,21 +283,21 @@ func TestRofiFormatterFormatEmptyString(t *testing.T) {
 	f := &RofiFormatter{}
 	out, err := f.Format("")
 	require.NoError(t, err)
-	assert.Equal(t, "", out)
+	assert.Empty(t, out)
 }
 
 func TestRofiFormatterFormatEmptySlice(t *testing.T) {
 	f := &RofiFormatter{}
 	out, err := f.Format([]string{})
 	require.NoError(t, err)
-	assert.Equal(t, "", out)
+	assert.Empty(t, out)
 }
 
 func TestRofiFormatterFormatEmptyAlfredItems(t *testing.T) {
 	f := &RofiFormatter{}
 	out, err := f.Format([]AlfredItem{})
 	require.NoError(t, err)
-	assert.Equal(t, "", out)
+	assert.Empty(t, out)
 }
 
 // --- Error path tests ---

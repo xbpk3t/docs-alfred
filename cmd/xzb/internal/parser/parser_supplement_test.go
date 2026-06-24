@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -136,15 +136,15 @@ func TestGet(t *testing.T) {
 	require.Equal(t, "Alice", get(row, indexes, "name"))
 	require.Equal(t, "30", get(row, indexes, "age"))
 	require.Equal(t, "Beijing", get(row, indexes, "city"))
-	require.Equal(t, "", get(row, indexes, "missing"))
+	require.Empty(t, get(row, indexes, "missing"))
 	require.Equal(t, "Alice", get(row, indexes, "missing", "name"))
-	require.Equal(t, "", get(row, indexes))
+	require.Empty(t, get(row, indexes))
 }
 
 func TestGetOutOfBounds(t *testing.T) {
 	indexes := map[string]int{"col": 5}
 	row := []string{"a", "b"}
-	require.Equal(t, "", get(row, indexes, "col"))
+	require.Empty(t, get(row, indexes, "col"))
 }
 
 func TestParseTime(t *testing.T) {
@@ -406,7 +406,7 @@ func TestParseRowsError(t *testing.T) {
 		{"data1", "data2"},
 	}
 	badParser := func(_ string, _ []string, _ map[string]int, _ int) (model.ParsedTransaction, bool, error) {
-		return model.ParsedTransaction{}, false, fmt.Errorf("parse failed")
+		return model.ParsedTransaction{}, false, errors.New("parse failed")
 	}
 	_, err := parseRows("test.csv", rows, []string{"Col1", "Col2"}, badParser)
 	require.Error(t, err)

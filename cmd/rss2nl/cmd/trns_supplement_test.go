@@ -246,12 +246,12 @@ func TestReadCachedItemTrnsEmptyCache(t *testing.T) {
 
 func TestConfiguredSummaryBaseURLEmpty(t *testing.T) {
 	cfg := &rss.Config{TrnsConfig: rss.TrnsConfig{Summary: rss.TrnsSummaryConfig{BaseURL: ""}}}
-	assert.Equal(t, "", configuredSummaryBaseURL(cfg))
+	assert.Empty(t, configuredSummaryBaseURL(cfg))
 }
 
 func TestConfiguredSummaryBaseURLDefault(t *testing.T) {
 	cfg := &rss.Config{TrnsConfig: rss.TrnsConfig{Summary: rss.TrnsSummaryConfig{BaseURL: defaultTrnsSummaryBaseURL}}}
-	assert.Equal(t, "", configuredSummaryBaseURL(cfg))
+	assert.Empty(t, configuredSummaryBaseURL(cfg))
 }
 
 func TestConfiguredSummaryBaseURLCustom(t *testing.T) {
@@ -458,6 +458,7 @@ func TestProcessNewsletterTrnsItemsZeroLimit(t *testing.T) {
 	processed := 0
 	report := processNewsletterTrnsItems(items, 0, func(item *NewsletterItem) (string, error) {
 		processed++
+
 		return "", nil
 	})
 	// limit=0 means no limit -> should process
@@ -552,7 +553,7 @@ func TestInspectFeedItemsMPEGEnclosure(t *testing.T) {
 
 func TestConfiguredSummaryBaseURLWhitespace(t *testing.T) {
 	cfg := &rss.Config{TrnsConfig: rss.TrnsConfig{Summary: rss.TrnsSummaryConfig{BaseURL: "  "}}}
-	assert.Equal(t, "", configuredSummaryBaseURL(cfg))
+	assert.Empty(t, configuredSummaryBaseURL(cfg))
 }
 
 // ---------------------------------------------------------------------------

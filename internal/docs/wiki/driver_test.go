@@ -207,11 +207,11 @@ func TestMarkdownFallbackBodyReturnsRawOnFailure(t *testing.T) {
 // --- extractTitleFromHTML edge cases ---
 
 func TestExtractTitleFromHTMLNoHeadTag(t *testing.T) {
-	assert.Equal(t, "", extractTitleFromHTML(`<html><body>No head</body></html>`))
+	assert.Empty(t, extractTitleFromHTML(`<html><body>No head</body></html>`))
 }
 
 func TestExtractTitleFromHTMLEmptyTitle(t *testing.T) {
-	assert.Equal(t, "", extractTitleFromHTML(`<html><head><title></title></head><body></body></html>`))
+	assert.Empty(t, extractTitleFromHTML(`<html><head><title></title></head><body></body></html>`))
 }
 
 func TestExtractTitleFromHTMLMultipleTitles(t *testing.T) {
@@ -864,9 +864,11 @@ func TestAppendBilibiliTranscriptSuccess(t *testing.T) {
 	opencliPath := filepath.Join(binDir, "opencli")
 	// Create a transcript table with enough content and lines
 	transcript := "| index | from | to | content |\n| --- | --- | --- | --- |\n"
+	var transcriptSb867 strings.Builder
 	for i := 0; i < 10; i++ {
-		transcript += fmt.Sprintf("| %d | 0:%02d | 0:%02d | This is transcript line %d with enough content to pass the threshold. |\n", i, i, i+1, i)
+		transcriptSb867.WriteString(fmt.Sprintf("| %d | 0:%02d | 0:%02d | This is transcript line %d with enough content to pass the threshold. |\n", i, i, i+1, i))
 	}
+	transcript += transcriptSb867.String()
 	script := `#!/bin/sh
 case "$2" in
   subtitle)
@@ -897,9 +899,11 @@ func TestAppendYoutubeTranscriptSuccess(t *testing.T) {
 	// Create a transcript with enough content and lines
 	transcript := "timestamp | speaker | text\n"
 	transcript += "--- | --- | ---\n"
+	var transcriptSb900 strings.Builder
 	for i := 0; i < 10; i++ {
-		transcript += fmt.Sprintf("00:%02d | speaker | This is transcript line %d with enough content to pass thresholds.\n", i, i)
+		transcriptSb900.WriteString(fmt.Sprintf("00:%02d | speaker | This is transcript line %d with enough content to pass thresholds.\n", i, i))
 	}
+	transcript += transcriptSb900.String()
 	script := `#!/bin/sh
 printf '%s' '` + transcript + `'
 `

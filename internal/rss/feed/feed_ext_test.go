@@ -118,8 +118,8 @@ func TestGetMaxAttempts(t *testing.T) {
 func TestAiModelForWiki(t *testing.T) {
 	tests := []struct {
 		name string
-		cfg  Config
 		want string
+		cfg  Config
 	}{
 		{
 			name: "wiki model set",
@@ -150,8 +150,8 @@ func TestAiModelForWiki(t *testing.T) {
 func TestAiBaseURLForWiki(t *testing.T) {
 	tests := []struct {
 		name string
-		cfg  Config
 		want string
+		cfg  Config
 	}{
 		{
 			name: "wiki base URL set",
@@ -174,8 +174,8 @@ func TestAiBaseURLForWiki(t *testing.T) {
 func TestValidateForSend(t *testing.T) {
 	tests := []struct {
 		name    string
-		cfg     Config
 		wantErr string
+		cfg     Config
 	}{
 		{
 			name:    "missing token",

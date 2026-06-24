@@ -154,7 +154,7 @@ func TestMetadataMarkdown(t *testing.T) {
 
 func TestMetadataEmpty(t *testing.T) {
 	m := Metadata()
-	assert.Equal(t, "", m.Markdown())
+	assert.Empty(t, m.Markdown())
 }
 
 func TestMetadataAddIsNoOp(t *testing.T) {
@@ -211,7 +211,7 @@ func TestAIReviewItemSkipsEmptySections(t *testing.T) {
 
 func TestAIReviewItemAllEmpty(t *testing.T) {
 	a := AIReviewItem(ReviewSection{Heading: "H", Items: nil})
-	assert.Equal(t, "", a.Markdown())
+	assert.Empty(t, a.Markdown())
 }
 
 func TestAIReviewItemAddIsNoOp(t *testing.T) {
@@ -264,7 +264,7 @@ func TestDocumentMarkdown(t *testing.T) {
 
 func TestDocumentEmpty(t *testing.T) {
 	doc := NewDocument()
-	assert.Equal(t, "", doc.Markdown())
+	assert.Empty(t, doc.Markdown())
 }
 
 func TestDocumentAddReturnsSelf(t *testing.T) {
@@ -298,7 +298,7 @@ func TestDocumentToHTMLEmpty(t *testing.T) {
 	doc := NewDocument()
 	html, err := doc.ToHTML()
 	require.NoError(t, err)
-	assert.Equal(t, "", html)
+	assert.Empty(t, html)
 }
 
 func TestEmptySectionAddIsNoOp(t *testing.T) {
@@ -320,7 +320,7 @@ func TestToHTML(t *testing.T) {
 func TestToHTMLEmpty(t *testing.T) {
 	html, err := ToHTML("")
 	require.NoError(t, err)
-	assert.Equal(t, "", html)
+	assert.Empty(t, html)
 }
 
 func TestToHTMLParagraph(t *testing.T) {
@@ -334,7 +334,7 @@ func TestToHTMLParagraph(t *testing.T) {
 func TestToHTMLParagraphEmpty(t *testing.T) {
 	html, err := ToHTMLParagraph("")
 	require.NoError(t, err)
-	assert.Equal(t, "", html)
+	assert.Empty(t, html)
 }
 
 func TestToHTMLParagraphList(t *testing.T) {
@@ -400,12 +400,12 @@ func TestExtractTitleFromMarkdownTable(t *testing.T) {
 
 func TestExtractTitleFromMarkdownNoTitle(t *testing.T) {
 	title := ExtractTitleFromMarkdown("just plain text")
-	assert.Equal(t, "", title)
+	assert.Empty(t, title)
 }
 
 func TestExtractTitleFromMarkdownEmpty(t *testing.T) {
 	title := ExtractTitleFromMarkdown("")
-	assert.Equal(t, "", title)
+	assert.Empty(t, title)
 }
 
 func TestExtractTitleFromMarkdownHeadingBeatsTable(t *testing.T) {
@@ -432,7 +432,7 @@ func TestHTMLToMarkdown(t *testing.T) {
 func TestHTMLToMarkdownEmpty(t *testing.T) {
 	md, err := HTMLToMarkdown("")
 	require.NoError(t, err)
-	assert.Equal(t, "", md)
+	assert.Empty(t, md)
 }
 
 func TestHTMLToMarkdownLink(t *testing.T) {
@@ -468,11 +468,11 @@ func TestExtractTitleFromTableWithNonTitleRows(t *testing.T) {
 func TestExtractTitleFromTableNoTitleRow(t *testing.T) {
 	table := "| field | value |\n| --- | --- |\n| author | someone |\n| date | 2024 |\n"
 	title := ExtractTitleFromMarkdown(table)
-	assert.Equal(t, "", title)
+	assert.Empty(t, title)
 }
 
 func TestExtractTitleFromTableEmptyValueCell(t *testing.T) {
 	table := "| field | value |\n| --- | --- |\n| title | |\n"
 	title := ExtractTitleFromMarkdown(table)
-	assert.Equal(t, "", title)
+	assert.Empty(t, title)
 }

@@ -139,9 +139,11 @@ func TestBuildReasonEmptySummary(t *testing.T) {
 
 func TestBuildReasonLongSummary(t *testing.T) {
 	longSummary := ""
+	var longSummarySb142 strings.Builder
 	for i := 0; i < 300; i++ {
-		longSummary += "word"
+		longSummarySb142.WriteString("word")
 	}
+	longSummary += longSummarySb142.String()
 	reason := buildReason("tech", nil, "Exa", longSummary)
 	assert.LessOrEqual(t, len(reason), 260+50) // reason prefix + truncated summary
 }
@@ -208,8 +210,8 @@ func TestBuildTavilyQuery(t *testing.T) {
 }
 
 func TestFormatConfidence(t *testing.T) {
-	assert.Equal(t, "", formatConfidence(0))
-	assert.Equal(t, "", formatConfidence(-1))
+	assert.Empty(t, formatConfidence(0))
+	assert.Empty(t, formatConfidence(-1))
 	assert.Equal(t, "0.85", formatConfidence(0.85))
 }
 

@@ -14,10 +14,10 @@ import (
 func TestRunWikiCheckOKF(t *testing.T) {
 	tests := []struct {
 		name       string
-		rel        string // relative path within wiki root
+		rel        string
 		content    string
+		checkMsgs  []string
 		wantIssues int
-		checkMsgs  []string // optional: specific messages that must appear
 	}{
 		{
 			name: "valid minimal frontmatter at topic level",
@@ -286,7 +286,7 @@ func TestAddDirDuplicate(t *testing.T) {
 	set := map[string]bool{"a": true}
 	var dirs []string
 	addDir("a", set, &dirs)
-	assert.Len(t, dirs, 0) // already in set, not added
+	assert.Empty(t, dirs) // already in set, not added
 }
 
 func TestAddDirNew(t *testing.T) {

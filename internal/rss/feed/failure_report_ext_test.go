@@ -61,9 +61,9 @@ func TestClassifyFeedFailureTLS(t *testing.T) {
 
 func TestClassifyFeedFailureHTTPStatus(t *testing.T) {
 	tests := []struct {
-		name        string
-		message     string
-		transient   bool
+		name      string
+		message   string
+		transient bool
 	}{
 		{"429 rate limit", "status code 429", true},
 		{"500 server error", "HTTP 500 internal server error", true},
@@ -158,10 +158,10 @@ func TestContainsAny(t *testing.T) {
 }
 
 func TestFeedFailureMessage(t *testing.T) {
-	assert.Equal(t, "", feedFailureMessage(nil))
+	assert.Empty(t, feedFailureMessage(nil))
 	assert.Equal(t, "err msg", feedFailureMessage(&FeedError{Err: errors.New("err msg")}))
 	assert.Equal(t, "fallback", feedFailureMessage(&FeedError{Message: "fallback"}))
-	assert.Equal(t, "", feedFailureMessage(&FeedError{}))
+	assert.Empty(t, feedFailureMessage(&FeedError{}))
 }
 
 func TestFeedFailureHost(t *testing.T) {

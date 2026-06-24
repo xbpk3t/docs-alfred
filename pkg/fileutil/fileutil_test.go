@@ -13,7 +13,7 @@ import (
 
 func TestCachePathEmpty(t *testing.T) {
 	result := CachePath("")
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestCachePathAbsolute(t *testing.T) {
@@ -234,10 +234,10 @@ func writeContent2(t *testing.T, path, content string) {
 // --- Permission constants ---
 
 func TestPermissionConstants(t *testing.T) {
-	assert.Equal(t, os.FileMode(0o750), DirPerm)
-	assert.Equal(t, os.FileMode(0o640), FilePerm)
-	assert.Equal(t, os.FileMode(0o600), FilePermPrivate)
-	assert.Equal(t, os.FileMode(0o660), FilePermShared)
+	assert.Equal(t, DirPerm, os.FileMode(0o750))
+	assert.Equal(t, FilePerm, os.FileMode(0o640))
+	assert.Equal(t, FilePermPrivate, os.FileMode(0o600))
+	assert.Equal(t, FilePermShared, os.FileMode(0o660))
 }
 
 // --- IsYAMLFileName tests ---

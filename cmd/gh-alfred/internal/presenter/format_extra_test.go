@@ -128,7 +128,7 @@ func TestFormatAlfredItemsTypeWithoutTag(t *testing.T) {
 }
 
 func TestBuildDocURLEmptyDoc(t *testing.T) {
-	assert.Equal(t, "", BuildDocURL("https://docs.lucc.dev/", ""))
+	assert.Empty(t, BuildDocURL("https://docs.lucc.dev/", ""))
 }
 
 func TestBuildDocURLDefaultDocsURL(t *testing.T) {
@@ -137,5 +137,5 @@ func TestBuildDocURLDefaultDocsURL(t *testing.T) {
 }
 
 func TestFormatRepoSubtitleNilRepo(t *testing.T) {
-	assert.Equal(t, "", formatRepoSubtitle(nil))
+	assert.Empty(t, formatRepoSubtitle(nil))
 }

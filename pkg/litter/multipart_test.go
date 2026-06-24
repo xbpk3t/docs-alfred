@@ -81,6 +81,7 @@ func (w *writeLimitWriter) Write(p []byte) (int, error) {
 	if w.written > w.limit {
 		return 0, errors.New("write failed")
 	}
+
 	return len(p), nil
 }
 

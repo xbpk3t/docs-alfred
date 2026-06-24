@@ -108,6 +108,7 @@ func TestSyncRowsWrittenAccumulates(t *testing.T) {
 	fake.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, sql string, params []any) (d1sync.QueryResult, error) {
 			callCount++
+
 			return d1sync.QueryResult{RowsWritten: int64(callCount)}, nil
 		}).Times(2)
 

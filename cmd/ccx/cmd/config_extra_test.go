@@ -93,7 +93,7 @@ func TestFormatExportConfigError_ReadStage(t *testing.T) {
 	require.Contains(t, result.Error(), "read config")
 	require.Contains(t, result.Error(), "file not found")
 	// Verify the original error is wrapped.
-	require.True(t, errors.Is(result, loadErr.Err))
+	require.ErrorIs(t, result, loadErr.Err)
 }
 
 func TestFormatExportConfigError_ParseStage(t *testing.T) {
@@ -107,7 +107,7 @@ func TestFormatExportConfigError_ParseStage(t *testing.T) {
 	require.Error(t, result)
 	require.Contains(t, result.Error(), "parse config")
 	require.Contains(t, result.Error(), "invalid YAML syntax")
-	require.True(t, errors.Is(result, loadErr.Err))
+	require.ErrorIs(t, result, loadErr.Err)
 }
 
 func TestFormatExportConfigError_UnmarshalStage(t *testing.T) {
@@ -121,7 +121,7 @@ func TestFormatExportConfigError_UnmarshalStage(t *testing.T) {
 	require.Error(t, result)
 	require.Contains(t, result.Error(), "unmarshal config")
 	require.Contains(t, result.Error(), "type mismatch")
-	require.True(t, errors.Is(result, loadErr.Err))
+	require.ErrorIs(t, result, loadErr.Err)
 }
 
 func TestFormatExportConfigError_ValidateStage(t *testing.T) {

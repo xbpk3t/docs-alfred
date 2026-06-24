@@ -126,5 +126,5 @@ func TestNormalizeRepoTopics_UseBase(t *testing.T) {
 
 func TestGithubYAMLRender_GetCurrentFileName(t *testing.T) {
 	r := NewGithubYAMLRender("test")
-	assert.Equal(t, "", r.GetCurrentFileName())
+	assert.Empty(t, r.GetCurrentFileName())
 }

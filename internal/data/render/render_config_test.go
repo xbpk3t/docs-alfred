@@ -449,7 +449,7 @@ func TestProcessGithubDirDomain_Success(t *testing.T) {
 
 func TestProcessRenderConfigEmpty(t *testing.T) {
 	cfg := processRenderConfig(docsConfig{})
-	assert.Equal(t, "", cfg.Src)
+	assert.Empty(t, cfg.Src)
 }
 
 func TestProcessRenderConfigWithJSON(t *testing.T) {

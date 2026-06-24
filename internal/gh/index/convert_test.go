@@ -24,7 +24,7 @@ func TestToRepos_BasicConversion(t *testing.T) {
 	repos := cr.ToRepos()
 	require.NotEmpty(t, repos)
 	// Both using and main repo should be present
-	assert.True(t, len(repos) >= 2)
+	assert.GreaterOrEqual(t, len(repos), 2)
 }
 
 func TestToRepos_SubRepos(t *testing.T) {

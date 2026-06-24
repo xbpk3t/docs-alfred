@@ -77,7 +77,7 @@ func TestDomainBlocked(t *testing.T) {
 func TestDomain(t *testing.T) {
 	require.Equal(t, "example.com", Domain("https://example.com/path"))
 	require.Equal(t, "example.com", Domain("https://Example.COM:8080/path"))
-	require.Equal(t, "", Domain("%zz"))
+	require.Empty(t, Domain("%zz"))
 }
 
 func TestNormalize_TrailingSlash(t *testing.T) {
@@ -94,8 +94,8 @@ func TestNormalize_BasicURL(t *testing.T) {
 func TestRegistrableDomain(t *testing.T) {
 	require.Equal(t, "example.com", RegistrableDomain("sub.example.com"))
 	require.Equal(t, "example.co.uk", RegistrableDomain("sub.example.co.uk"))
-	require.Equal(t, "", RegistrableDomain("localhost"))
-	require.Equal(t, "", RegistrableDomain(""))
+	require.Empty(t, RegistrableDomain("localhost"))
+	require.Empty(t, RegistrableDomain(""))
 }
 
 func TestDomainBlocked_EmptyDomain(t *testing.T) {
@@ -136,7 +136,7 @@ func TestRepoName_Fallback(t *testing.T) {
 }
 
 func TestRepoNameFromPath_Empty(t *testing.T) {
-	require.Equal(t, "", repoNameFromPath(""))
+	require.Empty(t, repoNameFromPath(""))
 	require.Equal(t, "repo", repoNameFromPath("/owner/repo"))
 	require.Equal(t, "repo", repoNameFromPath("/owner/repo.git"))
 }

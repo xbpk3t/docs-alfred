@@ -18,7 +18,7 @@ func TestNewYAMLRenderer(t *testing.T) {
 
 func TestNewYAMLRendererDefaults(t *testing.T) {
 	r := NewYAMLRenderer("", false)
-	assert.Equal(t, "", r.Cmd)
+	assert.Empty(t, r.Cmd)
 	assert.False(t, r.PrettyPrint)
 	assert.Equal(t, ParseSingle, r.ParseMode)
 }
@@ -213,10 +213,10 @@ c: 3
 // --- ParseMode constants ---
 
 func TestParseModeConstants(t *testing.T) {
-	assert.Equal(t, ParseMode(0), ParseModeInvalid)
-	assert.Equal(t, ParseMode(1), ParseSingle)
-	assert.Equal(t, ParseMode(2), ParseMulti)
-	assert.Equal(t, ParseMode(3), ParseFlatten)
+	assert.Equal(t, ParseModeInvalid, ParseMode(0))
+	assert.Equal(t, ParseSingle, ParseMode(1))
+	assert.Equal(t, ParseMulti, ParseMode(2))
+	assert.Equal(t, ParseFlatten, ParseMode(3))
 }
 
 // --- Renderer interface ---

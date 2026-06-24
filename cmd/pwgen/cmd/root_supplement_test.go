@@ -175,6 +175,7 @@ func TestExecuteErrorPath(t *testing.T) {
 		// We're in the subprocess; set args to trigger error (no website arg).
 		os.Args = []string{"pwgen"}
 		Execute()
+
 		return
 	}
 
@@ -238,12 +239,14 @@ func captureStderr(t *testing.T) func() string {
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	os.Stderr = w
+
 	return func() string {
 		require.NoError(t, w.Close())
 		os.Stderr = original
 		data, err := io.ReadAll(r)
 		require.NoError(t, err)
 		require.NoError(t, r.Close())
+
 		return string(data)
 	}
 }

@@ -134,9 +134,9 @@ func TestFormatMessages_NoDuplicateDateAnnotation(t *testing.T) {
 }
 
 func TestExtractDatePart_ShortTimestamp(t *testing.T) {
-	assert.Equal(t, "", extractDatePart("abc"))
-	assert.Equal(t, "", extractDatePart(""))
-	assert.Equal(t, "", extractDatePart("12345"))
+	assert.Empty(t, extractDatePart("abc"))
+	assert.Empty(t, extractDatePart(""))
+	assert.Empty(t, extractDatePart("12345"))
 }
 
 func TestExtractDatePart_Valid(t *testing.T) {
@@ -153,7 +153,7 @@ func TestCoalesceDate_ValidTimestamp(t *testing.T) {
 }
 
 func TestCoalesceDate_BothEmpty(t *testing.T) {
-	assert.Equal(t, "", coalesceDate("", ""))
+	assert.Empty(t, coalesceDate("", ""))
 }
 
 func TestMergeSameRole_SingleMessage(t *testing.T) {

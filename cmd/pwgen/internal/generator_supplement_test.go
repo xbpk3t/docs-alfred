@@ -56,7 +56,7 @@ func TestGeneratePwdAllFlagsTrue(t *testing.T) {
 
 	pwd := g.generatePwd(hash, 16, true, true)
 	assert.NotEmpty(t, pwd)
-	assert.Equal(t, 16, len(pwd))
+	assert.Len(t, pwd, 16)
 }
 
 func TestGeneratePwdAllFlagsFalse(t *testing.T) {
@@ -65,7 +65,7 @@ func TestGeneratePwdAllFlagsFalse(t *testing.T) {
 
 	pwd := g.generatePwd(hash, 16, false, false)
 	assert.NotEmpty(t, pwd)
-	assert.Equal(t, 16, len(pwd))
+	assert.Len(t, pwd, 16)
 }
 
 func TestGeneratePwdMixedFlags(t *testing.T) {
@@ -75,7 +75,7 @@ func TestGeneratePwdMixedFlags(t *testing.T) {
 	// uppercase=true, punctuation=false
 	pwd := g.generatePwd(hash, 16, false, true)
 	assert.NotEmpty(t, pwd)
-	assert.Equal(t, 16, len(pwd))
+	assert.Len(t, pwd, 16)
 }
 
 func TestGeneratePwdPunctuationTrueUppercaseFalse(t *testing.T) {
@@ -85,7 +85,7 @@ func TestGeneratePwdPunctuationTrueUppercaseFalse(t *testing.T) {
 	// isPunc=true, isUseUpper=false
 	pwd := g.generatePwd(hash, 16, true, false)
 	assert.NotEmpty(t, pwd)
-	assert.Equal(t, 16, len(pwd))
+	assert.Len(t, pwd, 16)
 }
 
 func TestGeneratePwdShortLength(t *testing.T) {
@@ -94,7 +94,7 @@ func TestGeneratePwdShortLength(t *testing.T) {
 
 	pwd := g.generatePwd(hash, 8, false, true)
 	assert.NotEmpty(t, pwd)
-	assert.Equal(t, 8, len(pwd))
+	assert.Len(t, pwd, 8)
 }
 
 func TestGeneratePwdLongLength(t *testing.T) {
@@ -113,7 +113,7 @@ func TestGeneratePunctuationTrueUppercaseFalse(t *testing.T) {
 
 	result, err := generator.Generate("github.com")
 	require.NoError(t, err)
-	assert.Equal(t, 16, len(result))
+	assert.Len(t, result, 16)
 
 	// Should not contain uppercase
 	for _, c := range result {
@@ -162,7 +162,7 @@ func TestGenerateDifferentSecrets(t *testing.T) {
 }
 
 // TestSha512MethodVariousInputs exercises the sha512 loop body with many
-// key/website combinations to maximise coverage of the ParseFloat-continue
+// key/website combinations to maximize coverage of the ParseFloat-continue
 // and string-processing paths.
 func TestSha512MethodVariousInputs(t *testing.T) {
 	g := NewGenerator(NewConfig("test", 16, true, true, false))
@@ -219,7 +219,7 @@ func TestGeneratePwdHashTooShort(t *testing.T) {
 
 	// "abc" is only 3 chars, much shorter than length=16
 	pwd := g.generatePwd("abc", 16, false, true)
-	assert.Equal(t, "", pwd, "should return empty when hash shorter than length")
+	assert.Empty(t, pwd, "should return empty when hash shorter than length")
 }
 
 // TestGenerateNoUppercaseNoPunctuation exercises the combination where
@@ -232,7 +232,7 @@ func TestGenerateNoUppercaseNoPunctuation(t *testing.T) {
 	result, err := g.Generate("github.com")
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
-	assert.Equal(t, 16, len(result))
+	assert.Len(t, result, 16)
 
 	// Should not contain uppercase letters
 	for _, c := range result {
@@ -249,7 +249,7 @@ func TestGenerateVeryShortPassword(t *testing.T) {
 	result, err := g.Generate("github.com")
 	require.NoError(t, err)
 	assert.NotEmpty(t, result, "should produce a password at length=4")
-	assert.Equal(t, 4, len(result))
+	assert.Len(t, result, 4)
 }
 
 // TestSha512RuleLengthMismatch covers the "i >= len(rule)" branch (line 112)
@@ -291,6 +291,7 @@ func TestSha512IsNaNPath(t *testing.T) {
 		if s == "a" {
 			return math.NaN(), nil
 		}
+
 		return strconv.ParseFloat(s, bitSize)
 	}
 	t.Cleanup(func() { parseFloatFunc = oldParse })
@@ -330,7 +331,7 @@ func TestGeneratePwdRunStringError(t *testing.T) {
 	t.Cleanup(func() { jsScript = oldScript })
 
 	pwd := g.generatePwd("testhash1234567890abcdef", 16, false, true)
-	assert.Equal(t, "", pwd, "should return empty string when JS fails to parse")
+	assert.Empty(t, pwd, "should return empty string when JS fails to parse")
 }
 
 // TestGeneratePwdExportError covers the vm.ExportTo error path by providing

@@ -85,7 +85,7 @@ func TestExtractURLRefsTranscriptOnlyFilters(t *testing.T) {
 }
 
 func TestCleanHTTPURLRejectsMalformedMarkdownCapture(t *testing.T) {
-	require.Equal(t, "", CleanHTTPURL("https://t.co/abc](https://x.com/user/status/1"))
+	require.Empty(t, CleanHTTPURL("https://t.co/abc](https://x.com/user/status/1"))
 }
 
 func TestNormalizeSetCleansAndNormalizes(t *testing.T) {
@@ -160,7 +160,7 @@ func TestKeepExtractedURL_TranscriptOnly_NoMatch(t *testing.T) {
 func TestCleanURLWithTrim_AllTrimmed(t *testing.T) {
 	// All characters are trim chars - result should be empty
 	result := CleanURLWithTrim("<<<>>>", CleanOptions{})
-	require.Equal(t, "", result.URL)
+	require.Empty(t, result.URL)
 }
 
 func TestCleanURLWithTrim_BracketsAndParens(t *testing.T) {
@@ -173,7 +173,7 @@ func TestCleanHTTPURL_Basic(t *testing.T) {
 }
 
 func TestCleanHTTPURL_FTPRejected(t *testing.T) {
-	require.Equal(t, "", CleanHTTPURL("ftp://example.com"))
+	require.Empty(t, CleanHTTPURL("ftp://example.com"))
 }
 
 func TestCleanURL_WithBaseURL(t *testing.T) {
@@ -183,13 +183,13 @@ func TestCleanURL_WithBaseURL(t *testing.T) {
 
 func TestCleanURL_InvalidURL(t *testing.T) {
 	result := CleanURL("%zz", CleanOptions{})
-	require.Equal(t, "", result)
+	require.Empty(t, result)
 }
 
 func TestCleanURL_WithMarkdownSyntax(t *testing.T) {
 	// URL containing ]( should be rejected
 	result := CleanURL("https://t.co/abc](https://x.com/user/status/1", CleanOptions{HTTPOnly: true})
-	require.Equal(t, "", result)
+	require.Empty(t, result)
 }
 
 func TestParseURLCandidate_Empty(t *testing.T) {
@@ -326,7 +326,7 @@ func TestExtractURLRefs_MarkdownTranscriptMatch(t *testing.T) {
 func TestCleanURL_ResolveReferenceError(t *testing.T) {
 	// A relative URL with an invalid base URL should return ""
 	result := CleanURL("/relative/path", CleanOptions{BaseURL: "%zz"})
-	require.Equal(t, "", result)
+	require.Empty(t, result)
 }
 
 func TestCleanURL_AssumeHTTPS_RelativePath(t *testing.T) {
@@ -335,13 +335,13 @@ func TestCleanURL_AssumeHTTPS_RelativePath(t *testing.T) {
 	// But validCleanURL rejects it because Host is empty.
 	result := CleanURL("/path/page", CleanOptions{AssumeHTTPS: true})
 	// The URL will have scheme "https" but no host, so validCleanURL returns false
-	require.Equal(t, "", result)
+	require.Empty(t, result)
 }
 
 func TestCleanURL_WithMarkdownBracketSyntax(t *testing.T) {
 	// URL containing ]( should be rejected by parseURLCandidate
 	result := CleanURL("abc](def", CleanOptions{})
-	require.Equal(t, "", result)
+	require.Empty(t, result)
 }
 
 func TestParseURLCandidate_AssumeHTTPS_DomainWithPercent(t *testing.T) {
@@ -354,8 +354,8 @@ func TestParseURLCandidate_AssumeHTTPS_DomainWithPercent(t *testing.T) {
 func TestExtractBareURLRefs_KeepFiltered(t *testing.T) {
 	// Test that bare URLs are filtered by keepExtractedURL
 	refs := ExtractURLRefs(`ftp://files.example.com/data`, ExtractOptions{
-		BareURLs:    true,
-		HTTPOnly:    true,
+		BareURLs: true,
+		HTTPOnly: true,
 	})
 	require.Empty(t, refs)
 }
@@ -372,5 +372,5 @@ func TestIsTranscriptURL_Extensions(t *testing.T) {
 func TestURLExtension_ValidURL(t *testing.T) {
 	require.Equal(t, ".json", urlExtension("https://example.com/data.json"))
 	require.Equal(t, ".vtt", urlExtension("https://example.com/subs.vtt"))
-	require.Equal(t, "", urlExtension("https://example.com/noext"))
+	require.Empty(t, urlExtension("https://example.com/noext"))
 }

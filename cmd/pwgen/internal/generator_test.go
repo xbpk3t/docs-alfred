@@ -39,7 +39,7 @@ func TestGenerateLength(t *testing.T) {
 
 	result, err := generator.Generate("github.com")
 	require.NoError(t, err)
-	assert.Equal(t, 16, len(result), "password should match requested length")
+	assert.Len(t, result, 16, "password should match requested length")
 }
 
 func TestGenerateLongerLength(t *testing.T) {
@@ -48,7 +48,7 @@ func TestGenerateLongerLength(t *testing.T) {
 
 	result, err := generator.Generate("github.com")
 	require.NoError(t, err)
-	assert.Equal(t, 32, len(result), "password should match requested length")
+	assert.Len(t, result, 32, "password should match requested length")
 }
 
 func TestGenerateWithPunctuation(t *testing.T) {
@@ -57,13 +57,14 @@ func TestGenerateWithPunctuation(t *testing.T) {
 
 	result, err := generator.Generate("github.com")
 	require.NoError(t, err)
-	assert.Equal(t, 16, len(result))
+	assert.Len(t, result, 16)
 
 	hasPunctuation := false
 	for _, c := range result {
 		for _, p := range "~*-+()!@#$^&" {
 			if c == p {
 				hasPunctuation = true
+
 				break
 			}
 		}
@@ -80,7 +81,7 @@ func TestGenerateWithoutPunctuation(t *testing.T) {
 
 	result, err := generator.Generate("github.com")
 	require.NoError(t, err)
-	assert.Equal(t, 16, len(result))
+	assert.Len(t, result, 16)
 
 	for _, c := range result {
 		for _, p := range "~*-+()!@#$^&" {
@@ -95,12 +96,13 @@ func TestGenerateWithUppercase(t *testing.T) {
 
 	result, err := generator.Generate("github.com")
 	require.NoError(t, err)
-	assert.Equal(t, 16, len(result))
+	assert.Len(t, result, 16)
 
 	hasUpper := false
 	for _, c := range result {
 		if c >= 'A' && c <= 'Z' {
 			hasUpper = true
+
 			break
 		}
 	}

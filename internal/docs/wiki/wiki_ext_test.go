@@ -99,8 +99,8 @@ func TestIsDirectAudioURL(t *testing.T) {
 
 func TestExtractTitleFromHTML(t *testing.T) {
 	assert.Equal(t, "Hello", extractTitleFromHTML(`<html><head><title>Hello</title></head><body></body></html>`))
-	assert.Equal(t, "", extractTitleFromHTML(`<html><body>No title</body></html>`))
-	assert.Equal(t, "", extractTitleFromHTML(`not html`))
+	assert.Empty(t, extractTitleFromHTML(`<html><body>No title</body></html>`))
+	assert.Empty(t, extractTitleFromHTML(`not html`))
 }
 
 // --- isHTTPBlockError ---
@@ -143,8 +143,8 @@ func TestExtractWeixinSavedPath(t *testing.T) {
 
 func TestExtractSavedPathFromLine(t *testing.T) {
 	assert.Equal(t, "/tmp/file.md", extractSavedPathFromLine("  saved: /tmp/file.md"))
-	assert.Equal(t, "", extractSavedPathFromLine("no saved field"))
-	assert.Equal(t, "", extractSavedPathFromLine("saved:"))
+	assert.Empty(t, extractSavedPathFromLine("no saved field"))
+	assert.Empty(t, extractSavedPathFromLine("saved:"))
 }
 
 // --- cleanExtractReason / isMissingTranscriptReason ---
@@ -446,8 +446,8 @@ func TestWriteManualReviewEntryNilItem(t *testing.T) {
 
 func TestWriteManualReviewEntryDryRun(t *testing.T) {
 	path, err := WriteManualReviewEntry(&ClassifyItem{
-		URL:    "https://example.com",
-		Title:  "Test",
+		URL:     "https://example.com",
+		Title:   "Test",
 		Summary: &StructuredSummary{Overview: "overview"},
 	}, &WriteOptions{WikiRoot: t.TempDir(), DryRun: true})
 	require.NoError(t, err)
@@ -457,8 +457,8 @@ func TestWriteManualReviewEntryDryRun(t *testing.T) {
 func TestWriteManualReviewEntrySuccess(t *testing.T) {
 	root := t.TempDir()
 	path, err := WriteManualReviewEntry(&ClassifyItem{
-		URL:    "https://example.com",
-		Title:  "Test Item",
+		URL:     "https://example.com",
+		Title:   "Test Item",
 		Summary: &StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
 	}, &WriteOptions{WikiRoot: root})
 	require.NoError(t, err)

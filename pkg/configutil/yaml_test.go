@@ -154,7 +154,7 @@ func TestLoadError_Unwrap(t *testing.T) {
 	inner := errors.New("inner error")
 	e := &LoadError{Stage: StageParse, Err: inner}
 	assert.Equal(t, inner, e.Unwrap())
-	assert.True(t, errors.Is(e, inner))
+	assert.ErrorIs(t, e, inner)
 }
 
 func TestLoadError_StageConstants(t *testing.T) {
@@ -188,7 +188,7 @@ func TestLoadYAMLConfig_ReadError(t *testing.T) {
 	})
 	require.Error(t, err)
 	var loadErr *LoadError
-	require.True(t, errors.As(err, &loadErr))
+	require.ErrorAs(t, err, &loadErr)
 	assert.Equal(t, StageRead, loadErr.Stage)
 }
 
@@ -203,7 +203,7 @@ func TestLoadYAMLConfig_ParseError(t *testing.T) {
 	})
 	require.Error(t, err)
 	var loadErr *LoadError
-	require.True(t, errors.As(err, &loadErr))
+	require.ErrorAs(t, err, &loadErr)
 	assert.Equal(t, StageParse, loadErr.Stage)
 }
 
@@ -267,6 +267,6 @@ func TestLoadYAMLConfig_EnvOverrideUnmarshalError(t *testing.T) {
 	})
 	require.Error(t, err)
 	var loadErr *LoadError
-	require.True(t, errors.As(err, &loadErr))
+	require.ErrorAs(t, err, &loadErr)
 	assert.Equal(t, StageUnmarshal, loadErr.Stage)
 }

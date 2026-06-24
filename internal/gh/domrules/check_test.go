@@ -22,7 +22,7 @@ func TestListYAMLFiles(t *testing.T) {
 
 	files, err := listYAMLFiles(dir)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(files), "should find .yml and .yaml files, exclude hidden and subdirs")
+	assert.Len(t, files, 2, "should find .yml and .yaml files, exclude hidden and subdirs")
 }
 
 func TestListYAMLFiles_NonExistentDir(t *testing.T) {
@@ -33,7 +33,7 @@ func TestListYAMLFiles_NonExistentDir(t *testing.T) {
 
 func TestCheckFile_NonExistent(t *testing.T) {
 	issues := checkFile("/tmp/nonexistent-file.yml", "auto")
-	assert.Greater(t, len(issues), 0)
+	assert.NotEmpty(t, issues)
 	assert.Equal(t, checkutil.SeverityError, issues[0].Severity)
 }
 
@@ -43,7 +43,7 @@ func TestCheckFile_EmptyContent(t *testing.T) {
 	require.NoError(t, os.WriteFile(file, []byte(""), 0644))
 
 	issues := checkFile(file, "auto")
-	assert.Equal(t, 0, len(issues), "empty file should produce no issues")
+	assert.Empty(t, issues, "empty file should produce no issues")
 }
 
 func TestCheckFile_ScoreValidation(t *testing.T) {

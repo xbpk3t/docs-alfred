@@ -93,17 +93,17 @@ func TestGenerated_Getters_AssignedIssuesResponse(t *testing.T) {
 }
 
 func TestGenerated_Getters_InputTypes(t *testing.T) {
-	a := &__AssignedIssuesInput{Filter: map[string]interface{}{"f": "v"}, First: 10}
-	assert.Equal(t, map[string]interface{}{"f": "v"}, a.GetFilter())
+	a := &__AssignedIssuesInput{Filter: map[string]any{"f": "v"}, First: 10}
+	assert.Equal(t, map[string]any{"f": "v"}, a.GetFilter())
 	assert.Equal(t, 10, a.GetFirst())
 
-	sc := &__StateChangesInput{Filter: map[string]interface{}{"f": "v"}, First: 5, HistoryFirst: 3}
-	assert.Equal(t, map[string]interface{}{"f": "v"}, sc.GetFilter())
+	sc := &__StateChangesInput{Filter: map[string]any{"f": "v"}, First: 5, HistoryFirst: 3}
+	assert.Equal(t, map[string]any{"f": "v"}, sc.GetFilter())
 	assert.Equal(t, 5, sc.GetFirst())
 	assert.Equal(t, 3, sc.GetHistoryFirst())
 
-	ui := &__UpdatedIssuesWithDetailsInput{Filter: map[string]interface{}{"f": "v"}, First: 5, CommentsFirst: 10}
-	assert.Equal(t, map[string]interface{}{"f": "v"}, ui.GetFilter())
+	ui := &__UpdatedIssuesWithDetailsInput{Filter: map[string]any{"f": "v"}, First: 5, CommentsFirst: 10}
+	assert.Equal(t, map[string]any{"f": "v"}, ui.GetFilter())
 	assert.Equal(t, 5, ui.GetFirst())
 	assert.Equal(t, 10, ui.GetCommentsFirst())
 }

@@ -13,16 +13,16 @@ import (
 
 func TestPriorityLabel(t *testing.T) {
 	tests := []struct {
-		p    float64
 		want string
+		p    float64
 	}{
-		{1, "🔥 P0"},
-		{2, "🔴 P1"},
-		{3, "⚡ P2"},
-		{4, "📋 P3"},
-		{0, ""},
-		{5, ""},
-		{99, ""},
+		{"🔥 P0", 1},
+		{"🔴 P1", 2},
+		{"⚡ P2", 3},
+		{"📋 P3", 4},
+		{"", 0},
+		{"", 5},
+		{"", 99},
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {

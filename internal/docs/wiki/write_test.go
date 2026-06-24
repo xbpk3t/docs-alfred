@@ -242,12 +242,10 @@ func TestLockPathConcurrentAccess(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.md")
 	var wg sync.WaitGroup
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			unlock := lockPath(path)
 			unlock()
-		}()
+		})
 	}
 	wg.Wait()
 }

@@ -22,7 +22,7 @@ func TestMarkdownFallbackBodyConvertsHTML(t *testing.T) {
 
 	assert.Contains(t, body, "Hello")
 	assert.Contains(t, body, "[more](https://example.com)")
-	assert.False(t, strings.Contains(body, "<h1>"), "fallback body should not be raw HTML")
+	assert.NotContains(t, body, "<h1>", "fallback body should not be raw HTML")
 }
 
 func TestHTTPDriverRejectsLowQualityContent(t *testing.T) {
@@ -384,7 +384,7 @@ func TestNewFetcherZeroMaxBodySize(t *testing.T) {
 func TestScoreTopicCandidateExactMatch(t *testing.T) {
 	candidate := ghindex.TopicCandidate{Path: "ai/tool/demo", Display: "demo"}
 	score := scoreTopicCandidate(candidate, "ai tool demo")
-	assert.Greater(t, score, 0)
+	assert.Positive(t, score)
 }
 
 func TestScoreTopicCandidateNoMatch(t *testing.T) {
@@ -621,7 +621,7 @@ func TestFetchContentDriverReturnsNil(t *testing.T) {
 // nilDriver is a test driver that always returns nil.
 type nilDriver struct{}
 
-func (d *nilDriver) Name() string                                    { return "nil" }
+func (d *nilDriver) Name() string                                                    { return "nil" }
 func (d *nilDriver) FetchContent(_ context.Context, _, _ string) *ContentFetchResult { return nil }
 
 // --- FetchContent with RSS feed URL ---

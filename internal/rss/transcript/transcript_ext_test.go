@@ -3,7 +3,6 @@ package transcript
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -415,7 +414,7 @@ func TestNormalizeTranscriptContentPlaintext(t *testing.T) {
 }
 
 func TestNormalizeTranscriptContentJSON(t *testing.T) {
-	assert.Equal(t, `{"key":"value"}`, normalizeTranscriptContent(`{"key":"value"}`, "json"))
+	assert.JSONEq(t, `{"key":"value"}`, normalizeTranscriptContent(`{"key":"value"}`, "json"))
 }
 
 func TestNormalizeTranscriptContentDefault(t *testing.T) {
@@ -667,7 +666,7 @@ func TestGetLinkScoreNoBonus(t *testing.T) {
 func TestURLExtension(t *testing.T) {
 	assert.Equal(t, ".vtt", urlExtension("https://example.com/file.vtt"))
 	assert.Equal(t, ".srt", urlExtension("https://example.com/file.srt"))
-	assert.Equal(t, "", urlExtension("https://example.com/file"))
+	assert.Empty(t, urlExtension("https://example.com/file"))
 }
 
 func TestURLExtensionInvalidURL(t *testing.T) {
@@ -732,7 +731,7 @@ func TestEpisodeRefFromFeedItemNonTranscriptTag(t *testing.T) {
 func TestNormalizeTranscriptContentHTMLEmptyResult(t *testing.T) {
 	// Empty HTML content should produce empty markdown, triggering the fallback
 	result := normalizeTranscriptContent("", "html")
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 // --- normalizeMediaType fallback ---
@@ -769,7 +768,7 @@ func TestCacheGetNonNotExistError(t *testing.T) {
 	entry, err := c.Get(key)
 	assert.Nil(t, entry)
 	assert.Error(t, err)
-	assert.False(t, errors.Is(err, ErrCacheMiss), "non-NotExist errors should not be ErrCacheMiss")
+	assert.NotErrorIs(t, err, ErrCacheMiss, "non-NotExist errors should not be ErrCacheMiss")
 }
 
 func TestCacheGetTranscriptPathStatNonNotExistError(t *testing.T) {
@@ -798,7 +797,7 @@ func TestCacheGetTranscriptPathStatNonNotExistError(t *testing.T) {
 	// and returns the entry without error.
 	if err != nil {
 		assert.Nil(t, entry)
-		assert.False(t, errors.Is(err, ErrCacheMiss))
+		assert.NotErrorIs(t, err, ErrCacheMiss)
 	} else {
 		assert.NotNil(t, entry)
 	}

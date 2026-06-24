@@ -27,7 +27,7 @@ func TestParse_Simple(t *testing.T) {
 func TestParse_MultiEvent(t *testing.T) {
 	// This JSONL simulates the real pattern:
 	// user text → assistant thinking + tool_use → user tool_result → assistant text ×3 → ...
-	// The thinking, tool_use, tool_result, and non-dialogue events should be skipped.
+	// The thinking, tool_use, tool_result, and non-dialog events should be skipped.
 	// Assistant text blocks from the SAME event are merged; blocks across events
 	// remain as separate Messages (format.go merges them later).
 	messages, err := Parse("testdata/multi-event.jsonl")
@@ -134,14 +134,14 @@ func TestTryUnmarshalString_Array(t *testing.T) {
 	raw := json.RawMessage(`[{"type":"text","text":"hello"}]`)
 	s, ok := tryUnmarshalString(raw)
 	assert.False(t, ok)
-	assert.Equal(t, "", s)
+	assert.Empty(t, s)
 }
 
 func TestTryUnmarshalString_Number(t *testing.T) {
 	raw := json.RawMessage(`42`)
 	s, ok := tryUnmarshalString(raw)
 	assert.False(t, ok)
-	assert.Equal(t, "", s)
+	assert.Empty(t, s)
 }
 
 func TestExtractCommandContent_NoCommandWrapper(t *testing.T) {
@@ -165,12 +165,12 @@ func TestExtractCommandContent_EmptyArgsFallsToMessage(t *testing.T) {
 
 func TestExtractCommandContent_CommandNameButNoArgsNoMessage(t *testing.T) {
 	content := "/test<command-name>test</command-name>"
-	assert.Equal(t, "", extractCommandContent(content))
+	assert.Empty(t, extractCommandContent(content))
 }
 
 func TestExtractCommandContent_UnclosedArgs(t *testing.T) {
 	content := "/test<command-name>test</command-name><command-args>incomplete"
-	assert.Equal(t, "", extractCommandContent(content))
+	assert.Empty(t, extractCommandContent(content))
 }
 
 func TestParseUserEvent_ToolResultSkipped(t *testing.T) {

@@ -151,6 +151,7 @@ func TestGetBytes_RetriesOn5xx(t *testing.T) {
 		attempts++
 		if attempts <= 1 {
 			http.Error(w, "server error", http.StatusInternalServerError)
+
 			return
 		}
 		_, _ = w.Write([]byte("ok"))
