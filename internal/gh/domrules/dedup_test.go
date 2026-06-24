@@ -26,8 +26,8 @@ func TestRunDuplicateCheck_NoDuplicates(t *testing.T) {
 	report, err := RunDuplicateCheck(dir)
 	require.NoError(t, err)
 	require.NotNil(t, report)
-	assert.Equal(t, 0, len(report.URLDuplicates))
-	assert.Equal(t, 0, len(report.NameAuthorDuplicates))
+	assert.Empty(t, report.URLDuplicates)
+	assert.Empty(t, report.NameAuthorDuplicates)
 }
 
 func TestRunDuplicateCheck_URLDuplicates(t *testing.T) {
@@ -47,7 +47,7 @@ func TestRunDuplicateCheck_URLDuplicates(t *testing.T) {
 	report, err := RunDuplicateCheck(dir)
 	require.NoError(t, err)
 	require.NotNil(t, report)
-	assert.Equal(t, 1, len(report.URLDuplicates), "should find one URL duplicate")
+	assert.Len(t, report.URLDuplicates, 1, "should find one URL duplicate")
 	assert.Equal(t, "https://example.com/same", report.URLDuplicates[0].URL)
 }
 
@@ -68,7 +68,7 @@ func TestRunDuplicateCheck_NameAuthorDuplicates(t *testing.T) {
 	report, err := RunDuplicateCheck(dir)
 	require.NoError(t, err)
 	require.NotNil(t, report)
-	assert.Equal(t, 1, len(report.NameAuthorDuplicates), "should find one name+author duplicate")
+	assert.Len(t, report.NameAuthorDuplicates, 1, "should find one name+author duplicate")
 }
 
 func TestRunDuplicateCheck_EmptyDir(t *testing.T) {
@@ -76,7 +76,7 @@ func TestRunDuplicateCheck_EmptyDir(t *testing.T) {
 	report, err := RunDuplicateCheck(dir)
 	require.NoError(t, err)
 	require.NotNil(t, report)
-	assert.Equal(t, 0, len(report.URLDuplicates))
+	assert.Empty(t, report.URLDuplicates)
 }
 
 func TestRunGHDuplicateCheck_NoDuplicates(t *testing.T) {
@@ -94,7 +94,7 @@ func TestRunGHDuplicateCheck_NoDuplicates(t *testing.T) {
 	report, err := RunGHDuplicateCheck(dir)
 	require.NoError(t, err)
 	require.NotNil(t, report)
-	assert.Equal(t, 0, len(report.URLDuplicates))
+	assert.Empty(t, report.URLDuplicates)
 }
 
 func TestRunGHDuplicateCheck_WithDuplicates(t *testing.T) {
@@ -112,7 +112,7 @@ func TestRunGHDuplicateCheck_WithDuplicates(t *testing.T) {
 	report, err := RunGHDuplicateCheck(dir)
 	require.NoError(t, err)
 	require.NotNil(t, report)
-	assert.Equal(t, 1, len(report.URLDuplicates), "should find duplicate URL")
+	assert.Len(t, report.URLDuplicates, 1, "should find duplicate URL")
 }
 
 func TestFormatDuplicateReport(t *testing.T) {
@@ -176,9 +176,9 @@ func TestRunDuplicateCheck_NameAuthorDuplicatesFiltered(t *testing.T) {
 	report, err := RunDuplicateCheck(dir)
 	require.NoError(t, err)
 	// URL duplicate found
-	assert.Equal(t, 1, len(report.URLDuplicates))
+	assert.Len(t, report.URLDuplicates, 1)
 	// Name+author duplicates filtered because they were caught by URL
-	assert.Equal(t, 0, len(report.NameAuthorDuplicates))
+	assert.Empty(t, report.NameAuthorDuplicates)
 }
 
 func TestRunGHDuplicateCheck_EmptyDir(t *testing.T) {
@@ -186,7 +186,7 @@ func TestRunGHDuplicateCheck_EmptyDir(t *testing.T) {
 	report, err := RunGHDuplicateCheck(dir)
 	require.NoError(t, err)
 	assert.NotNil(t, report)
-	assert.Equal(t, 0, len(report.URLDuplicates))
+	assert.Empty(t, report.URLDuplicates)
 }
 
 func TestRunGHDuplicateCheck_UsingEntry(t *testing.T) {
@@ -204,7 +204,7 @@ func TestRunGHDuplicateCheck_UsingEntry(t *testing.T) {
 
 	report, err := RunGHDuplicateCheck(dir)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(report.URLDuplicates))
+	assert.Len(t, report.URLDuplicates, 1)
 }
 
 func TestRunDuplicateCheck_MultiDoc(t *testing.T) {
@@ -222,7 +222,7 @@ func TestRunDuplicateCheck_MultiDoc(t *testing.T) {
 
 	report, err := RunDuplicateCheck(dir)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(report.NameAuthorDuplicates))
+	assert.Len(t, report.NameAuthorDuplicates, 1)
 }
 
 func TestRunDuplicateCheck_InvalidYAML(t *testing.T) {
@@ -246,7 +246,7 @@ func TestFormatDuplicateEntries_GhOnlyEmpty(t *testing.T) {
 
 func TestFormatDuplicateEntries_Empty(t *testing.T) {
 	result := formatDuplicateEntries(nil, false)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestDuplicateReport_IssuesNilReport(t *testing.T) {
@@ -365,6 +365,6 @@ func TestRunDuplicateCheck_NameAuthorOnly(t *testing.T) {
 
 	report, err := RunDuplicateCheck(dir)
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(report.URLDuplicates))
-	assert.Equal(t, 1, len(report.NameAuthorDuplicates))
+	assert.Empty(t, report.URLDuplicates)
+	assert.Len(t, report.NameAuthorDuplicates, 1)
 }

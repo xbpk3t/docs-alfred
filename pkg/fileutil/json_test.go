@@ -2,7 +2,6 @@ package fileutil
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +26,7 @@ func TestAtomicWriteJSONFileAndReadJSONFile(t *testing.T) {
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Equal(t, "{\n  \"name\": \"demo\",\n  \"count\": 2\n}", string(data))
+	require.JSONEq(t, "{\n  \"name\": \"demo\",\n  \"count\": 2\n}", string(data))
 
 	info, err := os.Stat(path)
 	require.NoError(t, err)
@@ -36,7 +35,7 @@ func TestAtomicWriteJSONFileAndReadJSONFile(t *testing.T) {
 
 func TestReadJSONFileMissingFile(t *testing.T) {
 	_, err := ReadJSONFile[map[string]string](filepath.Join(t.TempDir(), "missing.json"))
-	require.True(t, errors.Is(err, os.ErrNotExist), "error should be os.ErrNotExist")
+	require.ErrorIs(t, err, os.ErrNotExist, "error should be os.ErrNotExist")
 }
 
 func TestReadJSONFileInvalidJSON(t *testing.T) {
@@ -55,8 +54,8 @@ func TestUnmarshalJSON(t *testing.T) {
 
 func TestJSONUnmarshalPreservesExistingFields(t *testing.T) {
 	type state struct {
-		Version int               `json:"version"`
 		Items   map[string]string `json:"items"`
+		Version int               `json:"version"`
 	}
 
 	got := state{Version: 1}

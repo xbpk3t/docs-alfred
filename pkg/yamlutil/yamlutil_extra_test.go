@@ -29,7 +29,7 @@ func TestNodeLineValidNode(t *testing.T) {
 // --- KeyString edge cases ---
 
 func TestKeyStringNil(t *testing.T) {
-	assert.Equal(t, "", KeyString(nil))
+	assert.Empty(t, KeyString(nil))
 }
 
 func TestKeyStringStringNode(t *testing.T) {
@@ -166,7 +166,7 @@ func TestStringInvalid(t *testing.T) {
 func TestStringNil(t *testing.T) {
 	s, ok := String(nil)
 	assert.False(t, ok)
-	assert.Equal(t, "", s)
+	assert.Empty(t, s)
 }
 
 // --- IsNullOrEmptyString edge cases ---

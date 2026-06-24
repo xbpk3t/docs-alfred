@@ -500,5 +500,6 @@ func containsStr(s, substr string) bool {
 			return true
 		}
 	}
+
 	return false
 }

@@ -88,7 +88,7 @@ func TestPorcelainStatus_ValidRepo(t *testing.T) {
 	status, err := PorcelainStatus(repoDir)
 	require.NoError(t, err)
 	// Empty repo with no changes
-	assert.Equal(t, "", status)
+	assert.Empty(t, status)
 }
 
 func TestChangedFiles_InvalidRepo(t *testing.T) {
@@ -189,7 +189,7 @@ func TestCountLineDiff_EmptyBoth(t *testing.T) {
 }
 
 func TestNormalizeDiffText_Empty(t *testing.T) {
-	assert.Equal(t, "", normalizeDiffText(""))
+	assert.Empty(t, normalizeDiffText(""))
 }
 
 func TestSplitLines_Empty(t *testing.T) {
@@ -324,7 +324,7 @@ func TestPorcelainStatus_EmptyRepo(t *testing.T) {
 
 	status, err := PorcelainStatus(repoDir)
 	require.NoError(t, err)
-	assert.Equal(t, "", status)
+	assert.Empty(t, status)
 }
 
 func TestPorcelainStatus_BareRepo(t *testing.T) {

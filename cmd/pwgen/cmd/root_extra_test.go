@@ -47,7 +47,7 @@ func TestResolveSecretFlagWinsOverConfig(t *testing.T) {
 
 type bytesProvider []byte
 
-func (p bytesProvider) ReadBytes() ([]byte, error) { return p, nil }
+func (p bytesProvider) ReadBytes() ([]byte, error)    { return p, nil }
 func (p bytesProvider) Read() (map[string]any, error) { return nil, nil }
 
 func TestApplyBoolCfgWithChangedFlag(t *testing.T) {
@@ -118,12 +118,14 @@ func captureStdout(t *testing.T) func() string {
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	os.Stdout = w
+
 	return func() string {
 		require.NoError(t, w.Close())
 		os.Stdout = original
 		data, err := io.ReadAll(r)
 		require.NoError(t, err)
 		require.NoError(t, r.Close())
+
 		return string(data)
 	}
 }

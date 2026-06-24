@@ -3,7 +3,6 @@ package fileutil
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -54,8 +53,8 @@ func TestReadAndMergeYAMLFilesRecursiveUsesVisibleSortedYAMLFiles(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, "b: true\na: true\n", string(data))
 	require.Equal(t, []string{"b.yaml", "a.yml"}, seen)
-	require.False(t, strings.Contains(string(data), "hidden"), "unexpected hidden file content")
-	require.False(t, strings.Contains(string(data), "note"), "unexpected note file content")
+	require.NotContains(t, string(data), "hidden", "unexpected hidden file content")
+	require.NotContains(t, string(data), "note", "unexpected note file content")
 }
 
 func writeTestFile(t *testing.T, path string) {

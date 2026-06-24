@@ -384,7 +384,7 @@ func TestJsonKeyDashTag(t *testing.T) {
 	type S struct {
 		Field string `json:"-"`
 	}
-	field := reflect.TypeOf(S{}).Field(0)
+	field := reflect.TypeFor[S]().Field(0)
 	assert.Empty(t, jsonKey(&field))
 }
 
@@ -392,7 +392,7 @@ func TestJsonKeyEmptyTag(t *testing.T) {
 	type S struct {
 		Field string
 	}
-	field := reflect.TypeOf(S{}).Field(0)
+	field := reflect.TypeFor[S]().Field(0)
 	assert.Empty(t, jsonKey(&field))
 }
 
@@ -400,7 +400,7 @@ func TestJsonKeyWithOptions(t *testing.T) {
 	type S struct {
 		Field string `json:"name,omitempty"`
 	}
-	field := reflect.TypeOf(S{}).Field(0)
+	field := reflect.TypeFor[S]().Field(0)
 	assert.Equal(t, "name", jsonKey(&field))
 }
 
@@ -408,9 +408,9 @@ func TestJsonKeyWithOptions(t *testing.T) {
 
 func TestRenderStructuredSummaryWithDetail(t *testing.T) {
 	s := &StructuredSummary{
-		Overview:    "overview",
-		KeyPoints:   []string{"point"},
-		Detail:      "detailed analysis here",
+		Overview:  "overview",
+		KeyPoints: []string{"point"},
+		Detail:    "detailed analysis here",
 	}
 	rendered := RenderStructuredSummary(s)
 	assert.Contains(t, rendered, "detail")
@@ -460,8 +460,8 @@ func TestValidateClassifyResultValidSummary(t *testing.T) {
 		TopicPath: "ai/tool",
 		WikiType:  TypeDeepDive,
 		Summary: &StructuredSummary{
-			Overview:   "overview",
-			KeyPoints:  []string{"point"},
+			Overview:  "overview",
+			KeyPoints: []string{"point"},
 		},
 	})
 	assert.NoError(t, err)
@@ -765,6 +765,7 @@ func TestGhTopicCatalogErrorThenRecovery(t *testing.T) {
 		if callCount == 1 {
 			return nil, errors.New("network error")
 		}
+
 		return []ghindex.TopicCandidate{{Path: "recovered/topic"}}, nil
 	}
 

@@ -58,6 +58,7 @@ func TestSyncUpsertError(t *testing.T) {
 			if callCount == 1 {
 				return d1sync.QueryResult{RowsWritten: 1}, nil
 			}
+
 			return d1sync.QueryResult{}, context.DeadlineExceeded
 		}).Times(2)
 

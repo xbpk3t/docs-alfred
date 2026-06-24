@@ -106,14 +106,14 @@ func TestCleanCatalogPath(t *testing.T) {
 
 func TestJoinPath(t *testing.T) {
 	tests := []struct {
-		parts []string
 		want  string
+		parts []string
 	}{
-		{[]string{"a", "b", "c"}, "a/b/c"},
-		{[]string{"a", "", "c"}, "a/c"},
-		{[]string{"", "", ""}, ""},
-		{[]string{}, ""},
-		{[]string{"a"}, "a"},
+		{"a/b/c", []string{"a", "b", "c"}},
+		{"a/c", []string{"a", "", "c"}},
+		{"", []string{"", "", ""}},
+		{"", []string{}},
+		{"a", []string{"a"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
@@ -124,15 +124,15 @@ func TestJoinPath(t *testing.T) {
 
 func TestTopicBase(t *testing.T) {
 	assert.Equal(t, "tag/type", topicBase("tag", "type"))
-	assert.Equal(t, "", topicBase("", "type"))
-	assert.Equal(t, "", topicBase("tag", ""))
-	assert.Equal(t, "", topicBase("", ""))
+	assert.Empty(t, topicBase("", "type"))
+	assert.Empty(t, topicBase("tag", ""))
+	assert.Empty(t, topicBase("", ""))
 }
 
 func TestTopicDirName(t *testing.T) {
 	assert.Equal(t, "topic-name", topicDirName(&content.Topic{Topic: "topic-name"}))
 	assert.Equal(t, "slug", topicDirName(&content.Topic{Topic: "t", Meta: &content.TopicMeta{Slug: "slug"}}))
-	assert.Equal(t, "", topicDirName(nil))
+	assert.Empty(t, topicDirName(nil))
 	assert.Equal(t, "topic", topicDirName(&content.Topic{Topic: "topic", Meta: &content.TopicMeta{}}))
 }
 
@@ -158,7 +158,7 @@ func TestTopicCatalog_WithReplacedAndRelatedRepos(t *testing.T) {
 		Tag:  "kernel",
 		Type: "tool",
 		Repos: Repos{{
-			URL: "https://github.com/acme/main",
+			URL:    "https://github.com/acme/main",
 			Topics: content.Topics{{Topic: "Main Topic", Meta: &content.TopicMeta{Slug: "main-topic"}}},
 			ReplacedRepos: Repos{{
 				URL:    "https://github.com/acme/old",

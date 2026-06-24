@@ -15,16 +15,16 @@ func TestDuplicateFileRe(t *testing.T) {
 	tests := []struct {
 		name      string
 		input     string
-		wantMatch bool
 		original  string
+		wantMatch bool
 	}{
-		{"name__1.jpg matches", "photo__1.jpg", true, "photo.jpg"},
-		{"name__999.ext", "file__999.txt", true, "file.txt"},
-		{"no number", "photo.jpg", false, ""},
-		{"single underscore", "photo_1.jpg", false, ""},
-		{"triple underscore", "photo___1.jpg", false, ""},
-		{"multiple dots", "archive.tar__1.gz", true, "archive.tar.gz"},
-		{"no extension", "file__1", false, ""},
+		{"name__1.jpg matches", "photo__1.jpg", "photo.jpg", true},
+		{"name__999.ext", "file__999.txt", "file.txt", true},
+		{"no number", "photo.jpg", "", false},
+		{"single underscore", "photo_1.jpg", "", false},
+		{"triple underscore", "photo___1.jpg", "", false},
+		{"multiple dots", "archive.tar__1.gz", "archive.tar.gz", true},
+		{"no extension", "file__1", "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -288,7 +288,7 @@ func TestCheckResult_IssuesNoFlags(t *testing.T) {
 	issues := r.Issues(CheckConfig{})
 	assert.NotEmpty(t, issues)
 	// Should have warn + error + duplicate + missing + extra
-	assert.True(t, len(issues) >= 5)
+	assert.GreaterOrEqual(t, len(issues), 5)
 }
 
 func TestCheckResult_ReportWithList(t *testing.T) {

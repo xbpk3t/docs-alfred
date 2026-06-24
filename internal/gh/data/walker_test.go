@@ -14,6 +14,7 @@ func TestWalkGhRepos_EmptyDir(t *testing.T) {
 	var events []WalkerEvent
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
 		events = append(events, ev)
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -27,6 +28,7 @@ func TestWalkGhRepos_EmptyFile(t *testing.T) {
 	var events []WalkerEvent
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
 		events = append(events, ev)
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -41,6 +43,7 @@ func TestWalkGhRepos_WhitespaceOnlyFile(t *testing.T) {
 	var events []WalkerEvent
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
 		events = append(events, ev)
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -55,6 +58,7 @@ func TestWalkGhRepos_NotArray(t *testing.T) {
 	var events []WalkerEvent
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
 		events = append(events, ev)
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -85,6 +89,7 @@ func TestWalkGhRepos_ValidData(t *testing.T) {
 		case evRepo:
 			repoEvents++
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -106,6 +111,7 @@ func TestWalkGhRepos_UsingEntry(t *testing.T) {
 		if ev.Type == evRepo {
 			repoCount++
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -124,6 +130,7 @@ func TestWalkGhRepos_NonMappingInSection(t *testing.T) {
 		if ev.Type == evSection {
 			sectionCount++
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -148,6 +155,7 @@ func TestWalkGhRepos_CallbackError(t *testing.T) {
 		if ev.Type == evRepo {
 			return assert.AnError
 		}
+
 		return nil
 	})
 	require.Error(t, err)
@@ -167,6 +175,7 @@ func TestWalkGhRepos_SubDirs(t *testing.T) {
 		if ev.Type == evRepo {
 			repoCount++
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -192,6 +201,7 @@ func TestWalkerEvent_Fields(t *testing.T) {
 		if event.Type == evRepo {
 			ev = event
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -231,6 +241,7 @@ func TestWalkGhRepos_MultiDoc(t *testing.T) {
 		if ev.Type == evRepo {
 			repoCount++
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -245,6 +256,7 @@ func TestWalkGhRepos_NilDoc(t *testing.T) {
 	var events []WalkerEvent
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
 		events = append(events, ev)
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -274,6 +286,7 @@ func TestWalkGhRepos_EmptySequenceItem(t *testing.T) {
 		if ev.Type == evSection {
 			sectionCount++
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -290,6 +303,7 @@ func TestWalkGhRepos_EmptyCallbackError(t *testing.T) {
 		if ev.Type == evEmpty {
 			return expectedErr
 		}
+
 		return nil
 	})
 	require.Error(t, err)
@@ -307,6 +321,7 @@ func TestWalkGhRepos_FileCallbackError(t *testing.T) {
 		if ev.Type == evFile {
 			return expectedErr
 		}
+
 		return nil
 	})
 	require.Error(t, err)
@@ -326,6 +341,7 @@ func TestWalkGhRepos_SectionCallbackError(t *testing.T) {
 		if ev.Type == evSection {
 			return expectedErr
 		}
+
 		return nil
 	})
 	require.Error(t, err)
@@ -346,8 +362,10 @@ func TestWalkGhRepos_UsingCallbackError(t *testing.T) {
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
 		if ev.Type == evRepo && ev.Relation == "using" {
 			callCount++
+
 			return assert.AnError
 		}
+
 		return nil
 	})
 	require.Error(t, err)
@@ -363,6 +381,7 @@ func TestWalkGhRepos_NotArrayCallbackError(t *testing.T) {
 		if ev.Type == evNotArray {
 			return expectedErr
 		}
+
 		return nil
 	})
 	require.Error(t, err)
@@ -383,6 +402,7 @@ func TestWalkGhRepos_RepoNotMappingSkipped(t *testing.T) {
 		if ev.Type == evRepo {
 			repoCount++
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -401,6 +421,7 @@ func TestWalkGhRepos_NoRepoNoUsing(t *testing.T) {
 		if ev.Type == evRepo {
 			repoCount++
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -419,6 +440,7 @@ func TestWalkGhRepos_EmptyRepoList(t *testing.T) {
 		if ev.Type == evRepo {
 			repoCount++
 		}
+
 		return nil
 	})
 	require.NoError(t, err)

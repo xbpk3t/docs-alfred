@@ -190,7 +190,7 @@ func TestWriteRaw(t *testing.T) {
 	// fields: sessionID, prevSessionID, startedAt, endedAt, display, transcriptPath, isSidechain
 	require.Len(t, fields1, 7)
 	require.Equal(t, "sess-1", fields1[0])
-	require.Equal(t, "", fields1[1], "empty prevSessionID should be empty string")
+	require.Empty(t, fields1[1], "empty prevSessionID should be empty string")
 	require.Equal(t, "2025-01-01T10:00:00Z", fields1[2])
 	require.Equal(t, "2025-01-01T12:00:00Z", fields1[3])
 	require.Equal(t, "test display", fields1[4])
@@ -203,7 +203,7 @@ func TestWriteRaw(t *testing.T) {
 	require.Equal(t, "sess-2", fields2[0])
 	require.Equal(t, "prev-session-1", fields2[1])
 	require.Equal(t, "2025-01-01T11:00:00Z", fields2[2])
-	require.Equal(t, "", fields2[3], "empty endedAt should be empty string")
+	require.Empty(t, fields2[3], "empty endedAt should be empty string")
 	require.Equal(t, "sidechain display", fields2[4])
 	require.Equal(t, "/tmp/sess-2.jsonl", fields2[5])
 	require.Equal(t, "true", fields2[6])

@@ -20,7 +20,7 @@ func TestDefaultConfig_Defaults(t *testing.T) {
 
 	cfg := DefaultConfig()
 	assert.NotNil(t, cfg)
-	assert.Equal(t, "", cfg.APIKey, "no env var → empty key")
+	assert.Empty(t, cfg.APIKey, "no env var → empty key")
 	assert.Equal(t, "https://api.lucc.dev/v1", cfg.BaseURL, "default base URL")
 	assert.Equal(t, "deepseek-v4-flash", cfg.Model, "default model")
 }
@@ -146,7 +146,7 @@ func TestChatRequest_Struct(t *testing.T) {
 		},
 	}
 	assert.Equal(t, "test-model", r.Model)
-	assert.Equal(t, 1, len(r.Messages))
+	assert.Len(t, r.Messages, 1)
 }
 
 func TestChatResponse_Struct(t *testing.T) {
@@ -168,14 +168,14 @@ func TestChatResponse_Struct(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, 1, len(r.Choices))
+	assert.Len(t, r.Choices, 1)
 	assert.Equal(t, "response", r.Choices[0].Message.Content)
 	assert.Equal(t, "reasoning", r.Choices[0].Message.ReasoningContent)
 }
 
 func TestChatResponse_EmptyChoices(t *testing.T) {
 	r := ChatResponse{}
-	assert.Equal(t, 0, len(r.Choices))
+	assert.Empty(t, r.Choices)
 }
 
 func TestChatResponse_Error(t *testing.T) {
@@ -282,7 +282,7 @@ func TestExtractChoiceContent_ContentPreferred(t *testing.T) {
 }
 
 func TestExtractChoiceContent_Empty(t *testing.T) {
-	assert.Equal(t, "", extractChoiceContent(&llms.ContentChoice{}))
+	assert.Empty(t, extractChoiceContent(&llms.ContentChoice{}))
 }
 
 func TestChat_WithTemperature(t *testing.T) {

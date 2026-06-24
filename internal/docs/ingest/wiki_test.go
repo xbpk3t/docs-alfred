@@ -500,8 +500,8 @@ type writeCall struct {
 type failureCall struct {
 	url         string
 	failureType wikisvc.FailureKind
-	dryRun      bool
 	extraInfo   string
+	dryRun      bool
 }
 
 func (f *fakeWriter) WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.WriteOptions) (string, error) {
@@ -531,14 +531,15 @@ func (f *fakeWriter) WriteManualReviewEntry(item *wikisvc.ClassifyItem, opts *wi
 	if f.failureErr != nil {
 		return "", f.failureErr
 	}
+
 	return filepath.Join(opts.WikiRoot, "uncat.md"), nil
 }
 
 type fakeInbox struct {
 	parseErr error
 	flushErr error
-	entries  []wikisvc.InboxEntry
 	flushed  map[int][]string
+	entries  []wikisvc.InboxEntry
 }
 
 func (f *fakeInbox) ParseInbox(string) ([]wikisvc.InboxEntry, error) {

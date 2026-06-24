@@ -55,5 +55,5 @@ func TestDefaultPathForDomain(t *testing.T) {
 }
 
 func TestDefaultPathForDomain_Unknown(t *testing.T) {
-	assert.Equal(t, "", DefaultPathForDomain(DataDomain("unknown")))
+	assert.Empty(t, DefaultPathForDomain(DataDomain("unknown")))
 }

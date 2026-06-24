@@ -3,7 +3,6 @@ package presenter
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,8 +13,8 @@ import (
 
 func TestRepoBadgeState(t *testing.T) {
 	tests := []struct {
-		name string
 		repo *ghindex.Repository
+		name string
 		want badgeState
 	}{
 		{name: "nil", repo: nil, want: badgeState{}},
@@ -49,9 +48,9 @@ func TestEnsureBadgeIconWritesSVG(t *testing.T) {
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	svg := string(data)
-	assert.True(t, strings.Contains(svg, ">D</text>"))
-	assert.True(t, strings.Contains(svg, ">N</text>"))
-	assert.True(t, strings.Contains(svg, ">5</text>"))
+	assert.Contains(t, svg, ">D</text>")
+	assert.Contains(t, svg, ">N</text>")
+	assert.Contains(t, svg, ">5</text>")
 }
 
 func TestRepoIconPathFallsBackWhenGenerationFails(t *testing.T) {

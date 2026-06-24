@@ -80,6 +80,6 @@ func TestParsedTransactionNormalizeMonthFormat(t *testing.T) {
 }
 
 func TestSourceConstants(t *testing.T) {
-	require.Equal(t, Source("wechat"), SourceWechat)
-	require.Equal(t, Source("alipay"), SourceAlipay)
+	require.Equal(t, SourceWechat, Source("wechat"))
+	require.Equal(t, SourceAlipay, Source("alipay"))
 }

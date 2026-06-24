@@ -233,19 +233,19 @@ func TestURLMatchesDomain_Subdomain(t *testing.T) {
 }
 
 func TestExtractZhihuQuestionID_NoQuestionPrefix(t *testing.T) {
-	assert.Equal(t, "", extractZhihuQuestionID("/answer/123"))
+	assert.Empty(t, extractZhihuQuestionID("/answer/123"))
 }
 
 func TestExtractZhihuQuestionID_NonNumericID(t *testing.T) {
-	assert.Equal(t, "", extractZhihuQuestionID("/question/abc"))
+	assert.Empty(t, extractZhihuQuestionID("/question/abc"))
 }
 
 func TestExtractZhihuQuestionID_EmptyPath(t *testing.T) {
-	assert.Equal(t, "", extractZhihuQuestionID("/"))
+	assert.Empty(t, extractZhihuQuestionID("/"))
 }
 
 func TestExtractZhihuQuestionID_RootOnly(t *testing.T) {
-	assert.Equal(t, "", extractZhihuQuestionID(""))
+	assert.Empty(t, extractZhihuQuestionID(""))
 }
 
 func TestIsTcoURL_InvalidURL(t *testing.T) {

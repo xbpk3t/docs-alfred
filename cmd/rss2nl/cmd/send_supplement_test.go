@@ -18,7 +18,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestFeedDisplayNameNil(t *testing.T) {
-	assert.Equal(t, "", feedDisplayName(nil))
+	assert.Empty(t, feedDisplayName(nil))
 }
 
 func TestFeedDisplayNameWithTitle(t *testing.T) {
@@ -112,7 +112,7 @@ func TestCalcPublishFreqEmptyFeed(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFirstFeedURLEmpty(t *testing.T) {
-	assert.Equal(t, "", firstFeedURL(rss.FeedsDetail{}))
+	assert.Empty(t, firstFeedURL(rss.FeedsDetail{}))
 }
 
 func TestFirstFeedURLWithFeeds(t *testing.T) {
@@ -195,7 +195,7 @@ func TestFilterStaleFeedsRecentEntry(t *testing.T) {
 	}
 	feedList := []rss.FeedsDetail{{Type: "tech", Feeds: []rss.Feeds{{Feed: "a", LastUpdated: "2026-06-20"}}}}
 	result := service.filterStaleFeeds(feedList)
-	assert.Len(t, result, 0) // recent entry filtered out (not stale)
+	assert.Empty(t, result) // recent entry filtered out (not stale)
 }
 
 // ---------------------------------------------------------------------------
@@ -574,7 +574,7 @@ func TestHuntRunConfigApiKey(t *testing.T) {
 	}
 	assert.Equal(t, "exa-key", hc.ApiKey(providerExa))
 	assert.Equal(t, "tavily-key", hc.ApiKey(providerTavily))
-	assert.Equal(t, "", hc.ApiKey("unknown"))
+	assert.Empty(t, hc.ApiKey("unknown"))
 }
 
 // ---------------------------------------------------------------------------
@@ -695,7 +695,7 @@ func TestNewsletterItemHasTrnsInputNoInput(t *testing.T) {
 	assert.False(t, newsletterItemHasTrnsInput(item))
 }
 
-// helper
+// helper.
 func timePtr(t time.Time) *time.Time { return &t }
 
 // ---------------------------------------------------------------------------

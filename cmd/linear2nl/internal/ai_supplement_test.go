@@ -19,6 +19,7 @@ func newMockOpenAIServer(content string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
 			http.NotFound(w, r)
+
 			return
 		}
 
@@ -310,7 +311,7 @@ func TestMorningClassifyWithMockAPI(t *testing.T) {
 	got := p.MorningClassify([]IssueView{
 		{Identifier: "LUC-101", Title: "Some task", Priority: "P1", TeamName: "Platform"},
 	})
-	assert.Equal(t, `{"groups":[{"name":"FIXME","issues":[]}]}`, got)
+	assert.JSONEq(t, `{"groups":[{"name":"FIXME","issues":[]}]}`, got)
 }
 
 func TestMorningDeepAnalysisWithMockAPI(t *testing.T) {
@@ -381,7 +382,7 @@ func TestMorningStructuredReviewWithMockAPI(t *testing.T) {
 	got := p.MorningStructuredReview([]IssueView{
 		{Identifier: "LUC-104", Title: "Delegate test", Priority: "P2", TeamName: "QA"},
 	})
-	assert.Equal(t, `{"groups":[]}`, got)
+	assert.JSONEq(t, `{"groups":[]}`, got)
 }
 
 // --- IsConfigured edge cases ---

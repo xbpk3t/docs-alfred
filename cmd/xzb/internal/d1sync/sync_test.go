@@ -41,6 +41,7 @@ func TestSyncUsesImportBatchAndUpsert(t *testing.T) {
 		DoAndReturn(func(_ context.Context, sql string, params []any) (d1sync.QueryResult, error) {
 			capturedSQLs = append(capturedSQLs, sql)
 			capturedParams = append(capturedParams, params)
+
 			return d1sync.QueryResult{RowsWritten: 1}, nil
 		}).Times(2)
 

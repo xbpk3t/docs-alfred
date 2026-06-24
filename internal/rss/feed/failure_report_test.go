@@ -43,7 +43,7 @@ func TestBuildFeedFailureReportGroupsTransientFailures(t *testing.T) {
 	assert.Equal(t, "rsshub.stefanzhang.com", group.Host)
 	assert.Equal(t, FeedFailureKindTimeout, group.Kind)
 	assert.Equal(t, 3, group.Count)
-	assert.Equal(t, 2, len(group.ExampleURLs))
+	assert.Len(t, group.ExampleURLs, 2)
 	assert.Equal(t, 1, group.RemainingCount)
 	assert.Equal(t, 1, group.MaxConsecutiveRuns)
 	assert.True(t, group.Transient)

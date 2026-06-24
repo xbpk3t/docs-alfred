@@ -227,6 +227,7 @@ func TestLoadWithBackgroundSync_FreshCache(t *testing.T) {
 	t.Cleanup(func() { backgroundSyncStarter = previousStarter })
 	backgroundSyncStarter = func(m *Manager) error {
 		t.Fatal("should not be called for fresh cache")
+
 		return nil
 	}
 

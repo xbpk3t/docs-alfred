@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +17,7 @@ func TestNormalizeTranscriptContentHTML(t *testing.T) {
 	assert.Contains(t, got, "Transcript")
 	assert.Contains(t, got, "Hello")
 	assert.Contains(t, got, "world")
-	assert.False(t, strings.Contains(got, "<p>"), "HTML transcripts should be converted to Markdown")
+	assert.NotContains(t, got, "<p>", "HTML transcripts should be converted to Markdown")
 }
 
 func TestDetectTranscriptContentType(t *testing.T) {
@@ -125,7 +124,7 @@ func TestContentTypeFromMediaTypeEmpty(t *testing.T) {
 // --- normalizeMediaType ---
 
 func TestNormalizeMediaTypeEmpty(t *testing.T) {
-	assert.Equal(t, "", normalizeMediaType(""))
+	assert.Empty(t, normalizeMediaType(""))
 }
 
 func TestNormalizeMediaTypeWithCharset(t *testing.T) {

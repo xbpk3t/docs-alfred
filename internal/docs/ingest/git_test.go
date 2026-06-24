@@ -129,6 +129,7 @@ func TestChangedWikiGitRootsSuccess(t *testing.T) {
 		if len(args) > 0 && args[0] == "rev-parse" {
 			return []byte(resolvedDir + "\n"), nil
 		}
+
 		return []byte(""), nil
 	}
 	roots, err := changedWikiGitRoots(context.Background(), dir, runCmd)

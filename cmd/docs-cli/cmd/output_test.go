@@ -47,8 +47,8 @@ func TestWriteWikiResultJSONIncludesURLDetails(t *testing.T) {
 	require.NoError(t, err)
 	var got struct {
 		Name    string             `json:"name"`
-		OK      bool               `json:"ok"`
 		Results []wikiuc.URLResult `json:"results"`
+		OK      bool               `json:"ok"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout()), &got))
 	require.Equal(t, "wiki add", got.Name)
@@ -69,8 +69,8 @@ func TestWriteDotfilesSyncRecordJSONUsesCommonEnvelope(t *testing.T) {
 	require.NoError(t, err)
 	var got struct {
 		Name    string                `json:"name"`
-		OK      bool                  `json:"ok"`
 		Results []dotfiles.ChangeFile `json:"results"`
+		OK      bool                  `json:"ok"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout()), &got))
 	require.Equal(t, "dotfiles sync-record", got.Name)

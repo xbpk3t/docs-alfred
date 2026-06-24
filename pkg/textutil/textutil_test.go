@@ -47,12 +47,12 @@ func TestRemoveEmojiCJK(t *testing.T) {
 }
 
 func TestRemoveEmojiEmpty(t *testing.T) {
-	assert.Equal(t, "", RemoveEmoji(""))
+	assert.Empty(t, RemoveEmoji(""))
 }
 
 func TestRemoveEmojiOnlyEmoji(t *testing.T) {
 	result := RemoveEmoji("🎉🎊")
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestRemoveEmojiLatinExtended(t *testing.T) {
@@ -127,7 +127,7 @@ func TestSanitizeContentCollapsesDoubleSpaces(t *testing.T) {
 }
 
 func TestSanitizeContentEmpty(t *testing.T) {
-	assert.Equal(t, "", SanitizeContent(""))
+	assert.Empty(t, SanitizeContent(""))
 }
 
 func TestSanitizeContentMultiline(t *testing.T) {
@@ -192,15 +192,15 @@ func TestTruncateUTF8ExactBytes(t *testing.T) {
 }
 
 func TestTruncateUTF8ZeroMax(t *testing.T) {
-	assert.Equal(t, "", TruncateUTF8("hello", 0))
+	assert.Empty(t, TruncateUTF8("hello", 0))
 }
 
 func TestTruncateUTF8NegativeMax(t *testing.T) {
-	assert.Equal(t, "", TruncateUTF8("hello", -1))
+	assert.Empty(t, TruncateUTF8("hello", -1))
 }
 
 func TestTruncateUTF8EmptyString(t *testing.T) {
-	assert.Equal(t, "", TruncateUTF8("", 10))
+	assert.Empty(t, TruncateUTF8("", 10))
 }
 
 func TestTruncateUTF8OneByteOver(t *testing.T) {
@@ -211,7 +211,7 @@ func TestTruncateUTF8OneByteOver(t *testing.T) {
 func TestTruncateUTF8MultiByteChars(t *testing.T) {
 	// "你好" is 6 bytes in UTF-8
 	result := TruncateUTF8("你好世界", 7)
-	assert.True(t, len(result) <= 7+3) // +3 for "..."
+	assert.LessOrEqual(t, len(result), 7+3) // +3 for "..."
 	assert.NotEmpty(t, result)
 }
 

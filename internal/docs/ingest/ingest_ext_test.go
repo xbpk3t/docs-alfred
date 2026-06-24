@@ -686,7 +686,7 @@ func TestPrepareURLAttemptNilFetchResult(t *testing.T) {
 	_, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
 	require.Error(t, err)
 	var fetchErr *fetchFailureError
-	assert.True(t, errors.As(err, &fetchErr))
+	assert.ErrorAs(t, err, &fetchErr)
 	assert.Equal(t, wikisvc.FailureFetch, fetchErr.failureType)
 }
 
@@ -700,7 +700,7 @@ func TestPrepareURLAttemptEmptyFetchResultError(t *testing.T) {
 	_, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
 	require.Error(t, err)
 	var fetchErr *fetchFailureError
-	assert.True(t, errors.As(err, &fetchErr))
+	assert.ErrorAs(t, err, &fetchErr)
 }
 
 func TestPrepareURLAttemptVideoContentTooShort(t *testing.T) {
@@ -741,7 +741,7 @@ func TestPrepareURLAttemptNilClassifierNonEmptyContent(t *testing.T) {
 	_, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
 	require.Error(t, err)
 	var classifyErr *classifyRetryError
-	assert.True(t, errors.As(err, &classifyErr))
+	assert.ErrorAs(t, err, &classifyErr)
 }
 
 func TestPrepareURLAttemptClassifyFailure(t *testing.T) {
