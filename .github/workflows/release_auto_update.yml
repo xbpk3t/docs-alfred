@@ -1,68 +1,29 @@
-name: Release_auto_update
-on:
-  release:
-    types:
-      - published
-#  push:
-#    tags:
-#      - 'v*'
-#  workflow_dispatch:
+name: Release
 
+on:
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        go-version: [1.22.0]
-        platform: [macOS-latest]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@main
-      - name: Install Go
-        if: success()
-        uses: actions/setup-go@main
-        with:
-          go-version: ${{ matrix.go-version }}
-      - name: Install Task
-        uses: arduino/setup-task@v2
-        with:
-          version: 3.x
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-#      - name: Parse Event
-#        run: task ak:tag
-#      - name: Build and pack
-#        run: task ak:build-and-pack
-
-#      - uses: shogo82148/actions-upload-release-asset@v1
-#        with:
-#          upload_url: ${{ github.event.release.upload_url }}
-#          asset_path: "${{ env.artifact }}"
-
-
   release:
     name: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@main
         with:
-          fetch-depth: 0 # note the fetch-depth: 0 input in Checkout step. It is required for the changelog to work correctly.
-      - uses: actions/setup-go@main
+          fetch-depth: 0
 
-      - name: Install Task
-        uses: arduino/setup-task@main
+      - uses: actions/setup-go@main
         with:
-          version: 3.x
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          go-version: "1.25.0"
 
       - uses: goreleaser/goreleaser-action@v6
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          version: '~> v2'
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
-          # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
