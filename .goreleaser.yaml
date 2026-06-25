@@ -2,23 +2,91 @@ version: 2
 
 project_name: docs-alfred
 
-#before:
-#  hooks:
-#    - yarn install
-#    - task y2m
-#    - yarn build
-
 builds:
-  - skip: true
+  - id: ccx
+    main: ./cmd/ccx
+    binary: ccx
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
 
-#release:
-#  github:
-#    owner: xbpk3t
-#    name: docs
-##    release_name_template: "{{ .Tag }}"
-##    draft: false
-##    prerelease: false
+  - id: data-cli
+    main: ./cmd/data-cli
+    binary: data-cli
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
 
+  - id: docs-cli
+    main: ./cmd/docs-cli
+    binary: docs-cli
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+  - id: gh-alfred
+    main: ./cmd/gh-alfred
+    binary: gh-alfred
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+  - id: linear2nl
+    main: ./cmd/linear2nl
+    binary: linear2nl
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+  - id: pwgen
+    main: ./cmd/pwgen
+    binary: pwgen
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+  - id: rss2nl
+    main: ./cmd/rss2nl
+    binary: rss2nl
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+  - id: xzb
+    main: ./cmd/xzb
+    binary: xzb
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
 
 changelog:
   use: github
