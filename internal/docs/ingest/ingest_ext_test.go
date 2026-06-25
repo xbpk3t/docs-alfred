@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
-	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
 )
@@ -242,37 +241,6 @@ func TestAuditResultSummary(t *testing.T) {
 func TestFormatConfigLoadErrorNonLoadError(t *testing.T) {
 	err := assert.AnError
 	assert.Equal(t, err, formatConfigLoadError(err))
-}
-
-// --- parseGHTopicsMaxAge ---
-
-func TestParseGHTopicsMaxAgeValid(t *testing.T) {
-	d, err := parseGHTopicsMaxAge(&Config{Wiki: WikiConfig{GhTopicsMaxAge: "24h"}})
-	require.NoError(t, err)
-	assert.Equal(t, 24*time.Hour, d)
-}
-
-func TestParseGHTopicsMaxAgeEmpty(t *testing.T) {
-	d, err := parseGHTopicsMaxAge(&Config{})
-	require.NoError(t, err)
-	assert.Equal(t, ghindex.DefaultMaxAge, d)
-}
-
-func TestParseGHTopicsMaxAgeNil(t *testing.T) {
-	d, err := parseGHTopicsMaxAge(nil)
-	require.NoError(t, err)
-	assert.Equal(t, ghindex.DefaultMaxAge, d)
-}
-
-func TestParseGHTopicsMaxAgeInvalid(t *testing.T) {
-	_, err := parseGHTopicsMaxAge(&Config{Wiki: WikiConfig{GhTopicsMaxAge: "invalid"}})
-	require.Error(t, err)
-}
-
-func TestParseGHTopicsMaxAgeNegative(t *testing.T) {
-	_, err := parseGHTopicsMaxAge(&Config{Wiki: WikiConfig{GhTopicsMaxAge: "-1h"}})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "positive")
 }
 
 // --- resolveInboxConfig ---
@@ -978,7 +946,7 @@ func TestWriteSummaryNeedsManualReviewDryRun(t *testing.T) {
 func TestRunAddURLsWikiRootNotFound(t *testing.T) {
 	cfg := &Config{
 		AI:   AIConfig{Model: "model", BaseURL: "https://example.com/v1"},
-		Wiki: WikiConfig{WikiRoot: "/tmp/nonexistent-wiki-root-12345", GhTopicsURL: "https://example.com/gh.yml"},
+		Wiki: WikiConfig{WikiRoot: "/tmp/nonexistent-wiki-root-12345"},
 	}
 	_, err := RunAddURLs(context.Background(), AddInput{
 		Config: cfg,
@@ -993,7 +961,7 @@ func TestRunAddURLsWikiRootNotFound(t *testing.T) {
 func TestRunDigestWikiRootNotFound(t *testing.T) {
 	cfg := &Config{
 		AI:   AIConfig{Model: "model", BaseURL: "https://example.com/v1"},
-		Wiki: WikiConfig{WikiRoot: "/tmp/nonexistent-wiki-root-12345", GhTopicsURL: "https://example.com/gh.yml"},
+		Wiki: WikiConfig{WikiRoot: "/tmp/nonexistent-wiki-root-12345"},
 	}
 	_, err := RunDigest(context.Background(), DigestInput{Config: cfg})
 	require.Error(t, err)
@@ -1005,7 +973,7 @@ func TestRunDigestWikiRootNotFound(t *testing.T) {
 func TestRunAuditWikiRootNotFound(t *testing.T) {
 	cfg := &Config{
 		AI:   AIConfig{Model: "model", BaseURL: "https://example.com/v1"},
-		Wiki: WikiConfig{WikiRoot: "/tmp/nonexistent-wiki-root-12345", GhTopicsURL: "https://example.com/gh.yml"},
+		Wiki: WikiConfig{WikiRoot: "/tmp/nonexistent-wiki-root-12345"},
 	}
 	_, err := RunAudit(context.Background(), AuditInput{Config: cfg})
 	require.Error(t, err)
@@ -1065,13 +1033,6 @@ func TestRunDigestNoEntriesHandled(t *testing.T) {
 }
 
 // --- LoadConfig validation error ---
-
-func TestLoadConfigValidateGHTopicsMaxAge(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "wiki.yml")
-	require.NoError(t, os.WriteFile(path, []byte("wiki:\n  ghTopicsMaxAge: invalid\n"), 0o600))
-	_, err := LoadConfig(path, "")
-	require.Error(t, err)
-}
 
 // --- resolveDependencies coverage ---
 

@@ -16,25 +16,10 @@ includes:
       BINARY_NAME: pwgen
 
 tasks:
-  pre-commit:
+  lint:
     desc: pre-commit
     cmds:
       - pre-commit run --all-files
-
-  lint:
-    desc: golang linter
-    cmds:
-      - golangci-lint run --fix -c .github/linters/golangci-lint.yml
-      - gofumpt -l -w .
-      - go mod tidy -v
-#      - betteralign -apply ./...
-      #      - go test `go list ./... | grep -v examples` -coverprofile=coverage.out -covermode=atomic
-      - task: pre-commit
-      - nilaway ./...
-  #      - # go build -race cmd
-  #      - # hadolint --config </path/to/config.yaml> Dockerfile
-  #      - go vet -vettool=$(which shadow) -strict # 这个回去扫描官方pkg的版本，报错类似 shadow: package requires newer Go version go1.23，所以移除
-
 
   test:
     desc: run all tests with coverage

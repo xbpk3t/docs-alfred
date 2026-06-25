@@ -13,9 +13,8 @@ import (
 )
 
 // DefaultAITimeout is the default HTTP timeout for AI chat requests.
-// Kept at 90s to leave room for retries within the per-URL timeout (180s)
-// when the two-step pipeline (classify + summarize) runs across retries.
-const DefaultAITimeout = 90 * time.Second
+// Kept at 45s — fast-fail on slow models so retries don't blow the per-URL budget.
+const DefaultAITimeout = 45 * time.Second
 
 // Role constants for chat messages.
 const (

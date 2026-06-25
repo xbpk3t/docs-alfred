@@ -353,7 +353,7 @@ func extractStartedAt(transcriptPath string) string {
 // saveChainToFile saves the chain to a JSONL file.
 func saveChainToFile(projectDir string, chain []ChainRecord) error {
 	chainDir := filepath.Join(projectDir, ".claude", "session-trail")
-	if err := os.MkdirAll(chainDir, 0750); err != nil {
+	if err := os.MkdirAll(chainDir, 0o750); err != nil {
 		return fmt.Errorf("create chain dir: %w", err)
 	}
 	chainFile := filepath.Join(chainDir, "chain.jsonl")

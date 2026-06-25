@@ -229,8 +229,7 @@ func checkIntScoreAST(file string, val *ast.IntegerNode) []checkutil.Issue {
 			return []checkutil.Issue{errIssue(file, val, "score 范围必须是 0-5")}
 		}
 	case uint64:
-		score := int(v)
-		if score < 0 || score > 5 {
+		if v > 5 {
 			return []checkutil.Issue{errIssue(file, val, "score 范围必须是 0-5")}
 		}
 	}

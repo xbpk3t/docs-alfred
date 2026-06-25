@@ -209,7 +209,7 @@ func copyTranscriptToWiki(srcDir, wikiRoot, topicPath, bv string) error {
 		return fmt.Errorf("destination file escapes transcript dir: %s", dst)
 	}
 
-	if err := os.MkdirAll(dstDir, 0750); err != nil {
+	if err := os.MkdirAll(dstDir, 0o750); err != nil {
 		return fmt.Errorf("create transcript dir: %w", err)
 	}
 
@@ -218,7 +218,7 @@ func copyTranscriptToWiki(srcDir, wikiRoot, topicPath, bv string) error {
 		return fmt.Errorf("read source transcript: %w", err)
 	}
 
-	if err := os.WriteFile(dst, data, 0600); err != nil { //nolint:gosec // dst validated above via HasPrefix check
+	if err := os.WriteFile(dst, data, 0o600); err != nil { //nolint:gosec // dst validated above via HasPrefix check
 		return fmt.Errorf("write transcript to wiki: %w", err)
 	}
 

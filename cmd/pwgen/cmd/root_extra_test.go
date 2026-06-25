@@ -5,92 +5,100 @@ import (
 	"os"
 	"testing"
 
-	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/v2"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestResolveSecretFromFlag(t *testing.T) {
-	k := koanf.New(".")
-	got := resolveSecret("flag-secret", k)
-	assert.Equal(t, "flag-secret", got)
-}
-
-func TestResolveSecretFromConfig(t *testing.T) {
-	k := koanf.New(".")
-	require.NoError(t, k.Load(bytesProvider([]byte("secret: config-secret")), yaml.Parser()))
-	got := resolveSecret("", k)
-	assert.Equal(t, "config-secret", got)
-}
-
-func TestResolveSecretFromEnv(t *testing.T) {
-	t.Setenv("DEFAULT_PWGEN", "env-secret")
-	k := koanf.New(".")
-	got := resolveSecret("", k)
-	assert.Equal(t, "env-secret", got)
-}
-
-func TestResolveSecretEmpty(t *testing.T) {
+func TestLoadPwgenConfigFromFile(t *testing.T) {
 	t.Setenv("DEFAULT_PWGEN", "")
-	k := koanf.New(".")
-	got := resolveSecret("", k)
+	dir := t.TempDir()
+	path := dir + "/test-pwgen.yaml"
+	require.NoError(t, os.WriteFile(path, []byte("secret: my-secret\nlength: 24\nuppercase: false"), 0600))
+
+	cfg, err := loadPwgenConfig(path)
+	require.NoError(t, err)
+	assert.Equal(t, "my-secret", cfg.Secret)
+	assert.Equal(t, 24, cfg.Length)
+	assert.False(t, cfg.Uppercase)
+}
+
+func TestLoadPwgenConfigEmptyPath(t *testing.T) {
+	t.Setenv("DEFAULT_PWGEN", "")
+	cfg, err := loadPwgenConfig("")
+	require.NoError(t, err)
+	assert.Equal(t, defaultPwgenConfig(), cfg)
+}
+
+func TestLoadPwgenConfigFromEnv(t *testing.T) {
+	t.Setenv("DEFAULT_PWGEN", "env-secret")
+
+	cfg, err := loadPwgenConfig("")
+	require.NoError(t, err)
+	assert.Equal(t, "env-secret", cfg.Secret)
+}
+
+func TestLoadPwgenConfigDefaults(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/minimal.yaml"
+	require.NoError(t, os.WriteFile(path, []byte("secret: s"), 0600))
+
+	cfg, err := loadPwgenConfig(path)
+	require.NoError(t, err)
+	assert.Equal(t, 16, cfg.Length)
+	assert.True(t, cfg.Uppercase)
+	assert.True(t, cfg.Numbers)
+	assert.False(t, cfg.Punctuation)
+	assert.Equal(t, "plain", cfg.Output)
+}
+
+func TestResolveConfigPathExplicit(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/custom.yaml"
+	require.NoError(t, os.WriteFile(path, []byte(""), 0600))
+
+	got := resolveConfigPath(path)
+	assert.Equal(t, path, got)
+}
+
+func TestResolveConfigPathNonexistent(t *testing.T) {
+	got := resolveConfigPath("/definitely-does-not-exist-pwgen-test.yaml")
 	assert.Empty(t, got)
 }
 
-func TestResolveSecretFlagWinsOverConfig(t *testing.T) {
-	k := koanf.New(".")
-	require.NoError(t, k.Load(bytesProvider([]byte("secret: config-secret")), yaml.Parser()))
-	got := resolveSecret("flag-secret", k)
-	assert.Equal(t, "flag-secret", got)
+func TestApplyFlagOverridesSecret(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().String("secret", "", "")
+	cmd.Flags().Int("length", 16, "")
+	cmd.Flags().Bool("uppercase", true, "")
+	cmd.Flags().Bool("numbers", true, "")
+	cmd.Flags().Bool("punctuation", false, "")
+	cmd.Flags().String("output", "plain", "")
+	require.NoError(t, cmd.ParseFlags([]string{"--secret", "flag-secret"}))
+
+	cfg := defaultPwgenConfig()
+	cfg = applyFlagOverrides(cmd, cfg, "flag-secret", 16, true, true, false, "plain")
+
+	assert.Equal(t, "flag-secret", cfg.Secret)
 }
 
-type bytesProvider []byte
+func TestApplyFlagOverridesDoesNotOverrideDefault(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().String("secret", "", "")
+	cmd.Flags().Int("length", 16, "")
+	cmd.Flags().Bool("uppercase", true, "")
+	cmd.Flags().Bool("numbers", true, "")
+	cmd.Flags().Bool("punctuation", false, "")
+	cmd.Flags().String("output", "plain", "")
+	// No flags parsed → nothing changed
 
-func (p bytesProvider) ReadBytes() ([]byte, error)    { return p, nil }
-func (p bytesProvider) Read() (map[string]any, error) { return nil, nil }
+	cfg := defaultPwgenConfig()
+	cfg.Secret = "from-config"
+	cfg.Length = 24
+	cfg = applyFlagOverrides(cmd, cfg, "", 16, true, true, false, "plain")
 
-func TestApplyBoolCfgWithChangedFlag(t *testing.T) {
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"--uppercase=false", "example.com"})
-	// Parse flags
-	require.NoError(t, cmd.ParseFlags([]string{"--uppercase=false"}))
-	cfg := koanf.New(".")
-	dest := true
-	applyBoolCfg(cmd, cfg, "uppercase", &dest)
-	// Flag was changed, so applyBoolCfg should not override
-	assert.True(t, dest)
-}
-
-func TestApplyBoolCfgWithConfigValue(t *testing.T) {
-	cmd := newRootCmd()
-	// Don't change any flags
-	cfg := koanf.New(".")
-	require.NoError(t, cfg.Load(bytesProvider([]byte("punctuation: true")), yaml.Parser()))
-	dest := false
-	applyBoolCfg(cmd, cfg, "punctuation", &dest)
-	assert.True(t, dest)
-}
-
-func TestLoadConfigNonexistentFile(t *testing.T) {
-	k := loadConfig("/nonexistent/path/.pwgen.yaml")
-	assert.NotNil(t, k)
-	assert.Empty(t, k.Keys())
-}
-
-func TestLoadConfigWithExplicitFile(t *testing.T) {
-	dir := t.TempDir()
-	path := dir + "/test-pwgen.yaml"
-	require.NoError(t, os.WriteFile(path, []byte("secret: my-secret\nlength: 24"), 0600))
-	k := loadConfig(path)
-	assert.Equal(t, "my-secret", k.String("secret"))
-	assert.Equal(t, 24, k.Int("length"))
-}
-
-func TestLoadConfigEmptyPath(t *testing.T) {
-	// This will try to load $HOME/.pwgen.yaml which may not exist
-	k := loadConfig("")
-	assert.NotNil(t, k)
+	assert.Equal(t, "from-config", cfg.Secret)
+	assert.Equal(t, 24, cfg.Length)
 }
 
 func TestRootCommandGeneratesPassword(t *testing.T) {

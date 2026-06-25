@@ -8,11 +8,16 @@ import (
 	"github.com/xbpk3t/docs-alfred/cmd/gh-alfred/internal/presenter"
 	"github.com/xbpk3t/docs-alfred/cmd/gh-alfred/internal/usecase"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
+	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
+	"github.com/xbpk3t/docs-alfred/pkg/validator"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
 )
 
 // Execute is the entry point for the gh-alfred binary.
 func Execute() error {
+	carboninit.Setup()
+	validator.Setup()
+
 	return newRootCmd().Execute()
 }
 
