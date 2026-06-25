@@ -262,7 +262,7 @@ func TestAuditPathCandidateEmptyPath(t *testing.T) {
 // --- auditCanonicalHeadings ---
 
 func TestAuditCanonicalHeadingsValid(t *testing.T) {
-	lines := []string{"#### 概述", "#### 关键要点", "#### 可执行建议", "#### 值得关注"}
+	lines := []string{"#### overview", "#### detail", "#### keyPoints", "#### keyQuotes", "#### actionableAdvice", "#### worthNoting", "#### criticalThinking"}
 	issues := auditCanonicalHeadings("test.md", lines)
 	assert.Empty(t, issues)
 }
@@ -476,10 +476,10 @@ func TestPathWithinRootSimilarPrefix(t *testing.T) {
 func TestAuditCanonicalHeadingsMixedContent(t *testing.T) {
 	lines := []string{
 		"# Title",
-		"#### 概述",
+		"#### overview",
 		"Some text",
 		"#### Invalid",
-		"#### 关键要点",
+		"#### keyPoints",
 	}
 	issues := auditCanonicalHeadings("test.md", lines)
 	require.Len(t, issues, 1)

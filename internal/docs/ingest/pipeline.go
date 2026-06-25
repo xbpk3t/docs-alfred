@@ -76,15 +76,36 @@ func prepareInboxEntry(
 	urlCtx, cancel := context.WithTimeout(ctx, inboxCfg.perURLTimeout)
 	defer cancel()
 
+	// Fetch once — content doesn't change between retries, no point re-fetching.
+	slog.Info("Processing wiki URL", "url", entry.URL)
+
+	contentType := wikisvc.DetectContentType(entry.URL)
+	fetchResult := deps.fetcher.FetchContent(urlCtx, entry.URL, contentType)
+	if fetchResult == nil {
+		return newPendingFetchFailure(entry.URL, wikisvc.FailureFetch, "fetch content: empty result")
+	}
+	if fetchResult.Error != "" {
+		return newPendingFetchFailure(entry.URL, failureKindForFetchResult(fetchResult), "fetch content: "+fetchResult.Error)
+	}
+
+	// Pre-classification content quality: for video content, require enough
+	// content for meaningful classification (i.e., actually got a transcript).
+	if contentType == wikisvc.ContentVideo && len([]rune(fetchResult.Body)) < 600 {
+		item := &wikisvc.ClassifyItem{URL: entry.URL, Title: fetchResult.Title, ContentType: contentType, Summary: &wikisvc.StructuredSummary{Overview: fetchResult.Body}}
+
+		return pendingExtractFailureWrite(item, "video content too short (likely no transcript)")
+	}
+
+	// Retry only the classify step — fetch result is cached from above.
 	var result pendingURLWrite
 	err := retry.Do(
 		func() error {
-			attemptResult, attemptErr := prepareURLAttempt(urlCtx, deps, entry.URL)
-			if attemptErr == nil {
-				result = attemptResult
+			classifyResult, classifyErr := classifyURLOnly(urlCtx, deps, entry.URL, fetchResult)
+			if classifyErr == nil {
+				result = classifyResult
 			}
 
-			return attemptErr
+			return classifyErr
 		},
 		retry.Context(urlCtx),
 		retry.Attempts(inboxCfg.maxRetries),
@@ -92,24 +113,15 @@ func prepareInboxEntry(
 		retry.DelayType(retry.BackOffDelay),
 		retry.LastErrorOnly(true),
 		retry.RetryIf(func(err error) bool {
-			var fetchErr *fetchFailureError
-			if errors.As(err, &fetchErr) {
-				return true
-			}
 			var classifyErr *classifyRetryError
 
 			return errors.As(err, &classifyErr)
 		}),
 		retry.OnRetry(func(n uint, retryErr error) {
-			slog.Warn("Retrying processing wiki URL", "url", entry.URL, "attempt", n+1, "error", retryErr)
+			slog.Warn("Retrying wiki classify", "url", entry.URL, "attempt", n+1, "error", retryErr)
 		}),
 	)
 	if err != nil {
-		var fetchErr *fetchFailureError
-		if errors.As(err, &fetchErr) {
-			return newPendingFetchFailure(entry.URL, fetchErr.failureType, fetchErr.Error())
-		}
-
 		var classifyErr *classifyRetryError
 		if errors.As(err, &classifyErr) {
 			return newPendingAIError(entry.URL, classifyErr.Error())
@@ -176,6 +188,46 @@ func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) (
 		// Distinguish: empty content is a permanent classify failure (content-side issue);
 		// non-empty content with nil classifier means AI call failed (transient).
 		item := &wikisvc.ClassifyItem{URL: urlStr, Title: title, ContentType: contentType, Summary: &wikisvc.StructuredSummary{Overview: content}}
+		if strings.TrimSpace(content) == "" {
+			return pendingExtractFailureWrite(item, "extraction failed: empty content"), nil
+		}
+
+		return pendingURLWrite{}, &classifyRetryError{message: "classification failed: AI error"}
+	}
+
+	item := &wikisvc.ClassifyItem{
+		URL:               urlStr,
+		Title:             title,
+		ContentType:       classResult.ContentType,
+		TopicPath:         classResult.TopicPath,
+		Type:              classResult.WikiType,
+		Summary:           classResult.Summary,
+		MetadataBlock:     classResult.MetadataBlock,
+		NeedsManualReview: classResult.NeedsManualReview,
+	}
+
+	if shouldWriteClassifyFailure(classResult) {
+		extraInfo := classifyFailureInfo(classResult)
+
+		return pendingClassifyFailureWrite(item, extraInfo), nil
+	}
+
+	return pendingURLWrite{URL: urlStr, Kind: pendingSummary, Item: item}, nil
+}
+
+// classifyURLOnly runs only the AI classification step using pre-fetched content.
+// Used by prepareInboxEntry to avoid re-fetching on retry.
+func classifyURLOnly(ctx context.Context, deps *dependencies, urlStr string, fetchResult *wikisvc.ContentFetchResult) (pendingURLWrite, error) {
+	title := fetchResult.Title
+	if title == "" {
+		title = urlStr
+	}
+
+	content := fetchResult.Body
+
+	classResult := deps.classifier.ClassifyURL(ctx, urlStr, title, content)
+	if classResult == nil {
+		item := &wikisvc.ClassifyItem{URL: urlStr, Title: title, ContentType: wikisvc.DetectContentType(urlStr), Summary: &wikisvc.StructuredSummary{Overview: content}}
 		if strings.TrimSpace(content) == "" {
 			return pendingExtractFailureWrite(item, "extraction failed: empty content"), nil
 		}

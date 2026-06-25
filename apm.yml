@@ -11,6 +11,26 @@ includes:
 dependencies:
   apm:
     - git: https://github.com/cxuu/golang-skills
-compilation:
-  exclude:
-    - go-testing
+      skills:
+        - go-concurrency
+        - go-interfaces
+        - go-testing
+        - go-error-handling
+        - go-performance
+        - go-data-structures
+        - go-context
+        - go-defensive
+        - go-functional-options
+        - go-packages
+        - go-generics
+        - go-linting
+        - go-functions
+        - go-control-flow
+        - go-declarations
+        - go-logging # zap
+
+# 已排除（一共18个）
+# - go-code-review
+# - go-naming（revive 已覆盖）
+# - go-documentation（revive 已覆盖）
+# - go-style-core（linter 已覆盖风格）

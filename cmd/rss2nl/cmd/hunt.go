@@ -354,7 +354,7 @@ func publishHuntReport(hc *huntRunConfig, reportHTML string) {
 	if ghEnv := os.Getenv("GITHUB_ENV"); ghEnv != "" {
 		count := hc.report.Stats.AcceptedCandidates
 		entry := fmt.Sprintf("SOURCE_DISCOVERY_URL=%s\nSOURCE_DISCOVERY_COUNT=%d\n", result.URL, count)
-		if f, ferr := os.OpenFile(ghEnv, os.O_APPEND|os.O_WRONLY, 0600); ferr == nil { //nolint:gosec // GITHUB_ENV is set by Actions runner
+		if f, ferr := os.OpenFile(ghEnv, os.O_APPEND|os.O_WRONLY, 0o600); ferr == nil { //nolint:gosec // GITHUB_ENV is set by Actions runner
 			fmt.Fprint(f, entry) //nolint:errcheck
 			_ = f.Close()
 		}

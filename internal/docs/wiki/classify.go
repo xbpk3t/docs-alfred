@@ -418,15 +418,7 @@ func (c *Classifier) ghTopicCatalog() ([]ghindex.TopicCandidate, error) {
 }
 
 func (c *Classifier) defaultGHTopicsLoader() ([]ghindex.TopicCandidate, error) {
-	manager := ghindex.NewManager(c.GhTopicsCachePath, c.GhTopicsURL)
-	if c.GhTopicsMaxAge > 0 {
-		manager.SetTTL(c.GhTopicsMaxAge)
-	}
-	if err := manager.LoadWithCacheTTL(); err != nil {
-		return nil, err
-	}
-
-	return manager.ConfigRepos().TopicCatalog(), nil
+	return ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
 }
 
 func scanWikiCandidates(wikiRoot string) []ghindex.TopicCandidate {
@@ -603,8 +595,10 @@ func formatTopicCandidates(candidates []ghindex.TopicCandidate) string {
 // StructuredSummary holds the AI-generated summary broken into sections.
 type StructuredSummary struct {
 	Overview         string   `json:"overview"                   validate:"required"`
-	WorthNoting      string   `json:"worthNoting"`
 	Detail           string   `json:"detail,omitempty"`
+	KeyQuotes        string   `json:"keyQuotes,omitempty"`
+	WorthNoting      string   `json:"worthNoting,omitempty"`
+	CriticalThinking string   `json:"criticalThinking,omitempty"`
 	KeyPoints        []string `json:"keyPoints"                  validate:"required|min_len:1"`
 	ActionableAdvice []string `json:"actionableAdvice,omitempty"`
 }
@@ -983,8 +977,12 @@ func truncate(s string, maxLen int) string {
 
 // ClassifyContent classifies content to determine topic path.
 // This is a shared function that can be used by both wiki and ccx.
+// Topic candidates are loaded from the local gh.yml (/tmp/gh.yml).
 func ClassifyContent(content, wikiRoot string, aiConfig *ai.ClientConfig) (string, error) {
-	classifier := NewClassifier(aiConfig, wikiRoot, "https://cdn.lucc.dev/gh.yml")
+	classifier := NewClassifier(aiConfig, wikiRoot, "")
+	classifier.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
+		return ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
+	}
 
 	// Truncate content for classification (use first 2000 chars for speed)
 	if len(content) > 2000 {

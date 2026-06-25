@@ -204,11 +204,11 @@ func writeExportFile(outputPath, title string, messages []session.Message) error
 	body := session.FormatMessages(messages)
 	finalContent := frontmatter + body
 
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
 		return fmt.Errorf("create output dir: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, []byte(finalContent), 0600); err != nil {
+	if err := os.WriteFile(outputPath, []byte(finalContent), 0o600); err != nil {
 		return fmt.Errorf("write output file: %w", err)
 	}
 

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
-	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
@@ -244,16 +243,10 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		)
 	}
 	if deps.classifier == nil {
-		maxAge, err := parseGHTopicsMaxAge(cfg)
-		if err != nil {
-			maxAge = ghindex.DefaultMaxAge
-		}
 		deps.classifier = wikisvc.NewClassifier(
 			newAIConfig(cfg),
 			resolveWikiRoot(cfg),
-			cfg.Wiki.GhTopicsURL,
-			wikisvc.WithGHTopicsCachePath(cfg.Wiki.GhTopicsCachePath),
-			wikisvc.WithGHTopicsMaxAge(maxAge),
+			"",
 			wikisvc.WithMaxContentSize(cfg.Wiki.MaxContentSize),
 		)
 	}

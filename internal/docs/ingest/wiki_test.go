@@ -21,8 +21,6 @@ func TestLoadConfigPreservesDefaultsWithPartialFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, cfg.Wiki.Concurrency)
 	require.Equal(t, "wiki", cfg.Wiki.WikiRoot)
-	require.Equal(t, "https://cdn.lucc.dev/gh.yml", cfg.Wiki.GhTopicsURL)
-	require.Equal(t, "24h", cfg.Wiki.GhTopicsMaxAge)
 	require.True(t, cfg.Wiki.Media.Enabled)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
 }
@@ -386,7 +384,7 @@ This changed-only audit entry is clean and long enough to avoid historical pollu
 `), 0o600))
 	cfg := &Config{
 		AI:   AIConfig{Model: "model", BaseURL: "https://example.com/v1"},
-		Wiki: WikiConfig{WikiRoot: wikiRoot, GhTopicsURL: "https://example.com/gh.yml", Concurrency: 1, PerURLTimeout: 1, MaxRetries: 1},
+		Wiki: WikiConfig{WikiRoot: wikiRoot, Concurrency: 1, PerURLTimeout: 1, MaxRetries: 1},
 	}
 
 	result, err := RunAudit(context.Background(), AuditInput{
@@ -420,7 +418,6 @@ func testConfig(t *testing.T) *Config {
 		AI: AIConfig{Model: "model", BaseURL: "https://example.com/v1"},
 		Wiki: WikiConfig{
 			WikiRoot:      wikiRoot,
-			GhTopicsURL:   "https://example.com/gh.yml",
 			Concurrency:   1,
 			PerURLTimeout: 1,
 			MaxRetries:    1,

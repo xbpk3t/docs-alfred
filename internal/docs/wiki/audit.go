@@ -16,10 +16,13 @@ const codeFence = "```"
 
 // canonicalSectionHeadings are the only allowed #### section headings in summary entries.
 var canonicalSectionHeadings = map[string]bool{
-	"概述":    true,
-	"关键要点":  true,
-	"可执行建议": true,
-	"值得关注":  true,
+	"overview":         true,
+	"detail":           true,
+	"keyPoints":        true,
+	"keyQuotes":        true,
+	"actionableAdvice": true,
+	"worthNoting":      true,
+	"criticalThinking": true,
 }
 
 // validCodeblockFields are the allowed fields in summary codeblocks.
@@ -240,7 +243,7 @@ func auditCanonicalHeadings(file string, lines []string) []checkutil.Issue {
 				File:     file,
 				Line:     i + 1,
 				Severity: checkutil.SeverityWarn,
-				Message:  fmt.Sprintf("non-canonical section heading: #### %s (allowed: 概述, 关键要点, 可执行建议, 值得关注)", heading),
+				Message:  fmt.Sprintf("non-canonical section heading: #### %s (allowed: overview, detail, keyPoints, keyQuotes, actionableAdvice, worthNoting, criticalThinking)", heading),
 			})
 		}
 	}

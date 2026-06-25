@@ -55,18 +55,68 @@
 - summary.keyPoints: string[]
 - summary.actionableAdvice: string[]
 
-## 输出要求
-只返回一个 JSON object，不要 Markdown code fence，不要额外解释。字段如下：
+## 摘要质量要求
+- overview 必须 3-5 句，包含具体的技术细节、数据指标和结论，不能只说"本文介绍了XX"这种空洞概括
+- keyPoints 至少 5 条，每条附带具体数据、例子或细节
+- actionableAdvice 在有明确可执行建议时提供 2-3 条具体建议
+- 目标：读者只看你的摘要就能掌握原文 90% 的知识点，无需再打开原文
+- **术语保留**：原文中的英文技术术语（如 "rate limiting", "vector clock", "leader election"）应当保留原文，不要在中文概括中意译成模糊描述
+- **语言一致性**：正文是哪种语言，摘要就以哪种语言为主。中文正文用中文摘要，英文正文以英文概述为主，但 keyPoints 和 tags 可以双语
+- **客观性标记**：区分「作者声称」和「客观事实」，在 overview 中用「作者认为」「实验表明」等措辞标注
 
+## 按 wikiType 定制摘要风格
+- **review（项目评测）**：侧重项目的定位、功能亮点、安装/使用体验、与竞品对比、适用场景。overview 中突出 star 数、活跃度、技术栈等。keyQuotes 提取项目的核心卖点和用户评价。
+- **research（技术研究）**：侧重原理讲解、架构设计、关键算法、实验数据、最佳实践。overview 突出技术深度和核心概念。keyQuotes 提取论文/文章中的关键定义和数据结论。
+
+## 各字段输出指导
+
+### summary.detail — 详细摘要
+当正文内容超过 3000 字符时，生成 3-5 句的详细摘要，按逻辑层次展开：
+- **技术/教程类**：按「背景 → 核心方案 → 实现细节 → 效果/结论」展开
+- **观点/评测类**：按「出发点 → 论点/功能 → 论证/对比 → 结论/推荐」展开
+- 如果正文较短（< 3000 字符），可以省略 detail 字段
+
+### summary.keyQuotes — 关键原文引用与数据
+提取正文中最有价值、最有代表性的 2-4 条原文引用或数据：
+- **数据引用**：关键性能指标、benchmark 数据、用户增长数字等，标注数字单位
+- **核心论断**：作者的核心观点、定义性描述，保留原文风味
+- **技术指标**：延迟、吞吐量、准确率等关键量化指标
+- 每条引用标注来源（如「作者指出」「数据显示」「文章提到」），无需编号
+- 若无特别值得单独摘录的引用，可以省略
+
+### summary.criticalThinking — 盲点、争议与可信度评估
+从批判性视角评估内容：
+- **盲点**：文章未提及但重要的方面（如只讲优点不谈缺点、数据不完整、对标过时方案）
+- **争议点**：该领域中存在争议的观点或做法，以及作者的立场
+- **可信度**：作者资历、数据来源可靠性、论证是否充分（如 "依赖单一数据源，结论说服力有限"）
+- **适用边界**：结论是否具有普适性（如 "仅适用于 1000+ 节点的集群，小规模场景未必成立"）
+- 若无明显盲点或争议，可以省略（使用空字符串）
+
+## Output Schema
+只返回一个 JSON object，不要 Markdown code fence，不要额外解释。
+
+```json
 {
   "topicPath": "候选 path 或 none",
   "wikiType": "review|research|inbox",
   "contentType": "text|video|audio",
   "summary": {
-    "overview": "3-5 句详尽概括，确保包含核心技术点、关键数据/指标、结论和实际效果，让读者不打开原文也能掌握 90% 知识点",
-    "keyPoints": ["要点 1（附带具体数据/细节）", "要点 2", "要点 3", "要点 4", "要点 5"],
-    "actionableAdvice": ["可落地的建议/最佳实践 1", "建议 2"],
-    "worthNoting": "后续关注方向或值得进一步研究的主题"
+    "overview": "3-5 句详尽概括，确保包含核心技术点、关键数据/指标、结论和实际效果",
+    "detail": "详细摘要（按逻辑层次展开，可选）",
+    "keyPoints": [
+      "要点 1（附带具体数据/细节）",
+      "要点 2",
+      "要点 3",
+      "要点 4",
+      "要点 5"
+    ],
+    "keyQuotes": "最有价值的关键原文引用和数据（可选）",
+    "actionableAdvice": [
+      "可落地的建议/最佳实践 1",
+      "建议 2"
+    ],
+    "worthNoting": "后续关注方向或值得进一步研究的主题",
+    "criticalThinking": "盲点、争议与可信度评估（可选）"
   },
   "metadata": {
     "contentType": "text|media|repo",
@@ -77,19 +127,15 @@
     "duration": "15:23（仅 media，无则空字符串）",
     "transcriptQuality": "good|fair|poor（仅 media，无则空字符串）",
     "verdict": "watch|skip|try（仅 repo，无则空字符串）",
-    "stars": 2564（仅 repo，无则 0）,
+    "stars": 2564,
     "language": "Python（仅 repo，无则空字符串）"
   },
   "confidence": 0.0,
   "needsManualReview": false
 }
+```
 
-## 摘要质量要求
-- overview 必须 3-5 句，包含具体的技术细节、数据指标和结论，不能只说"本文介绍了XX"这种空洞概括
-- keyPoints 至少 5 条，每条附带具体数据、例子或细节
-- actionableAdvice 在有明确可执行建议时提供 2-3 条具体建议
-- 目标：读者只看你的摘要就能掌握原文 90% 的知识点，无需再打开原文
-
+## 兜底规则
 如果正文是错误页、登录页、空壳页面、纯导航、广告页、无法判断主题或候选都完全不匹配，返回 topicPath="none"、wikiType="inbox"、needsManualReview=true。
 summary.actionableAdvice 在有明确可执行建议时提供，否则可以省略或为空数组。
 metadata.contentType 如果无法判断默认为 "text"。

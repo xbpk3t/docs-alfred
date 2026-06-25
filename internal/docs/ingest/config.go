@@ -7,7 +7,6 @@ import (
 
 	"github.com/creasty/defaults"
 
-	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
@@ -32,16 +31,13 @@ type Config struct {
 
 // WikiConfig contains wiki-specific workflow settings.
 type WikiConfig struct {
-	WikiRoot          string          `default:"wiki"                        validate:"required"     yaml:"wikiRoot"`
-	GhTopicsURL       string          `default:"https://cdn.lucc.dev/gh.yml" validate:"required|url" yaml:"ghTopicsURL"`
-	GhTopicsCachePath string          `yaml:"ghTopicsCachePath"`
-	GhTopicsMaxAge    string          `default:"24h"                         validate:"required"     yaml:"ghTopicsMaxAge"`
-	Driver            string          `default:"opencli"                     yaml:"driver"`
-	Concurrency       int             `default:"3"                           validate:"gte:1"        yaml:"concurrency"`
-	PerURLTimeout     int             `default:"600"                         validate:"gte:1"        yaml:"perURLTimeout"`
-	MaxRetries        int             `default:"6"                           validate:"gte:0"        yaml:"maxRetries"`
-	MaxContentSize    int             `default:"20000"                       yaml:"maxContentSize"`
-	Media             wikiMediaConfig `yaml:"media"`
+	WikiRoot       string          `default:"wiki"    validate:"required" yaml:"wikiRoot"`
+	Driver         string          `default:"opencli"                     yaml:"driver"`
+	Concurrency    int             `default:"3"       validate:"gte:1"    yaml:"concurrency"`
+	PerURLTimeout  int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
+	MaxRetries     int             `default:"6"       validate:"gte:0"    yaml:"maxRetries"`
+	MaxContentSize int             `default:"20000"                       yaml:"maxContentSize"`
+	Media          wikiMediaConfig `yaml:"media"`
 }
 
 // wikiMediaConfig controls media content extraction.
@@ -70,14 +66,7 @@ func LoadConfig(configPath, wikiRootOverride string) (*Config, error) {
 			return nil
 		},
 		Validate: func(cfg *Config) error {
-			if err := validator.Struct(cfg); err != nil {
-				return err
-			}
-			if _, err := parseGHTopicsMaxAge(cfg); err != nil {
-				return err
-			}
-
-			return nil
+			return validator.Struct(cfg)
 		},
 	})
 	if err != nil {
@@ -112,21 +101,6 @@ func defaultConfig() Config {
 	defaults.MustSet(&cfg)
 
 	return cfg
-}
-
-func parseGHTopicsMaxAge(cfg *Config) (time.Duration, error) {
-	if cfg == nil || cfg.Wiki.GhTopicsMaxAge == "" {
-		return ghindex.DefaultMaxAge, nil
-	}
-	duration, err := time.ParseDuration(cfg.Wiki.GhTopicsMaxAge)
-	if err != nil {
-		return 0, fmt.Errorf("wiki.ghTopicsMaxAge must be a Go duration: %w", err)
-	}
-	if duration <= 0 {
-		return 0, errors.New("wiki.ghTopicsMaxAge must be positive")
-	}
-
-	return duration, nil
 }
 
 type inboxConfig struct {

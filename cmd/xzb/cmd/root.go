@@ -16,7 +16,8 @@ import (
 	"github.com/xbpk3t/docs-alfred/cmd/xzb/internal/importer"
 	"github.com/xbpk3t/docs-alfred/cmd/xzb/internal/parser"
 	"github.com/xbpk3t/docs-alfred/cmd/xzb/internal/rules"
-	_ "github.com/xbpk3t/docs-alfred/pkg/carboninit"
+	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
+	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
 type syncD1Flags struct {
@@ -57,6 +58,9 @@ type fileSummary struct {
 }
 
 func Execute() error {
+	carboninit.Setup()
+	validator.Setup()
+
 	return newRootCmd().Execute()
 }
 

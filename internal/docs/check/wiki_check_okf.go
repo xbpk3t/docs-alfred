@@ -23,7 +23,7 @@ type wikiFrontmatter struct {
 var validOKFTypes = map[string]bool{
 	"session":    true,
 	"review":     true,
-	"blog-draft": true,
+	"blog":       true,
 	"log":        true,
 	"digest":     true,
 	"reference":  true,
