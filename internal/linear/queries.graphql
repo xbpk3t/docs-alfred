@@ -55,32 +55,30 @@ query StateChanges($filter: IssueFilter!, $first: Int, $historyFirst: Int) {
   }
 }
 
-query IssueByIdentifier($identifier: String!, $commentsFirst: Int) {
-  issues(filter: { identifier: { eq: $identifier } }, first: 1) {
-    nodes {
-      id
-      identifier
-      title
-      description
-      priority
-      url
-      completedAt
-      updatedAt
-      state {
-        name
-        type
-      }
-      team {
-        name
-        key
-      }
-      comments(first: $commentsFirst) {
-        nodes {
-          body
-          createdAt
-          user {
-            name
-          }
+query IssueByID($id: String!, $commentsFirst: Int) {
+  issue(id: $id) {
+    id
+    identifier
+    title
+    description
+    priority
+    url
+    completedAt
+    updatedAt
+    state {
+      name
+      type
+    }
+    team {
+      name
+      key
+    }
+    comments(first: $commentsFirst) {
+      nodes {
+        body
+        createdAt
+        user {
+          name
         }
       }
     }

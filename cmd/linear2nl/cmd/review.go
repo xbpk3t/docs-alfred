@@ -225,15 +225,24 @@ func mergeLinearData(gh *internal.GitHubReviewIssue, li *linear.IssueDetail) {
 }
 
 // enrichFromLinear extracts a Linear issue identifier from the GitHub issue body
-// and, if found, fetches the full issue data from Linear to replace the stub content.
+// or comments, and if found, fetches the full issue data from Linear to replace
+// the stub content.
 func enrichFromLinear(ctx context.Context, cfg *internal.Config, issueData *internal.GitHubReviewIssue) {
+	// Try body first, then comments.
 	m := linearIDRe.FindString(issueData.Description)
+	if m == "" {
+		for _, c := range issueData.Comments {
+			if m = linearIDRe.FindString(c.Body); m != "" {
+				break
+			}
+		}
+	}
 	if m == "" {
 		return
 	}
 
 	issueData.LinearReference = m
-	slog.Info("found Linear reference in issue body", "identifier", m)
+	slog.Info("found Linear reference", "identifier", m)
 
 	if cfg.Linear.APIKey == "" {
 		slog.Warn("LINEAR_API_KEY not set, skipping Linear data fetch")

@@ -292,19 +292,19 @@ func mapAssignedIssues(nodes []AssignedIssuesViewerUserAssignedIssuesIssueConnec
 }
 
 // GetIssueByIdentifier fetches a single issue by its identifier (e.g. "LUC-153")
-// including description and comments. Unlike other methods, this queries the
-// global issues field so it works for any issue, not just ones assigned to the viewer.
+// including description and comments. Uses the issue(id:) query which accepts
+// both UUIDs and identifiers like "LUC-153".
 func (c *Client) GetIssueByIdentifier(ctx context.Context, identifier string) (*IssueDetail, error) {
-	resp, err := IssueIdentifierQuery(ctx, c.graphQLClient(), identifier, 100)
+	resp, err := IssueByIDQuery(ctx, c.graphQLClient(), identifier, 100)
 	if err != nil {
 		return nil, fmt.Errorf("query issue %s: %w", identifier, err)
 	}
 
-	if len(resp.Issues.Nodes) == 0 {
+	if resp.Issue.Id == "" {
 		return nil, fmt.Errorf("issue %s not found", identifier)
 	}
 
-	n := &resp.Issues.Nodes[0]
+	n := resp.Issue
 	d := &IssueDetail{
 		Identifier:  n.Identifier,
 		Title:       n.Title,
@@ -331,109 +331,102 @@ func (c *Client) GetIssueByIdentifier(ctx context.Context, identifier string) (*
 	return d, nil
 }
 
-// IssueByIdentifierResponse is returned by IssueByIdentifier on success.
-type IssueByIdentifierResponse struct {
-	Issues IssueByIdentifierIssuesIssueConnection `json:"issues"`
+// IssueByIDResponse is returned by IssueByIDQuery on success.
+type IssueByIDResponse struct {
+	Issue IssueByIDIssue `json:"issue"`
 }
 
-// IssueByIdentifierIssuesIssueConnection includes the requested fields of the GraphQL type IssueConnection.
-type IssueByIdentifierIssuesIssueConnection struct {
-	Nodes []IssueByIdentifierIssuesIssueConnectionNodesIssue `json:"nodes"`
+// IssueByIDIssue includes the requested fields of the GraphQL type Issue.
+type IssueByIDIssue struct {
+	State       IssueByIDIssueStateWorkflowState        `json:"state"`
+	Team        IssueByIDIssueTeam                      `json:"team"`
+	Id          string                                  `json:"id"`
+	Identifier  string                                  `json:"identifier"`
+	Title       string                                  `json:"title"`
+	Description string                                  `json:"description"`
+	Url         string                                  `json:"url"`
+	CompletedAt string                                  `json:"completedAt"`
+	UpdatedAt   string                                  `json:"updatedAt"`
+	Comments    IssueByIDIssueCommentsCommentConnection `json:"comments"`
+	Priority    float64                                 `json:"priority"`
 }
 
-// IssueByIdentifierIssuesIssueConnectionNodesIssue includes the requested fields of the GraphQL type Issue.
-type IssueByIdentifierIssuesIssueConnectionNodesIssue struct {
-	State       IssueByIdentifierIssuesIssueConnectionNodesIssueStateWorkflowState        `json:"state"`
-	Team        IssueByIdentifierIssuesIssueConnectionNodesIssueTeam                      `json:"team"`
-	Id          string                                                                    `json:"id"`
-	Identifier  string                                                                    `json:"identifier"`
-	Title       string                                                                    `json:"title"`
-	Description string                                                                    `json:"description"`
-	Url         string                                                                    `json:"url"`
-	CompletedAt string                                                                    `json:"completedAt"`
-	UpdatedAt   string                                                                    `json:"updatedAt"`
-	Comments    IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnection `json:"comments"`
-	Priority    float64                                                                   `json:"priority"`
-}
-
-// IssueByIdentifierIssuesIssueConnectionNodesIssueStateWorkflowState includes the requested fields of the GraphQL type WorkflowState.
-type IssueByIdentifierIssuesIssueConnectionNodesIssueStateWorkflowState struct {
+// IssueByIDIssueStateWorkflowState includes the requested fields of the GraphQL type WorkflowState.
+type IssueByIDIssueStateWorkflowState struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
 
-// IssueByIdentifierIssuesIssueConnectionNodesIssueTeam includes the requested fields of the GraphQL type Team.
-type IssueByIdentifierIssuesIssueConnectionNodesIssueTeam struct {
+// IssueByIDIssueTeam includes the requested fields of the GraphQL type Team.
+type IssueByIDIssueTeam struct {
 	Name string `json:"name"`
 	Key  string `json:"key"`
 }
 
-// IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnection includes the requested fields of the GraphQL type CommentConnection.
-type IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnection struct {
-	Nodes []IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesComment `json:"nodes"`
+// IssueByIDIssueCommentsCommentConnection includes the requested fields of the GraphQL type CommentConnection.
+type IssueByIDIssueCommentsCommentConnection struct {
+	Nodes []IssueByIDIssueCommentsCommentConnectionNodesComment `json:"nodes"`
 }
 
-// IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesComment includes the requested fields of the GraphQL type Comment.
-type IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesComment struct {
-	Body      string                                                                                    `json:"body"`
-	CreatedAt string                                                                                    `json:"createdAt"`
-	User      IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesCommentUser `json:"user"`
+// IssueByIDIssueCommentsCommentConnectionNodesComment includes the requested fields of the GraphQL type Comment.
+type IssueByIDIssueCommentsCommentConnectionNodesComment struct {
+	Body      string                                                  `json:"body"`
+	CreatedAt string                                                  `json:"createdAt"`
+	User      IssueByIDIssueCommentsCommentConnectionNodesCommentUser `json:"user"`
 }
 
-// IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesCommentUser includes the requested fields of the GraphQL type User.
-type IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesCommentUser struct {
+// IssueByIDIssueCommentsCommentConnectionNodesCommentUser includes the requested fields of the GraphQL type User.
+type IssueByIDIssueCommentsCommentConnectionNodesCommentUser struct {
 	Name string `json:"name"`
 }
 
-// IssueIdentifierQuery executes the IssueByIdentifier GraphQL query.
-func IssueIdentifierQuery(
+// IssueByIDQuery fetches a single issue by ID or identifier with comments.
+func IssueByIDQuery(
 	ctx context.Context,
 	c graphql.Client,
-	identifier string,
+	id string,
 	commentsFirst int,
-) (data *IssueByIdentifierResponse, err error) {
+) (data *IssueByIDResponse, err error) {
 	req := &graphql.Request{
-		OpName: "IssueByIdentifier",
+		OpName: "IssueByID",
 		Query: `
-query IssueByIdentifier ($identifier: String!, $commentsFirst: Int) {
-	issues(filter: {identifier: {eq: $identifier}}, first: 1) {
-		nodes {
-			id
-			identifier
-			title
-			description
-			priority
-			url
-			completedAt
-			updatedAt
-			state {
-				name
-				type
-			}
-			team {
-				name
-				key
-			}
-			comments(first: $commentsFirst) {
-				nodes {
-					body
-					createdAt
-					user {
-						name
-					}
+query IssueByID ($id: String!, $commentsFirst: Int) {
+	issue(id: $id) {
+		id
+		identifier
+		title
+		description
+		priority
+		url
+		completedAt
+		updatedAt
+		state {
+			name
+			type
+		}
+		team {
+			name
+			key
+		}
+		comments(first: $commentsFirst) {
+			nodes {
+				body
+				createdAt
+				user {
+					name
 				}
 			}
 		}
 	}
 }
 `,
-		Variables: &issueByIdentifierInput{
-			Identifier:    identifier,
+		Variables: &issueByIDInput{
+			ID:            id,
 			CommentsFirst: commentsFirst,
 		},
 	}
 
-	data = &IssueByIdentifierResponse{}
+	data = &IssueByIDResponse{}
 	resp := &graphql.Response{Data: data}
 
 	err = c.MakeRequest(ctx, req, resp)
@@ -441,9 +434,9 @@ query IssueByIdentifier ($identifier: String!, $commentsFirst: Int) {
 	return data, err
 }
 
-// issueByIdentifierInput holds variables for the IssueByIdentifier query.
-type issueByIdentifierInput struct {
-	Identifier    string `json:"identifier"`
+// issueByIDInput holds variables for the IssueByID query.
+type issueByIDInput struct {
+	ID            string `json:"id"`
 	CommentsFirst int    `json:"commentsFirst"`
 }
 
