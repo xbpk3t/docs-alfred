@@ -9,7 +9,9 @@ import (
 	"os"
 	"regexp"
 	"text/template"
+	"time"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/cmd/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
@@ -114,17 +116,32 @@ func runReview(cfg *internal.Config, token, owner, repo string, issueNumber int,
 		return fmt.Errorf("render prompt: %w", err)
 	}
 
-	// 5. Call AI.
+	// 5. Call AI with retry on transient errors (e.g. rate limits).
 	clientCfg := ai.ConfigWithOverrides(cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Model)
 	clientCfg.Timeout = cfg.AI.Timeout
 
-	raw, err := ai.Chat(clientCfg, []ai.Message{{Role: "user", Content: prompt}})
+	var raw string
+	err = retry.Do(
+		func() error {
+			r, e := ai.Chat(clientCfg, []ai.Message{{Role: "user", Content: prompt}})
+			if e != nil {
+				return fmt.Errorf("AI call failed: %w", e)
+			}
+			if r == "" {
+				return fmt.Errorf("AI returned empty response")
+			}
+			raw = r
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(1*time.Second),
+		retry.DelayType(retry.BackOffDelay),
+		retry.LastErrorOnly(true),
+	)
 	if err != nil {
-		return fmt.Errorf("AI call failed: %w", err)
+		return err
 	}
-	if raw == "" {
-		return fmt.Errorf("AI returned empty response")
-	}
+
 	slog.Info("AI raw response preview", "len", len(raw), "raw", raw[:min(len(raw), 2000)])
 
 	// 6. Parse response.
