@@ -25,38 +25,11 @@ func TestIsConfigured(t *testing.T) {
 	assert.False(t, p2.IsConfigured())
 }
 
-func TestMorningClassifyRendersPrompt(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-	p := NewAIProvider(AIConfig{Language: "en", APIKey: ""})
-	// No API key => chat returns empty, but prompt rendering should succeed.
-	got := p.MorningClassify([]IssueView{
-		{Identifier: "LUC-101", Title: "Fix bug", TeamName: "Eng", Priority: "P0"},
-	})
-	assert.Empty(t, got, "without API key, chat should return empty")
-}
-
-func TestMorningSummaryReturnsEmptyWithoutKey(t *testing.T) {
+func TestMorningPlanReturnsEmptyWithoutKey(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 	p := NewAIProvider(AIConfig{APIKey: ""})
-	got := p.MorningSummary([]IssueView{{Identifier: "LUC-1", Title: "Task"}})
-	assert.Empty(t, got)
-}
-
-func TestMorningStructuredReviewDelegatesToClassify(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-	p := NewAIProvider(AIConfig{APIKey: ""})
-	got := p.MorningStructuredReview([]IssueView{{Identifier: "LUC-1", Title: "Task"}})
-	assert.Empty(t, got)
-}
-
-func TestMorningDeepAnalysisReturnsEmptyWithoutKey(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-	p := NewAIProvider(AIConfig{APIKey: ""})
-	got := p.MorningDeepAnalysis([]IssueDetail{{Identifier: "LUC-1", Title: "Task"}})
+	got := p.MorningPlan([]IssueDetail{{Identifier: "LUC-1", Title: "Task"}})
 	assert.Empty(t, got)
 }
 
@@ -70,9 +43,9 @@ func TestEveningDeepReviewReturnsEmptyWithoutKey(t *testing.T) {
 
 func TestRenderPromptWithValidTemplate(t *testing.T) {
 	p := NewAIProvider(AIConfig{Language: "en"})
-	prompt, err := p.renderPrompt("prompts/morning-summary.txt", morningClassifyData{
+	prompt, err := p.renderPrompt("prompts/plan.txt", planPromptData{
 		Lang: "en",
-		Issues: []IssueView{
+		Issues: []IssueDetail{
 			{Identifier: "LUC-1", Title: "Test", TeamName: "Eng", Priority: "P0"},
 		},
 	})

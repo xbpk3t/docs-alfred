@@ -260,7 +260,7 @@ func parsePerIssueReviewJSON(raw string) *perIssueReviewResult {
 	}
 
 	reviews := make(map[string]string, len(result.Reviews))
-	for _, r := range result.Reviews {
+	for _, r := range result.Reviews { //nolint:dupl // structurally similar to morning but different types/headings
 		var sections []md.ReviewSection
 		if len(r.Progress) > 0 {
 			sections = append(sections, md.ReviewSection{Heading: "决策/进展", Items: r.Progress})

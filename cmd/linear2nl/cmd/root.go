@@ -53,12 +53,15 @@ func Execute() {
 
 Subcommands:
   morning   Send morning report with today's tasks
-  evening   Send evening report with today's accomplishments`,
+  evening   Send evening report with today's accomplishments
+  export    Export Linear issues as JSON or Markdown
+  review    AI review for a closed GitHub issue`,
 	}
 
 	rootCmd.AddCommand(newMorningCmd())
 	rootCmd.AddCommand(newEveningCmd())
 	rootCmd.AddCommand(newExportCmd())
+	rootCmd.AddCommand(newReviewCmd())
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	if err := rootCmd.Execute(); err != nil {

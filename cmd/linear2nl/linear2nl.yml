@@ -16,3 +16,7 @@ resend:
   token: ""                  # 或环境变量 RESEND_TOKEN
   mailTo: [jeffcottlu@gmail.com]
   fromName: "Linear Bot"
+
+github:
+  owner: ""                  # 或环境变量 GITHUB_OWNER
+  repo: ""                   # 或环境变量 GITHUB_REPO

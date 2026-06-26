@@ -108,21 +108,10 @@ func TestChatSuccessPath(t *testing.T) {
 
 // --- renderPrompt tests ---
 
-func TestRenderPromptExecuteError(t *testing.T) {
+func TestRenderPromptPlanTemplate(t *testing.T) {
 	p := NewAIProvider(AIConfig{Language: "en"})
 
-	// Passing a struct without the expected fields causes tmpl.Execute to
-	// fail because the template accesses {{.Lang}} which does not exist on
-	// struct{}.
-	_, err := p.renderPrompt("prompts/morning-summary.txt", struct{}{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "render prompt")
-}
-
-func TestRenderPromptMorningAnalysisTemplate(t *testing.T) {
-	p := NewAIProvider(AIConfig{Language: "en"})
-
-	prompt, err := p.renderPrompt("prompts/morning-analysis.txt", morningAnalysisData{
+	prompt, err := p.renderPrompt("prompts/plan.txt", planPromptData{
 		Lang: "en",
 		Issues: []IssueDetail{
 			{
@@ -147,10 +136,10 @@ func TestRenderPromptMorningAnalysisTemplate(t *testing.T) {
 	assert.Contains(t, prompt, "needs attention")
 }
 
-func TestRenderPromptEveningSummaryTemplate(t *testing.T) {
+func TestRenderPromptSummaryTemplate(t *testing.T) {
 	p := NewAIProvider(AIConfig{Language: "en"})
 
-	prompt, err := p.renderPrompt("prompts/evening-summary.txt", eveningDeepPromptData{
+	prompt, err := p.renderPrompt("prompts/summary.txt", summaryPromptData{
 		Lang: "en",
 		Issues: []IssueDetail{
 			{
@@ -173,50 +162,20 @@ func TestRenderPromptEveningSummaryTemplate(t *testing.T) {
 	assert.Contains(t, prompt, "charlie")
 }
 
-func TestRenderPromptMorningSummaryWithDueDate(t *testing.T) {
-	p := NewAIProvider(AIConfig{Language: "en"})
-
-	prompt, err := p.renderPrompt("prompts/morning-summary.txt", morningClassifyData{
-		Lang: "en",
-		Issues: []IssueView{
-			{
-				Identifier: "LUC-70",
-				Title:      "Urgent fix",
-				Priority:   "P0",
-				TeamName:   "Eng",
-				DueDate:    "2024-06-30",
-			},
-		},
-	})
-	require.NoError(t, err)
-	assert.Contains(t, prompt, "LUC-70")
-	assert.Contains(t, prompt, "2024-06-30")
-	assert.Contains(t, prompt, "截止")
-}
-
 func TestRenderPromptWithEmptyIssues(t *testing.T) {
 	p := NewAIProvider(AIConfig{Language: "zh"})
 
-	t.Run("morning-summary", func(t *testing.T) {
-		prompt, err := p.renderPrompt("prompts/morning-summary.txt", morningClassifyData{
+	t.Run("plan", func(t *testing.T) {
+		prompt, err := p.renderPrompt("prompts/plan.txt", planPromptData{
 			Lang:   "zh",
-			Issues: []IssueView{},
+			Issues: []IssueDetail{},
 		})
 		require.NoError(t, err)
 		assert.NotEmpty(t, prompt, "template header should still render")
 	})
 
-	t.Run("morning-analysis", func(t *testing.T) {
-		prompt, err := p.renderPrompt("prompts/morning-analysis.txt", morningAnalysisData{
-			Lang:   "zh",
-			Issues: []IssueDetail{},
-		})
-		require.NoError(t, err)
-		assert.NotEmpty(t, prompt)
-	})
-
-	t.Run("evening-summary", func(t *testing.T) {
-		prompt, err := p.renderPrompt("prompts/evening-summary.txt", eveningDeepPromptData{
+	t.Run("summary", func(t *testing.T) {
+		prompt, err := p.renderPrompt("prompts/summary.txt", summaryPromptData{
 			Lang:   "zh",
 			Issues: []IssueDetail{},
 		})
@@ -228,36 +187,14 @@ func TestRenderPromptWithEmptyIssues(t *testing.T) {
 // --- Public methods with broken prompts (empty embed.FS) ---
 // These test the renderPrompt error branches in each public method.
 
-func TestMorningSummaryRenderPromptError(t *testing.T) {
+func TestMorningPlanRenderPromptError(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 
 	p := NewAIProvider(AIConfig{Language: "en"})
 	p.prompts = embed.FS{} // empty FS: ParseFS will fail
 
-	got := p.MorningSummary([]IssueView{{Identifier: "LUC-1", Title: "Task"}})
-	assert.Empty(t, got)
-}
-
-func TestMorningClassifyRenderPromptError(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-
-	p := NewAIProvider(AIConfig{Language: "en"})
-	p.prompts = embed.FS{}
-
-	got := p.MorningClassify([]IssueView{{Identifier: "LUC-1", Title: "Task"}})
-	assert.Empty(t, got)
-}
-
-func TestMorningDeepAnalysisRenderPromptError(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-
-	p := NewAIProvider(AIConfig{Language: "en"})
-	p.prompts = embed.FS{}
-
-	got := p.MorningDeepAnalysis([]IssueDetail{{Identifier: "LUC-1", Title: "Task"}})
+	got := p.MorningPlan([]IssueDetail{{Identifier: "LUC-1", Title: "Task"}})
 	assert.Empty(t, got)
 }
 
@@ -274,47 +211,7 @@ func TestEveningDeepReviewRenderPromptError(t *testing.T) {
 
 // --- Public methods with mock API (full success paths) ---
 
-func TestMorningSummaryWithMockAPI(t *testing.T) {
-	srv := newMockOpenAIServer("priority: fix LUC-100 first")
-	t.Cleanup(srv.Close)
-
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-
-	p := NewAIProvider(AIConfig{
-		APIKey:   "sk-test",
-		BaseURL:  srv.URL,
-		Model:    "test-model",
-		Language: "en",
-	})
-
-	got := p.MorningSummary([]IssueView{
-		{Identifier: "LUC-100", Title: "Critical bug", Priority: "P0", TeamName: "Eng"},
-	})
-	assert.Equal(t, "priority: fix LUC-100 first", got)
-}
-
-func TestMorningClassifyWithMockAPI(t *testing.T) {
-	srv := newMockOpenAIServer(`{"groups":[{"name":"FIXME","issues":[]}]}`)
-	t.Cleanup(srv.Close)
-
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-
-	p := NewAIProvider(AIConfig{
-		APIKey:   "sk-test",
-		BaseURL:  srv.URL,
-		Model:    "test-model",
-		Language: "en",
-	})
-
-	got := p.MorningClassify([]IssueView{
-		{Identifier: "LUC-101", Title: "Some task", Priority: "P1", TeamName: "Platform"},
-	})
-	assert.JSONEq(t, `{"groups":[{"name":"FIXME","issues":[]}]}`, got)
-}
-
-func TestMorningDeepAnalysisWithMockAPI(t *testing.T) {
+func TestMorningPlanWithMockAPI(t *testing.T) {
 	srv := newMockOpenAIServer(`{"reviews":[{"identifier":"LUC-102","title":"Task"}]}`)
 	t.Cleanup(srv.Close)
 
@@ -328,7 +225,7 @@ func TestMorningDeepAnalysisWithMockAPI(t *testing.T) {
 		Language: "en",
 	})
 
-	got := p.MorningDeepAnalysis([]IssueDetail{
+	got := p.MorningPlan([]IssueDetail{
 		{
 			Identifier: "LUC-102", Title: "Task",
 			Description: "Do something", StateName: "Todo",
@@ -363,26 +260,6 @@ func TestEveningDeepReviewWithMockAPI(t *testing.T) {
 		},
 	})
 	assert.Equal(t, "review: task completed well", got)
-}
-
-func TestMorningStructuredReviewWithMockAPI(t *testing.T) {
-	srv := newMockOpenAIServer(`{"groups":[]}`)
-	t.Cleanup(srv.Close)
-
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-
-	p := NewAIProvider(AIConfig{
-		APIKey:   "sk-test",
-		BaseURL:  srv.URL,
-		Model:    "test-model",
-		Language: "en",
-	})
-
-	got := p.MorningStructuredReview([]IssueView{
-		{Identifier: "LUC-104", Title: "Delegate test", Priority: "P2", TeamName: "QA"},
-	})
-	assert.JSONEq(t, `{"groups":[]}`, got)
 }
 
 // --- IsConfigured edge cases ---
