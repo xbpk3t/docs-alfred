@@ -41,7 +41,8 @@
 {{range .Issues}}### {{.Identifier}}: {{.Title}}
 - 状态: {{.StateName}}
 - 团队: {{.TeamName}}
-- 描述: {{.Description}}
+{{if .LinearReference}}- Linear 关联: {{.LinearReference}}
+{{end}}- 描述: {{.Description}}
 
 评论:
 {{range .Comments}}- {{.UserName}} ({{.CreatedAt}}): {{.Body}}

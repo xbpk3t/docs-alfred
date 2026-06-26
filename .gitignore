@@ -132,3 +132,4 @@ apm.lock.yaml
 
 /_skillopt/
 /outputs/
+/.skillopt-sleep/

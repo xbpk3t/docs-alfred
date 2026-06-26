@@ -117,8 +117,13 @@ func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string, ghMaxLin
 		return err
 	}
 
-	checkutil.ReportIssues(result.Issues, "data check "+string(domain))
-	if checkutil.HasErrors(result.Issues) {
+	report, ok := checkutil.ReportIssues(result.Issues, "data check "+string(domain))
+	if report != "" {
+		if err := writeOutput(report); err != nil {
+			return err
+		}
+	}
+	if !ok {
 		return fmt.Errorf("data check %s failed", domain)
 	}
 
@@ -168,11 +173,21 @@ func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
 		return nil
 	}
 	if domain == data.DomainGH {
-		fmt.Fprint(os.Stderr, data.FormatGHDuplicateReport(report))
+		if err := writeOutput(data.FormatGHDuplicateReport(report)); err != nil {
+			return err
+		}
 
 		return fmt.Errorf("data duplicate %s found %d duplicate URLs", domain, len(report.URLDuplicates))
 	}
-	fmt.Fprint(os.Stderr, data.FormatDuplicateReport(report))
+	if err := writeOutput(data.FormatDuplicateReport(report)); err != nil {
+		return err
+	}
 
 	return fmt.Errorf("data duplicate %s found duplicates", domain)
+}
+
+func writeOutput(s string) error {
+	_, err := os.Stdout.WriteString(s)
+
+	return err
 }

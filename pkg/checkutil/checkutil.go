@@ -3,7 +3,6 @@ package checkutil
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 )
@@ -38,14 +37,6 @@ func (r *Result) HasErrors() bool {
 	return false
 }
 
-// Report prints the check result to stderr.
-func (r *Result) Report(name string) {
-	result := r.ReportResult(name)
-	if result != "" {
-		fmt.Fprint(os.Stderr, result)
-	}
-}
-
 // ReportResult returns the formatted check result.
 func (r *Result) ReportResult(name string) string {
 	if len(r.Issues) == 0 {
@@ -78,12 +69,11 @@ func (r *Result) ReportResult(name string) string {
 	return output
 }
 
-// ReportIssues prints issues and returns true if no errors.
-func ReportIssues(issues []Issue, command string) bool {
+// ReportIssues returns the formatted report string and whether there are no errors.
+func ReportIssues(issues []Issue, command string) (string, bool) {
 	r := &Result{Issues: issues}
-	r.Report(command)
 
-	return !r.HasErrors()
+	return r.ReportResult(command), !r.HasErrors()
 }
 
 // HasErrors is a convenience function for checking a slice of issues.

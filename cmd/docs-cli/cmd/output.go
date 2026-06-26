@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -53,19 +54,15 @@ func writeCheckCommandOutput(format string, output *checkCommandOutput, textDeta
 		return writeJSONOutput(output)
 	}
 
-	report := (&checkutil.Result{Issues: output.Issues}).ReportResult(output.Name)
-	if report != "" {
-		fmt.Fprint(os.Stderr, report)
+	var b strings.Builder
+	b.WriteString((&checkutil.Result{Issues: output.Issues}).ReportResult(output.Name))
+	b.WriteString(textDetails)
+	if textDetails != "" && textDetails[len(textDetails)-1] != '\n' {
+		b.WriteByte('\n')
 	}
-	if textDetails != "" {
-		fmt.Fprint(os.Stderr, textDetails)
-		if textDetails[len(textDetails)-1] != '\n' {
-			fmt.Fprintln(os.Stderr)
-		}
-	}
-	writeActions(output.Actions)
+	b.WriteString(formatActions(output.Actions))
 
-	return nil
+	return writeOutput(b.String())
 }
 
 func writeCommandOutput(format string, output *CommandOutput, textDetails string) error {
@@ -77,26 +74,28 @@ func writeCommandOutput(format string, output *CommandOutput, textDetails string
 		return writeJSONOutput(output)
 	}
 
-	if textDetails != "" {
-		fmt.Fprint(os.Stderr, textDetails)
-		if textDetails[len(textDetails)-1] != '\n' {
-			fmt.Fprintln(os.Stderr)
-		}
+	var b strings.Builder
+	b.WriteString(textDetails)
+	if textDetails != "" && textDetails[len(textDetails)-1] != '\n' {
+		b.WriteByte('\n')
 	}
-	writeActions(output.Actions)
+	b.WriteString(formatActions(output.Actions))
 
-	return nil
+	return writeOutput(b.String())
 }
 
-func writeActions(actions []string) {
+func formatActions(actions []string) string {
 	if len(actions) == 0 {
-		return
+		return ""
 	}
 
-	fmt.Fprintln(os.Stderr, "[actions]")
+	var b strings.Builder
+	b.WriteString("[actions]\n")
 	for _, action := range actions {
-		fmt.Fprintf(os.Stderr, "  %s\n", action)
+		fmt.Fprintf(&b, "  %s\n", action)
 	}
+
+	return b.String()
 }
 
 func writeJSONOutput(v any) error {
