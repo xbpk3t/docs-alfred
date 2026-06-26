@@ -127,21 +127,26 @@ func TestReportIssuesNoErrors(t *testing.T) {
 	issues := []Issue{
 		{File: "a.go", Severity: SeverityWarn, Message: "warn"},
 	}
-	result := ReportIssues(issues, "check")
-	assert.True(t, result)
+	report, ok := ReportIssues(issues, "check")
+	assert.True(t, ok)
+	assert.Contains(t, report, "WARN")
+	assert.Contains(t, report, "passed (with warnings)")
 }
 
 func TestReportIssuesWithErrors(t *testing.T) {
 	issues := []Issue{
 		{File: "a.go", Severity: SeverityError, Message: "err"},
 	}
-	result := ReportIssues(issues, "check")
-	assert.False(t, result)
+	report, ok := ReportIssues(issues, "check")
+	assert.False(t, ok)
+	assert.Contains(t, report, "ERROR")
+	assert.Contains(t, report, "failed")
 }
 
 func TestReportIssuesEmpty(t *testing.T) {
-	result := ReportIssues(nil, "check")
-	assert.True(t, result)
+	report, ok := ReportIssues(nil, "check")
+	assert.True(t, ok)
+	assert.Contains(t, report, "passed")
 }
 
 // --- DateFullPattern tests ---

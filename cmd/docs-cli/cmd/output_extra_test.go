@@ -59,7 +59,7 @@ func TestNormalizeOutputFormat(t *testing.T) {
 }
 
 func TestWriteCommandOutputTextFormat(t *testing.T) {
-	stderr := captureStderr(t)
+	stdout := captureStdout(t)
 
 	err := writeCommandOutput("text", &CommandOutput{
 		Name:    "test",
@@ -68,26 +68,26 @@ func TestWriteCommandOutputTextFormat(t *testing.T) {
 	}, "details here\n")
 	require.NoError(t, err)
 
-	got := stderr()
+	got := stdout()
 	assert.Contains(t, got, "details here")
 	assert.Contains(t, got, "[actions]")
 	assert.Contains(t, got, "action1")
 }
 
 func TestWriteCommandOutputTextNoTrailingNewline(t *testing.T) {
-	stderr := captureStderr(t)
+	stdout := captureStdout(t)
 
 	err := writeCommandOutput("text", &CommandOutput{
 		Name: "test",
 	}, "no newline")
 	require.NoError(t, err)
 
-	got := stderr()
+	got := stdout()
 	assert.Contains(t, got, "no newline\n")
 }
 
 func TestWriteCheckCommandOutputTextFormat(t *testing.T) {
-	stderr := captureStderr(t)
+	stdout := captureStdout(t)
 
 	err := writeCheckCommandOutput("text", &checkCommandOutput{
 		Name:   "test check",
@@ -95,7 +95,7 @@ func TestWriteCheckCommandOutputTextFormat(t *testing.T) {
 	}, "text details\n")
 	require.NoError(t, err)
 
-	got := stderr()
+	got := stdout()
 	assert.Contains(t, got, "text details")
 }
 
@@ -112,23 +112,15 @@ func TestWriteCheckCommandOutputWithErrors(t *testing.T) {
 	_ = stderr
 }
 
-func TestWriteActionsNonEmpty(t *testing.T) {
-	stderr := captureStderr(t)
-
-	writeActions([]string{"do thing 1", "do thing 2"})
-
-	got := stderr()
+func TestFormatActionsNonEmpty(t *testing.T) {
+	got := formatActions([]string{"do thing 1", "do thing 2"})
 	assert.Contains(t, got, "[actions]")
 	assert.Contains(t, got, "do thing 1")
 	assert.Contains(t, got, "do thing 2")
 }
 
-func TestWriteActionsEmpty(t *testing.T) {
-	stderr := captureStderr(t)
-
-	writeActions(nil)
-
-	got := stderr()
+func TestFormatActionsEmpty(t *testing.T) {
+	got := formatActions(nil)
 	assert.Empty(t, got)
 }
 
@@ -260,7 +252,6 @@ func TestFormatWikiAuditTextResultFailed(t *testing.T) {
 }
 
 func TestWriteWikiResultTextFormat(t *testing.T) {
-	stderr := captureStderr(t)
 	stdout := captureStdout(t)
 
 	err := writeWikiResult(&wikiuc.Result{
@@ -271,8 +262,7 @@ func TestWriteWikiResultTextFormat(t *testing.T) {
 	}, "text")
 	require.NoError(t, err)
 
-	_ = stdout
-	got := stderr()
+	got := stdout()
 	assert.Contains(t, got, "wiki add passed")
 }
 
@@ -291,14 +281,14 @@ func TestWriteWikiResultTextFormatFailed(t *testing.T) {
 }
 
 func TestWriteWikiAuditResultTextFormat(t *testing.T) {
-	stderr := captureStderr(t)
+	stdout := captureStdout(t)
 
 	err := writeWikiAuditResult(&wikiuc.AuditResult{
 		Name: "wiki audit",
 	}, "text")
 	require.NoError(t, err)
 
-	got := stderr()
+	got := stdout()
 	assert.Contains(t, got, "wiki audit passed")
 }
 
@@ -314,7 +304,7 @@ func TestWriteWikiAuditResultFailed(t *testing.T) {
 }
 
 func TestWriteDotfilesSyncRecordResultTextOK(t *testing.T) {
-	stderr := captureStderr(t)
+	stdout := captureStdout(t)
 
 	// Using the actual workspaceuc type via import
 	// We need to test the text path
@@ -331,7 +321,7 @@ func TestWriteDotfilesSyncRecordResultTextOK(t *testing.T) {
 	}, "text")
 	require.NoError(t, err)
 
-	got := stderr()
+	got := stdout()
 	assert.Contains(t, got, "modified")
 	assert.Contains(t, got, "added")
 	assert.Contains(t, got, "deleted")
@@ -340,7 +330,7 @@ func TestWriteDotfilesSyncRecordResultTextOK(t *testing.T) {
 }
 
 func TestWriteDotfilesSyncRecordResultTextFailed(t *testing.T) {
-	stderr := captureStderr(t)
+	stdout := captureStdout(t)
 
 	err := writeDotfilesSyncRecordResult(&workspaceuc.DotfilesSyncRecordResult{
 		OK:    false,
@@ -348,12 +338,12 @@ func TestWriteDotfilesSyncRecordResultTextFailed(t *testing.T) {
 	}, "text")
 	require.NoError(t, err)
 
-	got := stderr()
+	got := stdout()
 	assert.Contains(t, got, "sync-record failed: git error")
 }
 
 func TestWriteDotfilesSyncRecordResultTextWithGh(t *testing.T) {
-	stderr := captureStderr(t)
+	stdout := captureStdout(t)
 
 	err := writeDotfilesSyncRecordResult(&workspaceuc.DotfilesSyncRecordResult{
 		OK:           true,
@@ -368,7 +358,7 @@ func TestWriteDotfilesSyncRecordResultTextWithGh(t *testing.T) {
 	}, "text")
 	require.NoError(t, err)
 
-	got := stderr()
+	got := stdout()
 	assert.Contains(t, got, "gh category=tool")
 	assert.Contains(t, got, "tool.yml, tool2.yml")
 }

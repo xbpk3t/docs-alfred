@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
 	"text/template"
 
 	"github.com/spf13/cobra"
@@ -14,6 +15,9 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 )
+
+// linearIDRe matches Linear issue identifiers like "ENG-123".
+var linearIDRe = regexp.MustCompile(`[A-Z]{2,4}-\d+`)
 
 func newReviewCmd() *cobra.Command {
 	var (
@@ -92,19 +96,25 @@ func runReview(cfg *internal.Config, token, owner, repo string, issueNumber int,
 		return err
 	}
 
-	// 2. Build prompt input (field names match summary.txt template).
+	// 2. Extract Linear issue reference from GitHub issue body.
+	if m := linearIDRe.FindString(issueData.Description); m != "" {
+		issueData.LinearReference = m
+		slog.Info("found Linear reference in issue body", "identifier", m)
+	}
+
+	// 3. Build prompt input (field names match summary.txt template).
 	input := internal.GitHubReviewInput{
 		Lang:   cfg.AI.Language,
 		Issues: []internal.GitHubReviewIssue{*issueData},
 	}
 
-	// 3. Render prompt.
+	// 4. Render prompt.
 	prompt, err := renderGitHubReviewPrompt(input)
 	if err != nil {
 		return fmt.Errorf("render prompt: %w", err)
 	}
 
-	// 4. Call AI.
+	// 5. Call AI.
 	clientCfg := ai.ConfigWithOverrides(cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Model)
 	clientCfg.Timeout = cfg.AI.Timeout
 
@@ -117,7 +127,7 @@ func runReview(cfg *internal.Config, token, owner, repo string, issueNumber int,
 	}
 	slog.Info("AI raw response preview", "len", len(raw), "raw", raw[:min(len(raw), 2000)])
 
-	// 5. Parse response.
+	// 6. Parse response.
 	review, err := parseReviewJSON(raw)
 	if err != nil {
 		return fmt.Errorf("parse AI response: %w", err)
@@ -126,7 +136,7 @@ func runReview(cfg *internal.Config, token, owner, repo string, issueNumber int,
 		return fmt.Errorf("no review generated for #%d", issueNumber)
 	}
 
-	// 6. Output.
+	// 7. Output.
 	if dryRun {
 		fmt.Println(review) //nolint:forbidigo // dry-run intentionally outputs to stdout
 

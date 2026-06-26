@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -125,22 +124,23 @@ func writeDotfilesSyncRecordResult(result *workspaceuc.DotfilesSyncRecordResult,
 		}, "")
 	}
 
+	var b strings.Builder
 	if !result.OK {
-		fmt.Fprintf(os.Stderr, "sync-record failed: %s\n", result.Error)
+		fmt.Fprintf(&b, "sync-record failed: %s\n", result.Error)
 
-		return nil
+		return writeOutput(b.String())
 	}
 
-	fmt.Fprintf(os.Stderr, "dotfiles sync record: path=%s changed=%d\n", result.DotfilesPath, len(result.ChangedFiles))
+	fmt.Fprintf(&b, "dotfiles sync record: path=%s changed=%d\n", result.DotfilesPath, len(result.ChangedFiles))
 	for _, f := range result.ChangedFiles {
 		status := formatDotfilesChangeStatus(f.Status)
-		fmt.Fprintf(os.Stderr, "%s %s\n", status, f.Path)
+		fmt.Fprintf(&b, "%s %s\n", status, f.Path)
 		if f.Gh != nil {
-			fmt.Fprintf(os.Stderr, "  gh category=%s files=%s\n", f.Gh.Category, strings.Join(f.Gh.GhFiles, ", "))
+			fmt.Fprintf(&b, "  gh category=%s files=%s\n", f.Gh.Category, strings.Join(f.Gh.GhFiles, ", "))
 		}
 	}
 
-	return nil
+	return writeOutput(b.String())
 }
 
 func formatDotfilesChangeStatus(status string) string {

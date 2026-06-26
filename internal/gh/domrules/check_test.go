@@ -309,9 +309,12 @@ func TestCheckFile_ReadAtNilValue(t *testing.T) {
 }
 
 func TestReportIssues(t *testing.T) {
-	assert.True(t, checkutil.ReportIssues(nil, "test"))
-	assert.True(t, checkutil.ReportIssues([]checkutil.Issue{{Severity: checkutil.SeverityWarn, Message: "warn"}}, "test"))
-	assert.False(t, checkutil.ReportIssues([]checkutil.Issue{{Severity: checkutil.SeverityError, Message: "error"}}, "test"))
+	_, ok := checkutil.ReportIssues(nil, "test")
+	assert.True(t, ok)
+	_, ok = checkutil.ReportIssues([]checkutil.Issue{{Severity: checkutil.SeverityWarn, Message: "warn"}}, "test")
+	assert.True(t, ok)
+	_, ok = checkutil.ReportIssues([]checkutil.Issue{{Severity: checkutil.SeverityError, Message: "error"}}, "test")
+	assert.False(t, ok)
 }
 
 func TestCheckFile_DesEmptyValue(t *testing.T) {

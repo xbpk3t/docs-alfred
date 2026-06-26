@@ -17,12 +17,13 @@ type GitHubReviewInput struct {
 
 // GitHubReviewIssue is a single GitHub issue for AI review.
 type GitHubReviewIssue struct {
-	Identifier  string
-	Title       string
-	StateName   string
-	TeamName    string
-	Description string
-	Comments    []GitHubReviewComment
+	Identifier      string
+	Title           string
+	StateName       string
+	TeamName        string
+	Description     string
+	LinearReference string // Linear issue identifier (e.g. "ENG-123"), extracted from issue body
+	Comments        []GitHubReviewComment
 }
 
 // GitHubReviewComment is a single comment on a GitHub issue.
