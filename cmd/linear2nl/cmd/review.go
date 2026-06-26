@@ -9,11 +9,11 @@ import (
 	"os"
 	"regexp"
 	"text/template"
-	"time"
 
-	"github.com/avast/retry-go/v4"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/cmd/linear2nl/internal"
+	"github.com/xbpk3t/docs-alfred/internal/linear"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 )
@@ -98,11 +98,8 @@ func runReview(cfg *internal.Config, token, owner, repo string, issueNumber int,
 		return err
 	}
 
-	// 2. Extract Linear issue reference from GitHub issue body.
-	if m := linearIDRe.FindString(issueData.Description); m != "" {
-		issueData.LinearReference = m
-		slog.Info("found Linear reference in issue body", "identifier", m)
-	}
+	// 2. Extract Linear reference and enrich with full Linear data.
+	enrichFromLinear(ctx, cfg, issueData)
 
 	// 3. Build prompt input (field names match summary.txt template).
 	input := internal.GitHubReviewInput{
@@ -116,32 +113,17 @@ func runReview(cfg *internal.Config, token, owner, repo string, issueNumber int,
 		return fmt.Errorf("render prompt: %w", err)
 	}
 
-	// 5. Call AI with retry on transient errors (e.g. rate limits).
+	// 5. Call AI.
 	clientCfg := ai.ConfigWithOverrides(cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Model)
 	clientCfg.Timeout = cfg.AI.Timeout
 
-	var raw string
-	err = retry.Do(
-		func() error {
-			r, e := ai.Chat(clientCfg, []ai.Message{{Role: "user", Content: prompt}})
-			if e != nil {
-				return fmt.Errorf("AI call failed: %w", e)
-			}
-			if r == "" {
-				return fmt.Errorf("AI returned empty response")
-			}
-			raw = r
-			return nil
-		},
-		retry.Attempts(3),
-		retry.Delay(1*time.Second),
-		retry.DelayType(retry.BackOffDelay),
-		retry.LastErrorOnly(true),
-	)
+	raw, err := ai.Chat(clientCfg, []ai.Message{{Role: "user", Content: prompt}})
 	if err != nil {
-		return err
+		return fmt.Errorf("AI call failed: %w", err)
 	}
-
+	if raw == "" {
+		return fmt.Errorf("AI returned empty response")
+	}
 	slog.Info("AI raw response preview", "len", len(raw), "raw", raw[:min(len(raw), 2000)])
 
 	// 6. Parse response.
@@ -206,4 +188,67 @@ func parseReviewJSON(raw string) (string, error) {
 	}
 
 	return md.AIReviewItem(sections...).Markdown(), nil
+}
+
+// fetchLinearIssue fetches a single issue by identifier from the Linear API.
+func fetchLinearIssue(ctx context.Context, apiKey, identifier string) (*linear.IssueDetail, error) {
+	client := linear.NewClient(apiKey, nil)
+	return client.GetIssueByIdentifier(ctx, identifier)
+}
+
+// mergeLinearData replaces GitHub issue data with richer Linear issue data.
+// The GitHub issue body (typically a stub with just a linkback) is replaced
+// with the full Linear description, and GitHub comments are replaced with
+// Linear comments that contain the actual discussion.
+func mergeLinearData(gh *internal.GitHubReviewIssue, li *linear.IssueDetail) {
+	if li.Description != "" {
+		gh.Description = li.Description
+	}
+
+	if len(li.Comments) > 0 {
+		gh.Comments = lo.Map(li.Comments, func(c linear.Comment, _ int) internal.GitHubReviewComment {
+			return internal.GitHubReviewComment{
+				Body:      c.Body,
+				UserName:  c.UserName,
+				CreatedAt: c.CreatedAt,
+			}
+		})
+	}
+
+	if li.StateName != "" {
+		gh.StateName = li.StateName
+	}
+
+	if li.TeamName != "" {
+		gh.TeamName = li.TeamName
+	}
+}
+
+// enrichFromLinear extracts a Linear issue identifier from the GitHub issue body
+// and, if found, fetches the full issue data from Linear to replace the stub content.
+func enrichFromLinear(ctx context.Context, cfg *internal.Config, issueData *internal.GitHubReviewIssue) {
+	m := linearIDRe.FindString(issueData.Description)
+	if m == "" {
+		return
+	}
+
+	issueData.LinearReference = m
+	slog.Info("found Linear reference in issue body", "identifier", m)
+
+	if cfg.Linear.APIKey == "" {
+		slog.Warn("LINEAR_API_KEY not set, skipping Linear data fetch")
+		return
+	}
+
+	linearData, err := fetchLinearIssue(ctx, cfg.Linear.APIKey, m)
+	if err != nil {
+		slog.Warn("failed to fetch Linear issue, using GitHub data only", "identifier", m, "error", err)
+		return
+	}
+
+	mergeLinearData(issueData, linearData)
+	slog.Info("merged Linear issue data",
+		"identifier", m,
+		"description_len", len(linearData.Description),
+		"comments", len(linearData.Comments))
 }

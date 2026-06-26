@@ -291,4 +291,160 @@ func mapAssignedIssues(nodes []AssignedIssuesViewerUserAssignedIssuesIssueConnec
 	return issues
 }
 
+// GetIssueByIdentifier fetches a single issue by its identifier (e.g. "LUC-153")
+// including description and comments. Unlike other methods, this queries the
+// global issues field so it works for any issue, not just ones assigned to the viewer.
+func (c *Client) GetIssueByIdentifier(ctx context.Context, identifier string) (*IssueDetail, error) {
+	resp, err := IssueIdentifierQuery(ctx, c.graphQLClient(), identifier, 100)
+	if err != nil {
+		return nil, fmt.Errorf("query issue %s: %w", identifier, err)
+	}
+
+	if len(resp.Issues.Nodes) == 0 {
+		return nil, fmt.Errorf("issue %s not found", identifier)
+	}
+
+	n := &resp.Issues.Nodes[0]
+	d := &IssueDetail{
+		Identifier:  n.Identifier,
+		Title:       n.Title,
+		Description: n.Description,
+		Priority:    n.Priority,
+		StateName:   n.State.Name,
+		StateType:   n.State.Type,
+		TeamName:    n.Team.Name,
+		TeamKey:     n.Team.Key,
+		URL:         n.Url,
+		CompletedAt: n.CompletedAt,
+		UpdatedAt:   n.UpdatedAt,
+		Comments:    make([]Comment, 0, len(n.Comments.Nodes)),
+	}
+
+	for _, cm := range n.Comments.Nodes {
+		d.Comments = append(d.Comments, Comment{
+			Body:      cm.Body,
+			UserName:  cm.User.Name,
+			CreatedAt: cm.CreatedAt,
+		})
+	}
+
+	return d, nil
+}
+
+// IssueByIdentifierResponse is returned by IssueByIdentifier on success.
+type IssueByIdentifierResponse struct {
+	Issues IssueByIdentifierIssuesIssueConnection `json:"issues"`
+}
+
+// IssueByIdentifierIssuesIssueConnection includes the requested fields of the GraphQL type IssueConnection.
+type IssueByIdentifierIssuesIssueConnection struct {
+	Nodes []IssueByIdentifierIssuesIssueConnectionNodesIssue `json:"nodes"`
+}
+
+// IssueByIdentifierIssuesIssueConnectionNodesIssue includes the requested fields of the GraphQL type Issue.
+type IssueByIdentifierIssuesIssueConnectionNodesIssue struct {
+	State       IssueByIdentifierIssuesIssueConnectionNodesIssueStateWorkflowState        `json:"state"`
+	Team        IssueByIdentifierIssuesIssueConnectionNodesIssueTeam                      `json:"team"`
+	Id          string                                                                    `json:"id"`
+	Identifier  string                                                                    `json:"identifier"`
+	Title       string                                                                    `json:"title"`
+	Description string                                                                    `json:"description"`
+	Url         string                                                                    `json:"url"`
+	CompletedAt string                                                                    `json:"completedAt"`
+	UpdatedAt   string                                                                    `json:"updatedAt"`
+	Comments    IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnection `json:"comments"`
+	Priority    float64                                                                   `json:"priority"`
+}
+
+// IssueByIdentifierIssuesIssueConnectionNodesIssueStateWorkflowState includes the requested fields of the GraphQL type WorkflowState.
+type IssueByIdentifierIssuesIssueConnectionNodesIssueStateWorkflowState struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// IssueByIdentifierIssuesIssueConnectionNodesIssueTeam includes the requested fields of the GraphQL type Team.
+type IssueByIdentifierIssuesIssueConnectionNodesIssueTeam struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
+// IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnection includes the requested fields of the GraphQL type CommentConnection.
+type IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnection struct {
+	Nodes []IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesComment `json:"nodes"`
+}
+
+// IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesComment includes the requested fields of the GraphQL type Comment.
+type IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesComment struct {
+	Body      string                                                                                    `json:"body"`
+	CreatedAt string                                                                                    `json:"createdAt"`
+	User      IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesCommentUser `json:"user"`
+}
+
+// IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesCommentUser includes the requested fields of the GraphQL type User.
+type IssueByIdentifierIssuesIssueConnectionNodesIssueCommentsCommentConnectionNodesCommentUser struct {
+	Name string `json:"name"`
+}
+
+// IssueIdentifierQuery executes the IssueByIdentifier GraphQL query.
+func IssueIdentifierQuery(
+	ctx context.Context,
+	c graphql.Client,
+	identifier string,
+	commentsFirst int,
+) (data *IssueByIdentifierResponse, err error) {
+	req := &graphql.Request{
+		OpName: "IssueByIdentifier",
+		Query: `
+query IssueByIdentifier ($identifier: String!, $commentsFirst: Int) {
+	issues(filter: {identifier: {eq: $identifier}}, first: 1) {
+		nodes {
+			id
+			identifier
+			title
+			description
+			priority
+			url
+			completedAt
+			updatedAt
+			state {
+				name
+				type
+			}
+			team {
+				name
+				key
+			}
+			comments(first: $commentsFirst) {
+				nodes {
+					body
+					createdAt
+					user {
+						name
+					}
+				}
+			}
+		}
+	}
+}
+`,
+		Variables: &issueByIdentifierInput{
+			Identifier:    identifier,
+			CommentsFirst: commentsFirst,
+		},
+	}
+
+	data = &IssueByIdentifierResponse{}
+	resp := &graphql.Response{Data: data}
+
+	err = c.MakeRequest(ctx, req, resp)
+
+	return data, err
+}
+
+// issueByIdentifierInput holds variables for the IssueByIdentifier query.
+type issueByIdentifierInput struct {
+	Identifier    string `json:"identifier"`
+	CommentsFirst int    `json:"commentsFirst"`
+}
+
 //go:generate go run github.com/Khan/genqlient genqlient.yaml
