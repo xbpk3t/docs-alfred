@@ -32,14 +32,9 @@ func newReviewCmd() *cobra.Command {
 Requires GITHUB_TOKEN environment variable for authentication.
 Designed to run from GitHub Actions on issue close events.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Config is optional for review command — Resend/Linear fields not needed.
-			cfg := &internal.Config{}
-			if cfgFile != "" {
-				if c, err := internal.LoadConfig(cfgFile); err == nil {
-					cfg = c
-				} else {
-					slog.Warn("config not loaded, using defaults", "error", err)
-				}
+			cfg, err := internal.LoadConfig(cfgFile)
+			if err != nil {
+				return err
 			}
 
 			if owner == "" {
@@ -61,7 +56,7 @@ Designed to run from GitHub Actions on issue close events.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&cfgFile, "config", "c", "", "config file path (optional)")
+	cmd.Flags().StringVarP(&cfgFile, "config", "c", "cmd/linear2nl/linear2nl.yml", "config file path")
 	cmd.Flags().IntVarP(&issue, "issue", "i", 0, "GitHub issue number")
 	cmd.Flags().StringVar(&owner, "owner", "", "GitHub repo owner")
 	cmd.Flags().StringVar(&repo, "repo", "", "GitHub repo name")
