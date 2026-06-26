@@ -41,7 +41,7 @@
 {{range .Issues}}### {{.Identifier}}: {{.Title}}
 - 状态: {{.StateName}}
 - 团队: {{.TeamName}}
-{{if .LinearReference}}- Linear 关联: {{.LinearReference}}
+{{if .LinearReference}}- Linear 关联: {{.LinearReference}}（以下描述和评论来自原始 Linear issue）
 {{end}}- 描述: {{.Description}}
 
 评论:
