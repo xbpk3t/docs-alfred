@@ -212,7 +212,7 @@ type: session
 	}{
 		{"type session", "session"},
 		{"type review", "review"},
-		{"type blog-draft", "blog-draft"},
+		{"type blog", "blog"},
 		{"type log", "log"},
 		{"type digest", "digest"},
 		{"type reference", "reference"},

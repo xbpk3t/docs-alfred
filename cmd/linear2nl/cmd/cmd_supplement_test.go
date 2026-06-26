@@ -29,8 +29,6 @@ func TestSendOrWriteDryRun(t *testing.T) {
 }
 
 func TestSendOrWriteNonDryRun(t *testing.T) {
-	// non-dryRun path calls sendEmail which will fail with empty config,
-	// but covers the sendEmail branch in sendOrWrite.
 	cfg := &internal.Config{
 		Resend: internal.ResendConfig{
 			Token:  "re_test_key",
@@ -38,7 +36,6 @@ func TestSendOrWriteNonDryRun(t *testing.T) {
 		},
 	}
 	err := sendOrWrite(cfg, "subject", "<h1>body</h1>", "test", false)
-	// sendEmail will fail (invalid token) but the code path is covered
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "send email")
 }
@@ -120,70 +117,6 @@ func TestBuildEveningHTMLEmpty(t *testing.T) {
 	assert.NotContains(t, html, "完成")
 }
 
-func TestBuildMorningGroupsAINotConfigured(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: ""})
-	views := []internal.IssueView{
-		{Identifier: "LUC-1", Title: "Task 1", URL: "https://example.com/1"},
-	}
-
-	groups := buildMorningGroups(aiClient, views)
-	require.Len(t, groups, 1)
-	assert.Equal(t, fallbackGroupName, groups[0].Name)
-	assert.Len(t, groups[0].Issues, 1)
-}
-
-func TestBuildMorningGroupsEmptyViews(t *testing.T) {
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: ""})
-	groups := buildMorningGroups(aiClient, nil)
-	require.Len(t, groups, 1)
-	assert.Empty(t, groups[0].Issues)
-}
-
-func TestEnrichActiveGroupsEmptyGroups(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: ""})
-
-	groups := []internal.GroupView{
-		{Name: "Uncategorized", Issues: []internal.GroupItemView{{Identifier: "LUC-1"}}},
-	}
-	enrichActiveGroups(aiClient, groups, nil)
-	// Should not modify non-active groups
-	assert.Empty(t, groups[0].Issues[0].Context)
-}
-
-func TestEnrichActiveGroupsWithFIXMEGroup(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: ""})
-
-	groups := []internal.GroupView{
-		{Name: "FIXME", Issues: []internal.GroupItemView{{Identifier: "LUC-1", Title: "Fix this"}}},
-	}
-	details := []internal.IssueDetail{
-		{Identifier: "LUC-1", Title: "Fix this", Description: "desc"},
-	}
-
-	// Without API key, should not crash
-	enrichActiveGroups(aiClient, groups, details)
-	assert.Equal(t, "LUC-1", groups[0].Issues[0].Identifier)
-}
-
-func TestEnrichActiveGroupsNoMatchingDetails(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("LLM_AxonHub", "")
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: ""})
-
-	groups := []internal.GroupView{
-		{Name: "FIXME", Issues: []internal.GroupItemView{{Identifier: "LUC-999"}}},
-	}
-	enrichActiveGroups(aiClient, groups, nil)
-	// Should not crash when no matching details
-}
-
 func TestBuildPerIssueReviewsAINotConfigured(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
@@ -208,7 +141,6 @@ func TestBuildEveningSummaryNilResult(t *testing.T) {
 	changeViews := []internal.StateChangeView{{IssueIdentifier: "LUC-2"}}
 	details := []linear.IssueDetail{{Identifier: "LUC-1"}}
 
-	// Should not crash
 	buildEveningSummary(aiClient, details, completedViews, changeViews)
 	assert.Empty(t, completedViews[0].Review)
 }
@@ -216,7 +148,7 @@ func TestBuildEveningSummaryNilResult(t *testing.T) {
 func TestRawSectionMethods(t *testing.T) {
 	rs := &rawSection{content: "test content"}
 	assert.Equal(t, "test content", rs.Markdown())
-	rs.Add() // should not panic
+	rs.Add()
 }
 
 func TestExportJSONWithAllFields(t *testing.T) {
@@ -351,27 +283,6 @@ func TestParsePerIssueReviewJSONEmptySections(t *testing.T) {
 	require.Contains(t, result.reviews, "LUC-1")
 }
 
-func TestBuildGroupsFromResultNoGroups(t *testing.T) {
-	result := &internal.MorningReviewJSON{Groups: nil}
-	views := []internal.IssueView{
-		{Identifier: "LUC-1", Title: "Task 1", URL: "https://example.com/1"},
-	}
-	groups := buildGroupsFromResult(result, views)
-	require.Len(t, groups, 1)
-	assert.Equal(t, fallbackGroupName, groups[0].Name)
-	assert.Len(t, groups[0].Issues, 1)
-}
-
-func TestToGroupItemsNilAIData(t *testing.T) {
-	views := []internal.IssueView{
-		{Identifier: "LUC-1", Title: "Task 1"},
-	}
-	items := toGroupItems(views, nil)
-	require.Len(t, items, 1)
-	assert.Equal(t, "LUC-1", items[0].Identifier)
-	assert.Nil(t, items[0].Context)
-}
-
 func TestFilterActiveDetailsNoMatches(t *testing.T) {
 	completed := []linear.Issue{{Identifier: "LUC-1"}}
 	changes := []linear.StateChange{{IssueIdentifier: "LUC-2"}}
@@ -387,15 +298,11 @@ func TestFilterActiveDetailsEmptyInputs(t *testing.T) {
 	assert.Empty(t, filtered)
 }
 
-// --- writeOutput error path ---
-
 func TestWriteOutputErrorPath(t *testing.T) {
 	err := writeOutput([]byte("hello"), "/nonexistent/dir/file.txt")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "write file")
 }
-
-// --- newReportCmd error path ---
 
 func TestNewReportCmdConfigError(t *testing.T) {
 	cmd := newReportCmd("test", "test cmd", func(cfg *internal.Config, dryRun bool) error {
@@ -406,217 +313,12 @@ func TestNewReportCmdConfigError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// --- newExportCmd error path ---
-
 func TestNewExportCmdConfigError(t *testing.T) {
 	cmd := newExportCmd()
 	cmd.SetArgs([]string{"--config", "/nonexistent/path/to/config.yml"})
 	err := cmd.Execute()
 	require.Error(t, err)
 }
-
-// --- buildMorningGroups with AI configured but empty response ---
-
-func TestBuildMorningGroupsAIConfiguredEmptyResponse(t *testing.T) {
-	// Use a real HTTP server that returns error to simulate AI failure
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	t.Cleanup(srv.Close)
-
-	t.Setenv("OPENAI_API_KEY", "sk-test")
-	t.Setenv("OPENAI_BASE_URL", srv.URL+"/v1")
-	t.Setenv("LLM_MODEL", "test")
-
-	aiClient := internal.NewAIProvider(internal.AIConfig{
-		APIKey:  "sk-test",
-		BaseURL: srv.URL + "/v1",
-		Model:   "test",
-		Timeout: 1_000_000_000, // 1s
-	})
-
-	views := []internal.IssueView{
-		{Identifier: "LUC-1", Title: "Task 1", URL: "https://example.com/1"},
-	}
-
-	groups := buildMorningGroups(aiClient, views)
-	// AI call fails -> falls back
-	require.Len(t, groups, 1)
-	assert.Equal(t, fallbackGroupName, groups[0].Name)
-}
-
-// --- buildMorningGroups with AI returning invalid JSON ---
-
-func TestBuildMorningGroupsAIInvalidJSON(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"not valid json"}}]}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	aiClient := internal.NewAIProvider(internal.AIConfig{
-		APIKey:  "sk-test",
-		BaseURL: srv.URL + "/v1",
-		Model:   "test",
-		Timeout: 2_000_000_000, // 2s
-	})
-
-	views := []internal.IssueView{
-		{Identifier: "LUC-1", Title: "Task 1", URL: "https://example.com/1"},
-	}
-
-	groups := buildMorningGroups(aiClient, views)
-	// Invalid JSON -> falls back
-	require.Len(t, groups, 1)
-	assert.Equal(t, fallbackGroupName, groups[0].Name)
-}
-
-// --- buildMorningGroups with AI returning valid JSON ---
-
-func TestBuildMorningGroupsAIValidJSON(t *testing.T) {
-	responseJSON := `{"groups":[{"name":"FIXME","issues":[{"identifier":"LUC-1","title":"Fix this","context":["ctx"],"bottleneck":["bn"],"advice":["adv"]}]}]}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + jsonMarshalString(responseJSON) + `}}]}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	aiClient := internal.NewAIProvider(internal.AIConfig{
-		APIKey:  "sk-test",
-		BaseURL: srv.URL + "/v1",
-		Model:   "test",
-		Timeout: 2_000_000_000,
-	})
-
-	views := []internal.IssueView{
-		{Identifier: "LUC-1", Title: "Fix this", URL: "https://example.com/1"},
-	}
-
-	groups := buildMorningGroups(aiClient, views)
-	require.NotEmpty(t, groups)
-	// Should have FIXME group
-	found := false
-	for _, g := range groups {
-		if g.Name == "FIXME" {
-			found = true
-			require.Len(t, g.Issues, 1)
-			assert.Equal(t, "LUC-1", g.Issues[0].Identifier)
-			assert.NotEmpty(t, g.Issues[0].Content) // rendered content
-		}
-	}
-	assert.True(t, found, "FIXME group should be present")
-}
-
-// --- enrichActiveGroups with AI returning valid data ---
-
-func TestEnrichActiveGroupsAIValidResponse(t *testing.T) {
-	responseJSON := `{"reviews":[{"identifier":"LUC-1","title":"Fix this","context":["from AI"],"bottleneck":["bottleneck"],"advice":["do this"]}]}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + jsonMarshalString(responseJSON) + `}}]}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	aiClient := internal.NewAIProvider(internal.AIConfig{
-		APIKey:  "sk-test",
-		BaseURL: srv.URL + "/v1",
-		Model:   "test",
-		Timeout: 2_000_000_000,
-	})
-
-	groups := []internal.GroupView{
-		{Name: "FIXME", Issues: []internal.GroupItemView{{Identifier: "LUC-1", Title: "Fix this"}}},
-	}
-	details := []internal.IssueDetail{
-		{Identifier: "LUC-1", Title: "Fix this", Description: "desc"},
-	}
-
-	enrichActiveGroups(aiClient, groups, details)
-	assert.Equal(t, []string{"from AI"}, groups[0].Issues[0].Context)
-	assert.Equal(t, []string{"bottleneck"}, groups[0].Issues[0].Bottleneck)
-	assert.NotEmpty(t, groups[0].Issues[0].Content)
-}
-
-func TestEnrichActiveGroupsAIInvalidJSON(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"not json"}}]}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	aiClient := internal.NewAIProvider(internal.AIConfig{
-		APIKey:  "sk-test",
-		BaseURL: srv.URL + "/v1",
-		Model:   "test",
-		Timeout: 2_000_000_000,
-	})
-
-	groups := []internal.GroupView{
-		{Name: "FIXME", Issues: []internal.GroupItemView{{Identifier: "LUC-1", Title: "Fix this"}}},
-	}
-	details := []internal.IssueDetail{
-		{Identifier: "LUC-1", Title: "Fix this", Description: "desc"},
-	}
-
-	enrichActiveGroups(aiClient, groups, details)
-	// Invalid JSON -> no enrichment
-	assert.Empty(t, groups[0].Issues[0].Context)
-}
-
-func TestEnrichActiveGroupsAIEmptyResponse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":""}}]}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	aiClient := internal.NewAIProvider(internal.AIConfig{
-		APIKey:  "sk-test",
-		BaseURL: srv.URL + "/v1",
-		Model:   "test",
-		Timeout: 2_000_000_000,
-	})
-
-	groups := []internal.GroupView{
-		{Name: "FIXME", Issues: []internal.GroupItemView{{Identifier: "LUC-1", Title: "Fix this"}}},
-	}
-	details := []internal.IssueDetail{
-		{Identifier: "LUC-1", Title: "Fix this", Description: "desc"},
-	}
-
-	enrichActiveGroups(aiClient, groups, details)
-	assert.Empty(t, groups[0].Issues[0].Context)
-}
-
-func TestEnrichActiveGroupsAIIdentifierMismatch(t *testing.T) {
-	// AI returns a review for an identifier not in the groups
-	responseJSON := `{"reviews":[{"identifier":"LUC-999","title":"Other","context":["ctx"],"bottleneck":[],"advice":[]}]}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + jsonMarshalString(responseJSON) + `}}]}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	aiClient := internal.NewAIProvider(internal.AIConfig{
-		APIKey:  "sk-test",
-		BaseURL: srv.URL + "/v1",
-		Model:   "test",
-		Timeout: 2_000_000_000,
-	})
-
-	groups := []internal.GroupView{
-		{Name: "FIXME", Issues: []internal.GroupItemView{{Identifier: "LUC-1", Title: "Fix this"}}},
-	}
-	details := []internal.IssueDetail{
-		{Identifier: "LUC-1", Title: "Fix this", Description: "desc"},
-	}
-
-	enrichActiveGroups(aiClient, groups, details)
-	// LUC-999 not in groups -> no enrichment
-	assert.Empty(t, groups[0].Issues[0].Context)
-}
-
-// --- buildPerIssueReviews with AI ---
 
 func TestBuildPerIssueReviewsAIValidResponse(t *testing.T) {
 	responseJSON := `{"reviews":[{"identifier":"LUC-1","title":"Task","progress":["did stuff"],"knowledge":["learned"],"review":["looks good"]}],"summary":["s1"]}`
@@ -687,8 +389,6 @@ func TestBuildPerIssueReviewsAIInvalidJSON(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// --- buildEveningSummary with AI ---
-
 func TestBuildEveningSummaryWithAIReviewResult(t *testing.T) {
 	responseJSON := `{"reviews":[{"identifier":"LUC-1","title":"Task","progress":["did stuff"],"knowledge":["learned"],"review":["looks good"]},{"identifier":"LUC-2","title":"Task 2","progress":["changed"],"knowledge":[],"review":[]}],"summary":["s1"]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -720,83 +420,6 @@ func TestBuildEveningSummaryWithAIReviewResult(t *testing.T) {
 	assert.Contains(t, changeViews[0].Review, "changed")
 }
 
-// --- buildGroupsFromResult edge cases ---
-
-func TestBuildGroupsFromResultDuplicateIdentifiers(t *testing.T) {
-	result := &internal.MorningReviewJSON{
-		Groups: []internal.MorningGroupJSON{
-			{Name: "FIXME", Issues: []internal.MorningIssueItem{
-				{Identifier: "LUC-1", Title: "Fix this"},
-			}},
-			{Name: "MAYBE", Issues: []internal.MorningIssueItem{
-				{Identifier: "LUC-1", Title: "Fix this duplicate"},
-			}},
-		},
-	}
-	views := []internal.IssueView{
-		{Identifier: "LUC-1", Title: "Fix this", URL: "https://example.com/1"},
-	}
-	groups := buildGroupsFromResult(result, views)
-	// LUC-1 appears in FIXME, mentioned set prevents it in MAYBE (which has 0 items and is filtered)
-	// Then uncategorized check: LUC-1 is mentioned, so no uncategorized group
-	require.NotEmpty(t, groups)
-}
-
-func TestBuildGroupsFromResultCustomGroupName(t *testing.T) {
-	result := &internal.MorningReviewJSON{
-		Groups: []internal.MorningGroupJSON{
-			{Name: "CUSTOM", Issues: []internal.MorningIssueItem{{Identifier: "LUC-1", Title: "Task"}}},
-		},
-	}
-	views := []internal.IssueView{
-		{Identifier: "LUC-1", Title: "Task", URL: "https://example.com/1"},
-	}
-	groups := buildGroupsFromResult(result, views)
-	require.Len(t, groups, 1)
-	assert.Equal(t, "CUSTOM", groups[0].Name)
-}
-
-// --- renderMorningIssueContent with partial sections ---
-
-func TestRenderMorningIssueContentOnlyContext(t *testing.T) {
-	item := &internal.GroupItemView{Context: []string{"context only"}}
-	got := renderMorningIssueContent(item)
-	assert.NotEmpty(t, got)
-	assert.Contains(t, got, "context only")
-}
-
-func TestRenderMorningIssueContentOnlyBottleneck(t *testing.T) {
-	item := &internal.GroupItemView{Bottleneck: []string{"bottleneck only"}}
-	got := renderMorningIssueContent(item)
-	assert.NotEmpty(t, got)
-	assert.Contains(t, got, "bottleneck only")
-}
-
-func TestRenderMorningIssueContentOnlyAdvice(t *testing.T) {
-	item := &internal.GroupItemView{Advice: []string{"advice only"}}
-	got := renderMorningIssueContent(item)
-	assert.NotEmpty(t, got)
-	assert.Contains(t, got, "advice only")
-}
-
-// --- buildGroupItems without viewMap match ---
-
-func TestBuildGroupItemsNoViewMapMatch(t *testing.T) {
-	g := internal.MorningGroupJSON{
-		Name:   "FIXME",
-		Issues: []internal.MorningIssueItem{{Identifier: "UNKNOWN", Title: "Unknown task"}},
-	}
-	viewMap := map[string]internal.IssueView{} // empty
-	mentioned := make(map[string]bool)
-	items := buildGroupItems(g, viewMap, mentioned)
-	require.Len(t, items, 1)
-	assert.Equal(t, "UNKNOWN", items[0].Identifier)
-	assert.Empty(t, items[0].URL) // no viewMap match
-	assert.True(t, mentioned["UNKNOWN"])
-}
-
-// --- sendBriefEmptyEmail dry run with different subject ---
-
 func TestSendBriefEmptyEmailDryRunAlt(t *testing.T) {
 	dir := t.TempDir()
 	origDir, _ := os.Getwd()
@@ -807,8 +430,6 @@ func TestSendBriefEmptyEmailDryRunAlt(t *testing.T) {
 	err := sendBriefEmptyEmail(cfg, "Subject", "Body text", true)
 	require.NoError(t, err)
 }
-
-// --- toIssueViews edge cases ---
 
 func TestToIssueViewsEmpty(t *testing.T) {
 	views := toIssueViews(nil)
@@ -825,10 +446,95 @@ func TestToIssueDetailsEmpty(t *testing.T) {
 	assert.Empty(t, details)
 }
 
-// --- helper to JSON-encode a string value for embedding in test JSON ---
-
 func jsonMarshalString(s string) string {
 	b, _ := json.Marshal(s)
 
 	return string(b)
+}
+
+// --- buildMorningPlan tests ---
+
+func TestBuildMorningPlanAINotConfigured(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("LLM_AxonHub", "")
+
+	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: ""})
+
+	plans := buildMorningPlan(aiClient, nil)
+	assert.Nil(t, plans)
+}
+
+func TestBuildMorningPlanEmptyDetails(t *testing.T) {
+	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: "sk-test"})
+	plans := buildMorningPlan(aiClient, nil)
+	assert.Nil(t, plans)
+}
+
+func TestBuildMorningPlanAIValidResponse(t *testing.T) {
+	responseJSON := `{"reviews":[{"identifier":"LUC-1","title":"Task","context":["ctx"],"bottleneck":["bn"],"advice":["adv"]}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + jsonMarshalString(responseJSON) + `}}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	aiClient := internal.NewAIProvider(internal.AIConfig{
+		APIKey:  "sk-test",
+		BaseURL: srv.URL + "/v1",
+		Model:   "test",
+		Timeout: 2_000_000_000,
+	})
+
+	details := []internal.IssueDetail{
+		{Identifier: "LUC-1", Title: "Task", Description: "desc"},
+	}
+
+	plans := buildMorningPlan(aiClient, details)
+	require.NotNil(t, plans)
+	require.Contains(t, plans, "LUC-1")
+	assert.Contains(t, plans["LUC-1"], "ctx")
+}
+
+func TestBuildMorningPlanAIEmptyResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":""}}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	aiClient := internal.NewAIProvider(internal.AIConfig{
+		APIKey:  "sk-test",
+		BaseURL: srv.URL + "/v1",
+		Model:   "test",
+		Timeout: 2_000_000_000,
+	})
+
+	details := []internal.IssueDetail{
+		{Identifier: "LUC-1", Title: "Task", Description: "desc"},
+	}
+
+	plans := buildMorningPlan(aiClient, details)
+	assert.Nil(t, plans)
+}
+
+func TestBuildMorningPlanAIInvalidJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"not json"}}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	aiClient := internal.NewAIProvider(internal.AIConfig{
+		APIKey:  "sk-test",
+		BaseURL: srv.URL + "/v1",
+		Model:   "test",
+		Timeout: 2_000_000_000,
+	})
+
+	details := []internal.IssueDetail{
+		{Identifier: "LUC-1", Title: "Task", Description: "desc"},
+	}
+
+	plans := buildMorningPlan(aiClient, details)
+	assert.Nil(t, plans)
 }

@@ -129,3 +129,6 @@ AGENTS.md
 # APM dependencies
 apm_modules/
 apm.lock.yaml
+
+/_skillopt/
+/outputs/

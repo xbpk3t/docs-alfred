@@ -12,11 +12,18 @@ import (
 
 // Config is the top-level configuration for linear2nl.
 type Config struct {
-	Resend  ResendConfig  `koanf:"resend"`
+	GitHub  GitHubConfig  `koanf:"github"`
 	Theme   string        `default:"dark"  koanf:"theme" validate:"in:dark,light"`
 	Morning MorningConfig `koanf:"morning"`
 	AI      AIConfig      `koanf:"ai"`
+	Resend  ResendConfig  `koanf:"resend"`
 	Linear  LinearConfig  `koanf:"linear"`
+}
+
+// GitHubConfig holds GitHub API configuration for the review command.
+type GitHubConfig struct {
+	Owner string `koanf:"owner"`
+	Repo  string `koanf:"repo"`
 }
 
 // LinearConfig holds Linear API configuration.
@@ -53,6 +60,8 @@ type ResendConfig struct {
 //	LINEAR2NL_AI_MODEL          → ai.model
 //	LINEAR_API_KEY              → linear.apiKey
 //	RESEND_TOKEN                → resend.token
+//	GITHUB_OWNER                → github.owner
+//	GITHUB_REPO                 → github.repo
 //
 // AI config flows to pkg/ai.DefaultConfig() (OPENAI_API_KEY etc.).
 func LoadConfig(path string) (*Config, error) {
@@ -64,6 +73,8 @@ func LoadConfig(path string) (*Config, error) {
 			{Name: "LINEAR2NL_AI_MODEL", Path: "ai.model"},
 			{Name: "LINEAR_API_KEY", Path: "linear.apiKey"},
 			{Name: "RESEND_TOKEN", Path: "resend.token"},
+			{Name: "GITHUB_OWNER", Path: "github.owner"},
+			{Name: "GITHUB_REPO", Path: "github.repo"},
 		},
 		AfterUnmarshal: func(cfg *Config) error {
 			applyDefaults(cfg)
