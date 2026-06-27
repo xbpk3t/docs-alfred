@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
@@ -27,10 +26,6 @@ type CommandOutput struct {
 	Issues  []checkutil.Issue `json:"issues,omitempty"`
 	Actions []string          `json:"actions,omitempty"`
 	OK      bool              `json:"ok"`
-}
-
-func addFormatFlag(cmd *cobra.Command, target *string) {
-	cmd.Flags().StringVar(target, "format", output.FormatText, "Output format: text or json")
 }
 
 func normalizeOutputFormat(format string) (string, error) {

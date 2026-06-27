@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 type blogCheckFlags struct {
 	dataDir string
 	blogDir string
-	format  string
 }
 
 func newBlogCmd() *cobra.Command {
@@ -32,12 +32,11 @@ func newBlogCheckCmd() *cobra.Command {
 		Use:   cmdCheck,
 		Short: "Check blog/data consistency",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runBlogCheck(flags.dataDir, flags.blogDir, flags.format)
+			return runBlogCheck(flags.dataDir, flags.blogDir, output.GetFormat(cmd))
 		},
 	}
 	cmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
 	cmd.Flags().StringVar(&flags.blogDir, "blog-dir", "blog", "blog path")
-	addFormatFlag(cmd, &flags.format)
 
 	return cmd
 }

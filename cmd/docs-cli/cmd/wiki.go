@@ -11,12 +11,12 @@ import (
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
 	wikiuc "github.com/xbpk3t/docs-alfred/internal/docs/ingest"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 type wikiFlags struct {
 	config         string
 	wikiRoot       string
-	format         string
 	model          string
 	auditPaths     []string
 	maxContentSize int
@@ -80,7 +80,7 @@ func newWikiAddCmd() *cobra.Command {
 				return err
 			}
 
-			return writeWikiResult(result, flags.format)
+			return writeWikiResult(result, output.GetFormat(cmd))
 		},
 	}
 	addWikiFlags(cmd, &flags)
@@ -110,7 +110,7 @@ func newWikiDigestCmd() *cobra.Command {
 				return err
 			}
 
-			return writeWikiResult(result, flags.format)
+			return writeWikiResult(result, output.GetFormat(cmd))
 		},
 	}
 	addWikiFlags(cmd, &flags)
@@ -180,14 +180,13 @@ func newWikiAuditCmd() *cobra.Command {
 				return err
 			}
 
-			return writeWikiAuditResult(result, flags.format)
+			return writeWikiAuditResult(result, output.GetFormat(cmd))
 		},
 	}
 	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
 	cmd.Flags().BoolVar(&flags.changedOnly, "changed-only", false, "Audit changed wiki markdown files only")
 	cmd.Flags().StringSliceVar(&flags.auditPaths, "paths", nil, "Audit only these wiki files or directories")
-	addFormatFlag(cmd, &flags.format)
 
 	return cmd
 }
@@ -196,7 +195,6 @@ func newWikiCheckCmd() *cobra.Command {
 	var flags struct {
 		ghRoot   string
 		wikiRoot string
-		format   string
 	}
 	cmd := &cobra.Command{
 		Use:   wikiCheckCommandName,
@@ -214,7 +212,7 @@ func newWikiCheckCmd() *cobra.Command {
 			textDetails := fmt.Sprintf("summary: expected=%d actual=%d missing=%d extra=%d\n",
 				len(result.ExpectedWikiDirs), len(result.ActualWikiDirs),
 				len(result.MissingWikiDirs), len(result.ExtraWikiDirs))
-			if err := writeCheckCommandOutput(flags.format, &checkCommandOutput{
+			if err := writeCheckCommandOutput(output.GetFormat(cmd), &checkCommandOutput{
 				Name:    "wiki check",
 				Issues:  result.Issues,
 				Summary: result.Summary(),
@@ -230,7 +228,6 @@ func newWikiCheckCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&flags.ghRoot, "gh-root", "data/gh", "data/gh path")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "wiki", "wiki path")
-	addFormatFlag(cmd, &flags.format)
 
 	return cmd
 }
@@ -263,11 +260,10 @@ func addWikiFlags(cmd *cobra.Command, flags *wikiFlags) {
 	cmd.Flags().StringVar(&flags.model, "model", "", "AI model override (e.g. deepseek-v3)")
 	cmd.Flags().IntVar(&flags.maxContentSize, "max-content-size", 0, "Max content chars sent to AI (default 20000)")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Run fetch/classify without writing files or flushing inbox")
-	addFormatFlag(cmd, &flags.format)
 }
 
 func writeWikiResult(result *wikiuc.Result, format string) error {
-	output := &CommandOutput{
+	out := &CommandOutput{
 		Name:    result.Name,
 		OK:      result.OK(),
 		Summary: result.Summary(),
@@ -275,7 +271,7 @@ func writeWikiResult(result *wikiuc.Result, format string) error {
 		Results: result.URLResults,
 	}
 
-	if err := writeCommandOutput(format, output, formatWikiTextResult(result)); err != nil {
+	if err := writeCommandOutput(format, out, formatWikiTextResult(result)); err != nil {
 		return err
 	}
 	if !result.OK() {

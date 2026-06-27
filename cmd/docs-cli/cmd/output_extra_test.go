@@ -370,7 +370,7 @@ func TestBlogCheckCommandFlags(t *testing.T) {
 	f := blogCmd.Flags()
 	require.NotNil(t, f.Lookup("data-dir"))
 	require.NotNil(t, f.Lookup("blog-dir"))
-	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, blogCmd.InheritedFlags().Lookup("format"))
 }
 
 func TestDotfilesCheckCommandFlags(t *testing.T) {
@@ -380,7 +380,7 @@ func TestDotfilesCheckCommandFlags(t *testing.T) {
 	f := dotfilesCmd.Flags()
 	require.NotNil(t, f.Lookup("path"))
 	require.NotNil(t, f.Lookup("data-dir"))
-	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, dotfilesCmd.InheritedFlags().Lookup("format"))
 }
 
 func TestDotfilesSyncRecordCommandFlags(t *testing.T) {
@@ -389,7 +389,7 @@ func TestDotfilesSyncRecordCommandFlags(t *testing.T) {
 
 	f := dotfilesCmd.Flags()
 	require.NotNil(t, f.Lookup("path"))
-	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, dotfilesCmd.InheritedFlags().Lookup("format"))
 }
 
 func TestImagesCheckCommandFlags(t *testing.T) {
@@ -402,7 +402,7 @@ func TestImagesCheckCommandFlags(t *testing.T) {
 	require.NotNil(t, f.Lookup("list"))
 	require.NotNil(t, f.Lookup("skip-extra-files"))
 	require.NotNil(t, f.Lookup("skip-missing"))
-	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, imagesCmd.InheritedFlags().Lookup("format"))
 }
 
 func TestImagesFixCommandFlags(t *testing.T) {
@@ -414,7 +414,7 @@ func TestImagesFixCommandFlags(t *testing.T) {
 	require.NotNil(t, f.Lookup("images-dir"))
 	require.NotNil(t, f.Lookup("list"))
 	require.NotNil(t, f.Lookup("skip-missing"))
-	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, imagesCmd.InheritedFlags().Lookup("format"))
 }
 
 func TestWikiDigestLocalCommandFlags(t *testing.T) {
@@ -434,5 +434,5 @@ func TestWikiCheckCommandFlags(t *testing.T) {
 	f := wikiCmd.Flags()
 	require.NotNil(t, f.Lookup("gh-root"))
 	require.NotNil(t, f.Lookup("wiki-root"))
-	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, wikiCmd.InheritedFlags().Lookup("format"))
 }

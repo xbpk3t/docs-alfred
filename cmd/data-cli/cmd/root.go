@@ -11,6 +11,7 @@ import (
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
 	"github.com/xbpk3t/docs-alfred/pkg/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
@@ -55,6 +56,10 @@ func newRenderCmd(dataPath *string) *cobra.Command {
 			domain, err := parseDataDomainArg(args[0])
 			if err != nil {
 				return err
+			}
+
+				if ve := fileutil.ValidateOutputPath(outDir); ve != nil {
+					return ve
 			}
 
 			result, err := dataops.RunDomainRender(dataops.DomainRenderInput{

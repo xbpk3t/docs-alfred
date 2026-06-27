@@ -2,9 +2,23 @@
 package fileutil
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// ValidateOutputPath rejects paths that traverse above the working directory via "..".
+func ValidateOutputPath(path string) error {
+	if path == "" {
+		return fmt.Errorf("output path must not be empty")
+	}
+	cleaned := filepath.Clean(path)
+	if strings.HasPrefix(cleaned, "..") {
+		return fmt.Errorf("output path %q escapes the working directory", path)
+	}
+	return nil
+}
 
 // Standard file permission constants.
 const (
