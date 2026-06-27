@@ -88,6 +88,7 @@ func toIssueViews(issues []linear.Issue) []internal.IssueView {
 			TeamName:   iss.TeamName,
 			DueDate:    iss.DueDate,
 			URL:        iss.URL,
+			DoneAt:     iss.CompletedAt,
 		}
 	})
 }

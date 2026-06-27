@@ -8,6 +8,7 @@ type IssueView struct {
 	TeamName   string
 	DueDate    string
 	URL        string
+	DoneAt     string // completion time in HH:mm (CST) — used by evening
 	Review     string // per-issue AI review (Markdown) — used by evening
 }
 

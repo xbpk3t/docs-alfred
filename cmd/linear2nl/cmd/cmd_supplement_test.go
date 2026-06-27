@@ -83,9 +83,6 @@ func TestBuildEveningHTMLWithData(t *testing.T) {
 		Stats: internal.EveningStats{Completed: 1, InProgress: 2},
 	}
 
-	completed := []linear.Issue{
-		{Identifier: "LUC-1", Title: "Task 1", TeamName: "Eng", URL: "https://example.com/1"},
-	}
 	changes := []linear.StateChange{
 		{IssueIdentifier: "LUC-2", IssueTitle: "Task 2", FromState: "Todo", ToState: "Done", TeamName: "Eng", URL: "https://example.com/2"},
 	}
@@ -96,7 +93,7 @@ func TestBuildEveningHTMLWithData(t *testing.T) {
 		{IssueIdentifier: "LUC-2", IssueTitle: "Task 2", Review: "**change review**"},
 	}
 
-	html, err := buildEveningHTML(data, completed, changes, completedViews, changeViews)
+	html, err := buildEveningHTML(data, changes, completedViews, changeViews)
 	require.NoError(t, err)
 	assert.Contains(t, html, "LUC-1")
 	assert.Contains(t, html, "完成")
@@ -111,7 +108,7 @@ func TestBuildEveningHTMLEmpty(t *testing.T) {
 		DayOfWeek: "Mon",
 	}
 
-	html, err := buildEveningHTML(data, nil, nil, nil, nil)
+	html, err := buildEveningHTML(data, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Contains(t, html, "今日收获")
 	assert.NotContains(t, html, "完成")

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	carbon "github.com/dromara/carbon/v2"
@@ -39,6 +40,9 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 	}
 
 	relevantDetails := filterActiveDetails(completed, changes, updatedDetails)
+
+	sortIssuesByCompletedAt(completed)
+
 	completedViews := toIssueViews(completed)
 	changeViews := toStateChangeViews(changes)
 
@@ -56,7 +60,7 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 		},
 	}
 
-	htmlBody, err := buildEveningHTML(&data, completed, changes, completedViews, changeViews)
+	htmlBody, err := buildEveningHTML(&data, changes, completedViews, changeViews)
 	if err != nil {
 		return fmt.Errorf("render document: %w", err)
 	}
@@ -66,21 +70,40 @@ func runEvening(cfg *internal.Config, dryRun bool) error {
 	return sendOrWrite(cfg, subject, htmlBody, "evening", dryRun)
 }
 
-func buildEveningHTML(data *internal.EveningData, completed []linear.Issue, changes []linear.StateChange, completedViews []internal.IssueView, changeViews []internal.StateChangeView) (string, error) {
+// sortIssuesByCompletedAt sorts issues by CompletedAt ascending (earliest first).
+// Issues with empty CompletedAt are sorted to the end.
+func sortIssuesByCompletedAt(issues []linear.Issue) {
+	sort.Slice(issues, func(i, j int) bool {
+		if issues[i].CompletedAt == "" {
+			return false
+		}
+		if issues[j].CompletedAt == "" {
+			return true
+		}
+		return carbon.Parse(issues[i].CompletedAt).Lt(carbon.Parse(issues[j].CompletedAt))
+	})
+}
+
+func buildEveningHTML(data *internal.EveningData, changes []linear.StateChange, completedViews []internal.IssueView, changeViews []internal.StateChangeView) (string, error) {
 	doc := md.NewDocument()
 	doc.Add(md.NamedSection(fmt.Sprintf("Linear 今日收获 · %s %s", data.Date, data.DayOfWeek)))
 
-	if len(completed) > 0 {
-		headers := []string{"ID", "Title", "Team"}
+	if len(completedViews) > 0 {
+		headers := []string{"ID", "Title", "Team", "DoneAt"}
 		var rows [][]string
-		for i := range completed {
+		for i := range completedViews {
+			doneAt := "—"
+			if completedViews[i].DoneAt != "" {
+				doneAt = carbon.Parse(completedViews[i].DoneAt).SetTimezone("Asia/Shanghai").Format("H:i")
+			}
 			rows = append(rows, []string{
-				md.Link(completed[i].Identifier, completed[i].URL),
-				completed[i].Title,
-				completed[i].TeamName,
+				md.Link(completedViews[i].Identifier, completedViews[i].URL),
+				completedViews[i].Title,
+				completedViews[i].TeamName,
+				doneAt,
 			})
 		}
-		doc.Add(md.NamedSection(fmt.Sprintf("✅ 完成 · %d", len(completed)), md.Table(headers, rows)))
+		doc.Add(md.NamedSection(fmt.Sprintf("✅ 完成 · %d", len(completedViews)), md.Table(headers, rows)))
 	}
 
 	if len(changes) > 0 {
