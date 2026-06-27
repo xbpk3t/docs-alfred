@@ -5,8 +5,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 func TestSearchCmdFlags(t *testing.T) {
@@ -35,7 +37,7 @@ func TestExportCmdFlags(t *testing.T) {
 
 	f := exportCmd.Flags()
 	require.NotNil(t, f.Lookup("src"))
-	require.NotNil(t, f.Lookup("out"))
+	require.NotNil(t, f.Lookup("output"))
 }
 
 func TestValidateCmdFlags(t *testing.T) {
@@ -82,7 +84,13 @@ func TestRunSearchOutputWritesAlfredJSON(t *testing.T) {
 		{URL: "https://github.com/acme/tool", Des: "A tool"},
 	}
 
-	err := runSearchOutput(repos, "https://docs.lucc.dev/", "tool")
+	cmd := &cobra.Command{Use: "test"}
+	var format string
+	output.FormatFlag(cmd, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "format")
+	cmd.SetArgs([]string{})
+	_ = cmd.Execute()
+
+	err := runSearchOutput(repos, "https://docs.lucc.dev/", "tool", cmd)
 	require.NoError(t, err)
 
 	got := stdout()

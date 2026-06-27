@@ -18,6 +18,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/litter"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -174,7 +175,7 @@ func newHuntCmd() *cobra.Command {
 		Short: "Discover high-quality source URLs",
 		Long:  "Discover high-quality source URLs via Exa/Tavily providers and generate review reports.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runHunt(&opts, os.Getenv("EXA_API_KEY"), os.Getenv("TAVILY_API_KEY"))
+			return runHunt(&opts, os.Getenv("EXA_API_KEY"), os.Getenv("TAVILY_API_KEY"), output.GetFormat(cmd))
 		},
 	}
 
@@ -294,6 +295,7 @@ func runHunt(opts *struct {
 	newOnly, dryRun, sendMail                                  bool
 },
 	exaAPIKey, tavilyAPIKey string,
+	format string,
 ) error {
 	hc, err := initHuntRun(opts, exaAPIKey, tavilyAPIKey)
 	if err != nil {
@@ -311,7 +313,7 @@ func runHunt(opts *struct {
 		hc.report.Stats.AcceptedCandidates = len(hc.report.Candidates)
 	}
 
-	writeHuntReports(hc.report, opts.reportMd, opts.reportHTML, opts.reportJSON)
+	writeHuntReports(hc.report, opts.reportMd, opts.reportHTML, opts.reportJSON, format)
 	if !hc.dryRun {
 		saveHuntState(opts.state, hc.state)
 	}
@@ -896,7 +898,7 @@ func saveHuntState(path string, state *huntState) {
 
 // -- Report generation --
 
-func writeHuntReports(report *huntReport, mdPath, htmlPath, jsonPath string) {
+func writeHuntReports(report *huntReport, mdPath, htmlPath, jsonPath, format string) {
 	jsonData, err := fileutil.MarshalJSON(report)
 	if err != nil {
 		slog.Warn("Failed to marshal JSON report", "error", err)
@@ -917,7 +919,11 @@ func writeHuntReports(report *huntReport, mdPath, htmlPath, jsonPath string) {
 		slog.Warn("Failed to write HTML report", "path", htmlPath, "error", err)
 	}
 
-	fmt.Fprintln(os.Stdout, mdContent) //nolint:errcheck
+	if format == output.FormatJSON {
+		fmt.Fprintln(os.Stdout, string(jsonData)) //nolint:errcheck
+	} else {
+		fmt.Fprintln(os.Stdout, mdContent) //nolint:errcheck
+	}
 }
 
 func renderHuntMarkdown(report *huntReport) string {

@@ -31,7 +31,7 @@ func Execute() {
 
 type pwgenConfig struct {
 	Secret      string `yaml:"secret"`
-	Output      string `default:"plain" yaml:"output"`
+	Format      string `default:"text" yaml:"format"`
 	Length      int    `default:"16" yaml:"length"`
 	Uppercase   bool   `default:"true" yaml:"uppercase"`
 	Numbers     bool   `default:"true" yaml:"numbers"`
@@ -43,7 +43,7 @@ func defaultPwgenConfig() pwgenConfig {
 		Length:    16,
 		Uppercase: true,
 		Numbers:   true,
-		Output:    "plain",
+		Format:    "text",
 	}
 }
 
@@ -61,7 +61,7 @@ func newRootCmd() *cobra.Command {
 	var flagSecret string
 	var flagLength int
 	var flagUppercase, flagNumbers, flagPunctuation bool
-	var flagOutput string
+	var flagFormat string
 
 	cmd := &cobra.Command{
 		Use:   "pwgen [website]",
@@ -76,7 +76,7 @@ func newRootCmd() *cobra.Command {
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			cfg = applyFlagOverrides(cmd, cfg, flagSecret, flagLength, flagUppercase, flagNumbers, flagPunctuation, flagOutput)
+			cfg = applyFlagOverrides(cmd, cfg, flagSecret, flagLength, flagUppercase, flagNumbers, flagPunctuation, flagFormat)
 
 			if cfg.Secret == "" {
 				return errors.New("secret key is required (set via --secret, config file, or DEFAULT_PWGEN environment variable)")
@@ -87,7 +87,7 @@ func newRootCmd() *cobra.Command {
 				return fmt.Errorf("failed to generate password: %w", err)
 			}
 
-			result, err := wf.GetFormatter(cfg.Output).Format(password)
+			result, err := wf.GetFormatter(cfg.Format).Format(password)
 			if err != nil {
 				return fmt.Errorf("failed to format output: %w", err)
 			}
@@ -99,7 +99,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.pwgen.yaml)")
-	cmd.Flags().StringVarP(&flagOutput, "output", "o", "plain", "Output format (alfred, plain, raw, rofi)")
+	cmd.Flags().StringVarP(&flagFormat, "format", "f", "text", "Output format: text or json")
 	cmd.Flags().StringVarP(&flagSecret, "secret", "s", "", "Secret key for password generation")
 	cmd.Flags().IntVarP(&flagLength, "length", "l", 16, "Password length")
 	cmd.Flags().BoolVarP(&flagUppercase, "uppercase", "u", true, "Include uppercase letters")
@@ -137,7 +137,7 @@ func applyFlagOverrides(
 	flagSecret string,
 	flagLength int,
 	flagUppercase, flagNumbers, flagPunctuation bool,
-	flagOutput string,
+	flagFormat string,
 ) pwgenConfig {
 	if cmd.Flags().Changed("secret") {
 		cfg.Secret = flagSecret
@@ -154,8 +154,8 @@ func applyFlagOverrides(
 	if cmd.Flags().Changed("punctuation") {
 		cfg.Punctuation = flagPunctuation
 	}
-	if cmd.Flags().Changed("output") {
-		cfg.Output = flagOutput
+	if cmd.Flags().Changed("format") {
+		cfg.Format = flagFormat
 	}
 
 	return cfg

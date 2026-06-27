@@ -95,7 +95,6 @@ func TestNewExportCmdHasFlags(t *testing.T) {
 	f := cmd.Flags()
 	require.NotNil(t, f.Lookup("config"))
 	require.NotNil(t, f.Lookup("days"))
-	require.NotNil(t, f.Lookup("format"))
 	require.NotNil(t, f.Lookup("output"))
 }
 

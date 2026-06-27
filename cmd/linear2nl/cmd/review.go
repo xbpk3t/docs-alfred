@@ -16,6 +16,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/linear"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 // linearIDRe matches Linear issue identifiers like "ENG-123".
@@ -58,7 +59,7 @@ Designed to run from GitHub Actions on issue close events.`,
 				return fmt.Errorf("GITHUB_TOKEN environment variable is required")
 			}
 
-			return runReview(cfg, token, owner, repo, issue, dryRun)
+			return runReview(cfg, token, owner, repo, issue, dryRun, output.GetFormat(cmd))
 		},
 	}
 
@@ -88,7 +89,7 @@ type reviewItemJSON struct {
 	Review     []string `json:"review"`
 }
 
-func runReview(cfg *internal.Config, token, owner, repo string, issueNumber int, dryRun bool) error {
+func runReview(cfg *internal.Config, token, owner, repo string, issueNumber int, dryRun bool, format string) error {
 	ctx := context.Background()
 
 	// 1. Fetch issue from GitHub.
@@ -137,6 +138,15 @@ func runReview(cfg *internal.Config, token, owner, repo string, issueNumber int,
 
 	// 7. Output.
 	if dryRun {
+		if format == output.FormatJSON {
+			return output.WriteJSON(map[string]any{
+				"issue":      issueNumber,
+				"owner":      owner,
+				"repo":       repo,
+				"review":     review,
+			})
+		}
+
 		fmt.Println(review) //nolint:forbidigo // dry-run intentionally outputs to stdout
 
 		return nil

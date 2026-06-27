@@ -6,6 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
+	"github.com/xbpk3t/docs-alfred/pkg/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
@@ -14,6 +16,8 @@ import (
 func Execute() {
 	carboninit.Setup()
 	validator.Setup()
+
+	var format string
 
 	rootCmd := &cobra.Command{
 		Use:   "rss2nl",
@@ -29,9 +33,12 @@ Subcommands:
 Run "rss2nl <subcommand> --help" for more details.`,
 	}
 
+	output.FormatFlag(rootCmd, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "Output format: text or json")
+
 	rootCmd.AddCommand(newSendCmd())
 	rootCmd.AddCommand(newTrnsCmd())
 	rootCmd.AddCommand(newHuntCmd())
+	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	if err := rootCmd.Execute(); err != nil {

@@ -11,7 +11,7 @@ func TestRootCommandOwnsWorkspaceResources(t *testing.T) {
 	root := newRootCmd()
 
 	require.Equal(t, "docs-cli", root.Name())
-	requireCommandNames(t, root.Commands(), []string{"blog", "dotfiles", "images", wikiCommandName})
+	requireCommandNames(t, root.Commands(), []string{"blog", "dotfiles", "images", "schema", wikiCommandName})
 	requireNoCommand(t, root, cmdCheck)
 	requireNoCommand(t, root, "sync-record")
 	requireNoCommand(t, root, "alfred")

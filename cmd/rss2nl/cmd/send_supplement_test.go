@@ -529,7 +529,7 @@ func TestLoadConfigInvalidFile(t *testing.T) {
 func TestNewTrnsCmdFlags(t *testing.T) {
 	cmd := newTrnsCmd()
 	assert.Contains(t, cmd.Use, "trns")
-	assert.NotNil(t, cmd.Flags().Lookup("out"))
+	assert.NotNil(t, cmd.Flags().Lookup("output"))
 	assert.NotNil(t, cmd.Flags().Lookup("limit"))
 	assert.NotNil(t, cmd.Flags().Lookup("refresh"))
 	assert.NotNil(t, cmd.PersistentFlags().Lookup("config"))
@@ -633,7 +633,7 @@ func TestWriteHuntReports(t *testing.T) {
 			{Title: "Blog", NormalizedURL: "https://blog.example.com", Category: "tech", Domain: "blog.example.com"},
 		},
 	}
-	writeHuntReports(report, dir+"/report.md", dir+"/report.html", dir+"/report.json")
+	writeHuntReports(report, dir+"/report.md", dir+"/report.html", dir+"/report.json", "text")
 }
 
 // ---------------------------------------------------------------------------

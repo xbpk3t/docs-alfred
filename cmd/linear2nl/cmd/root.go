@@ -13,6 +13,8 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/linear"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
+	"github.com/xbpk3t/docs-alfred/pkg/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
@@ -46,6 +48,8 @@ func Execute() {
 	carboninit.Setup()
 	validator.Setup()
 
+	var format string
+
 	rootCmd := &cobra.Command{
 		Use:   "linear2nl",
 		Short: "Linear task reports via email",
@@ -58,10 +62,13 @@ Subcommands:
   review    AI review for a closed GitHub issue`,
 	}
 
+	output.FormatFlag(rootCmd, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "Output format: text or json")
+
 	rootCmd.AddCommand(newMorningCmd())
 	rootCmd.AddCommand(newEveningCmd())
 	rootCmd.AddCommand(newExportCmd())
 	rootCmd.AddCommand(newReviewCmd())
+	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	if err := rootCmd.Execute(); err != nil {

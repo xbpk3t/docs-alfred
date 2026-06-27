@@ -19,7 +19,7 @@ func GetFormatter(format string) Formatter {
 	switch format {
 	case "alfred":
 		return &AlfredFormatter{}
-	case "raw":
+	case "raw", "json":
 		return &RawFormatter{}
 	case "rofi":
 		return &RofiFormatter{}

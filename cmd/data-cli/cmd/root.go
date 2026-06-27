@@ -11,6 +11,8 @@ import (
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
+	"github.com/xbpk3t/docs-alfred/pkg/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
@@ -23,7 +25,7 @@ func Execute() error {
 }
 
 func newRootCmd() *cobra.Command {
-	var dataPath string
+	var dataPath, format string
 
 	rootCmd := &cobra.Command{
 		Use:   "data-cli",
@@ -31,17 +33,19 @@ func newRootCmd() *cobra.Command {
 	}
 
 	rootCmd.PersistentFlags().StringVar(&dataPath, "path", "", "Override data directory")
+	output.FormatFlag(rootCmd, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "Output format: text or json")
 
 	rootCmd.AddCommand(newRenderCmd(&dataPath))
 	rootCmd.AddCommand(newCheckCmd(&dataPath))
 	rootCmd.AddCommand(newDuplicateCmd(&dataPath))
+	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	return rootCmd
 }
 
 func newRenderCmd(dataPath *string) *cobra.Command {
-	var outDir, format string
+	var outDir string
 
 	cmd := &cobra.Command{
 		Use:   "render <domain>",
@@ -57,7 +61,6 @@ func newRenderCmd(dataPath *string) *cobra.Command {
 				Domain: domain,
 				Path:   *dataPath,
 				OutDir: outDir,
-				Format: format,
 			})
 			if err != nil {
 				return err
@@ -71,8 +74,7 @@ func newRenderCmd(dataPath *string) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&outDir, "out-dir", "docs/public", "Output directory")
-	cmd.Flags().StringVar(&format, "format", "", "Output format: json, yaml, json,yaml (default depends on domain)")
+	cmd.Flags().StringVar(&outDir, "output", "docs/public", "Output directory")
 
 	return cmd
 }

@@ -91,7 +91,7 @@ func TestNewRenderCmdWithCustomPath(t *testing.T) {
 	outDir := t.TempDir()
 
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"render", "gh", "--path", ghDir, "--out-dir", outDir, "--format", "yaml"})
+	cmd.SetArgs([]string{"render", "gh", "--path", ghDir, "--output", outDir})
 	err := cmd.Execute()
 	require.NoError(t, err)
 }
@@ -101,7 +101,7 @@ func TestNewRenderCmdWithJSONFormat(t *testing.T) {
 	outDir := t.TempDir()
 
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"render", "gh", "--path", ghDir, "--out-dir", outDir, "--format", "json"})
+	cmd.SetArgs([]string{"render", "gh", "--path", ghDir, "--output", outDir})
 	err := cmd.Execute()
 	require.NoError(t, err)
 }
@@ -119,7 +119,7 @@ func TestNewRenderCmdGoodsDomain(t *testing.T) {
 	outDir := t.TempDir()
 
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"render", "goods", "--path", goodsDir, "--out-dir", outDir})
+	cmd.SetArgs([]string{"render", "goods", "--path", goodsDir, "--output", outDir})
 	err := cmd.Execute()
 	require.NoError(t, err)
 }

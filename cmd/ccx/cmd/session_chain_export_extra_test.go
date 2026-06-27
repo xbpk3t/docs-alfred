@@ -7,9 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/cmd/ccx/internal"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 // --- helpers ---
@@ -260,8 +262,6 @@ func TestWriteLines_MultipleFields(t *testing.T) {
 func TestNewSessionChainCmd_RunE_JsonFlag(t *testing.T) {
 	cmd := newSessionChainCmd()
 	require.True(t, cmd.Flags().HasFlags())
-	require.NotNil(t, cmd.Flags().Lookup("json"))
-	require.NotNil(t, cmd.Flags().Lookup("raw"))
 	require.NotNil(t, cmd.Flags().Lookup("session"))
 }
 
@@ -269,55 +269,63 @@ func TestNewSessionChainCmd_Execute_DefaultOutput(t *testing.T) {
 	sessionID := "test-chain-default"
 	setupFakeSession(t, sessionID)
 
-	cmd := NewSessionCmd()
-	cmd.SetArgs([]string{"chain", "--session", sessionID})
+	root := &cobra.Command{Use: "test"}
+	var format string
+	output.FormatFlag(root, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "format")
+	root.AddCommand(NewSessionCmd())
+	root.SetArgs([]string{"session", "chain", "--session", sessionID})
 
-	output, err := captureStdout(t, func() error {
-		return cmd.Execute()
+	out, err := captureStdout(t, func() error {
+		return root.Execute()
 	})
 
 	require.NoError(t, err)
-	assert.Contains(t, output, "Session Chain")
-	assert.Contains(t, output, sessionID)
+	assert.Contains(t, out, "Session Chain")
+	assert.Contains(t, out, sessionID)
 }
 
 func TestNewSessionChainCmd_Execute_JSONOutput(t *testing.T) {
 	sessionID := "test-chain-json"
 	setupFakeSession(t, sessionID)
 
-	cmd := NewSessionCmd()
-	cmd.SetArgs([]string{"chain", "--session", sessionID, "--json"})
+	root := &cobra.Command{Use: "test"}
+	var format string
+	output.FormatFlag(root, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "format")
+	root.AddCommand(NewSessionCmd())
+	root.SetArgs([]string{"session", "chain", "--session", sessionID, "--format", "json"})
 
-	output, err := captureStdout(t, func() error {
-		return cmd.Execute()
+	out, err := captureStdout(t, func() error {
+		return root.Execute()
 	})
 
 	require.NoError(t, err)
 
 	var chain []internal.ChainRecord
-	require.NoError(t, json.Unmarshal([]byte(output), &chain))
+	require.NoError(t, json.Unmarshal([]byte(out), &chain))
 	require.NotEmpty(t, chain)
 	assert.Equal(t, sessionID, chain[0].SessionID)
 }
 
-func TestNewSessionChainCmd_Execute_RawOutput(t *testing.T) {
-	sessionID := "test-chain-raw"
+func TestNewSessionChainCmd_Execute_JSONOutput2(t *testing.T) {
+	sessionID := "test-chain-json2"
 	setupFakeSession(t, sessionID)
 
-	cmd := NewSessionCmd()
-	cmd.SetArgs([]string{"chain", "--session", sessionID, "--raw"})
+	root := &cobra.Command{Use: "test"}
+	var format string
+	output.FormatFlag(root, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "format")
+	root.AddCommand(NewSessionCmd())
+	root.SetArgs([]string{"session", "chain", "--session", sessionID, "--format", "json"})
 
-	output, err := captureStdout(t, func() error {
-		return cmd.Execute()
+	out, err := captureStdout(t, func() error {
+		return root.Execute()
 	})
 
 	require.NoError(t, err)
 
-	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
-	require.NotEmpty(t, lines)
-	fields := strings.Split(lines[0], "\t")
-	require.Len(t, fields, 7)
-	assert.Equal(t, sessionID, fields[0])
+	var chain []internal.ChainRecord
+	require.NoError(t, json.Unmarshal([]byte(out), &chain))
+	require.NotEmpty(t, chain)
+	assert.Equal(t, sessionID, chain[0].SessionID)
 }
 
 func TestNewSessionChainCmd_Execute_NoSessionID(t *testing.T) {

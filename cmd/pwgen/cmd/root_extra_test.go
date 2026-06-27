@@ -49,7 +49,7 @@ func TestLoadPwgenConfigDefaults(t *testing.T) {
 	assert.True(t, cfg.Uppercase)
 	assert.True(t, cfg.Numbers)
 	assert.False(t, cfg.Punctuation)
-	assert.Equal(t, "plain", cfg.Output)
+	assert.Equal(t, "text", cfg.Format)
 }
 
 func TestResolveConfigPathExplicit(t *testing.T) {
@@ -73,11 +73,11 @@ func TestApplyFlagOverridesSecret(t *testing.T) {
 	cmd.Flags().Bool("uppercase", true, "")
 	cmd.Flags().Bool("numbers", true, "")
 	cmd.Flags().Bool("punctuation", false, "")
-	cmd.Flags().String("output", "plain", "")
+	cmd.Flags().String("format", "text", "")
 	require.NoError(t, cmd.ParseFlags([]string{"--secret", "flag-secret"}))
 
 	cfg := defaultPwgenConfig()
-	cfg = applyFlagOverrides(cmd, cfg, "flag-secret", 16, true, true, false, "plain")
+	cfg = applyFlagOverrides(cmd, cfg, "flag-secret", 16, true, true, false, "text")
 
 	assert.Equal(t, "flag-secret", cfg.Secret)
 }
@@ -89,13 +89,13 @@ func TestApplyFlagOverridesDoesNotOverrideDefault(t *testing.T) {
 	cmd.Flags().Bool("uppercase", true, "")
 	cmd.Flags().Bool("numbers", true, "")
 	cmd.Flags().Bool("punctuation", false, "")
-	cmd.Flags().String("output", "plain", "")
+	cmd.Flags().String("format", "text", "")
 	// No flags parsed → nothing changed
 
 	cfg := defaultPwgenConfig()
 	cfg.Secret = "from-config"
 	cfg.Length = 24
-	cfg = applyFlagOverrides(cmd, cfg, "", 16, true, true, false, "plain")
+	cfg = applyFlagOverrides(cmd, cfg, "", 16, true, true, false, "text")
 
 	assert.Equal(t, "from-config", cfg.Secret)
 	assert.Equal(t, 24, cfg.Length)
@@ -104,7 +104,7 @@ func TestApplyFlagOverridesDoesNotOverrideDefault(t *testing.T) {
 func TestRootCommandGeneratesPassword(t *testing.T) {
 	stdout := captureStdout(t)
 	root := newRootCmd()
-	root.SetArgs([]string{"--secret", "test-secret", "--output", "plain", "example.com"})
+	root.SetArgs([]string{"--secret", "test-secret", "--format", "text", "example.com"})
 	err := root.Execute()
 	require.NoError(t, err)
 	got := stdout()

@@ -17,6 +17,8 @@ import (
 	"github.com/xbpk3t/docs-alfred/cmd/xzb/internal/parser"
 	"github.com/xbpk3t/docs-alfred/cmd/xzb/internal/rules"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
+	"github.com/xbpk3t/docs-alfred/pkg/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
@@ -31,7 +33,6 @@ type syncD1Flags struct {
 	alipayFiles      []string
 	limit            int
 	dryRun           bool
-	jsonOutput       bool
 	confirmRealWrite bool
 }
 
@@ -65,12 +66,18 @@ func Execute() error {
 }
 
 func newRootCmd() *cobra.Command {
+	var format string
+
 	rootCmd := &cobra.Command{
 		Use:   "xzb",
 		Short: "Private finance importer for WeChat and Alipay bills",
 	}
+
+	output.FormatFlag(rootCmd, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "Output format: text or json")
+
 	rootCmd.AddCommand(newSyncCmd())
 	rootCmd.AddCommand(newExportCmd())
+	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	return rootCmd
@@ -110,7 +117,7 @@ func newExportSQLCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&flags.wechatFiles, "wechat", nil, "WeChat bill CSV/XLSX path; repeatable")
 	cmd.Flags().StringArrayVar(&flags.alipayFiles, "alipay", nil, "Alipay bill CSV path; repeatable")
 	cmd.Flags().StringVar(&flags.rulesPath, "rules", "", "Rules YAML path")
-	cmd.Flags().StringVar(&flags.outputPath, "out", "", "Output SQL path; stdout when omitted")
+	cmd.Flags().StringVar(&flags.outputPath, "output", "", "Output SQL path; stdout when omitted")
 	cmd.Flags().IntVar(&flags.limit, "limit", 0, "Debug guard: only process first N parsed records")
 
 	return cmd
@@ -123,7 +130,7 @@ func newSyncD1Cmd() *cobra.Command {
 		Use:   "d1",
 		Short: "Parse bills and sync transactions to Cloudflare D1",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSyncD1(cmd.Context(), &flags)
+			return runSyncD1(cmd.Context(), &flags, output.GetFormat(cmd))
 		},
 	}
 
@@ -136,14 +143,13 @@ func newSyncD1Cmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.wranglerConfig, "wrangler-config", "", "Wrangler TOML path used to resolve the D1 database ID")
 	cmd.Flags().StringVar(&flags.binding, "binding", "FINANCE_DB", "D1 binding name in wrangler.toml")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Parse and summarize without writing D1")
-	cmd.Flags().BoolVar(&flags.jsonOutput, "json", false, "Emit machine-readable summary")
 	cmd.Flags().IntVar(&flags.limit, "limit", 0, "Debug guard: only process first N parsed records")
 	cmd.Flags().BoolVar(&flags.confirmRealWrite, "confirm-real-write", false, "Required for non-dry-run writes")
 
 	return cmd
 }
 
-func runSyncD1(ctx context.Context, flags *syncD1Flags) error {
+func runSyncD1(ctx context.Context, flags *syncD1Flags, format string) error {
 	now := time.Now()
 	result, err := importTransactions(flags.rulesPath, flags.wechatFiles, flags.alipayFiles, flags.limit, now)
 	if err != nil {
@@ -173,7 +179,7 @@ func runSyncD1(ctx context.Context, flags *syncD1Flags) error {
 		summary.Sync = &syncSummary
 	}
 
-	return writeSummary(&summary, flags.jsonOutput)
+	return writeSummary(&summary, format == output.FormatJSON)
 }
 
 func runExportSQL(_ context.Context, flags *exportSQLFlags) error {
