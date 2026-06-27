@@ -9,6 +9,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/cmd/gh-alfred/internal/usecase"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
 	"github.com/xbpk3t/docs-alfred/pkg/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
@@ -120,6 +121,9 @@ func newExportCmd() *cobra.Command {
 		Use:   "export",
 		Short: "Export split data/gh YAML into a validated gh.yml Alfred artifact",
 		RunE: func(cmd *cobra.Command, args []string) error {
+				if err := fileutil.ValidateOutputPath(out); err != nil {
+					return err
+				}
 			result, err := usecase.RunExport(usecase.ExportInput{Src: src, Out: out})
 			if err != nil {
 				return err

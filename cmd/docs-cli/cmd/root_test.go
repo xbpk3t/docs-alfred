@@ -60,7 +60,7 @@ func TestWikiAddCommandFlags(t *testing.T) {
 	f := wikiAddCmd.Flags()
 	require.NotNil(t, f.Lookup("config"))
 	require.NotNil(t, f.Lookup("wiki-root"))
-	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, wikiAddCmd.InheritedFlags().Lookup("format"))
 	require.NotNil(t, f.Lookup("dry-run"))
 }
 
@@ -84,7 +84,7 @@ func TestWikiDigestCommandFlags(t *testing.T) {
 	require.NotNil(t, f.Lookup("wiki-root"))
 	require.NotNil(t, f.Lookup("model"))
 	require.NotNil(t, f.Lookup("max-content-size"))
-	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, wikiDigestCmd.InheritedFlags().Lookup("format"))
 	require.NotNil(t, f.Lookup("dry-run"))
 }
 
@@ -98,7 +98,7 @@ func TestWikiAuditCommandFlags(t *testing.T) {
 	f := wikiAuditCmd.Flags()
 	require.NotNil(t, f.Lookup("config"))
 	require.NotNil(t, f.Lookup("wiki-root"))
-	require.NotNil(t, f.Lookup("format"))
+	require.NotNil(t, wikiAuditCmd.InheritedFlags().Lookup("format"))
 	require.NotNil(t, f.Lookup("changed-only"))
 	require.NotNil(t, f.Lookup("paths"))
 	require.Nil(t, f.Lookup("dry-run"))

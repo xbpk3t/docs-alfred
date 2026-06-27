@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"strings"
 	"time"
 
@@ -200,6 +201,9 @@ func runExportSQL(_ context.Context, flags *exportSQLFlags) error {
 		return err
 	}
 
+	if err := fileutil.ValidateOutputPath(flags.outputPath); err != nil {
+		return err
+	}
 	if err := os.WriteFile(flags.outputPath, []byte(script), 0o600); err != nil {
 		return err
 	}

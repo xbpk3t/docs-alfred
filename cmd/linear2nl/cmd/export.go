@@ -43,6 +43,9 @@ Default: JSON, last 2 days, written to linear2nl_export_<date>.json.`,
 				return err
 			}
 			slog.Info("fetched issues", "count", len(details))
+				if err := fileutil.ValidateOutputPath(outputPath); err != nil {
+					return err
+				}
 
 			now := carbon.Now()
 			dateStr := now.Format("Ymd")

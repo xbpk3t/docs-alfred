@@ -81,6 +81,10 @@ func NewFetcher(opts ...FetcherOption) *Fetcher {
 func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) *ContentFetchResult {
 	slog.Info("FetchContent", "url", urlStr, "type", contentType)
 
+	if err := urlutil.ValidateURL(urlStr); err != nil {
+		return extractFailure(urlStr, err.Error())
+	}
+
 	u := strings.ToLower(urlStr)
 	if contentType == "" {
 		contentType = DetectContentType(u)

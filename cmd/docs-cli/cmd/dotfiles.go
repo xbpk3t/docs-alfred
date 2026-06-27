@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 const cmdDotfiles = "dotfiles"
@@ -14,7 +15,6 @@ const cmdDotfiles = "dotfiles"
 type dotfilesFlags struct {
 	path    string
 	dataDir string
-	format  string
 }
 
 func newDotfilesCmd() *cobra.Command {
@@ -36,12 +36,11 @@ func newDotfilesCheckCmd() *cobra.Command {
 		Use:   cmdCheck,
 		Short: "Check dotfiles/data consistency",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDotfilesCheck(flags.path, flags.dataDir, flags.format)
+			return runDotfilesCheck(flags.path, flags.dataDir, output.GetFormat(cmd))
 		},
 	}
 	cmd.Flags().StringVar(&flags.path, "path", cmdDotfiles, "dotfiles path")
 	cmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
-	addFormatFlag(cmd, &flags.format)
 
 	return cmd
 }
@@ -53,11 +52,10 @@ func newDotfilesSyncRecordCmd() *cobra.Command {
 		Use:   "sync-record",
 		Short: "Inspect dotfiles changes for record synchronization",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDotfilesSyncRecord(flags.path, flags.format)
+			return runDotfilesSyncRecord(flags.path, output.GetFormat(cmd))
 		},
 	}
 	cmd.Flags().StringVar(&flags.path, "path", cmdDotfiles, "dotfiles path")
-	addFormatFlag(cmd, &flags.format)
 
 	return cmd
 }

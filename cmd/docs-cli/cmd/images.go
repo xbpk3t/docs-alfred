@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 type imagesCheckFlags struct {
 	dataDir     string
 	imagesDir   string
-	format      string
 	list        bool
 	skipExtra   bool
 	skipMissing bool
@@ -41,7 +41,7 @@ func newImagesCheckCmd() *cobra.Command {
 				List:        flags.list,
 				SkipExtra:   flags.skipExtra,
 				SkipMissing: flags.skipMissing,
-			}, flags.format)
+			}, output.GetFormat(cmd))
 		},
 	}
 
@@ -50,7 +50,6 @@ func newImagesCheckCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&flags.list, "list", false, "Print full lists")
 	cmd.Flags().BoolVar(&flags.skipExtra, "skip-extra-files", false, "Ignore extra files")
 	cmd.Flags().BoolVar(&flags.skipMissing, "skip-missing", false, "Do not fail on missing expected dirs")
-	addFormatFlag(cmd, &flags.format)
 
 	return cmd
 }
@@ -67,7 +66,7 @@ func newImagesFixCmd() *cobra.Command {
 				Apply:       true,
 				List:        flags.list,
 				SkipMissing: flags.skipMissing,
-			}, flags.format)
+			}, output.GetFormat(cmd))
 		},
 	}
 
@@ -75,7 +74,6 @@ func newImagesFixCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.imagesDir, "images-dir", "docs-images", "docs-images path")
 	cmd.Flags().BoolVar(&flags.list, "list", false, "Print full lists")
 	cmd.Flags().BoolVar(&flags.skipMissing, "skip-missing", false, "Do not fail on missing expected dirs")
-	addFormatFlag(cmd, &flags.format)
 
 	return cmd
 }
