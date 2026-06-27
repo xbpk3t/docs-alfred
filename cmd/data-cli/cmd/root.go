@@ -58,8 +58,8 @@ func newRenderCmd(dataPath *string) *cobra.Command {
 				return err
 			}
 
-				if ve := fileutil.ValidateOutputPath(outDir); ve != nil {
-					return ve
+			if ve := fileutil.ValidateOutputPath(outDir); ve != nil {
+				return ve
 			}
 
 			result, err := dataops.RunDomainRender(dataops.DomainRenderInput{
