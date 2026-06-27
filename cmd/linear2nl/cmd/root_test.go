@@ -32,7 +32,7 @@ func TestPriorityLabel(t *testing.T) {
 
 func TestToIssueViews(t *testing.T) {
 	issues := []linear.Issue{
-		{Identifier: "LUC-1", Title: "Task 1", Priority: 1, TeamName: "Eng", DueDate: "2026-01-01", URL: "https://example.com/1"},
+		{Identifier: "LUC-1", Title: "Task 1", Priority: 1, TeamName: "Eng", DueDate: "2026-01-01", URL: "https://example.com/1", CompletedAt: "2026-06-27T14:36:00Z"},
 		{Identifier: "LUC-2", Title: "Task 2", Priority: 3, TeamName: "Ops"},
 	}
 	views := toIssueViews(issues)
@@ -40,9 +40,11 @@ func TestToIssueViews(t *testing.T) {
 	assert.Equal(t, "LUC-1", views[0].Identifier)
 	assert.Equal(t, "🔥 P0", views[0].Priority)
 	assert.Equal(t, "2026-01-01", views[0].DueDate)
+	assert.Equal(t, "2026-06-27T14:36:00Z", views[0].DoneAt)
 	assert.Equal(t, "LUC-2", views[1].Identifier)
 	assert.Equal(t, "⚡ P2", views[1].Priority)
 	assert.Empty(t, views[1].DueDate)
+	assert.Empty(t, views[1].DoneAt)
 }
 
 func TestToStateChangeViews(t *testing.T) {
@@ -238,4 +240,44 @@ func TestParsePlanJSON(t *testing.T) {
 func TestParsePlanJSONInvalid(t *testing.T) {
 	plans := parsePlanJSON("not json")
 	assert.Nil(t, plans)
+}
+
+func TestSortIssuesByCompletedAt(t *testing.T) {
+	t.Run("sorts ascending by CompletedAt", func(t *testing.T) {
+		issues := []linear.Issue{
+			{Identifier: "LUC-3", CompletedAt: "2026-06-27T22:02:00Z"},
+			{Identifier: "LUC-1", CompletedAt: "2026-06-27T14:36:00Z"},
+			{Identifier: "LUC-2", CompletedAt: "2026-06-27T18:15:00Z"},
+		}
+		sortIssuesByCompletedAt(issues)
+		assert.Equal(t, "LUC-1", issues[0].Identifier)
+		assert.Equal(t, "LUC-2", issues[1].Identifier)
+		assert.Equal(t, "LUC-3", issues[2].Identifier)
+	})
+
+	t.Run("empty CompletedAt sorted to end", func(t *testing.T) {
+		issues := []linear.Issue{
+			{Identifier: "LUC-2", CompletedAt: "2026-06-27T18:15:00Z"},
+			{Identifier: "LUC-1", CompletedAt: ""},
+			{Identifier: "LUC-3", CompletedAt: "2026-06-27T14:36:00Z"},
+		}
+		sortIssuesByCompletedAt(issues)
+		assert.Equal(t, "LUC-3", issues[0].Identifier)
+		assert.Equal(t, "LUC-2", issues[1].Identifier)
+		assert.Equal(t, "LUC-1", issues[2].Identifier)
+	})
+
+	t.Run("single issue", func(t *testing.T) {
+		issues := []linear.Issue{
+			{Identifier: "LUC-1", CompletedAt: "2026-06-27T14:36:00Z"},
+		}
+		sortIssuesByCompletedAt(issues)
+		assert.Equal(t, "LUC-1", issues[0].Identifier)
+	})
+
+	t.Run("empty slice", func(t *testing.T) {
+		var issues []linear.Issue
+		sortIssuesByCompletedAt(issues)
+		assert.Empty(t, issues)
+	})
 }
