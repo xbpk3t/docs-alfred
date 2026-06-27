@@ -104,9 +104,9 @@ func newTrnsCmd() *cobra.Command {
 				source = args[0]
 			}
 
-				if err := fileutil.ValidateOutputPath(flags.outDir); err != nil {
-					return err
-				}
+			if err := fileutil.ValidateOutputPath(flags.outDir); err != nil {
+				return err
+			}
 			return runTrnsCheck(source, flags, output.GetFormat(cmd))
 		},
 	}

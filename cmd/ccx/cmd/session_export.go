@@ -39,8 +39,8 @@ This command:
 			}
 
 			if flags.outputDir != "" {
-				if err := fileutil.ValidateOutputPath(flags.outputDir); err != nil {
-					return err
+				if ve := fileutil.ValidateOutputPath(flags.outputDir); ve != nil {
+					return ve
 				}
 			}
 
