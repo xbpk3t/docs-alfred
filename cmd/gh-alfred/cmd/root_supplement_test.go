@@ -154,7 +154,7 @@ func TestExportCmdRunE_Error(t *testing.T) {
 	root.SetArgs([]string{
 		"export",
 		"--src", filepath.Join(t.TempDir(), "nonexistent"),
-		"--out", filepath.Join(t.TempDir(), "out.yml"),
+		"--output", filepath.Join(t.TempDir(), "out.yml"),
 	})
 
 	err := root.Execute()
@@ -179,7 +179,7 @@ func TestExportCmdRunE_Success(t *testing.T) {
 	root.SetArgs([]string{
 		"export",
 		"--src", src,
-		"--out", outFile,
+		"--output", outFile,
 	})
 
 	err := root.Execute()

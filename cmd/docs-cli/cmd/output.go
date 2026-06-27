@@ -8,12 +8,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 const (
 	cmdCheck         = "check"
-	outputFormatText = "text"
-	outputFormatJSON = "json"
+	outputFormatText = output.FormatText
+	outputFormatJSON = output.FormatJSON
 )
 
 type checkCommandOutput = CommandOutput
@@ -29,7 +30,7 @@ type CommandOutput struct {
 }
 
 func addFormatFlag(cmd *cobra.Command, target *string) {
-	cmd.Flags().StringVar(target, "format", outputFormatText, "Output format: text or json")
+	cmd.Flags().StringVar(target, "format", output.FormatText, "Output format: text or json")
 }
 
 func normalizeOutputFormat(format string) (string, error) {
@@ -43,35 +44,35 @@ func normalizeOutputFormat(format string) (string, error) {
 	}
 }
 
-func writeCheckCommandOutput(format string, output *checkCommandOutput, textDetails string) error {
+func writeCheckCommandOutput(format string, out *checkCommandOutput, textDetails string) error {
 	format, err := normalizeOutputFormat(format)
 	if err != nil {
 		return err
 	}
 
-	output.OK = !checkutil.HasErrors(output.Issues)
+	out.OK = !checkutil.HasErrors(out.Issues)
 	if format == outputFormatJSON {
-		return writeJSONOutput(output)
+		return writeJSONOutput(out)
 	}
 
 	var b strings.Builder
-	b.WriteString((&checkutil.Result{Issues: output.Issues}).ReportResult(output.Name))
+	b.WriteString((&checkutil.Result{Issues: out.Issues}).ReportResult(out.Name))
 	b.WriteString(textDetails)
 	if textDetails != "" && textDetails[len(textDetails)-1] != '\n' {
 		b.WriteByte('\n')
 	}
-	b.WriteString(formatActions(output.Actions))
+	b.WriteString(formatActions(out.Actions))
 
 	return writeOutput(b.String())
 }
 
-func writeCommandOutput(format string, output *CommandOutput, textDetails string) error {
+func writeCommandOutput(format string, out *CommandOutput, textDetails string) error {
 	format, err := normalizeOutputFormat(format)
 	if err != nil {
 		return err
 	}
 	if format == outputFormatJSON {
-		return writeJSONOutput(output)
+		return writeJSONOutput(out)
 	}
 
 	var b strings.Builder
@@ -79,7 +80,7 @@ func writeCommandOutput(format string, output *CommandOutput, textDetails string
 	if textDetails != "" && textDetails[len(textDetails)-1] != '\n' {
 		b.WriteByte('\n')
 	}
-	b.WriteString(formatActions(output.Actions))
+	b.WriteString(formatActions(out.Actions))
 
 	return writeOutput(b.String())
 }

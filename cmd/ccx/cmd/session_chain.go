@@ -8,39 +8,32 @@ import (
 	"github.com/samber/mo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/cmd/ccx/internal"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 func newSessionChainCmd() *cobra.Command {
 	var flags struct {
-		session    string
-		jsonOutput bool
-		rawOutput  bool
+		session string
 	}
 
 	cmd := &cobra.Command{
 		Use:   "chain",
 		Short: "Walk session chain",
 		Long:  `Walk the Claude Code session chain by following parentUuid links.`,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			chain, err := internal.WalkSessionChain(flags.session)
 			if err != nil {
 				return fmt.Errorf("walk session chain: %w", err)
 			}
 
-			if flags.jsonOutput {
+			if output.GetFormat(cmd) == output.FormatJSON {
 				return writeJSON(chain)
-			}
-
-			if flags.rawOutput {
-				return writeRaw(chain)
 			}
 
 			return writeHumanReadable(chain)
 		},
 	}
 
-	cmd.Flags().BoolVar(&flags.jsonOutput, "json", false, "Output as JSON")
-	cmd.Flags().BoolVar(&flags.rawOutput, "raw", false, "Output as tab-separated values")
 	cmd.Flags().StringVar(&flags.session, "session", "", "Session ID (overrides CLAUDE_CODE_SESSION_ID)")
 
 	return cmd

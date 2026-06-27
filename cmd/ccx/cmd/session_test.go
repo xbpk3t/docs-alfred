@@ -62,12 +62,6 @@ func TestNewSessionChainCmd_Flags(t *testing.T) {
 
 	require.True(t, cmd.Flags().HasFlags(), "chain command should have flags")
 
-	jsonFlag := cmd.Flags().Lookup("json")
-	require.NotNil(t, jsonFlag, "--json flag should exist")
-
-	rawFlag := cmd.Flags().Lookup("raw")
-	require.NotNil(t, rawFlag, "--raw flag should exist")
-
 	sessionFlag := cmd.Flags().Lookup("session")
 	require.NotNil(t, sessionFlag, "--session flag should exist")
 }

@@ -1,9 +1,11 @@
 package urlutil
 
 import (
+	"fmt"
 	"net/url"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/PuerkitoBio/purell"
 	"golang.org/x/net/publicsuffix"
@@ -37,6 +39,37 @@ func Normalize(rawURL string) string {
 	}
 
 	return strings.TrimRight(normalized, "/")
+}
+
+// ValidateURL checks a URL for common agent-hallucinated or adversarial patterns.
+// It rejects: non-http(s) schemes, embedded userinfo (@), and control characters.
+// Returns nil if the URL is safe to use.
+func ValidateURL(rawURL string) error {
+	if rawURL == "" {
+		return fmt.Errorf("empty URL")
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("unsupported scheme %q (only http/https allowed)", parsed.Scheme)
+	}
+
+	if parsed.User != nil {
+		return fmt.Errorf("URL must not contain userinfo (embedded @)")
+	}
+
+	for _, r := range rawURL {
+		if unicode.IsControl(r) && r != '\t' {
+			return fmt.Errorf("URL contains control character U+%04X", r)
+		}
+	}
+
+	return nil
 }
 
 // Equal compares URLs using Normalize.

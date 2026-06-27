@@ -164,3 +164,30 @@ func TestCountURLs_Empty(t *testing.T) {
 	require.Equal(t, 0, CountURLs(""))
 	require.Equal(t, 0, CountURLs("no urls here"))
 }
+
+func TestValidateURL(t *testing.T) {
+	tests := []struct {
+		url     string
+		wantErr bool
+	}{
+		{"https://example.com/path", false},
+		{"http://example.com", false},
+		{"file:///etc/passwd", true},
+		{"ftp://example.com/file", true},
+		{"https://evil.com@legit.com", true},
+		{"https://user:pass@example.com", true},
+		{"https://example.com/path\x00null", true},
+		{"", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			err := ValidateURL(tt.url)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

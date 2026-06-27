@@ -17,6 +17,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/litter"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
 const (
@@ -85,7 +86,7 @@ func newTrnsCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&flags.outDir, "out", fileutil.CachePath("rss2nl/trns"), "Trns cache/output directory")
+	cmd.Flags().StringVar(&flags.outDir, "output", fileutil.CachePath("rss2nl/trns"), "Trns cache/output directory")
 	cmd.Flags().IntVar(&flags.limit, "limit", 0, "Episodes to process per feed")
 	cmd.Flags().BoolVar(&flags.refresh, "refresh", false, "Ignore existing cached trns data")
 	cmd.PersistentFlags().StringVar(&flags.cfgFile, "config", "rss2nl.yml", "Config file path")
@@ -103,7 +104,7 @@ func newTrnsCmd() *cobra.Command {
 				source = args[0]
 			}
 
-			return runTrnsCheck(source, flags)
+			return runTrnsCheck(source, flags, output.GetFormat(cmd))
 		},
 	}
 	checkCmd.Flags().StringVar(&flags.outDir, "out", fileutil.CachePath("rss2nl/trns"), "Trns cache/output directory")
@@ -248,7 +249,24 @@ func buildRouter() *transcript.Router {
 	}
 }
 
-func runTrnsCheck(source string, flags *trnsFlags) error {
+type trnsCheckFeedResult struct {
+	Feed     string `json:"feed"`
+	Title    string `json:"title"`
+	Error    string `json:"error,omitempty"`
+	Limit    int    `json:"limit"`
+	RSS      int    `json:"rss"`
+	Audio    int    `json:"audio"`
+	Episodes int    `json:"episodes"`
+	Failed   bool   `json:"failed,omitempty"`
+}
+
+type trnsCheckResult struct {
+	Feeds         []trnsCheckFeedResult `json:"feeds"`
+	TotalEpisodes int                   `json:"totalEpisodes"`
+	FailedFeeds   int                   `json:"failedFeeds"`
+}
+
+func runTrnsCheck(source string, flags *trnsFlags, format string) error {
 	cfg, err := rss.NewConfig(flags.cfgFile)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
@@ -256,8 +274,7 @@ func runTrnsCheck(source string, flags *trnsFlags) error {
 
 	limit := effectiveTrnsLimit(cfg, flags)
 
-	failedFeeds := 0
-	totalEpisodes := 0
+	result := trnsCheckResult{}
 
 	for _, feed := range cfg.RSS {
 		for _, u := range feed.Feeds {
@@ -270,13 +287,27 @@ func runTrnsCheck(source string, flags *trnsFlags) error {
 			parsed, err := fp.ParseURL(u.Feed)
 			if err != nil {
 				slog.Warn("Feed parse failed", "feed", u.Feed, "error", err)
-				failedFeeds++
+				result.FailedFeeds++
+				result.Feeds = append(result.Feeds, trnsCheckFeedResult{
+					Feed:   u.Feed,
+					Failed: true,
+					Error:  err.Error(),
+				})
 
 				continue
 			}
 
 			rssCount, audioCount, epCount := inspectFeedItems(parsed, limit)
-			totalEpisodes += epCount
+			result.TotalEpisodes += epCount
+			result.Feeds = append(result.Feeds, trnsCheckFeedResult{
+				Feed:     u.Feed,
+				Title:    parsed.Title,
+				Limit:    limit,
+				RSS:      rssCount,
+				Audio:    audioCount,
+				Episodes: epCount,
+			})
+
 			slog.Info("Feed inspection",
 				"feed", parsed.Title,
 				"limit", limit,
@@ -286,13 +317,17 @@ func runTrnsCheck(source string, flags *trnsFlags) error {
 		}
 	}
 
+	if format == output.FormatJSON {
+		return output.WriteJSON(result)
+	}
+
 	slog.Info("Trns check completed",
-		"episodes", totalEpisodes,
-		"failedFeeds", failedFeeds,
+		"episodes", result.TotalEpisodes,
+		"failedFeeds", result.FailedFeeds,
 	)
 
-	if flags.strict && failedFeeds > 0 {
-		return fmt.Errorf("trns check: %d feeds failed", failedFeeds)
+	if flags.strict && result.FailedFeeds > 0 {
+		return fmt.Errorf("trns check: %d feeds failed", result.FailedFeeds)
 	}
 
 	return nil

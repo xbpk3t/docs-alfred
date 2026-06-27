@@ -16,10 +16,9 @@ import (
 
 func newExportCmd() *cobra.Command {
 	var (
-		cfgFile string
-		days    int
-		format  string
-		output  string
+		cfgFile    string
+		days       int
+		outputPath string
 	)
 
 	cmd := &cobra.Command{
@@ -48,18 +47,17 @@ Default: JSON, last 2 days, written to linear2nl_export_<date>.json.`,
 			now := carbon.Now()
 			dateStr := now.Format("Ymd")
 
-			if format == "md" {
-				return exportMarkdown(details, output, dateStr)
+			if strings.HasSuffix(outputPath, ".md") {
+				return exportMarkdown(details, outputPath, dateStr)
 			}
 
-			return exportJSON(details, output, dateStr)
+			return exportJSON(details, outputPath, dateStr)
 		},
 	}
 
 	cmd.Flags().StringVarP(&cfgFile, "config", "c", "cmd/linear2nl/linear2nl.yml", "config file path")
 	cmd.Flags().IntVar(&days, "days", 2, "export issues updated in the last N days")
-	cmd.Flags().StringVar(&format, "format", "json", "output format: json or md")
-	cmd.Flags().StringVarP(&output, "output", "o", "", "output file path (default: linear2nl_export_<date>.<ext>)")
+	cmd.Flags().StringVarP(&outputPath, "output", "o", "", "output file path (default: linear2nl_export_<date>.json)")
 
 	return cmd
 }

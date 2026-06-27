@@ -23,16 +23,16 @@ func TestLoadPwgenConfigInvalidYAML(t *testing.T) {
 
 func TestApplyFlagOverridesLengthAndOutput(t *testing.T) {
 	cmd := newRootCmd()
-	require.NoError(t, cmd.ParseFlags([]string{"--length", "24", "--output", "raw"}))
+	require.NoError(t, cmd.ParseFlags([]string{"--length", "24", "--format", "json"}))
 
 	cfg := defaultPwgenConfig()
 	cfg.Length = 32
-	cfg.Output = "alfred"
+	cfg.Format = "text"
 
-	cfg = applyFlagOverrides(cmd, cfg, "", 24, true, true, false, "raw")
+	cfg = applyFlagOverrides(cmd, cfg, "", 24, true, true, false, "json")
 
 	assert.Equal(t, 24, cfg.Length, "flag-changed length should override config")
-	assert.Equal(t, "raw", cfg.Output, "flag-changed output should override config")
+	assert.Equal(t, "json", cfg.Format, "flag-changed format should override config")
 }
 
 func TestNewRootCmdAllFlagsSet(t *testing.T) {
@@ -44,7 +44,7 @@ func TestNewRootCmdAllFlagsSet(t *testing.T) {
 		"--uppercase=false",
 		"--numbers=false",
 		"--punctuation=true",
-		"--output", "raw",
+		"--format", "json",
 		"testsite.com",
 	})
 	err := root.Execute()
@@ -77,7 +77,7 @@ func TestExecuteSuccess(t *testing.T) {
 	os.Stdout = w
 
 	origArgs := os.Args
-	os.Args = []string{"pwgen", "--output", "plain", "test.example.com"}
+	os.Args = []string{"pwgen", "--format", "text", "test.example.com"}
 
 	assert.NotPanics(t, func() {
 		Execute()

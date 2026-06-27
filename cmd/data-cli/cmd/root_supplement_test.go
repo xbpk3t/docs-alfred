@@ -136,12 +136,10 @@ func TestNewRenderCmdFlags(t *testing.T) {
 	cmd := newRenderCmd(new(string))
 
 	require.Equal(t, "render", cmd.Name())
-	require.NotNil(t, cmd.Flag("out-dir"))
-	require.NotNil(t, cmd.Flag("format"))
+	require.NotNil(t, cmd.Flag("output"))
 
 	// Check defaults.
-	require.Equal(t, "docs/public", cmd.Flag("out-dir").DefValue)
-	require.Empty(t, cmd.Flag("format").DefValue)
+	require.Equal(t, "docs/public", cmd.Flag("output").DefValue)
 }
 
 func TestNewRenderCmdRequiresExactlyOneArg(t *testing.T) {

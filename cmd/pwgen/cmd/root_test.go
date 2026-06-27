@@ -13,7 +13,7 @@ func TestRootCommandMetadata(t *testing.T) {
 	require.True(t, root.HasAvailableFlags())
 	require.NotNil(t, root.Flags().Lookup("secret"))
 	require.NotNil(t, root.Flags().Lookup("length"))
-	require.NotNil(t, root.Flags().Lookup("output"))
+	require.NotNil(t, root.Flags().Lookup("format"))
 }
 
 func TestRootCommandRequiresOneArg(t *testing.T) {

@@ -9,6 +9,8 @@ import (
 	"github.com/xbpk3t/docs-alfred/cmd/gh-alfred/internal/usecase"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
+	"github.com/xbpk3t/docs-alfred/pkg/output"
+	"github.com/xbpk3t/docs-alfred/pkg/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
 )
@@ -22,15 +24,20 @@ func Execute() error {
 }
 
 func newRootCmd() *cobra.Command {
+	var format string
+
 	rootCmd := &cobra.Command{
 		Use:   "gh-alfred",
 		Short: "Alfred GitHub repo search and cache sync",
 	}
 
+	output.FormatFlag(rootCmd, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "Output format: text or json")
+
 	rootCmd.AddCommand(newSearchCmd())
 	rootCmd.AddCommand(newSyncCmd())
 	rootCmd.AddCommand(newExportCmd())
 	rootCmd.AddCommand(newValidateCmd())
+	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	return rootCmd
@@ -68,7 +75,7 @@ func newSearchCmd() *cobra.Command {
 				})
 			}
 
-			return runSearchOutput(result.Repos, docsURL, query)
+			return runSearchOutput(result.Repos, docsURL, query, cmd)
 		},
 	}
 
@@ -123,7 +130,7 @@ func newExportCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&src, "src", "data/gh", "Source data/gh directory")
-	cmd.Flags().StringVar(&out, "out", "gh.yml", "Output gh.yml path")
+	cmd.Flags().StringVar(&out, "output", "gh.yml", "Output gh.yml path")
 
 	return cmd
 }
@@ -165,7 +172,12 @@ func writeOutput(s string) error {
 	return err
 }
 
-func runSearchOutput(repos ghindex.Repos, docsURL, query string) error {
+func runSearchOutput(repos ghindex.Repos, docsURL, query string, cmd *cobra.Command) error {
+	format := output.GetFormat(cmd)
+	if format == output.FormatJSON {
+		return writeFormatterOutput("raw", repos)
+	}
+
 	items := presenter.FormatAlfredItems(repos, docsURL, query)
 
 	return writeFormatterOutput("alfred", items)

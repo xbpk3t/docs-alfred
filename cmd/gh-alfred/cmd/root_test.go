@@ -11,7 +11,7 @@ func TestRootCommandOwnsAlfredActions(t *testing.T) {
 	root := newRootCmd()
 
 	require.Equal(t, "gh-alfred", root.Name())
-	requireCommandNames(t, root.Commands(), []string{"export", "search", "sync", "validate"})
+	requireCommandNames(t, root.Commands(), []string{"export", "schema", "search", "sync", "validate"})
 }
 
 func requireCommandNames(t *testing.T, commands []*cobra.Command, want []string) {
