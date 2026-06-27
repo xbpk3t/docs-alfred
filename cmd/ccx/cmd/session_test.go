@@ -180,7 +180,7 @@ func TestWriteRaw(t *testing.T) {
 	require.Len(t, lines, 2)
 
 	// First line: session with endedAt and no prevSessionID
-	fields1 := strings.Split(lines[1-1], "\t")
+		fields1 := strings.Split(lines[0], "	")
 	// fields: sessionID, prevSessionID, startedAt, endedAt, display, transcriptPath, isSidechain
 	require.Len(t, fields1, 7)
 	require.Equal(t, "sess-1", fields1[0])

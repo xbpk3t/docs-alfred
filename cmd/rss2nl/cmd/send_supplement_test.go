@@ -807,7 +807,7 @@ func TestHandleOutputDebug(t *testing.T) {
 	dir := t.TempDir()
 	origDir, _ := os.Getwd()
 	require.NoError(t, os.Chdir(dir))
-	t.Cleanup(func() { os.Chdir(origDir) })
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
 
 	service := NewNewsletterService(&rss.Config{
 		EnvConfig: rss.EnvConfig{Debug: true},
