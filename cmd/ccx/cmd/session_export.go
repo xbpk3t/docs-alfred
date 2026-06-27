@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/cmd/ccx/internal"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 func newSessionExportCmd() *cobra.Command {
@@ -35,6 +36,12 @@ This command:
 			})
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
+			}
+
+			if flags.outputDir != "" {
+				if err := fileutil.ValidateOutputPath(flags.outputDir); err != nil {
+					return err
+				}
 			}
 
 			input := internal.ExportInput{

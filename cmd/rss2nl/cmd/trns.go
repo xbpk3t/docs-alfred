@@ -110,7 +110,7 @@ func newTrnsCmd() *cobra.Command {
 			return runTrnsCheck(source, flags, output.GetFormat(cmd))
 		},
 	}
-	checkCmd.Flags().StringVar(&flags.outDir, "out", fileutil.CachePath("rss2nl/trns"), "Trns cache/output directory")
+	checkCmd.Flags().StringVar(&flags.outDir, "output", fileutil.CachePath("rss2nl/trns"), "Trns cache/output directory")
 	checkCmd.Flags().IntVar(&flags.limit, "limit", 0, "Episodes to inspect per feed")
 	checkCmd.Flags().BoolVar(&flags.strict, "strict", false, "Exit non-zero when any trns feed fails")
 
