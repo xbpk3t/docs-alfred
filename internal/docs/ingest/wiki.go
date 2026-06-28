@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
@@ -266,5 +267,6 @@ func newAIConfig(cfg *Config) *ai.ClientConfig {
 		BaseURL:     cfg.AI.BaseURL,
 		Model:       cfg.AI.Model,
 		Temperature: cfg.AI.Temperature,
+		Timeout:     time.Duration(cfg.AI.Timeout) * time.Second,
 	}
 }

@@ -989,7 +989,7 @@ func ClassifyContent(content, wikiRoot string, aiConfig *ai.ClientConfig) (strin
 		content = content[:2000]
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
 	result := classifier.ClassifyURL(ctx, "session-export", "Session Export", content)

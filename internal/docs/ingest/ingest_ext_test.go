@@ -756,8 +756,10 @@ func TestPrepareInboxEntryClassifyRetryError(t *testing.T) {
 	entry := wikisvc.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
 	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second, maxRetries: 1}
 	result := prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg)
-	assert.Equal(t, pendingAIError, result.Kind)
-	assert.Contains(t, result.Error, "classification failed")
+	assert.Equal(t, pendingSummary, result.Kind)
+	require.NotNil(t, result.Item)
+	assert.True(t, result.Item.NeedsManualReview)
+	assert.Contains(t, result.Item.Summary.Overview, "some real content")
 }
 
 // --- processAddURL ---

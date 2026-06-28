@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -124,4 +125,36 @@ func requireNoCommand(t *testing.T, parent *cobra.Command, name string) {
 	for _, cmd := range parent.Commands() {
 		require.NotEqual(t, name, cmd.Name())
 	}
+}
+
+func TestImagesCheckCommandDefaults(t *testing.T) {
+	imgCheck, _, err := newRootCmd().Find([]string{"images", cmdCheck})
+	require.NoError(t, err)
+
+	list, _ := imgCheck.Flags().GetBool("list")
+	assert.False(t, list, "--list should default to false")
+
+	skipExtra, _ := imgCheck.Flags().GetBool("skip-extra-files")
+	assert.False(t, skipExtra, "--skip-extra-files should default to false")
+
+	skipMissing, _ := imgCheck.Flags().GetBool("skip-missing")
+	assert.False(t, skipMissing, "--skip-missing should default to false")
+}
+
+func TestImagesFixCommandDefaults(t *testing.T) {
+	imgFix, _, err := newRootCmd().Find([]string{"images", "fix"})
+	require.NoError(t, err)
+
+	list, _ := imgFix.Flags().GetBool("list")
+	assert.False(t, list, "--list should default to false")
+
+	skipMissing, _ := imgFix.Flags().GetBool("skip-missing")
+	assert.False(t, skipMissing, "--skip-missing should default to false")
+}
+
+func TestImagesCheckCommandHasInheritedFormat(t *testing.T) {
+	imgCheck, _, err := newRootCmd().Find([]string{"images", cmdCheck})
+	require.NoError(t, err)
+
+	require.NotNil(t, imgCheck.InheritedFlags().Lookup("format"))
 }
