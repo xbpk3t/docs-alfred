@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 )
 
 func processAddURL(ctx context.Context, deps *dependencies, wikiRoot, urlStr string, dryRun bool) URLResult {
@@ -109,7 +110,7 @@ func prepareInboxEntry(
 		},
 		retry.Context(urlCtx),
 		retry.Attempts(inboxCfg.maxRetries),
-		retry.Delay(5*time.Second),
+		retry.Delay(20*time.Second),
 		retry.DelayType(retry.BackOffDelay),
 		retry.LastErrorOnly(true),
 		retry.RetryIf(func(err error) bool {
@@ -124,7 +125,23 @@ func prepareInboxEntry(
 	if err != nil {
 		var classifyErr *classifyRetryError
 		if errors.As(err, &classifyErr) {
-			return newPendingAIError(entry.URL, classifyErr.Error())
+			// Content was fetched but AI classify failed (timeout / rate limit).
+			// Route to uncat.md with fetched content instead of discarding it.
+			return pendingURLWrite{
+				URL:  entry.URL,
+				Kind: pendingSummary, // via writeSummary → NeedsManualReview → WriteManualReviewEntry → uncat.md
+				Item: &wikisvc.ClassifyItem{
+					URL:               entry.URL,
+					Title:             fetchResult.Title,
+					ContentType:       contentType,
+					Type:              wikisvc.TypeDeepDive,
+					NeedsManualReview: true,
+					Summary: &wikisvc.StructuredSummary{
+						Overview: "Content fetched but AI classify unavailable. Raw content:\n\n```\n" +
+							strings.ReplaceAll(textutil.TruncateUTF8(fetchResult.Body, 2000), "```", "'''") + "\n```",
+					},
+				},
+			}
 		}
 
 		return newPendingUnhandled(entry.URL, err.Error())

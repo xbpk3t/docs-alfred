@@ -73,11 +73,17 @@ func RunImagesCheck(cfg CheckConfig) (*CheckResult, error) {
 		}
 	}
 
-	// Find extra
+	// Find extra — skip structural intermediate dirs
 	for _, d := range existingDirs {
-		if !expectedSet[d] {
-			result.ExtraDirs = append(result.ExtraDirs, d)
+		if expectedSet[d] {
+			continue
 		}
+		// Structural intermediate dir (parent of an expected dir with no direct files)
+		// is silently accepted — it's a container for deeper expected subdirs.
+		if isParentOfExpected(d, expectedDirs) && !dirHasDirectFiles(d, actualFiles) {
+			continue
+		}
+		result.ExtraDirs = append(result.ExtraDirs, d)
 	}
 
 	// Apply fixes
@@ -161,6 +167,45 @@ func removeDuplicateFiles(imagesDir string, actualFiles []string) int {
 	}
 
 	return removed
+}
+
+// isParentOfExpected reports whether dir is a parent of any expected directory,
+// meaning it exists only as a structural container for deeper expected subdirs.
+//
+// The trailing-slash prefix check ensures "a-new" is NOT treated as a parent
+// of "a".
+func isParentOfExpected(dir string, expectedDirs []string) bool {
+	prefix := dir + "/"
+	for _, ed := range expectedDirs {
+		if strings.HasPrefix(ed, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// dirHasDirectFiles reports whether dir contains files directly (not in subdirs).
+// Used to detect "files at wrong layer" — a structural dir with direct files needs attention.
+//
+// allFiles must be the same filtered list used by collectExistingFilesAndDirs
+// (which skips dot-prefixed entries). This implicitly excludes .DS_Store and
+// other hidden files from the check — an intentional property.
+//
+// Performance note: O(n×m) scan of all files per dir. Fine for current scale
+// (~200 dirs × ~800 files). If scale grows significantly, consider building a
+// prefix-indexed set for O(1) lookups.
+func dirHasDirectFiles(dir string, allFiles []string) bool {
+	prefix := dir + "/"
+	for _, f := range allFiles {
+		if !strings.HasPrefix(f, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(f, prefix)
+		if !strings.Contains(rest, "/") {
+			return true
+		}
+	}
+	return false
 }
 
 // hideExtraDirs renames extra directories by prefixing with ".".

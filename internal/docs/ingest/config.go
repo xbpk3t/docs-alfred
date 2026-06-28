@@ -51,6 +51,7 @@ type AIConfig struct {
 	Model       string  `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
 	BaseURL     string  `default:"https://api.lucc.dev/v1" validate:"required|url" yaml:"baseUrl"`
 	Temperature float64 `default:"0.3"                     yaml:"temperature"`
+	Timeout     int     `yaml:"timeout"` // AI HTTP timeout in seconds; 0 defaults to 45s
 }
 
 // LoadConfig loads wiki config from disk, preserving defaults for omitted fields.

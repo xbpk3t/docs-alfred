@@ -383,3 +383,267 @@ func TestCheckResult_ReportNoApplyNoActions(t *testing.T) {
 	// Should still produce valid output even with no actions
 	assert.NotEmpty(t, report)
 }
+
+// --- isParentOfExpected ---
+
+func TestIsParentOfExpected_ReturnsTrueForDirectParent(t *testing.T) {
+	assert.True(t, isParentOfExpected("a", []string{"a/b"}))
+	assert.True(t, isParentOfExpected("a/b", []string{"a/b/c"}))
+	assert.True(t, isParentOfExpected("algo", []string{"algo/algo/scheduler"}))
+	assert.True(t, isParentOfExpected("algo/algo", []string{"algo/algo/scheduler"}))
+}
+
+func TestIsParentOfExpected_ReturnsTrueForDeepNesting(t *testing.T) {
+	assert.True(t, isParentOfExpected("x", []string{"x/y/z/w"}))
+	assert.True(t, isParentOfExpected("x/y", []string{"x/y/z/w"}))
+	assert.True(t, isParentOfExpected("x/y/z", []string{"x/y/z/w"}))
+}
+
+func TestIsParentOfExpected_ReturnsFalseForExactMatch(t *testing.T) {
+	assert.False(t, isParentOfExpected("a/b", []string{"a/b"}))
+}
+
+func TestIsParentOfExpected_ReturnsFalseForUnrelatedDir(t *testing.T) {
+	assert.False(t, isParentOfExpected("other", []string{"a/b"}))
+	assert.False(t, isParentOfExpected("a/other", []string{"a/b"}))
+}
+
+func TestIsParentOfExpected_ReturnsFalseForPrefixLikeNoSlash(t *testing.T) {
+	assert.False(t, isParentOfExpected("a-new", []string{"a/b"}))
+}
+
+func TestIsParentOfExpected_EmptyExpectedList(t *testing.T) {
+	assert.False(t, isParentOfExpected("a", []string{}))
+}
+
+func TestIsParentOfExpected_EmptyDir(t *testing.T) {
+	assert.False(t, isParentOfExpected("", []string{"a/b"}))
+}
+
+// --- dirHasDirectFiles ---
+
+func TestDirHasDirectFiles_ReturnsTrueForFileInDir(t *testing.T) {
+	files := []string{"dir/file.txt", "dir/sub/file2.txt"}
+	assert.True(t, dirHasDirectFiles("dir", files))
+}
+
+func TestDirHasDirectFiles_ReturnsFalseForFileOnlyInSubdir(t *testing.T) {
+	files := []string{"dir/sub/file.txt"}
+	assert.False(t, dirHasDirectFiles("dir", files))
+}
+
+func TestDirHasDirectFiles_ReturnsFalseForNoFiles(t *testing.T) {
+	files := []string{"other/file.txt"}
+	assert.False(t, dirHasDirectFiles("dir", files))
+}
+
+func TestDirHasDirectFiles_EmptyFileList(t *testing.T) {
+	assert.False(t, dirHasDirectFiles("dir", []string{}))
+}
+
+func TestDirHasDirectFiles_MultipleNestedNoDirect(t *testing.T) {
+	files := []string{"a/b/c/d.txt", "a/b/c/e.txt"}
+	assert.False(t, dirHasDirectFiles("a/b", files))
+	assert.True(t, dirHasDirectFiles("a/b/c", files))
+}
+
+func TestDirHasDirectFiles_FileWithSimilarPrefix(t *testing.T) {
+	files := []string{"dir-other/file.txt"}
+	assert.False(t, dirHasDirectFiles("dir", files))
+}
+
+// --- RunImagesCheck integration: structural dir filtering ---
+
+func TestRunImagesCheck_SkipsStructuralDirsWithoutDirectFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "algo", "algo", "scheduler"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "algo", "algo", "scheduler", "file.png"), nil, 0644))
+
+	dataDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "algo"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: algo
+  topics:
+    - topic: scheduler
+      hasPic: true
+`), 0644))
+
+	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
+	require.NoError(t, err)
+
+	assert.NotContains(t, result.ExtraDirs, "algo")
+	assert.NotContains(t, result.ExtraDirs, "algo/algo")
+	assert.Contains(t, result.ExistingDirs, "algo/algo/scheduler")
+	assert.Contains(t, result.ExpectedDirs, "algo/algo/scheduler")
+}
+
+func TestRunImagesCheck_FlagsStructuralDirsWithDirectFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "algo", "algo", "scheduler"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "algo", "algo", "scheduler", "file.png"), nil, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "algo", "algo", "orphan.png"), nil, 0644))
+
+	dataDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "algo"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: algo
+  topics:
+    - topic: scheduler
+      hasPic: true
+`), 0644))
+
+	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
+	require.NoError(t, err)
+
+	assert.NotContains(t, result.ExtraDirs, "algo")
+	assert.Contains(t, result.ExtraDirs, "algo/algo")
+}
+
+func TestRunImagesCheck_FlagsGenuinelyExtraDirs(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "totally-extra", "sub"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "totally-extra", "sub", "file.png"), nil, 0644))
+
+	dataDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "algo"), 0755))
+
+	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
+	require.NoError(t, err)
+
+	assert.Contains(t, result.ExtraDirs, "totally-extra")
+}
+
+func TestRunImagesCheck_SkipsExpectedDirWithMissingParent(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "db", "redis", "cache-problems"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "db", "redis", "cache-problems", "file.png"), nil, 0644))
+
+	dataDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "db"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "db", "storage.yml"), []byte(`- type: redis
+  topics:
+    - topic: cache-problems
+      hasPic: true
+`), 0644))
+
+	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
+	require.NoError(t, err)
+
+	assert.NotContains(t, result.ExtraDirs, "db")
+	assert.NotContains(t, result.ExtraDirs, "db/redis")
+	assert.Contains(t, result.ExpectedDirs, "db/redis/cache-problems")
+	assert.NotContains(t, result.MissingDirs, "db/redis/cache-problems")
+}
+
+func TestRunImagesCheck_FlagsL2FilesInStructuralDir(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "ai", "skills"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ai", "skills", "agent-skills.webp"), nil, 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "ai", "skills", "sub-topic"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ai", "skills", "sub-topic", "file.png"), nil, 0644))
+
+	dataDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "ai"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "ai", "skills.yml"), []byte(`- type: skills
+  topics:
+    - topic: sub-topic
+      hasPic: true
+`), 0644))
+
+	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
+	require.NoError(t, err)
+
+	assert.Contains(t, result.ExtraDirs, "ai/skills",
+		"structural dir with direct files should be flagged (files at wrong layer)")
+}
+
+func TestRunImagesCheck_NestedIntermediateDirsAllSkipped(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "x", "y", "z", "w"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x", "y", "z", "w", "file.png"), nil, 0644))
+
+	dataDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "x"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "x", "deep.yml"), []byte(`- type: y
+  topics:
+    - topic: z
+      hasPic: true
+      sub:
+        - topic: w
+          meta:
+            slug: w
+            hasPic: true
+`), 0644))
+
+	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
+	require.NoError(t, err)
+
+	assert.NotContains(t, result.ExtraDirs, "x")
+	assert.NotContains(t, result.ExtraDirs, "x/y")
+	assert.NotContains(t, result.ExtraDirs, "x/y/z")
+	assert.Contains(t, result.ExpectedDirs, "x/y/z/w")
+	assert.NotContains(t, result.MissingDirs, "x/y/z/w")
+}
+
+func TestRunImagesCheck_ExpectedDirItselfNotExtra(t *testing.T) {
+	dir := t.TempDir()
+
+	// Structural dir with ONLY subdir content — no direct files
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "desktop", "browser", "desktop-browser"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "desktop", "browser", "desktop-browser", "file.png"), nil, 0644))
+
+	dataDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "desktop"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "desktop", "browser.yml"), []byte(`- type: browser
+  topics:
+    - topic: desktop-browser
+      meta:
+        slug: desktop-browser
+      hasPic: true
+`), 0644))
+
+	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
+	require.NoError(t, err)
+
+	// Pure structural dirs without direct files should be skipped
+	assert.NotContains(t, result.ExtraDirs, "desktop")
+	assert.NotContains(t, result.ExtraDirs, "desktop/browser")
+}
+
+func TestRunImagesCheck_SingleDepthExpectedIsNotParent(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create expected directory: x/single/repo/a-topic
+	// The repo creates the 'repo' subdirectory automatically
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "x", "single", "repo", "a-topic"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x", "single", "repo", "a-topic", "file.png"), nil, 0644))
+
+	dataDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "x"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "x", "single.yml"), []byte(`- type: single
+  repo:
+    - url: https://github.com/acme/repo
+      topics:
+        - topic: a-topic
+          meta:
+            slug: a-topic
+            hasPic: true
+`), 0644))
+
+	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
+	require.NoError(t, err)
+
+	// Pure structural dirs without direct files should be skipped
+	assert.NotContains(t, result.ExtraDirs, "x")
+	assert.NotContains(t, result.ExtraDirs, "x/single")
+	// Subdirs with no direct files should also be skipped
+	assert.NotContains(t, result.ExtraDirs, "x/single/repo")
+
+	// Expected leaf should exist
+	assert.Contains(t, result.ExpectedDirs, "x/single/repo/a-topic")
+	assert.NotContains(t, result.MissingDirs, "x/single/repo/a-topic")
+}
