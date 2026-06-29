@@ -38,7 +38,7 @@ func TestDotfilesCommandOwnsDotfilesActions(t *testing.T) {
 	dotfilesCmd, _, err := newRootCmd().Find([]string{"dotfiles"})
 	require.NoError(t, err)
 
-	requireCommandNames(t, dotfilesCmd.Commands(), []string{cmdCheck, "sync-record"})
+	requireCommandNames(t, dotfilesCmd.Commands(), []string{cmdCheck})
 }
 
 func TestWikiCommandOwnsWikiActions(t *testing.T) {

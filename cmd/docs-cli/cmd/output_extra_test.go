@@ -7,9 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
 	wikiuc "github.com/xbpk3t/docs-alfred/internal/docs/ingest"
-	"github.com/xbpk3t/docs-alfred/internal/docs/workspace/dotfiles"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
@@ -122,25 +120,6 @@ func TestFormatActionsNonEmpty(t *testing.T) {
 func TestFormatActionsEmpty(t *testing.T) {
 	got := formatActions(nil)
 	assert.Empty(t, got)
-}
-
-func TestFormatDotfilesChangeStatus(t *testing.T) {
-	tests := []struct {
-		status string
-		want   string
-	}{
-		{"M", "modified"},
-		{"A", "added"},
-		{"D", "deleted"},
-		{"??", "untracked"},
-		{"R", "R"},
-		{"", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.status, func(t *testing.T) {
-			assert.Equal(t, tt.want, formatDotfilesChangeStatus(tt.status))
-		})
-	}
 }
 
 func TestResolveWikiAPIKeyAlreadySet(t *testing.T) {
@@ -303,65 +282,6 @@ func TestWriteWikiAuditResultFailed(t *testing.T) {
 	assert.Contains(t, err.Error(), "wiki audit failed")
 }
 
-func TestWriteDotfilesSyncRecordResultTextOK(t *testing.T) {
-	stdout := captureStdout(t)
-
-	// Using the actual workspaceuc type via import
-	// We need to test the text path
-	err := writeDotfilesSyncRecordResult(&workspaceuc.DotfilesSyncRecordResult{
-		OK:           true,
-		DotfilesPath: "dotfiles",
-		ChangedFiles: []dotfiles.ChangeFile{
-			{Path: "home/base/dev/default.nix", Status: "M"},
-			{Path: "home/new.nix", Status: "A"},
-			{Path: "home/old.nix", Status: "D"},
-			{Path: "home/temp.nix", Status: "??"},
-			{Path: "home/other.nix", Status: "R"},
-		},
-	}, "text")
-	require.NoError(t, err)
-
-	got := stdout()
-	assert.Contains(t, got, "modified")
-	assert.Contains(t, got, "added")
-	assert.Contains(t, got, "deleted")
-	assert.Contains(t, got, "untracked")
-	assert.Contains(t, got, "home/base/dev/default.nix")
-}
-
-func TestWriteDotfilesSyncRecordResultTextFailed(t *testing.T) {
-	stdout := captureStdout(t)
-
-	err := writeDotfilesSyncRecordResult(&workspaceuc.DotfilesSyncRecordResult{
-		OK:    false,
-		Error: "git error",
-	}, "text")
-	require.NoError(t, err)
-
-	got := stdout()
-	assert.Contains(t, got, "sync-record failed: git error")
-}
-
-func TestWriteDotfilesSyncRecordResultTextWithGh(t *testing.T) {
-	stdout := captureStdout(t)
-
-	err := writeDotfilesSyncRecordResult(&workspaceuc.DotfilesSyncRecordResult{
-		OK:           true,
-		DotfilesPath: "dotfiles",
-		ChangedFiles: []dotfiles.ChangeFile{
-			{
-				Path:   "home/base/dev/default.nix",
-				Status: "M",
-				Gh:     &dotfiles.GhMap{Category: "tool", GhFiles: []string{"tool.yml", "tool2.yml"}},
-			},
-		},
-	}, "text")
-	require.NoError(t, err)
-
-	got := stdout()
-	assert.Contains(t, got, "gh category=tool")
-	assert.Contains(t, got, "tool.yml, tool2.yml")
-}
 
 func TestBlogCheckCommandFlags(t *testing.T) {
 	blogCmd, _, err := newRootCmd().Find([]string{"blog", "check"})
@@ -383,14 +303,6 @@ func TestDotfilesCheckCommandFlags(t *testing.T) {
 	require.NotNil(t, dotfilesCmd.InheritedFlags().Lookup("format"))
 }
 
-func TestDotfilesSyncRecordCommandFlags(t *testing.T) {
-	dotfilesCmd, _, err := newRootCmd().Find([]string{"dotfiles", "sync-record"})
-	require.NoError(t, err)
-
-	f := dotfilesCmd.Flags()
-	require.NotNil(t, f.Lookup("path"))
-	require.NotNil(t, dotfilesCmd.InheritedFlags().Lookup("format"))
-}
 
 func TestImagesCheckCommandFlags(t *testing.T) {
 	imagesCmd, _, err := newRootCmd().Find([]string{"images", "check"})

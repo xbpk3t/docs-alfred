@@ -7,9 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
 	wikiuc "github.com/xbpk3t/docs-alfred/internal/docs/ingest"
-	"github.com/xbpk3t/docs-alfred/internal/docs/workspace/dotfiles"
 )
 
 func TestWriteCommandOutputJSONEnvelope(t *testing.T) {
@@ -57,26 +55,6 @@ func TestWriteWikiResultJSONIncludesURLDetails(t *testing.T) {
 	require.Equal(t, "https://example.com/a", got.Results[0].URL)
 }
 
-func TestWriteDotfilesSyncRecordJSONUsesCommonEnvelope(t *testing.T) {
-	stdout := captureStdout(t)
-
-	err := writeDotfilesSyncRecordResult(&workspaceuc.DotfilesSyncRecordResult{
-		OK:           true,
-		DotfilesPath: "dotfiles",
-		ChangedFiles: []dotfiles.ChangeFile{{Path: "home/base/dev/default.nix", Status: "M"}},
-	}, outputFormatJSON)
-
-	require.NoError(t, err)
-	var got struct {
-		Name    string                `json:"name"`
-		Results []dotfiles.ChangeFile `json:"results"`
-		OK      bool                  `json:"ok"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(stdout()), &got))
-	require.Equal(t, "dotfiles sync-record", got.Name)
-	require.True(t, got.OK)
-	require.Len(t, got.Results, 1)
-}
 
 func captureStdout(t *testing.T) func() string {
 	t.Helper()

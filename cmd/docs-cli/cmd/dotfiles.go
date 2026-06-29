@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
@@ -24,7 +23,6 @@ func newDotfilesCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(newDotfilesCheckCmd())
-	cmd.AddCommand(newDotfilesSyncRecordCmd())
 
 	return cmd
 }
@@ -41,21 +39,6 @@ func newDotfilesCheckCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&flags.path, "path", cmdDotfiles, "dotfiles path")
 	cmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
-
-	return cmd
-}
-
-func newDotfilesSyncRecordCmd() *cobra.Command {
-	var flags dotfilesFlags
-
-	cmd := &cobra.Command{
-		Use:   "sync-record",
-		Short: "Inspect dotfiles changes for record synchronization",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDotfilesSyncRecord(flags.path, output.GetFormat(cmd))
-		},
-	}
-	cmd.Flags().StringVar(&flags.path, "path", cmdDotfiles, "dotfiles path")
 
 	return cmd
 }
@@ -84,74 +67,4 @@ func runDotfilesCheck(dotfilesPath, dataDir, format string) error {
 	}
 
 	return nil
-}
-
-func runDotfilesSyncRecord(dotfilesPath, format string) error {
-	result := workspaceuc.RunDotfilesSyncRecord(workspaceuc.DotfilesSyncRecordInput{
-		DotfilesPath: dotfilesPath,
-	})
-
-	if err := writeDotfilesSyncRecordResult(result, format); err != nil {
-		return err
-	}
-	if !result.OK {
-		return fmt.Errorf("sync-record failed: %s", result.Error)
-	}
-
-	return nil
-}
-
-func writeDotfilesSyncRecordResult(result *workspaceuc.DotfilesSyncRecordResult, format string) error {
-	format, err := normalizeOutputFormat(format)
-	if err != nil {
-		return err
-	}
-	if format == outputFormatJSON {
-		summary := map[string]any{
-			"changedFiles": len(result.ChangedFiles),
-		}
-		if result.Error != "" {
-			summary["error"] = result.Error
-		}
-
-		return writeCommandOutput(format, &CommandOutput{
-			Name:    "dotfiles sync-record",
-			OK:      result.OK,
-			Summary: summary,
-			Results: result.ChangedFiles,
-		}, "")
-	}
-
-	var b strings.Builder
-	if !result.OK {
-		fmt.Fprintf(&b, "sync-record failed: %s\n", result.Error)
-
-		return writeOutput(b.String())
-	}
-
-	fmt.Fprintf(&b, "dotfiles sync record: path=%s changed=%d\n", result.DotfilesPath, len(result.ChangedFiles))
-	for _, f := range result.ChangedFiles {
-		status := formatDotfilesChangeStatus(f.Status)
-		fmt.Fprintf(&b, "%s %s\n", status, f.Path)
-		if f.Gh != nil {
-			fmt.Fprintf(&b, "  gh category=%s files=%s\n", f.Gh.Category, strings.Join(f.Gh.GhFiles, ", "))
-		}
-	}
-
-	return writeOutput(b.String())
-}
-
-func formatDotfilesChangeStatus(status string) string {
-	switch status {
-	case "M":
-		return "modified"
-	case "A":
-		return "added"
-	case "D":
-		return "deleted"
-	case "??":
-		return "untracked"
-	default:
-		return status
-	}
 }

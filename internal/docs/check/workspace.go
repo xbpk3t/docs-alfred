@@ -199,33 +199,6 @@ func RunDotfilesCheck(input DotfilesCheckInput) (*DotfilesCheckResult, error) {
 	}, nil
 }
 
-// DotfilesSyncRecordInput holds input for dotfiles sync-record.
-type DotfilesSyncRecordInput struct {
-	DotfilesPath string
-}
-
-// DotfilesSyncRecordResult holds sync-record results.
-type DotfilesSyncRecordResult struct {
-	DotfilesPath string                `json:"dotfilesPath"`
-	Error        string                `json:"error,omitempty"`
-	ChangedFiles []dotfiles.ChangeFile `json:"changedFiles"`
-	OK           bool                  `json:"ok"`
-}
-
-// RunDotfilesSyncRecord inspects dotfiles changes for record synchronization.
-func RunDotfilesSyncRecord(input DotfilesSyncRecordInput) *DotfilesSyncRecordResult {
-	result := dotfiles.RunSyncRecord(dotfiles.SyncRecordOptions{
-		DotfilesPath: input.DotfilesPath,
-	})
-
-	return &DotfilesSyncRecordResult{
-		OK:           result.OK,
-		Error:        result.Error,
-		DotfilesPath: result.DotfilesPath,
-		ChangedFiles: result.ChangedFiles,
-	}
-}
-
 // HasIssueErrors reports whether any common issue is error-severity.
 func HasIssueErrors(issues []checkutil.Issue) bool {
 	return checkutil.HasErrors(issues)
