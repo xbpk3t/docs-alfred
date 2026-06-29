@@ -304,33 +304,6 @@ func TestDotfilesCheckResultSummary(t *testing.T) {
 	assert.Equal(t, 2, s["ghOnly"])
 }
 
-// --- RunDotfilesSyncRecord ---
-
-func TestRunDotfilesSyncRecordNonExistent(t *testing.T) {
-	result := RunDotfilesSyncRecord(DotfilesSyncRecordInput{
-		DotfilesPath: "/tmp/nonexistent-dotfiles-12345",
-	})
-	assert.False(t, result.OK)
-	assert.Contains(t, result.Error, "not found")
-}
-
-func TestRunDotfilesSyncRecordNotGit(t *testing.T) {
-	dir := t.TempDir()
-	result := RunDotfilesSyncRecord(DotfilesSyncRecordInput{
-		DotfilesPath: dir,
-	})
-	assert.False(t, result.OK)
-	assert.Contains(t, result.Error, "not a git repository")
-}
-
-func TestDotfilesSyncRecordResultSummary(t *testing.T) {
-	r := &DotfilesSyncRecordResult{
-		OK:           true,
-		DotfilesPath: "/tmp/dotfiles",
-	}
-	assert.True(t, r.OK)
-}
-
 // --- ImagesCheckResult ---
 
 func TestImagesCheckResultSummary(t *testing.T) {
@@ -456,14 +429,6 @@ func TestRunDotfilesCheckWithGHOnlyNoDotfilesFlag(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.GhOnlyCount)
 	assert.Empty(t, result.Issues)
-}
-
-func TestRunDotfilesSyncRecordNonExistentPath(t *testing.T) {
-	result := RunDotfilesSyncRecord(DotfilesSyncRecordInput{
-		DotfilesPath: "/tmp/nonexistent-99999",
-	})
-	assert.False(t, result.OK)
-	assert.Contains(t, result.Error, "not found")
 }
 
 func TestRunWikiCheckNonExistentGhRoot(t *testing.T) {

@@ -191,6 +191,73 @@ func TestToIssueViewsFromDetails(t *testing.T) {
 	assert.Equal(t, "🔥 P0", views[0].Priority)
 }
 
+func TestToIssueViewsFromDetailsMultiple(t *testing.T) {
+	details := []linear.IssueDetail{
+		{Identifier: "LUC-1", Title: "Task 1", Priority: 1, TeamName: "Eng", URL: "https://example.com/1"},
+		{Identifier: "LUC-2", Title: "Task 2", Priority: 3, TeamName: "Ops", URL: "https://example.com/2"},
+		{Identifier: "LUC-3", Title: "Task 3", Priority: 0, TeamName: "QA"},
+	}
+	views := toIssueViewsFromDetails(details)
+	require.Len(t, views, 3)
+	assert.Equal(t, "🔥 P0", views[0].Priority)
+	assert.Equal(t, "⚡ P2", views[1].Priority)
+	assert.Empty(t, views[2].Priority) // priority 0 → empty label
+	assert.Empty(t, views[2].URL)
+}
+
+func TestToIssueDetailsMultiple(t *testing.T) {
+	details := []linear.IssueDetail{
+		{Identifier: "LUC-1", Title: "Task 1", Priority: 1, Comments: []linear.Comment{{Body: "c1", UserName: "A"}}},
+		{Identifier: "LUC-2", Title: "Task 2", Priority: 4, Comments: nil},
+		{Identifier: "LUC-3", Title: "Task 3", Priority: 0},
+	}
+	result := toIssueDetails(details)
+	require.Len(t, result, 3)
+	assert.Equal(t, "🔥 P0", result[0].Priority)
+	assert.Len(t, result[0].Comments, 1)
+	assert.Equal(t, "📋 P3", result[1].Priority)
+	assert.Empty(t, result[1].Comments)
+	assert.Empty(t, result[2].Priority) // priority 0 → empty label
+}
+
+func TestParseReviewJSONValid(t *testing.T) {
+	raw := `{"reviews":[{"identifier":"LUC-1","title":"Task","progress":["p1"],"knowledge":["k1"],"review":["r1"]}],"summary":["s1"]}`
+	result, err := parseReviewJSON(raw)
+	require.NoError(t, err)
+	assert.Contains(t, result, "p1")
+	assert.Contains(t, result, "k1")
+	assert.Contains(t, result, "r1")
+}
+
+func TestParseReviewJSONEmptyReviews(t *testing.T) {
+	raw := `{"reviews":[],"summary":["s1"]}`
+	_, err := parseReviewJSON(raw)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no reviews")
+}
+
+func TestParseReviewJSONInvalid(t *testing.T) {
+	_, err := parseReviewJSON("not json")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal")
+}
+
+func TestParseReviewJSONNoSections(t *testing.T) {
+	raw := `{"reviews":[{"identifier":"LUC-1","title":"Task"}],"summary":[]}`
+	result, err := parseReviewJSON(raw)
+	require.NoError(t, err)
+	// All sections empty → AIReviewItem returns empty markdown
+	assert.Empty(t, result)
+}
+
+func TestParseReviewJSONTakesFirst(t *testing.T) {
+	raw := `{"reviews":[{"identifier":"LUC-1","title":"First","progress":["first-review"]},{"identifier":"LUC-2","title":"Second","progress":["second-review"]}]}`
+	result, err := parseReviewJSON(raw)
+	require.NoError(t, err)
+	assert.Contains(t, result, "first-review")
+	assert.NotContains(t, result, "second-review")
+}
+
 func TestFilterActiveDetails(t *testing.T) {
 	completed := []linear.Issue{{Identifier: "LUC-1"}}
 	changes := []linear.StateChange{{IssueIdentifier: "LUC-2"}}
