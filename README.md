@@ -32,7 +32,7 @@ go install github.com/xbpk3t/docs-alfred/cmd/data-cli@main
 ```shell
 data-cli render
 data-cli check gh
-data-cli duplicate gh
+data-cli dedup gh
 ```
 
 

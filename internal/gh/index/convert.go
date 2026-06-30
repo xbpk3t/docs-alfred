@@ -8,10 +8,12 @@ func (cr ConfigRepos) ToRepos() Repos {
 
 	for _, config := range cr {
 		config.Using.Tag = config.Tag
+		config.Using.IsDotfiles = config.IsDotfiles
 		repos = append(repos, processRepo(&config.Using, config.Type)...)
 
 		for i := range config.Repos {
 			config.Repos[i].Tag = config.Tag
+			config.Repos[i].IsDotfiles = config.IsDotfiles
 			repos = append(repos, processRepo(config.Repos[i], config.Type)...)
 		}
 	}

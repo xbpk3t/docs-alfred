@@ -32,9 +32,9 @@ func TestNewCheckCmdShortDescription(t *testing.T) {
 	require.Contains(t, cmd.Short, "Check")
 }
 
-func TestNewDuplicateCmdShortDescription(t *testing.T) {
-	cmd := newDuplicateCmd(new(string))
-	require.Equal(t, "duplicate", cmd.Name())
+func TestNewDedupCmdShortDescription(t *testing.T) {
+	cmd := newDedupCmd(new(string))
+	require.Equal(t, "dedup", cmd.Name())
 	require.Contains(t, cmd.Short, "duplicate")
 }
 
@@ -55,15 +55,15 @@ func TestNewCheckCmdWithInvalidDomain(t *testing.T) {
 	require.Contains(t, err.Error(), "unknown data domain")
 }
 
-func TestNewDuplicateCmdWithValidDomain(t *testing.T) {
-	cmd := newDuplicateCmd(new(string))
+func TestNewDedupCmdWithValidDomain(t *testing.T) {
+	cmd := newDedupCmd(new(string))
 	cmd.SetArgs([]string{"gh"})
 	err := cmd.Execute()
 	_ = err
 }
 
-func TestNewDuplicateCmdWithInvalidDomain(t *testing.T) {
-	cmd := newDuplicateCmd(new(string))
+func TestNewDedupCmdWithInvalidDomain(t *testing.T) {
+	cmd := newDedupCmd(new(string))
 	cmd.SetArgs([]string{"invalid"})
 	err := cmd.Execute()
 	require.Error(t, err)
@@ -76,8 +76,8 @@ func TestRunDomainCheckWithValidDomain(t *testing.T) {
 	_ = err
 }
 
-func TestRunDomainDuplicateWithValidDomain(t *testing.T) {
-	err := runDomainDuplicate("gh", "")
+func TestRunDomainDedupWithValidDomain(t *testing.T) {
+	err := runDomainDedup("gh", "")
 	_ = err
 }
 
@@ -177,18 +177,18 @@ func TestNewCheckCmdRequiresExactlyOneArg(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// newDuplicateCmd
+// newDedupCmd
 // ---------------------------------------------------------------------------
 
-func TestNewDuplicateCmdFlags(t *testing.T) {
-	cmd := newDuplicateCmd(new(string))
+func TestNewDedupCmdFlags(t *testing.T) {
+	cmd := newDedupCmd(new(string))
 
-	require.Equal(t, "duplicate", cmd.Name())
-	require.Equal(t, "duplicate <domain>", cmd.Use)
+	require.Equal(t, "dedup", cmd.Name())
+	require.Equal(t, "dedup <domain>", cmd.Use)
 }
 
-func TestNewDuplicateCmdRequiresExactlyOneArg(t *testing.T) {
-	cmd := newDuplicateCmd(new(string))
+func TestNewDedupCmdRequiresExactlyOneArg(t *testing.T) {
+	cmd := newDedupCmd(new(string))
 
 	cmd.SetArgs([]string{})
 	err := cmd.Execute()

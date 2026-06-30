@@ -114,19 +114,19 @@ func runYAMLParseOnlyDomainCheck(domain data.DataDomain, path string) (*DomainCh
 	return &DomainCheckResult{}, nil
 }
 
-// DomainDuplicateInput holds input for duplicate detection.
-type DomainDuplicateInput struct {
+// DomainDedupInput holds input for duplicate detection.
+type DomainDedupInput struct {
 	Domain data.DataDomain
 	Path   string
 }
 
-// DomainDuplicateResult holds duplicate detection results.
-type DomainDuplicateResult struct {
+// DomainDedupResult holds duplicate detection results.
+type DomainDedupResult struct {
 	Report *data.DuplicateReport
 }
 
-// RunDomainDuplicate detects duplicate entries in a domain data directory.
-func RunDomainDuplicate(input DomainDuplicateInput) (*DomainDuplicateResult, error) {
+// RunDomainDedup detects duplicate entries in a domain data directory.
+func RunDomainDedup(input DomainDedupInput) (*DomainDedupResult, error) {
 	spec, ok := data.SpecForDomain(input.Domain)
 	if !ok {
 		return nil, fmt.Errorf("unknown data domain %q", input.Domain)
@@ -155,7 +155,7 @@ func RunDomainDuplicate(input DomainDuplicateInput) (*DomainDuplicateResult, err
 		return nil, err
 	}
 
-	return &DomainDuplicateResult{Report: report}, nil
+	return &DomainDedupResult{Report: report}, nil
 }
 
 // DomainRenderInput holds input for domain rendering.

@@ -4,15 +4,13 @@
 <dict>
 	<key>bundleid</key>
 	<string>com.pwgen-alfred.lucas</string>
-	<key>category</key>
-	<string>Tools</string>
 	<key>connections</key>
 	<dict>
 		<key>58DCDFD6-3D4C-4206-9FBC-776576E48604</key>
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>C9E98C70-4B1D-4CD8-BBF2-915382C85BA4</string>
+				<string>80DA6C7E-022A-4644-85BE-9F158FB36990</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -32,6 +30,25 @@
 	<string>pwgen</string>
 	<key>objects</key>
 	<array>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>autopaste</key>
+				<false/>
+				<key>clipboardtext</key>
+				<string>{query}</string>
+				<key>ignoredynamicplaceholders</key>
+				<false/>
+				<key>transient</key>
+				<false/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.clipboard</string>
+			<key>uid</key>
+			<string>80DA6C7E-022A-4644-85BE-9F158FB36990</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
 		<dict>
 			<key>config</key>
 			<dict>
@@ -81,29 +98,6 @@
 			<key>version</key>
 			<integer>3</integer>
 		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>concurrently</key>
-				<false/>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>script</key>
-				<string>printf '%s' "{query}" | pbcopy</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>type</key>
-				<integer>0</integer>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.action.script</string>
-			<key>uid</key>
-			<string>C9E98C70-4B1D-4CD8-BBF2-915382C85BA4</string>
-			<key>version</key>
-			<integer>2</integer>
-		</dict>
 	</array>
 	<key>readme</key>
 	<string></string>
@@ -116,10 +110,10 @@
 			<key>ypos</key>
 			<real>190</real>
 		</dict>
-		<key>C9E98C70-4B1D-4CD8-BBF2-915382C85BA4</key>
+		<key>80DA6C7E-022A-4644-85BE-9F158FB36990</key>
 		<dict>
 			<key>xpos</key>
-			<real>525</real>
+			<real>685</real>
 			<key>ypos</key>
 			<real>155</real>
 		</dict>

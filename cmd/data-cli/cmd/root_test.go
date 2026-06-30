@@ -11,7 +11,7 @@ func TestRootCommandOwnsDataActions(t *testing.T) {
 	root := newRootCmd()
 
 	require.Equal(t, "data-cli", root.Name())
-	requireCommandNames(t, root.Commands(), []string{"check", "duplicate", "render", "schema"})
+	requireCommandNames(t, root.Commands(), []string{"check", "dedup", "render", "schema"})
 }
 
 func TestCheckCommandExposesGhMaxLinesFlag(t *testing.T) {

@@ -21,7 +21,7 @@ applyTo: "cmd/**"
 
 ## data-cli
 
-子命令：`render`、`check`、`duplicate`。
+子命令：`render`、`check`、`dedup`。
 
 - 遵循上游 docs 项目 schema 规则，不凭空修改。
 - `render` 写 repo-tracked 内容，只有任务明确要求才执行。

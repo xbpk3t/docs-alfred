@@ -18,6 +18,7 @@ type Repo struct {
 	URL         string   `yaml:"url"`
 	Des         string   `yaml:"des"`
 	Zk          string   `yaml:"zk"`
+	NixURL      string   `yaml:"nix"`
 	Topics      []Topic  `yaml:"topics"`
 	Record      []Record `yaml:"record"`
 	HasRecord   bool     `yaml:"-"`
@@ -55,6 +56,7 @@ type repoFields struct {
 	URL string `yaml:"url"`
 	Des string `yaml:"des"`
 	Zk  string `yaml:"zk"`
+	Nix string `yaml:"nix"`
 }
 
 type topicFields struct {
@@ -99,6 +101,7 @@ func repoFromMap(m map[string]any) Repo {
 	repo.URL = fields.URL
 	repo.Des = fields.Des
 	repo.Zk = fields.Zk
+	repo.NixURL = fields.Nix
 	repo.Topics = topicsFromAny(m["topics"])
 
 	if record, ok := m["record"]; ok {

@@ -198,56 +198,56 @@ func TestRunDomainCheckGhWithRuleScope(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// newDuplicateCmd – RunE paths
+// newDedupCmd – RunE paths
 // ---------------------------------------------------------------------------
 
-func TestNewDuplicateCmdRunEInvalidDomain(t *testing.T) {
+func TestNewDedupCmdRunEInvalidDomain(t *testing.T) {
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"duplicate", "bogus"})
+	cmd.SetArgs([]string{"dedup", "bogus"})
 	err := cmd.Execute()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown data domain")
 }
 
-func TestNewDuplicateCmdRunEGhNoDuplicates(t *testing.T) {
+func TestNewDedupCmdRunEGhNoDuplicates(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"duplicate", "gh", "--path", ghDir})
+	cmd.SetArgs([]string{"dedup", "gh", "--path", ghDir})
 	_ = cmd.Execute()
 }
 
-func TestNewDuplicateCmdRunEGhWithDuplicates(t *testing.T) {
+func TestNewDedupCmdRunEGhWithDuplicates(t *testing.T) {
 	// GH duplicate check expects YAML files inside subdirectories of the target dir.
 	ghDir := writeGhFiles(t, map[string]string{
 		"dev/a.yml": "- type: a\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n  record: []\n",
 		"ops/b.yml": "- type: b\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n  record: []\n",
 	})
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"duplicate", "gh", "--path", ghDir})
+	cmd.SetArgs([]string{"dedup", "gh", "--path", ghDir})
 	_ = cmd.Execute()
 }
 
 // ---------------------------------------------------------------------------
-// runDomainDuplicate – direct tests
+// runDomainDedup – direct tests
 // ---------------------------------------------------------------------------
 
-func TestRunDomainDuplicateGhNoDuplicates(t *testing.T) {
+func TestRunDomainDedupGhNoDuplicates(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
-	err := runDomainDuplicate(data.DomainGH, ghDir)
+	err := runDomainDedup(data.DomainGH, ghDir)
 	_ = err
 }
 
-func TestRunDomainDuplicateGhNonexistentPath(t *testing.T) {
-	err := runDomainDuplicate(data.DomainGH, "/tmp/__dup_no_such__")
+func TestRunDomainDedupGhNonexistentPath(t *testing.T) {
+	err := runDomainDedup(data.DomainGH, "/tmp/__dup_no_such__")
 	require.Error(t, err)
 }
 
-func TestRunDomainDuplicateGhWithDuplicates(t *testing.T) {
+func TestRunDomainDedupGhWithDuplicates(t *testing.T) {
 	// GH duplicate check expects YAML files inside subdirectories.
 	ghDir := writeGhFiles(t, map[string]string{
 		"dev/a.yml": "- type: a\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n  record: []\n",
 		"ops/b.yml": "- type: b\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n  record: []\n",
 	})
-	err := runDomainDuplicate(data.DomainGH, ghDir)
+	err := runDomainDedup(data.DomainGH, ghDir)
 	_ = err
 }
