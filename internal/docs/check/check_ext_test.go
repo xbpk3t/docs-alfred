@@ -188,14 +188,6 @@ func TestWikiCheckResultSummary(t *testing.T) {
 	assert.Equal(t, 1, s["extraWikiDirs"])
 }
 
-// --- HasIssueErrors ---
-
-func TestHasIssueErrors(t *testing.T) {
-	assert.True(t, HasIssueErrors([]checkutil.Issue{{Severity: checkutil.SeverityError}}))
-	assert.False(t, HasIssueErrors([]checkutil.Issue{{Severity: checkutil.SeverityWarn}}))
-	assert.False(t, HasIssueErrors(nil))
-}
-
 // --- FormatImagesDetails ---
 
 func TestFormatImagesDetails(t *testing.T) {
@@ -251,57 +243,6 @@ func TestBlogCheckResultSummary(t *testing.T) {
 	s := r.Summary()
 	assert.Equal(t, 5, s["ghTypes"])
 	assert.Equal(t, 3, s["blogDirs"])
-}
-
-// --- RunDotfilesCheck ---
-
-func TestRunDotfilesCheckMissingBase(t *testing.T) {
-	result, err := RunDotfilesCheck(DotfilesCheckInput{
-		DotfilesPath: t.TempDir(),
-		DataDir:      t.TempDir(),
-	})
-	require.NoError(t, err)
-	assert.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "home/base not found")
-}
-
-func TestRunDotfilesCheckMatching(t *testing.T) {
-	dotfilesDir := t.TempDir()
-	dataDir := t.TempDir()
-
-	require.NoError(t, os.MkdirAll(filepath.Join(dotfilesDir, "home", "base", "tech"), 0o700))
-	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "tech"), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "tech", "go.yml"), []byte("- isDotfiles: true"), 0o600))
-
-	result, err := RunDotfilesCheck(DotfilesCheckInput{
-		DotfilesPath: dotfilesDir,
-		DataDir:      dataDir,
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.SharedCount)
-}
-
-func TestRunDotfilesCheckDfOnly(t *testing.T) {
-	dotfilesDir := t.TempDir()
-	dataDir := t.TempDir()
-
-	require.NoError(t, os.MkdirAll(filepath.Join(dotfilesDir, "home", "base", "dfonly"), 0o700))
-
-	result, err := RunDotfilesCheck(DotfilesCheckInput{
-		DotfilesPath: dotfilesDir,
-		DataDir:      dataDir,
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.DfOnlyCount)
-	assert.NotEmpty(t, result.Issues)
-}
-
-func TestDotfilesCheckResultSummary(t *testing.T) {
-	r := &DotfilesCheckResult{SharedCount: 3, DfOnlyCount: 1, GhOnlyCount: 2}
-	s := r.Summary()
-	assert.Equal(t, 3, s["shared"])
-	assert.Equal(t, 1, s["dfOnly"])
-	assert.Equal(t, 2, s["ghOnly"])
 }
 
 // --- ImagesCheckResult ---
@@ -414,23 +355,6 @@ func TestRunBlogCheckEmpty(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
-func TestRunDotfilesCheckWithGHOnlyNoDotfilesFlag(t *testing.T) {
-	dotfilesDir := t.TempDir()
-	dataDir := t.TempDir()
-
-	require.NoError(t, os.MkdirAll(filepath.Join(dotfilesDir, "home", "base"), 0o700))
-	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "ghonly"), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "ghonly", "type.yml"), []byte("- isDotfiles: false\n"), 0o600))
-
-	result, err := RunDotfilesCheck(DotfilesCheckInput{
-		DotfilesPath: dotfilesDir,
-		DataDir:      dataDir,
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.GhOnlyCount)
-	assert.Empty(t, result.Issues)
-}
-
 func TestRunWikiCheckNonExistentGhRoot(t *testing.T) {
 	_, err := RunWikiCheck(WikiCheckInput{
 		GhRoot:   "/tmp/nonexistent-gh-root-12345",
@@ -462,14 +386,4 @@ func TestRunBlogCheckError(t *testing.T) {
 		BlogDir: t.TempDir(),
 	})
 	require.Error(t, err)
-}
-
-func TestRunDotfilesCheckEmptyDotfilesPath(t *testing.T) {
-	// An empty DotfilesPath should work (defaults are applied in RunCheck)
-	result, err := RunDotfilesCheck(DotfilesCheckInput{
-		DotfilesPath: "",
-		DataDir:      t.TempDir(),
-	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
 }

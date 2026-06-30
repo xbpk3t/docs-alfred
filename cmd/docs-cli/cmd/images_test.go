@@ -384,17 +384,17 @@ func TestWriteImagesCheckResult_EmptyName(t *testing.T) {
 // --- checkutil helpers ---
 
 func TestHasIssueErrors_TrueForErrors(t *testing.T) {
-	assert.True(t, workspaceuc.HasIssueErrors([]checkutil.Issue{
+	assert.True(t, checkutil.HasErrors([]checkutil.Issue{
 		{Severity: checkutil.SeverityError, Message: "bad"},
 	}))
 }
 
 func TestHasIssueErrors_FalseForWarnings(t *testing.T) {
-	assert.False(t, workspaceuc.HasIssueErrors([]checkutil.Issue{
+	assert.False(t, checkutil.HasErrors([]checkutil.Issue{
 		{Severity: checkutil.SeverityWarn, Message: "warn"},
 	}))
 }
 
 func TestHasIssueErrors_EmptyList(t *testing.T) {
-	assert.False(t, workspaceuc.HasIssueErrors(nil))
+	assert.False(t, checkutil.HasErrors(nil))
 }

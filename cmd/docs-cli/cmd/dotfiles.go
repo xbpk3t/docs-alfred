@@ -1,16 +1,10 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"log/slog"
-	"os"
-	"sort"
-	"strings"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
-	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
 	df "github.com/xbpk3t/docs-alfred/internal/docs/dotfiles"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
@@ -59,51 +53,48 @@ func newDotfilesCheckCmd() *cobra.Command {
 var runDotfilesCheck = runDotfilesFullCheck
 
 func runDotfilesFullCheck(dotfilesPath, dataDir, format string) error {
-	// Category-level check
-	catResult, err := workspaceuc.RunDotfilesCheck(workspaceuc.DotfilesCheckInput{
-		DotfilesPath: dotfilesPath,
-		DataDir:      dataDir,
-	})
+	// Category-level diff
+	dfCats, err := df.LoadDotfilesCategories(dotfilesPath)
+	if err != nil {
+		return err
+	}
+	ghCats, err := df.LoadGHCategories(dataDir)
+	if err != nil {
+		return err
+	}
+	catDiff := df.DiffCategories(ghCats, dfCats)
+	catDiffPtr, err := df.FilterGhOnlyCategories(&catDiff, dataDir)
 	if err != nil {
 		return err
 	}
 
 	// Nix-level diff
-	nixDiff, err := df.RunNixDiff(dataDir, dotfilesPath, df.DefaultScope())
+	dfNix, err := df.LoadDotfilesNixData(dotfilesPath, df.DefaultScope())
 	if err != nil {
 		return err
 	}
-
-	allIssues := make([]checkutil.Issue, 0, len(catResult.Issues)+len(nixDiff.Issues))
-	allIssues = append(allIssues, catResult.Issues...)
-	allIssues = append(allIssues, nixDiff.Issues...)
-
-	catSum := catResult.Summary()
-	nixSum := nixDiff.Summary()
-
-	textDetails := fmt.Sprintf(
-		"categories shared=%d df-only=%d gh-only=%d | nix gh-only=%d df-only=%d\n",
-		catSum["shared"], catSum["dfOnly"], catSum["ghOnly"],
-		nixSum["ghOnly"], nixSum["dfOnly"],
-	)
-
-	combined := make(map[string]any)
-	for k, v := range catSum {
-		combined[k] = v
+	ghNix, err := df.LoadGHNixData(dataDir)
+	if err != nil {
+		return err
 	}
-	for k, v := range nixSum {
-		combined["nix"+k] = v
+	falsePkgs, err := df.LoadGHFalsePkgs(dataDir)
+	if err != nil {
+		return err
 	}
+	selfBuilt, err := df.LoadSelfBuiltPkgs(filepath.Join(dotfilesPath, "pkgs", "_sources", "generated.json"))
+	if err != nil {
+		return err
+	}
+	nixDiff := df.DiffNix(ghNix, dfNix, falsePkgs, selfBuilt)
 
-	if err := writeCheckCommandOutput(format, &checkCommandOutput{
-		Name:    "dotfiles check",
-		Issues:  allIssues,
-		Summary: combined,
-	}, textDetails); err != nil {
+	// Merge and output
+	result := df.MergeResult(catDiffPtr, nixDiff)
+
+	if err := df.WriteOutput(format, result); err != nil {
 		return err
 	}
 
-	if workspaceuc.HasIssueErrors(allIssues) {
+	if checkutil.HasErrors(result.Issues) {
 		return errors.New("dotfiles check failed")
 	}
 
@@ -135,36 +126,5 @@ func runDotfilesDedup(dotfilesPath, format string) error {
 		return err
 	}
 
-	if len(dups) == 0 {
-		slog.Info("no duplicates found")
-		return nil
-	}
-
-	// Build issues for each duplicated package
-	var issues []checkutil.Issue
-	for pkg, files := range dups {
-		sort.Strings(files)
-		issues = append(issues, checkutil.Issue{
-			File:     pkg,
-			Severity: checkutil.SeverityWarn,
-			Message:  fmt.Sprintf("pkgs.%s referenced in multiple files: %s", pkg, strings.Join(files, ", ")),
-		})
-	}
-
-	if format == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{
-			"name":    "dotfiles dedup",
-			"total":   len(dups),
-			"results": issues,
-		})
-	}
-
-	slog.Info(fmt.Sprintf("found %d duplicate package references:", len(dups)))
-	for _, iss := range issues {
-		slog.Info(fmt.Sprintf("  %s", iss.Message))
-	}
-
-	return nil
+	return df.WriteDedupOutput(format, dups)
 }
