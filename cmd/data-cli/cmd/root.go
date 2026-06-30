@@ -38,7 +38,7 @@ func newRootCmd() *cobra.Command {
 
 	rootCmd.AddCommand(newRenderCmd(&dataPath))
 	rootCmd.AddCommand(newCheckCmd(&dataPath))
-	rootCmd.AddCommand(newDuplicateCmd(&dataPath))
+	rootCmd.AddCommand(newDedupCmd(&dataPath))
 	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
@@ -137,9 +137,9 @@ func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string, ghMaxLin
 	return nil
 }
 
-func newDuplicateCmd(dataPath *string) *cobra.Command {
+func newDedupCmd(dataPath *string) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "duplicate <domain>",
+		Use:   "dedup <domain>",
 		Short: "Find duplicate records for a domain",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -148,7 +148,7 @@ func newDuplicateCmd(dataPath *string) *cobra.Command {
 				return err
 			}
 
-			return runDomainDuplicate(domain, *dataPath)
+			return runDomainDedup(domain, *dataPath)
 		},
 	}
 
@@ -164,8 +164,8 @@ func parseDataDomainArg(value string) (data.DataDomain, error) {
 	return domain, nil
 }
 
-func runDomainDuplicate(domain data.DataDomain, dataPath string) error {
-	result, err := dataops.RunDomainDuplicate(dataops.DomainDuplicateInput{
+func runDomainDedup(domain data.DataDomain, dataPath string) error {
+	result, err := dataops.RunDomainDedup(dataops.DomainDedupInput{
 		Domain: domain,
 		Path:   dataPath,
 	})

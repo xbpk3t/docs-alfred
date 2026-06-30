@@ -70,18 +70,18 @@ func TestRunDomainCheck_GoodsDomain(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
-func TestRunDomainDuplicate_UnknownDomain(t *testing.T) {
-	_, err := RunDomainDuplicate(DomainDuplicateInput{Domain: data.DataDomain("unknown")})
+func TestRunDomainDedup_UnknownDomain(t *testing.T) {
+	_, err := RunDomainDedup(DomainDedupInput{Domain: data.DataDomain("unknown")})
 	require.Error(t, err)
 }
 
-func TestRunDomainDuplicate_UnsupportedDomain(t *testing.T) {
-	_, err := RunDomainDuplicate(DomainDuplicateInput{Domain: data.DomainTask})
+func TestRunDomainDedup_UnsupportedDomain(t *testing.T) {
+	_, err := RunDomainDedup(DomainDedupInput{Domain: data.DomainTask})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not supported")
 }
 
-func TestRunDomainDuplicate_BooksDomain(t *testing.T) {
+func TestRunDomainDedup_BooksDomain(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "books.yml"), []byte(`---
 - name: "Book A"
@@ -89,12 +89,12 @@ func TestRunDomainDuplicate_BooksDomain(t *testing.T) {
   url: "https://example.com/a"
 `), 0644))
 
-	result, err := RunDomainDuplicate(DomainDuplicateInput{Domain: data.DomainBooks, Path: tmpDir})
+	result, err := RunDomainDedup(DomainDedupInput{Domain: data.DomainBooks, Path: tmpDir})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 }
 
-func TestRunDomainDuplicate_GHDomain(t *testing.T) {
+func TestRunDomainDedup_GHDomain(t *testing.T) {
 	tmpDir := t.TempDir()
 	tagDir := filepath.Join(tmpDir, "dev")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
@@ -104,7 +104,7 @@ func TestRunDomainDuplicate_GHDomain(t *testing.T) {
     - url: https://github.com/acme/tool
 `), 0644))
 
-	result, err := RunDomainDuplicate(DomainDuplicateInput{Domain: data.DomainGH, Path: tmpDir})
+	result, err := RunDomainDedup(DomainDedupInput{Domain: data.DomainGH, Path: tmpDir})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 }
@@ -116,8 +116,8 @@ func TestRunDomainCheck_DefaultPath(t *testing.T) {
 	}
 }
 
-func TestRunDomainDuplicate_DefaultPath(t *testing.T) {
-	_, err := RunDomainDuplicate(DomainDuplicateInput{Domain: data.DomainBooks})
+func TestRunDomainDedup_DefaultPath(t *testing.T) {
+	_, err := RunDomainDedup(DomainDedupInput{Domain: data.DomainBooks})
 	if err != nil {
 		// Expected - default path may not exist
 	}
