@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
@@ -59,7 +60,7 @@ func runBlogCheck(dataDir, blogDir, format string) error {
 		return err
 	}
 
-	if workspaceuc.HasIssueErrors(result.Issues) {
+	if checkutil.HasErrors(result.Issues) {
 		return errors.New("blog check failed")
 	}
 

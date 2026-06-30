@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
@@ -126,7 +127,7 @@ func writeImagesCheckResult(
 		return err
 	}
 
-	if workspaceuc.HasIssueErrors(issues) {
+	if checkutil.HasErrors(issues) {
 		return fmt.Errorf("%s failed", name)
 	}
 

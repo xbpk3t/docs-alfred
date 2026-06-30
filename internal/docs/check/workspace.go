@@ -6,9 +6,7 @@ import (
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/internal/docs/workspace/blog"
-	"github.com/xbpk3t/docs-alfred/internal/docs/workspace/dotfiles"
 	"github.com/xbpk3t/docs-alfred/internal/docs/workspace/images"
-	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
@@ -154,52 +152,4 @@ func RunBlogCheck(input BlogCheckInput) (*BlogCheckResult, error) {
 		GHTypes:  result.GHTypes,
 		BlogDirs: result.BlogDirs,
 	}, nil
-}
-
-// DotfilesCheckInput holds input for dotfiles check.
-type DotfilesCheckInput struct {
-	DotfilesPath string
-	DataDir      string
-}
-
-// DotfilesCheckResult holds dotfiles check results.
-type DotfilesCheckResult struct {
-	Issues      []checkutil.Issue
-	SharedCount int
-	DfOnlyCount int
-	GhOnlyCount int
-}
-
-// Summary returns count-oriented dotfiles check details for structured output.
-func (r *DotfilesCheckResult) Summary() map[string]any {
-	return map[string]any{
-		"shared": r.SharedCount,
-		"dfOnly": r.DfOnlyCount,
-		"ghOnly": r.GhOnlyCount,
-	}
-}
-
-// RunDotfilesCheck checks dotfiles/data consistency.
-func RunDotfilesCheck(input DotfilesCheckInput) (*DotfilesCheckResult, error) {
-	dataDir := input.DataDir
-	if dataDir == "" {
-		dataDir = data.DefaultPathForDomain(data.DomainGH)
-	}
-
-	result, err := dotfiles.RunCheck(input.DotfilesPath, dataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	return &DotfilesCheckResult{
-		Issues:      result.Issues,
-		SharedCount: result.SharedCount,
-		DfOnlyCount: result.DfOnlyCount,
-		GhOnlyCount: result.GhOnlyCount,
-	}, nil
-}
-
-// HasIssueErrors reports whether any common issue is error-severity.
-func HasIssueErrors(issues []checkutil.Issue) bool {
-	return checkutil.HasErrors(issues)
 }
