@@ -1,14 +1,20 @@
 package internal
 
 import (
+	"bytes"
 	"context"
+	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 	"time"
 
+	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
 	session "github.com/xbpk3t/docs-alfred/pkg/ai/session"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
@@ -16,8 +22,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+//go:embed prompts/*.txt
+var promptFS embed.FS
+
 const (
 	roleUser = "user"
+
+	// mergedAITimeout is the timeout for the single merged AI call
+	// that handles both classification and title generation.
+	mergedAITimeout = 100 * time.Second
 )
 
 // ExportInput contains inputs for session export.
@@ -45,6 +58,13 @@ type Frontmatter struct {
 	Title  string `yaml:"title"`
 	Date   string `yaml:"date"`
 	Source string `yaml:"source"`
+}
+
+// classifyTitleResult is the JSON response from the merged classify+title AI call.
+type classifyTitleResult struct {
+	TopicPath string `json:"topicPath"`
+	Title     string `json:"title"`
+	EngTitle  string `json:"engTitle"`
 }
 
 // ExportSession exports the current session to wiki.
@@ -155,32 +175,102 @@ func extractAndMergeSessions(chain []ChainRecord, verbose bool) ([]session.Messa
 	return messages, nil
 }
 
-// classifyAndGenerateTitle classifies content and generates AI title + engTitle.
+// classifyAndGenerateTitle performs a single AI call to classify content and generate titles.
+// Falls back to empty topicPath + fallbackTitle on failure.
 func classifyAndGenerateTitle(messages []session.Message, input ExportInput) (string, string, string) {
-	// Build plain text for AI classification (Turn formatting is visual noise for AI)
-	content := messagesToPlainText(messages)
-	topicPath := classifyWithFallback(content, input.WikiRoot, input.Verbose, input.AIConfig)
-
-	title, engTitle, err := generateTitles(messages, input.AIConfig)
+	topicPath, title, engTitle, err := mergedClassifyAndTitle(messages, input)
 	if err != nil {
+		slog.Warn("Merged AI call failed, using fallback", "error", err)
 		fallback := fallbackTitle(extractUserMessages(messages))
 
-		return topicPath, fallback, fallback
+		return "", fallback, fallback
 	}
 
 	return topicPath, title, engTitle
 }
 
-// messagesToPlainText joins message contents into a simple text representation
-// for AI classification, without any Turn formatting.
-func messagesToPlainText(messages []session.Message) string {
-	var sb strings.Builder
-	for _, msg := range messages {
-		sb.WriteString(msg.Content)
-		sb.WriteString("\n")
+// mergedClassifyAndTitle makes a single AI call to determine topicPath, title, and engTitle.
+func mergedClassifyAndTitle(messages []session.Message, input ExportInput) (string, string, string, error) {
+	candidates := wikisvc.LoadClassificationCandidates(input.WikiRoot)
+	if len(candidates) == 0 {
+		return "", "", "", errors.New("no topic candidates available")
 	}
 
-	return sb.String()
+	prompt, err := renderClassifyTitlePrompt(candidates, messages)
+	if err != nil {
+		return "", "", "", fmt.Errorf("render prompt: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), mergedAITimeout)
+	defer cancel()
+
+	response, err := ai.ChatContext(ctx, input.AIConfig, []ai.Message{
+		{Role: roleUser, Content: prompt},
+	})
+	if err != nil {
+		return "", "", "", fmt.Errorf("AI call: %w", err)
+	}
+
+	result, err := parseClassifyTitleResult(response)
+	if err != nil {
+		return "", "", "", fmt.Errorf("parse AI response: %w", err)
+	}
+
+	title := trimTitle(result.Title)
+	engTitle := trimEngTitle(result.EngTitle)
+	if title == "" || engTitle == "" {
+		return "", "", "", errors.New("empty title from AI")
+	}
+
+	return result.TopicPath, title, engTitle, nil
+}
+
+// renderClassifyTitlePrompt renders the classify-title.txt prompt template.
+func renderClassifyTitlePrompt(candidates []ghindex.TopicCandidate, messages []session.Message) (string, error) {
+	tmpl, err := template.New("classify-title.txt").
+		Option("missingkey=error").
+		ParseFS(promptFS, "prompts/classify-title.txt")
+	if err != nil {
+		return "", fmt.Errorf("parse prompt: %w", err)
+	}
+
+	userMessages := extractUserMessages(messages)
+	content := strings.Join(selectMessages(userMessages, 3, 1), "\n\n")
+	if len(content) > 2000 {
+		content = content[:2000]
+	}
+
+	data := map[string]string{
+		"CandidateTree": wikisvc.FormatTopicCandidates(candidates),
+		"Content":       content,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("render prompt: %w", err)
+	}
+
+	return buf.String(), nil
+}
+
+// parseClassifyTitleResult parses the JSON response from the merged AI call.
+func parseClassifyTitleResult(raw string) (*classifyTitleResult, error) {
+	// Strip markdown code fence if present
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "```") {
+		lines := strings.Split(raw, "\n")
+		if len(lines) >= 3 {
+			lines = lines[1 : len(lines)-1]
+			raw = strings.Join(lines, "\n")
+		}
+	}
+
+	var result classifyTitleResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 // extractUserMessages extracts user messages from the message list.
@@ -193,6 +283,68 @@ func extractUserMessages(messages []session.Message) []string {
 	}
 
 	return userMessages
+}
+
+// selectMessages selects head messages from the beginning and tail messages from the end.
+func selectMessages(messages []string, head, tail int) []string {
+	if len(messages) <= head+tail {
+		return messages
+	}
+
+	result := make([]string, 0, head+tail)
+	result = append(result, messages[:head]...)
+	result = append(result, messages[len(messages)-tail:]...)
+
+	return result
+}
+
+// trimTitle cleans up a semantic title (remove quotes, truncate to 50).
+func trimTitle(title string) string {
+	title = strings.TrimSpace(title)
+	title = strings.Trim(title, `"'「」『』`)
+	if len(title) > 50 {
+		title = title[:50]
+	}
+
+	return title
+}
+
+// trimEngTitle cleans up an English title for use as filename.
+func trimEngTitle(engTitle string) string {
+	engTitle = strings.TrimSpace(engTitle)
+	engTitle = strings.Trim(engTitle, `"'「」『』`)
+	engTitle = slugTitle(engTitle)
+	if len(engTitle) > 50 {
+		engTitle = engTitle[:50]
+	}
+
+	return engTitle
+}
+
+// fallbackTitle generates a fallback title from user messages, skipping URLs.
+func fallbackTitle(userMessages []string) string {
+	for _, msg := range userMessages {
+		title := strings.TrimSpace(msg)
+		if idx := strings.IndexByte(title, '\n'); idx > 0 {
+			title = title[:idx]
+		}
+
+		// Skip messages that are just URLs
+		lower := strings.ToLower(title)
+		if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+			continue
+		}
+
+		title = slugTitle(title)
+		if len(title) > 50 {
+			title = title[:50]
+		}
+		if title != "" {
+			return title
+		}
+	}
+
+	return time.Now().Format("2006-01-02-15-04-05")
 }
 
 // writeExportFile writes the final markdown file with Turn-structured formatting.
@@ -230,155 +382,6 @@ func generateFrontmatter(title string) (string, error) {
 	}
 
 	return "---\n" + string(data) + "---\n\n", nil
-}
-
-// generateTitles generates a semantic title and an English filename-safe slug using AI.
-// Returns (title, engTitle, error).
-func generateTitles(messages []session.Message, aiConfig *ai.ClientConfig) (string, string, error) {
-	userMessages := extractUserMessages(messages)
-
-	if len(userMessages) == 0 {
-		ts := time.Now().Format("2006-01-02-15-04-05")
-
-		return ts, ts, nil
-	}
-
-	// Select: first 3 + last 1
-	selected := selectMessages(userMessages, 3, 1)
-	content := strings.Join(selected, "\n\n")
-
-	// Truncate to avoid excessive tokens
-	if len(content) > 200 {
-		content = content[:200]
-	}
-
-	systemMsg := `Output exactly two lines about this conversation:
-TITLE: a short semantic title of the topic (any language, max 50 chars)
-ENGLISH-TITLE: a short ASCII-only filename-safe slug (English, lowercase, hyphen-separated, max 50 chars)
-
-Example:
-TITLE: 用 Go 重写用户认证模块
-ENGLISH-TITLE: go-user-auth-rewrite`
-	userMsg := "User messages:\n" + content
-
-	aiMessages := []ai.Message{
-		{Role: "system", Content: systemMsg},
-		{Role: roleUser, Content: userMsg},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	response, err := ai.ChatContext(ctx, aiConfig, aiMessages)
-	if err != nil {
-		return "", "", fmt.Errorf("AI title generation: %w", err)
-	}
-
-	title, engTitle := parseTitles(response)
-	trimmedTitle := trimTitle(title)
-	trimmedEng := trimEngTitle(engTitle)
-
-	// If either is empty after trimming, fall back
-	if trimmedTitle == "" || trimmedEng == "" {
-		fallback := fallbackTitle(userMessages)
-
-		return fallback, fallback, nil
-	}
-
-	return trimmedTitle, trimmedEng, nil
-}
-
-// parseTitles extracts TITLE and ENGLISH-TITLE from AI response.
-func parseTitles(response string) (string, string) {
-	title := ""
-	engTitle := ""
-
-	for line := range strings.SplitSeq(response, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if after, ok := strings.CutPrefix(trimmed, "TITLE:"); ok {
-			title = strings.TrimSpace(after)
-		} else if after, ok := strings.CutPrefix(trimmed, "ENGLISH-TITLE:"); ok {
-			engTitle = strings.TrimSpace(after)
-		}
-	}
-
-	return title, engTitle
-}
-
-// trimTitle cleans up a semantic title (remove quotes, truncate to 50).
-func trimTitle(title string) string {
-	title = strings.TrimSpace(title)
-	title = strings.Trim(title, `"'「」『』`)
-	if len(title) > 50 {
-		title = title[:50]
-	}
-
-	return title
-}
-
-// trimEngTitle cleans up an English title for use as filename.
-func trimEngTitle(engTitle string) string {
-	engTitle = strings.TrimSpace(engTitle)
-	engTitle = strings.Trim(engTitle, `"'「」『』`)
-	// Apply slugification for safety (gosimple/slug will not transliterate
-	// if input is already ASCII, serving as a sanitizer)
-	engTitle = slugTitle(engTitle)
-	if len(engTitle) > 50 {
-		engTitle = engTitle[:50]
-	}
-
-	return engTitle
-}
-
-// fallbackTitle generates a fallback title from the first user message.
-func fallbackTitle(userMessages []string) string {
-	if len(userMessages) == 0 {
-		return time.Now().Format("2006-01-02-15-04-05")
-	}
-
-	// Use first 50 chars of first message
-	title := userMessages[0]
-	title = strings.TrimSpace(title)
-	// Take first line only
-	if idx := strings.IndexByte(title, '\n'); idx > 0 {
-		title = title[:idx]
-	}
-	title = slugTitle(title)
-	if len(title) > 50 {
-		title = title[:50]
-	}
-	if title == "" {
-		return time.Now().Format("2006-01-02-15-04-05")
-	}
-
-	return title
-}
-
-// selectMessages selects head messages from the beginning and tail messages from the end.
-func selectMessages(messages []string, head, tail int) []string {
-	if len(messages) <= head+tail {
-		return messages
-	}
-
-	result := make([]string, 0, head+tail)
-	result = append(result, messages[:head]...)
-	result = append(result, messages[len(messages)-tail:]...)
-
-	return result
-}
-
-// classifyWithFallback classifies content and returns empty string on failure.
-func classifyWithFallback(content, wikiRoot string, verbose bool, aiConfig *ai.ClientConfig) string {
-	topicPath, err := wikisvc.ClassifyContent(content, wikiRoot, aiConfig)
-	if err != nil {
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Classification failed: %v\n", err)
-		}
-
-		return ""
-	}
-
-	return topicPath
 }
 
 // determineOutputPath determines the output path for the exported session.
