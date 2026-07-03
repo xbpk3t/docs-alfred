@@ -9,28 +9,11 @@ import (
 
 const GhURL = "https://github.com/"
 
-// Repository defines repository structure (used by both render pipeline and remote search).
-type Repository struct {
-	MainRepo       string         `yaml:"-"`
-	Des            string         `yaml:"des,omitempty"`
-	URL            string         `yaml:"url"`
-	NixURL         string         `yaml:"nix,omitempty"`
-	Tag            string         `yaml:"tag,omitempty"`
-	Type           string         `yaml:"type"`
-	Doc            string         `yaml:"doc,omitempty"`
-	Topics         content.Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
-	SubRepos       Repos          `yaml:"sub,omitempty"`
-	ReplacedRepos  Repos          `yaml:"rep,omitempty"`
-	RelatedRepos   Repos          `yaml:"rel,omitempty"`
-	Cmd            []string       `yaml:"cmd,omitempty"`
-	Score          int            `yaml:"score,omitempty"`
-	IsDotfiles     bool           `yaml:"isDotfiles,omitempty"`
-	IsSubRepo      bool           `yaml:"-"`
-	IsReplacedRepo bool           `yaml:"-"`
-	IsRelatedRepo  bool           `yaml:"-"`
-}
+// Repository is an alias for content.Repo.
+type Repository = content.Repo
 
-type Repos []*Repository
+// Repos is an alias for content.Repos.
+type Repos = content.Repos
 
 // ConfigRepo defines configuration repository structure.
 type ConfigRepo struct {
@@ -50,41 +33,41 @@ type Config struct {
 	ConfigRepos ConfigRepos `yaml:"config"`
 }
 
-func (r *Repository) IsValid() bool {
-	_, ok := urlutil.GitHubOwnerRepo(r.URL)
+func IsValid(repo *content.Repo) bool {
+	_, ok := urlutil.GitHubOwnerRepo(repo.URL)
 
 	return ok
 }
 
-func (r *Repository) FullName() string {
-	repo, ok := urlutil.GitHubOwnerRepo(r.URL)
+func FullName(repo *content.Repo) string {
+	r, ok := urlutil.GitHubOwnerRepo(repo.URL)
 	if !ok {
 		return ""
 	}
 
-	return repo.Owner + "/" + repo.Name
+	return r.Owner + "/" + r.Name
 }
 
-func (r *Repository) GetDes() string {
-	return r.Des
+func GetDes(repo *content.Repo) string {
+	return repo.Des
 }
 
-func (r *Repository) GetURL() string {
-	return r.URL
+func GetURL(repo *content.Repo) string {
+	return repo.URL
 }
 
-func (r *Repository) HasQs() bool {
-	return len(r.Topics) > 0
+func HasQs(repo *content.Repo) bool {
+	return len(repo.Topics) > 0
 }
 
-func (r *Repository) HasNix() bool {
-	return strings.TrimSpace(r.NixURL) != ""
+func HasNix(repo *content.Repo) bool {
+	return strings.TrimSpace(repo.NixURL) != ""
 }
 
-func (r *Repository) HasSubRepos() bool {
-	return len(r.SubRepos) > 0 || len(r.ReplacedRepos) > 0 || len(r.RelatedRepos) > 0
+func HasSubRepos(repo *content.Repo) bool {
+	return len(repo.SubRepos) > 0 || len(repo.ReplacedRepos) > 0 || len(repo.RelatedRepos) > 0
 }
 
-func (r *Repository) IsSubOrDepOrRelRepo() bool {
-	return r.IsSubRepo || r.IsReplacedRepo || r.IsRelatedRepo
+func IsSubOrDepOrRelRepo(repo *content.Repo) bool {
+	return repo.IsSubRepo || repo.IsReplacedRepo || repo.IsRelatedRepo
 }

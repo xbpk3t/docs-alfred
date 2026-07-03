@@ -446,3 +446,87 @@ func TestWalkGhRepos_EmptyRepoList(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, repoCount)
 }
+
+func TestWalkGhRepos_TopicWithRepos(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "llm.yml"), []byte(`- type: LLM
+  topics:
+    - topic: claude-code
+      repo:
+        - url: https://github.com/anthropics/claude-code
+          doc: https://code.claude.com/docs/
+        - url: https://github.com/openai/codex
+          doc: https://developers.openai.com/codex/config-reference
+      record:
+        - date: 2025-01-01
+          des: initial
+  record: []
+`), 0644))
+
+	var sectionEvents int
+	var section Section
+	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
+		if ev.Type == evSection {
+			sectionEvents++
+			section = ev.Section
+		}
+
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, sectionEvents)
+
+	// 验证 topics 中的 repos 被正确解析
+	require.Len(t, section.Topics, 1)
+	assert.Equal(t, "claude-code", section.Topics[0].Topic)
+	require.Len(t, section.Topics[0].Repos, 2)
+	assert.Equal(t, "https://github.com/anthropics/claude-code", section.Topics[0].Repos[0].URL)
+	assert.Equal(t, "https://code.claude.com/docs/", section.Topics[0].Repos[0].Doc)
+	assert.Equal(t, "https://github.com/openai/codex", section.Topics[0].Repos[1].URL)
+
+	// 验证 topic 的 record 也被正确解析
+	assert.True(t, section.Topics[0].HasRecord)
+	require.Len(t, section.Topics[0].Record, 1)
+	assert.Equal(t, "2025-01-01", section.Topics[0].Record[0].Date)
+}
+
+func TestWalkGhRepos_TopicWithRepos_RealFile(t *testing.T) {
+	// 读取真实的 LLM.yml 文件
+	data, err := os.ReadFile("/Users/luck/Desktop/docs/data/gh/AI/LLM.yml")
+	if err != nil {
+		t.Skip("Skipping test: cannot read real LLM.yml file")
+	}
+
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "LLM.yml"), data, 0644))
+
+	var sections []Section
+	err = WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
+		if ev.Type == evSection {
+			sections = append(sections, ev.Section)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	// 验证 topics 中的 repos 被正确解析
+	foundTopicWithRepos := false
+	for _, section := range sections {
+		for _, topic := range section.Topics {
+			if len(topic.Repos) > 0 {
+				foundTopicWithRepos = true
+				t.Logf("✓ Topic: %s, Repos: %d", topic.Topic, len(topic.Repos))
+				for i, repo := range topic.Repos {
+					if i < 3 {
+						t.Logf("  - %s", repo.URL)
+					}
+				}
+				if len(topic.Repos) > 3 {
+					t.Logf("  ... and %d more", len(topic.Repos)-3)
+				}
+			}
+		}
+	}
+
+	assert.True(t, foundTopicWithRepos, "Expected to find topics with repos in LLM.yml")
+}

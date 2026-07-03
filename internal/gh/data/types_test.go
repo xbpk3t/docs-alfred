@@ -161,7 +161,7 @@ func TestTopic_DirName(t *testing.T) {
 		want  string
 		topic Topic
 	}{
-		{"with slug", "my-slug", Topic{Topic: "t", Meta: TopicMeta{Slug: "my-slug"}}},
+		{"with slug", "my-slug", Topic{Topic: "t", Meta: &TopicMeta{Slug: "my-slug"}}},
 		{"without slug", "topic-name", Topic{Topic: "topic-name"}},
 		{"empty", "", Topic{}},
 	}
@@ -178,7 +178,7 @@ func TestTopic_HasPicture(t *testing.T) {
 		topic Topic
 		want  bool
 	}{
-		{"meta hasPic", Topic{Meta: TopicMeta{HasPic: true}}, true},
+		{"meta hasPic", Topic{Meta: &TopicMeta{HasPic: true}, HasPic: true}, true},
 		{"topic hasPic", Topic{HasPic: true}, true},
 		{"neither", Topic{}, false},
 	}
@@ -376,7 +376,7 @@ func TestDecodeYAMLMap_Basic(t *testing.T) {
 func TestTopic_DirName_WithMetaSlug(t *testing.T) {
 	topic := Topic{
 		Topic: "my-topic",
-		Meta:  TopicMeta{Slug: "custom-slug"},
+		Meta:  &TopicMeta{Slug: "custom-slug"},
 	}
 	assert.Equal(t, "custom-slug", topic.DirName())
 }
@@ -384,14 +384,14 @@ func TestTopic_DirName_WithMetaSlug(t *testing.T) {
 func TestTopic_DirName_WithoutMetaSlug(t *testing.T) {
 	topic := Topic{
 		Topic: "my-topic",
-		Meta:  TopicMeta{Slug: ""},
+		Meta:  &TopicMeta{Slug: ""},
 	}
 	assert.Equal(t, "my-topic", topic.DirName())
 }
 
 func TestTopic_HasPicture_WithMetaHasPic(t *testing.T) {
 	topic := Topic{
-		Meta:   TopicMeta{HasPic: true},
+		Meta:   &TopicMeta{HasPic: true},
 		HasPic: false,
 	}
 	assert.True(t, topic.HasPicture())
@@ -399,7 +399,7 @@ func TestTopic_HasPicture_WithMetaHasPic(t *testing.T) {
 
 func TestTopic_HasPicture_WithTopicHasPic(t *testing.T) {
 	topic := Topic{
-		Meta:   TopicMeta{HasPic: false},
+		Meta:   &TopicMeta{HasPic: false},
 		HasPic: true,
 	}
 	assert.True(t, topic.HasPicture())

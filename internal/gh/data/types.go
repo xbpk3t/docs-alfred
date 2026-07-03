@@ -1,52 +1,32 @@
 package ghdata
 
-import "github.com/go-viper/mapstructure/v2"
+import (
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/xbpk3t/docs-alfred/internal/gh/content"
+)
 
 // Section is a typed representation of a data/gh YAML section.
 type Section struct {
-	Using       *Repo    `yaml:"using"`
-	Type        string   `yaml:"type"`
-	Repos       []Repo   `yaml:"repo"`
-	Topics      []Topic  `yaml:"topics"`
-	Record      []Record `yaml:"record"`
-	HasRecord   bool     `yaml:"-"`
-	RecordValid bool     `yaml:"-"`
+	Using       *content.Repo    `yaml:"using"`
+	Type        string           `yaml:"type"`
+	Repos       []content.Repo   `yaml:"repo"`
+	Topics      []content.Topic  `yaml:"topics"`
+	Record      []content.Record `yaml:"record"`
+	HasRecord   bool             `yaml:"-"`
+	RecordValid bool             `yaml:"-"`
 }
 
-// Repo is a typed representation of a repository entry in data/gh YAML.
-type Repo struct {
-	URL         string   `yaml:"url"`
-	Des         string   `yaml:"des"`
-	Zk          string   `yaml:"zk"`
-	NixURL      string   `yaml:"nix"`
-	Topics      []Topic  `yaml:"topics"`
-	Record      []Record `yaml:"record"`
-	HasRecord   bool     `yaml:"-"`
-	RecordValid bool     `yaml:"-"`
-}
+// Repo is an alias for content.Repo.
+type Repo = content.Repo
 
-// Topic is a typed representation of a topic entry in data/gh YAML.
-type Topic struct {
-	Meta        TopicMeta `yaml:"meta"`
-	Topic       string    `yaml:"topic"`
-	Sub         []Topic   `yaml:"sub"`
-	Record      []Record  `yaml:"record"`
-	HasPic      bool      `yaml:"hasPic"`
-	HasRecord   bool      `yaml:"-"`
-	RecordValid bool      `yaml:"-"`
-}
+// Topic is an alias for content.Topic.
+type Topic = content.Topic
 
-// TopicMeta holds topic metadata used by images checks.
-type TopicMeta struct {
-	Slug   string `yaml:"slug"`
-	HasPic bool   `yaml:"hasPic"`
-}
+// Record is an alias for content.Record.
+type Record = content.Record
 
-// Record is a dated note attached to a repo or topic.
-type Record struct {
-	Date string `yaml:"date"`
-	Des  string `yaml:"des"`
-}
+// TopicMeta is an alias for content.TopicMeta.
+type TopicMeta = content.TopicMeta
 
 type sectionFields struct {
 	Type string `yaml:"type"`
@@ -57,12 +37,13 @@ type repoFields struct {
 	Des string `yaml:"des"`
 	Zk  string `yaml:"zk"`
 	Nix string `yaml:"nix"`
+	Doc string `yaml:"doc"`
 }
 
 type topicFields struct {
-	Topic  string    `yaml:"topic"`
-	Meta   TopicMeta `yaml:"meta"`
-	HasPic bool      `yaml:"hasPic"`
+	Topic  string          `yaml:"topic"`
+	Meta   content.TopicMeta `yaml:"meta"`
+	HasPic bool            `yaml:"hasPic"`
 }
 
 func sectionFromMap(m map[string]any) Section {
@@ -78,7 +59,7 @@ func sectionFromMap(m map[string]any) Section {
 	}
 
 	if repos, ok := m["repo"].([]any); ok {
-		section.Repos = make([]Repo, 0, len(repos))
+		section.Repos = make([]content.Repo, 0, len(repos))
 		for _, item := range repos {
 			if repoMap, ok := item.(map[string]any); ok {
 				section.Repos = append(section.Repos, repoFromMap(repoMap))
@@ -94,14 +75,15 @@ func sectionFromMap(m map[string]any) Section {
 	return section
 }
 
-func repoFromMap(m map[string]any) Repo {
-	repo := Repo{RecordValid: true}
+func repoFromMap(m map[string]any) content.Repo {
+	repo := content.Repo{RecordValid: true}
 	var fields repoFields
 	decodeYAMLMap(m, &fields)
 	repo.URL = fields.URL
 	repo.Des = fields.Des
 	repo.Zk = fields.Zk
 	repo.NixURL = fields.Nix
+	repo.Doc = fields.Doc
 	repo.Topics = topicsFromAny(m["topics"])
 
 	if record, ok := m["record"]; ok {
@@ -112,13 +94,13 @@ func repoFromMap(m map[string]any) Repo {
 	return repo
 }
 
-func topicsFromAny(v any) []Topic {
+func topicsFromAny(v any) []content.Topic {
 	items, ok := v.([]any)
 	if !ok {
 		return nil
 	}
 
-	topics := make([]Topic, 0, len(items))
+	topics := make([]content.Topic, 0, len(items))
 	for _, item := range items {
 		if topicMap, ok := item.(map[string]any); ok {
 			topics = append(topics, topicFromMap(topicMap))
@@ -128,14 +110,25 @@ func topicsFromAny(v any) []Topic {
 	return topics
 }
 
-func topicFromMap(m map[string]any) Topic {
-	topic := Topic{RecordValid: true}
+func topicFromMap(m map[string]any) content.Topic {
+	topic := content.Topic{RecordValid: true}
 	var fields topicFields
 	decodeYAMLMap(m, &fields)
 	topic.Topic = fields.Topic
-	topic.Meta = fields.Meta
+	topic.Meta = &fields.Meta
 	topic.HasPic = fields.HasPic
 	topic.Sub = topicsFromAny(m["sub"])
+
+	// 解析 topic 内嵌的 repos
+	if repos, ok := m["repo"].([]any); ok {
+		topic.Repos = make([]*content.Repo, 0, len(repos))
+		for _, item := range repos {
+			if repoMap, ok := item.(map[string]any); ok {
+				repo := repoFromMap(repoMap)
+				topic.Repos = append(topic.Repos, &repo)
+			}
+		}
+	}
 
 	if record, ok := m["record"]; ok {
 		topic.HasRecord = true
@@ -145,16 +138,16 @@ func topicFromMap(m map[string]any) Topic {
 	return topic
 }
 
-func recordsFromAny(v any) ([]Record, bool) {
+func recordsFromAny(v any) ([]content.Record, bool) {
 	items, ok := v.([]any)
 	if !ok || items == nil {
 		return nil, false
 	}
 
-	records := make([]Record, 0, len(items))
+	records := make([]content.Record, 0, len(items))
 	for _, item := range items {
 		if recordMap, ok := item.(map[string]any); ok {
-			record := Record{}
+			record := content.Record{}
 			decodeYAMLMap(recordMap, &record)
 			records = append(records, record)
 		}
@@ -172,18 +165,4 @@ func decodeYAMLMap(input, output any) {
 		return
 	}
 	_ = decoder.Decode(input)
-}
-
-// DirName returns the directory name implied by a topic.
-func (t *Topic) DirName() string {
-	if t.Meta.Slug != "" {
-		return t.Meta.Slug
-	}
-
-	return t.Topic
-}
-
-// HasPicture reports whether a topic expects an image directory.
-func (t *Topic) HasPicture() bool {
-	return t.Meta.HasPic || t.HasPic
 }

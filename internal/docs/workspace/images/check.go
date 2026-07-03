@@ -301,8 +301,8 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 		}
 
 		// Collect repo topic dirs
-		for _, repo := range section.Repos {
-			collectRepoTopicDirs(&repo, typeBase, &dirs, false)
+		for i := range section.Repos {
+			collectRepoTopicDirs(&section.Repos[i], typeBase, &dirs, false)
 		}
 
 		return nil
@@ -312,7 +312,8 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 }
 
 func collectTopicDirs(topics []ghdata.Topic, base string, dirs *[]string) {
-	for _, topic := range topics {
+	for i := range topics {
+		topic := topics[i]
 		topicDirName := topic.DirName()
 		if topicDirName == "" {
 			continue
@@ -324,6 +325,18 @@ func collectTopicDirs(topics []ghdata.Topic, base string, dirs *[]string) {
 			*dirs = append(*dirs, topicBase)
 		}
 
+		// 收集 topic 内嵌 repo 的图片目录
+		for _, repo := range topic.Repos {
+			repoName := urlutil.RepoName(repo.URL)
+			if repoName == "" {
+				continue
+			}
+			repoBase := topicBase + "/" + repoName
+			// 收集 repo 的 topics 的图片目录
+			collectTopicDirs(repo.Topics, repoBase, dirs)
+		}
+
+		// 递归处理子 topics
 		collectTopicDirs(topic.Sub, topicBase, dirs)
 	}
 }

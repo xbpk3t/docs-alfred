@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
@@ -92,6 +93,46 @@ func handleSectionEvent(result *CheckResult, ev *WalkerEvent) {
 		result.addIssue(ev.File, "error",
 			fmt.Sprintf("section[%d]: 'record' must be an array", ev.SectionIndex))
 	}
+
+	// 验证 topic 内的 repos
+	checkTopicRepos(result, ev.File, section.Topics, ev.SectionIndex)
+}
+
+// checkTopicRepos validates repos inside topics.
+func checkTopicRepos(result *CheckResult, file string, topics []content.Topic, sectionIndex int) {
+	for topicIdx := range topics {
+		for repoIdx, repo := range topics[topicIdx].Repos {
+			result.TotalEntries++
+
+			// Check URL
+			urlStr := repo.URL
+			if urlStr == "" {
+				result.addIssue(file, "error",
+					fmt.Sprintf("section[%d].topics[%d].repo[%d]: missing or invalid url", sectionIndex, topicIdx, repoIdx))
+			} else if !isValidURL(urlStr) {
+				result.addIssue(file, "error",
+					fmt.Sprintf("section[%d].topics[%d].repo[%d]: invalid url format: %q", sectionIndex, topicIdx, repoIdx, urlStr))
+			}
+
+			// Check record at repo level
+			if repo.HasRecord && !repo.RecordValid {
+				result.addIssue(file, "error",
+					fmt.Sprintf("section[%d].topics[%d].repo[%d]: 'record' must be an array", sectionIndex, topicIdx, repoIdx))
+			}
+
+			// Check repo-level records
+			if repo.HasRecord && repo.RecordValid {
+				result.TotalRecords += len(repo.Record)
+				for recIdx, rec := range repo.Record {
+					prefix := fmt.Sprintf("section[%d].topics[%d].repo[%d]", sectionIndex, topicIdx, repoIdx)
+					checkRecord(file, prefix, recIdx, rec, result)
+				}
+			}
+		}
+
+		// 递归处理子 topics
+		checkTopicRepos(result, file, topics[topicIdx].Sub, sectionIndex)
+	}
 }
 
 // handleRepoEvent processes a repo event, validating URL, topics, and records.
@@ -126,7 +167,8 @@ func handleRepoEvent(result *CheckResult, ev *WalkerEvent) {
 
 // checkRepoTopicRecords validates topic records in a repo entry.
 func checkRepoTopicRecords(result *CheckResult, file string, repoIndex int, repo *Repo) {
-	for topicIdx, topic := range repo.Topics {
+	for topicIdx := range repo.Topics {
+		topic := &repo.Topics[topicIdx]
 		if topic.HasRecord && !topic.RecordValid {
 			result.addIssue(file, "error",
 				fmt.Sprintf("repo[%d].topics[%d]: 'record' must be an array", repoIndex, topicIdx))
@@ -165,15 +207,19 @@ func (r *CheckResult) addIssueForRecord(file string, repoIndex, topicIdx, recIdx
 		prefix = fmt.Sprintf("repo[%d].topics[%d]", repoIndex, topicIdx)
 	}
 
+	checkRecord(file, prefix, recIdx, rec, r)
+}
+
+func checkRecord(file, prefix string, recIdx int, rec Record, result *CheckResult) {
 	dateStr := rec.Date
 	if dateStr != "" && !checkutil.DateFullPattern.MatchString(dateStr) {
-		r.addIssue(file, "error",
+		result.addIssue(file, "error",
 			fmt.Sprintf("%s.record[%d]: invalid date format %q (expected YYYY-MM-DD)", prefix, recIdx, dateStr))
 	}
 
 	des := rec.Des
 	if des == "" {
-		r.addIssue(file, "error",
+		result.addIssue(file, "error",
 			fmt.Sprintf("%s.record[%d]: missing or empty des", prefix, recIdx))
 	}
 }
