@@ -199,5 +199,5 @@ func (m *Manager) ConfigRepos() ConfigRepos {
 
 // Filter filters repositories by query.
 func (m *Manager) Filter(query string) Repos {
-	return m.repos.Filter(query)
+	return FilterRepos(m.repos, query)
 }

@@ -34,8 +34,8 @@ type WalkerEvent struct {
 	File         string
 	Content      string
 	Errors       []string
-	Repo         Repo
 	Section      Section
+	Repo         Repo
 	DocIndex     int
 	SectionIndex int
 	RepoIndex    int

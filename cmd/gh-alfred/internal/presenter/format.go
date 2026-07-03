@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
 )
@@ -15,14 +16,14 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredIt
 	items := make([]wf.AlfredItem, 0)
 
 	for _, repo := range repos {
-		fullName := repo.FullName()
+		fullName := ghindex.FullName(repo)
 		item := wf.AlfredItem{
 			Title:        fullName,
 			Subtitle:     formatRepoSubtitle(repo),
-			Arg:          repo.GetURL(),
+			Arg:          ghindex.GetURL(repo),
 			Autocomplete: fullName,
-			QuicklookURL: repo.GetURL(),
-			Text:         &wf.AlfredText{Copy: repo.GetURL(), Largetype: fullName},
+			QuicklookURL: ghindex.GetURL(repo),
+			Text:         &wf.AlfredText{Copy: ghindex.GetURL(repo), Largetype: fullName},
 			Valid:        true,
 		}
 
@@ -33,8 +34,8 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredIt
 		// alt: copy repo URL (plist alt -> clipboard)
 		item.Mods["alt"] = &wf.AlfredMod{
 			Valid:    true,
-			Arg:      repo.GetURL(),
-			Subtitle: "复制URL: " + repo.GetURL(),
+			Arg:      ghindex.GetURL(repo),
+			Subtitle: "复制URL: " + ghindex.GetURL(repo),
 		}
 
 		if repo.Doc != "" {
@@ -51,7 +52,7 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredIt
 			}
 		}
 
-		if repo.HasNix() {
+		if ghindex.HasNix(repo) {
 			item.Mods["ctrl"] = &wf.AlfredMod{
 				Valid:    true,
 				Arg:      repo.NixURL,
@@ -100,7 +101,7 @@ func appendGitHubSearchFallback(items []wf.AlfredItem, query string) []wf.Alfred
 	})
 }
 
-func formatRepoSubtitle(repo *ghindex.Repository) string {
+func formatRepoSubtitle(repo *content.Repo) string {
 	parts := make([]string, 0, 4)
 	if repo == nil {
 		return ""
@@ -117,17 +118,35 @@ func formatRepoSubtitle(repo *ghindex.Repository) string {
 	}
 
 	if repo.Type != "" {
-		if repo.Tag != "" {
-			parts = append(parts, fmt.Sprintf("[%s#%s]", repo.Tag, repo.Type))
-		} else {
-			parts = append(parts, fmt.Sprintf("[%s]", repo.Type))
-		}
+		parts = append(parts, formatTypeLabel(repo.Tag, repo.Type, repo.TopicName))
 	}
-	if repo.GetDes() != "" {
-		parts = append(parts, repo.GetDes())
+	if ghindex.GetDes(repo) != "" {
+		parts = append(parts, ghindex.GetDes(repo))
 	}
 
 	return strings.Join(parts, " ")
+}
+
+// formatTypeLabel formats the type label with brackets for subtitle display.
+func formatTypeLabel(tag, typeName, topicName string) string {
+	if tag != "" {
+		if topicName != "" {
+			return fmt.Sprintf("[%s#%s#%s]", tag, typeName, topicName)
+		}
+		return fmt.Sprintf("[%s#%s]", tag, typeName)
+	}
+	return fmt.Sprintf("[%s]", typeName)
+}
+
+// formatTypeInfo formats the type info without brackets for plain/rofi display.
+func formatTypeInfo(tag, typeName, topicName string) string {
+	if tag != "" {
+		if topicName != "" {
+			return fmt.Sprintf("%s#%s#%s", tag, typeName, topicName)
+		}
+		return fmt.Sprintf("%s#%s", tag, typeName)
+	}
+	return typeName
 }
 
 // FormatPlain returns plain-text output of repos with labels.
@@ -138,9 +157,9 @@ func FormatPlain(repos ghindex.Repos, docsURL string) string {
 		if i > 0 {
 			sb.WriteString("\n\n")
 		}
-		fmt.Fprintf(&sb, "repo: %s\n", repo.GetURL())
-		if repo.GetDes() != "" {
-			fmt.Fprintf(&sb, "desc: %s\n", repo.GetDes())
+		fmt.Fprintf(&sb, "repo: %s\n", ghindex.GetURL(repo))
+		if ghindex.GetDes(repo) != "" {
+			fmt.Fprintf(&sb, "desc: %s\n", ghindex.GetDes(repo))
 		}
 		if repo.Doc != "" {
 			docURL := BuildDocURL(docsURL, repo.Doc)
@@ -148,11 +167,7 @@ func FormatPlain(repos ghindex.Repos, docsURL string) string {
 			fmt.Fprintf(&sb, "docs: %s\n", docURL)
 		}
 		if repo.Type != "" {
-			typeInfo := repo.Type
-			if repo.Tag != "" {
-				typeInfo = fmt.Sprintf("%s#%s", repo.Tag, repo.Type)
-			}
-			fmt.Fprintf(&sb, "type: %s\n", typeInfo)
+			fmt.Fprintf(&sb, "type: %s\n", formatTypeInfo(repo.Tag, repo.Type, repo.TopicName))
 		}
 	}
 
@@ -163,9 +178,12 @@ func FormatPlain(repos ghindex.Repos, docsURL string) string {
 func FormatRofi(repos ghindex.Repos) string {
 	var lines []string
 	for _, repo := range repos {
-		line := repo.FullName()
-		if repo.GetDes() != "" {
-			line = fmt.Sprintf("%s - %s", line, repo.GetDes())
+		line := ghindex.FullName(repo)
+		if repo.TopicName != "" {
+			line = fmt.Sprintf("%s [%s#%s#%s]", line, repo.Tag, repo.Type, repo.TopicName)
+		}
+		if ghindex.GetDes(repo) != "" {
+			line = fmt.Sprintf("%s - %s", line, ghindex.GetDes(repo))
 		}
 		lines = append(lines, line)
 	}

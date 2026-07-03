@@ -107,6 +107,11 @@ func normalizeTopic(topic *content.Topic, base string) {
 		topic.PicDir = topicBase
 	}
 
+	// 处理 topic 内的 repos
+	for i := range topic.Repos {
+		normalizeRepoTopics(topic.Repos[i], topicBase, false)
+	}
+
 	normalizeTopics(topic.Sub, topicBase)
 
 	topic.Meta = nil

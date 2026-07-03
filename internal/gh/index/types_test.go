@@ -20,7 +20,7 @@ func TestRepository_IsValid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &Repository{URL: tt.url}
-			assert.Equal(t, tt.want, r.IsValid())
+			assert.Equal(t, tt.want, IsValid(r))
 		})
 	}
 }
@@ -38,64 +38,64 @@ func TestRepository_FullName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &Repository{URL: tt.url}
-			assert.Equal(t, tt.want, r.FullName())
+			assert.Equal(t, tt.want, FullName(r))
 		})
 	}
 }
 
 func TestRepository_GetDes(t *testing.T) {
 	r := &Repository{Des: "test description"}
-	assert.Equal(t, "test description", r.GetDes())
+	assert.Equal(t, "test description", GetDes(r))
 }
 
 func TestRepository_GetURL(t *testing.T) {
 	r := &Repository{URL: "https://github.com/a/b"}
-	assert.Equal(t, "https://github.com/a/b", r.GetURL())
+	assert.Equal(t, "https://github.com/a/b", GetURL(r))
 }
 
 func TestRepository_HasQs(t *testing.T) {
 	r1 := &Repository{Topics: []content.Topic{{Topic: "t1"}}}
-	assert.True(t, r1.HasQs())
+	assert.True(t, HasQs(r1))
 
 	r2 := &Repository{}
-	assert.False(t, r2.HasQs())
+	assert.False(t, HasQs(r2))
 }
 
 func TestRepository_HasNix(t *testing.T) {
 	r1 := &Repository{NixURL: "github:acme/repo#pkg"}
-	assert.True(t, r1.HasNix())
+	assert.True(t, HasNix(r1))
 
 	r2 := &Repository{NixURL: "  "}
-	assert.False(t, r2.HasNix())
+	assert.False(t, HasNix(r2))
 
 	r3 := &Repository{}
-	assert.False(t, r3.HasNix())
+	assert.False(t, HasNix(r3))
 }
 
 func TestRepository_HasSubRepos(t *testing.T) {
 	r1 := &Repository{SubRepos: Repos{{URL: "https://github.com/a/b"}}}
-	assert.True(t, r1.HasSubRepos())
+	assert.True(t, HasSubRepos(r1))
 
 	r2 := &Repository{ReplacedRepos: Repos{{URL: "https://github.com/a/b"}}}
-	assert.True(t, r2.HasSubRepos())
+	assert.True(t, HasSubRepos(r2))
 
 	r3 := &Repository{RelatedRepos: Repos{{URL: "https://github.com/a/b"}}}
-	assert.True(t, r3.HasSubRepos())
+	assert.True(t, HasSubRepos(r3))
 
 	r4 := &Repository{}
-	assert.False(t, r4.HasSubRepos())
+	assert.False(t, HasSubRepos(r4))
 }
 
 func TestRepository_IsSubOrDepOrRelRepo(t *testing.T) {
 	r1 := &Repository{IsSubRepo: true}
-	assert.True(t, r1.IsSubOrDepOrRelRepo())
+	assert.True(t, IsSubOrDepOrRelRepo(r1))
 
 	r2 := &Repository{IsReplacedRepo: true}
-	assert.True(t, r2.IsSubOrDepOrRelRepo())
+	assert.True(t, IsSubOrDepOrRelRepo(r2))
 
 	r3 := &Repository{IsRelatedRepo: true}
-	assert.True(t, r3.IsSubOrDepOrRelRepo())
+	assert.True(t, IsSubOrDepOrRelRepo(r3))
 
 	r4 := &Repository{}
-	assert.False(t, r4.IsSubOrDepOrRelRepo())
+	assert.False(t, IsSubOrDepOrRelRepo(r4))
 }

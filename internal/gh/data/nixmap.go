@@ -28,7 +28,7 @@ func LoadNixData(ghRoot string) (ghMap map[string]map[string]bool, falsePkgs map
 	falsePkgs = make(map[string]bool)
 
 	for _, r := range repos {
-		if !r.HasNix() {
+		if !ghindex.HasNix(r) {
 			continue
 		}
 		short := extractNixShort(r.NixURL)

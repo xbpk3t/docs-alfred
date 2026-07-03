@@ -1,6 +1,9 @@
 package ghindex
 
-import "github.com/xbpk3t/docs-alfred/pkg/urlutil"
+import (
+	"github.com/xbpk3t/docs-alfred/internal/gh/content"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
+)
 
 // ToRepos converts ConfigRepos to flat Repos list.
 func (cr ConfigRepos) ToRepos() Repos {
@@ -16,6 +19,30 @@ func (cr ConfigRepos) ToRepos() Repos {
 			config.Repos[i].IsDotfiles = config.IsDotfiles
 			repos = append(repos, processRepo(config.Repos[i], config.Type)...)
 		}
+
+		// 处理 topic 内的 repos
+		for i := range config.Topics {
+			repos = append(repos, processTopicRepos(&config.Topics[i], config.Tag, config.Type)...)
+		}
+	}
+
+	return repos
+}
+
+// processTopicRepos processes repos inside a topic.
+func processTopicRepos(topic *content.Topic, tag, typeName string) Repos {
+	var repos Repos
+
+	for i := range topic.Repos {
+		topic.Repos[i].Tag = tag
+		topic.Repos[i].Type = typeName
+		topic.Repos[i].TopicName = topic.Topic // 设置 topic 名称
+		repos = append(repos, processRepo(topic.Repos[i], typeName)...)
+	}
+
+	// 递归处理子 topics
+	for i := range topic.Sub {
+		repos = append(repos, processTopicRepos(&topic.Sub[i], tag, typeName)...)
 	}
 
 	return repos
@@ -48,7 +75,7 @@ func processAllSubRepos(repo *Repository) Repos {
 		repo.SubRepos[i].IsSubRepo = true
 		repo.SubRepos[i].Type = repo.Type
 		repo.SubRepos[i].Tag = repo.Tag
-		repo.SubRepos[i].MainRepo = repo.FullName()
+		repo.SubRepos[i].MainRepo = FullName(repo)
 		repos = append(repos, processRepo(repo.SubRepos[i], repo.Type)...)
 	}
 
@@ -56,7 +83,7 @@ func processAllSubRepos(repo *Repository) Repos {
 		repo.ReplacedRepos[i].IsReplacedRepo = true
 		repo.ReplacedRepos[i].Type = repo.Type
 		repo.ReplacedRepos[i].Tag = repo.Tag
-		repo.ReplacedRepos[i].MainRepo = repo.FullName()
+		repo.ReplacedRepos[i].MainRepo = FullName(repo)
 		repos = append(repos, processRepo(repo.ReplacedRepos[i], repo.Type)...)
 	}
 
@@ -64,7 +91,7 @@ func processAllSubRepos(repo *Repository) Repos {
 		repo.RelatedRepos[i].IsRelatedRepo = true
 		repo.RelatedRepos[i].Type = repo.Type
 		repo.RelatedRepos[i].Tag = repo.Tag
-		repo.RelatedRepos[i].MainRepo = repo.FullName()
+		repo.RelatedRepos[i].MainRepo = FullName(repo)
 		repos = append(repos, processRepo(repo.RelatedRepos[i], repo.Type)...)
 	}
 
