@@ -999,3 +999,27 @@ func ClassifyContent(content, wikiRoot string, aiConfig *ai.ClientConfig) (strin
 
 	return result.TopicPath, nil
 }
+
+// FormatTopicCandidates formats topic candidates for prompt injection.
+func FormatTopicCandidates(candidates []ghindex.TopicCandidate) string {
+	return formatTopicCandidates(candidates)
+}
+
+// LoadClassificationCandidates loads and ranks topic candidates from wiki root and gh.yml.
+// Used by ccx session export for the merged classify+title AI call.
+func LoadClassificationCandidates(wikiRoot string) []ghindex.TopicCandidate {
+	seen := make(map[string]bool)
+	candidates := appendUniqueTopicCandidates(nil, seen, scanWikiCandidates(wikiRoot))
+
+	remote, err := ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
+	if err != nil {
+		slog.Warn("Local topic catalog unavailable; using wiki-only candidates", "error", err)
+
+		return candidates
+	}
+
+	ranked := rankTopicCandidates(remote, "", 120)
+	candidates = appendUniqueTopicCandidates(candidates, seen, ranked)
+
+	return candidates
+}
