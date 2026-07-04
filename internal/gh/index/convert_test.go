@@ -95,8 +95,29 @@ func TestProcessRepo_NilSubRepos(t *testing.T) {
 	assert.Equal(t, "tool", repos[0].Type)
 }
 
-func TestIsValidGithubURL(t *testing.T) {
-	assert.True(t, isValidGithubURL("https://github.com/owner/repo"))
-	assert.False(t, isValidGithubURL("https://example.com/owner/repo"))
-	assert.False(t, isValidGithubURL("not-a-url"))
+func TestToRepos_GitLabWithNix(t *testing.T) {
+	cr := ConfigRepos{
+		{
+			Type: "devops",
+			Tag:  "devops",
+			Repos: Repos{
+				{
+					URL:    "https://gitlab.com/gitlab-org/cli",
+					NixURL: "https://mynixos.com/nixpkgs/package/glab",
+				},
+			},
+		},
+	}
+
+	repos := cr.ToRepos()
+	require.NotEmpty(t, repos)
+	assert.Equal(t, "https://gitlab.com/gitlab-org/cli", repos[0].URL)
+	assert.Equal(t, "https://mynixos.com/nixpkgs/package/glab", repos[0].NixURL)
+}
+
+func TestIsValidSourceRepoURL(t *testing.T) {
+	assert.True(t, isValidSourceRepoURL("https://github.com/owner/repo"))
+	assert.True(t, isValidSourceRepoURL("https://gitlab.com/owner/repo"))
+	assert.False(t, isValidSourceRepoURL("https://example.com/owner/repo"))
+	assert.False(t, isValidSourceRepoURL("not-a-url"))
 }
