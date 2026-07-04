@@ -50,6 +50,10 @@ var nixSkip = map[string]bool{
 	"meta": true, "name": true, "version": true, "src": true,
 	"enable": true, "package": true,
 	"system": true, "path": true, "cc": true,
+	// NixOS module system (not standalone packages)
+	"home-manager": true,
+	// Dotfiles-only modules / services (not in nixpkgs)
+	"ssh": true, "remote_server": true,
 }
 
 func isSkip(name string) bool {

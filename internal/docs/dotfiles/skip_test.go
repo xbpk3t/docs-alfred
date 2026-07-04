@@ -19,13 +19,13 @@ func TestIsSkip_NixLibFuncs(t *testing.T) {
 }
 
 func TestIsSkip_NixSkip(t *testing.T) {
-	for _, name := range []string{"stdenv", "callPackage", "fetchurl", "buildGoModule", "override", "logind", "meta", "name", "version"} {
+	for _, name := range []string{"stdenv", "callPackage", "fetchurl", "buildGoModule", "override", "logind", "meta", "name", "version", "ssh", "remote_server"} {
 		assert.True(t, isSkip(name), "expected isSkip(%q) = true", name)
 	}
 }
 
 func TestIsSkip_RealPackages(t *testing.T) {
-	for _, name := range []string{"gcc", "coreutils", "bash", "mpv", "pipewire", "home-manager", "gpg", "ssh", "firefox", "vim", "git"} {
+	for _, name := range []string{"gcc", "coreutils", "bash", "mpv", "pipewire", "gpg", "firefox", "vim", "git"} {
 		assert.False(t, isSkip(name), "expected isSkip(%q) = false", name)
 	}
 }
