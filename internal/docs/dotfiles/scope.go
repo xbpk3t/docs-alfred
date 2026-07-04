@@ -18,8 +18,7 @@ var scopeMap = []scopeRule{
 	{prefix: "modules/nixos", idx: 2},
 	{prefix: "modules/darwin", label: "desktop"},
 	{prefix: "home/darwin", label: "desktop"},
-	{prefix: "home/nixos", label: "nixos"},
-	{prefix: "home/extra", label: "extra"},
+	{prefix: "home/nixos", label: "desktop"},
 }
 
 // DefaultScope returns the default directory scopes for dotfiles scanning.

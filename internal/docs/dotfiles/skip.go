@@ -41,7 +41,7 @@ var nixSkip = map[string]bool{
 	"gnomeExtensions": true, "nerd-fonts": true, "yaziPlugins": true,
 	"qt6Packages": true, "python3Packages": true, "python313Packages": true,
 	"kubernetes-helmPlugins": true,
-	"typstPackages": true, "vscode-extensions": true,
+	"typstPackages":          true, "vscode-extensions": true,
 	"vimPlugins": true, "mpvScripts": true, "nushellPlugins": true,
 	// Systemd components (part of systemd package, not standalone)
 	"logind": true, "journald": true, "timesyncd": true,
@@ -50,6 +50,7 @@ var nixSkip = map[string]bool{
 	"meta": true, "name": true, "version": true, "src": true,
 	"enable": true, "package": true,
 	"system": true, "path": true, "cc": true,
+	"remote_server": true, "ssh": true, "home-manager": true,
 }
 
 func isSkip(name string) bool {
