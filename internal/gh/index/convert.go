@@ -60,7 +60,7 @@ func processRepo(repo *Repository, configType string) Repos {
 }
 
 func processMainRepo(repo *Repository, configType string) *Repository {
-	if !isValidGithubURL(repo.URL) {
+	if !isValidSourceRepoURL(repo.URL) {
 		return nil
 	}
 	repo.Type = configType
@@ -98,8 +98,6 @@ func processAllSubRepos(repo *Repository) Repos {
 	return repos
 }
 
-func isValidGithubURL(url string) bool {
-	_, ok := urlutil.GitHubOwnerRepo(url)
-
-	return ok
+func isValidSourceRepoURL(url string) bool {
+	return urlutil.IsSourceRepo(url)
 }
