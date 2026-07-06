@@ -8,6 +8,7 @@ import (
 
 // Repo defines a repository entry in data/gh YAML.
 type Repo struct {
+	IsDotfiles     *bool    `json:"isDotfiles,omitempty" yaml:"isDotfiles,omitempty"`
 	URL            string   `json:"url"              yaml:"url"`
 	Des            string   `json:"des,omitempty"    yaml:"des,omitempty"`
 	Zk             string   `json:"zk,omitempty"     yaml:"zk,omitempty"`
@@ -17,14 +18,13 @@ type Repo struct {
 	Type           string   `json:"type,omitempty"   yaml:"type,omitempty"`
 	TopicName      string   `json:"-"                yaml:"-"`
 	MainRepo       string   `json:"-"                yaml:"-"`
-	SubRepos       Repos    `json:"sub,omitempty"    yaml:"sub,omitempty"`
 	Topics         Topics   `json:"topics,omitempty" yaml:"topics,omitempty"`
 	ReplacedRepos  Repos    `json:"rep,omitempty"    yaml:"rep,omitempty"`
 	RelatedRepos   Repos    `json:"rel,omitempty"    yaml:"rel,omitempty"`
 	Cmd            []string `json:"cmd,omitempty"   yaml:"cmd,omitempty"`
 	Record         []Record `json:"record,omitempty" yaml:"record,omitempty"`
+	SubRepos       Repos    `json:"sub,omitempty"    yaml:"sub,omitempty"`
 	Score          int      `json:"score,omitempty"  yaml:"score,omitempty"`
-	IsDotfiles     bool     `json:"isDotfiles,omitempty" yaml:"isDotfiles,omitempty"`
 	IsSubRepo      bool     `json:"-"                yaml:"-"`
 	IsReplacedRepo bool     `json:"-"                yaml:"-"`
 	IsRelatedRepo  bool     `json:"-"                yaml:"-"`

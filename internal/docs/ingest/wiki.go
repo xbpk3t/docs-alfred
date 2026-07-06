@@ -19,10 +19,11 @@ import (
 type CommandRunner func(ctx context.Context, dir string, name string, args ...string) ([]byte, error)
 
 type dependencies struct {
-	fetcher    fetcher
-	classifier classifier
-	writer     writer
-	inbox      inboxStore
+	fetcher         fetcher
+	classifier      classifier
+	writer          writer
+	inbox           inboxStore
+	validTopicPaths map[string]bool // loaded from ghindex for write-layer validation
 }
 
 type fetcher interface {
@@ -256,6 +257,9 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 	}
 	if deps.inbox == nil {
 		deps.inbox = serviceInboxStore{}
+	}
+	if deps.validTopicPaths == nil {
+		deps.validTopicPaths = wikisvc.LoadValidTopicPaths()
 	}
 
 	return deps

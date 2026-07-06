@@ -17,13 +17,12 @@ type Repos = content.Repos
 
 // ConfigRepo defines configuration repository structure.
 type ConfigRepo struct {
+	IsDotfiles *bool          `yaml:"isDotfiles,omitempty"`
 	Type       string         `yaml:"type"`
 	Tag        string         `yaml:"tag"`
 	Repos      Repos          `yaml:"repo"`
 	Topics     content.Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
 	Using      Repository     `yaml:"using,omitempty"`
-	Score      int            `yaml:"score,omitempty"`
-	IsDotfiles bool           `yaml:"isDotfiles,omitempty"`
 }
 
 type ConfigRepos []*ConfigRepo

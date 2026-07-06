@@ -29,13 +29,22 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 	}
 }
 
+// newWriteOpts builds WriteOptions with ValidTopicPaths from dependencies.
+func newWriteOpts(deps *dependencies, wikiRoot string, dryRun bool) *wikisvc.WriteOptions {
+	return &wikisvc.WriteOptions{
+		WikiRoot:       wikiRoot,
+		DryRun:         dryRun,
+		ValidTopicPaths: deps.validTopicPaths,
+	}
+}
+
 func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyItem, dryRun bool) URLResult {
 	// Items with NeedsManualReview and good content get written to wiki/uncat.md
 	// for manual triage, not under a topic dir.
 	if item.NeedsManualReview {
 		path, err := deps.writer.WriteManualReviewEntry(
 			item,
-			&wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun},
+			newWriteOpts(deps, wikiRoot, dryRun),
 		)
 		if err != nil {
 			return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("write manual review: %v", err)}
@@ -57,7 +66,7 @@ func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyIte
 		}
 	}
 
-	path, err := deps.writer.WriteSummary(item, &wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun})
+	path, err := deps.writer.WriteSummary(item, newWriteOpts(deps, wikiRoot, dryRun))
 	if err != nil {
 		return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("write summary: %v", err)}
 	}
@@ -134,7 +143,7 @@ func writeClassifyFailure(
 		item,
 		wikisvc.FailureClassify,
 		extraInfo,
-		&wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun},
+		newWriteOpts(deps, wikiRoot, dryRun),
 	)
 	if err != nil {
 		return URLResult{
@@ -173,7 +182,7 @@ func writeExtractFailure(
 		item,
 		wikisvc.FailureExtract,
 		extraInfo,
-		&wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun},
+		newWriteOpts(deps, wikiRoot, dryRun),
 	)
 	if err != nil {
 		return URLResult{
@@ -211,7 +220,7 @@ func writeFetchFailure(
 		item,
 		failureType,
 		extraInfo,
-		&wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun},
+		newWriteOpts(deps, wikiRoot, dryRun),
 	)
 	if err != nil {
 		return URLResult{
@@ -248,7 +257,7 @@ func writeAIError(
 		item,
 		wikisvc.FailureAI,
 		message,
-		&wikisvc.WriteOptions{WikiRoot: wikiRoot, DryRun: dryRun},
+		newWriteOpts(deps, wikiRoot, dryRun),
 	)
 	if err != nil {
 		return URLResult{
