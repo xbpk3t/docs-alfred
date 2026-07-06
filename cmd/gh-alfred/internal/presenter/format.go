@@ -107,12 +107,6 @@ func formatRepoSubtitle(repo *content.Repo) string {
 		return ""
 	}
 
-	if repo.IsSubRepo {
-		parts = append(parts, fmt.Sprintf("[SUB#%s]", repo.MainRepo))
-	}
-	if repo.IsReplacedRepo {
-		parts = append(parts, fmt.Sprintf("[REP#%s]", repo.MainRepo))
-	}
 	if repo.IsRelatedRepo {
 		parts = append(parts, fmt.Sprintf("[REL#%s]", repo.MainRepo))
 	}

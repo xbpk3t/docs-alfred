@@ -12,9 +12,6 @@ func TestToRepos_BasicConversion(t *testing.T) {
 		{
 			Type: "tool",
 			Tag:  "kernel",
-			Using: Repository{
-				URL: "https://github.com/acme/using-repo",
-			},
 			Repos: Repos{
 				{URL: "https://github.com/acme/main-repo"},
 			},
@@ -23,8 +20,7 @@ func TestToRepos_BasicConversion(t *testing.T) {
 
 	repos := cr.ToRepos()
 	require.NotEmpty(t, repos)
-	// Both using and main repo should be present
-	assert.GreaterOrEqual(t, len(repos), 2)
+	assert.GreaterOrEqual(t, len(repos), 1)
 }
 
 func TestToRepos_SubRepos(t *testing.T) {
@@ -35,12 +31,6 @@ func TestToRepos_SubRepos(t *testing.T) {
 			Repos: Repos{
 				{
 					URL: "https://github.com/acme/main",
-					SubRepos: Repos{
-						{URL: "https://github.com/acme/sub"},
-					},
-					ReplacedRepos: Repos{
-						{URL: "https://github.com/acme/replaced"},
-					},
 					RelatedRepos: Repos{
 						{URL: "https://github.com/acme/related"},
 					},
@@ -53,20 +43,12 @@ func TestToRepos_SubRepos(t *testing.T) {
 	require.NotEmpty(t, repos)
 
 	// Check sub-repo flags
-	var subRepo, replacedRepo, relatedRepo bool
+	var relatedRepo bool
 	for _, r := range repos {
-		if r.IsSubRepo {
-			subRepo = true
-		}
-		if r.IsReplacedRepo {
-			replacedRepo = true
-		}
 		if r.IsRelatedRepo {
 			relatedRepo = true
 		}
 	}
-	assert.True(t, subRepo)
-	assert.True(t, replacedRepo)
 	assert.True(t, relatedRepo)
 }
 

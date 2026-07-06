@@ -10,15 +10,6 @@ func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
 
 	for _, config := range cr {
-		// Propagate type-level isDotfiles to repos, but only when explicitly set.
-		// nil means "not set" so we skip propagation, avoiding zero-value false
-		// overriding repo-level values.
-		config.Using.Tag = config.Tag
-		if config.IsDotfiles != nil {
-			config.Using.IsDotfiles = config.IsDotfiles
-		}
-		repos = append(repos, processRepo(&config.Using, config.Type)...)
-
 		for i := range config.Repos {
 			config.Repos[i].Tag = config.Tag
 			if config.IsDotfiles != nil {
@@ -77,22 +68,6 @@ func processMainRepo(repo *Repository, configType string) *Repository {
 
 func processAllSubRepos(repo *Repository) Repos {
 	var repos Repos
-
-	for i := range repo.SubRepos {
-		repo.SubRepos[i].IsSubRepo = true
-		repo.SubRepos[i].Type = repo.Type
-		repo.SubRepos[i].Tag = repo.Tag
-		repo.SubRepos[i].MainRepo = FullName(repo)
-		repos = append(repos, processRepo(repo.SubRepos[i], repo.Type)...)
-	}
-
-	for i := range repo.ReplacedRepos {
-		repo.ReplacedRepos[i].IsReplacedRepo = true
-		repo.ReplacedRepos[i].Type = repo.Type
-		repo.ReplacedRepos[i].Tag = repo.Tag
-		repo.ReplacedRepos[i].MainRepo = FullName(repo)
-		repos = append(repos, processRepo(repo.ReplacedRepos[i], repo.Type)...)
-	}
 
 	for i := range repo.RelatedRepos {
 		repo.RelatedRepos[i].IsRelatedRepo = true

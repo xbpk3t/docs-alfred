@@ -15,7 +15,7 @@ type TopicCandidate struct {
 	Source  string `json:"source,omitempty"`
 }
 
-// TopicCatalog extracts all topic paths from config-level, using-repo, and repo topics.
+// TopicCatalog extracts all topic paths from config-level and repo topics.
 func (cr ConfigRepos) TopicCatalog() []TopicCandidate {
 	seen := make(map[string]bool)
 	var candidates []TopicCandidate
@@ -25,7 +25,6 @@ func (cr ConfigRepos) TopicCatalog() []TopicCandidate {
 		}
 		base := joinPath(cfg.Tag, cfg.Type)
 		candidates = appendTopicCandidates(candidates, seen, cfg.Topics, base, "gh:config")
-		candidates = appendTopicCandidates(candidates, seen, cfg.Using.Topics, base, "gh:using")
 		appendRepoTopicCandidates(&candidates, seen, cfg.Repos, cfg.Tag, cfg.Type)
 	}
 
@@ -46,8 +45,6 @@ func appendRepoTopicCandidates(
 		repoName := urlutil.RepoName(repo.URL)
 		base := joinPath(tag, typeName, repoName)
 		*candidates = appendTopicCandidates(*candidates, seen, repo.Topics, base, "gh:repo")
-		appendRepoTopicCandidates(candidates, seen, repo.SubRepos, tag, typeName)
-		appendRepoTopicCandidates(candidates, seen, repo.ReplacedRepos, tag, typeName)
 		appendRepoTopicCandidates(candidates, seen, repo.RelatedRepos, tag, typeName)
 	}
 }

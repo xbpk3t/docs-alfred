@@ -7,7 +7,6 @@ import (
 
 // Section is a typed representation of a data/gh YAML section.
 type Section struct {
-	Using       *content.Repo    `yaml:"using"`
 	Type        string           `yaml:"type"`
 	Repos       []content.Repo   `yaml:"repo"`
 	Topics      []content.Topic  `yaml:"topics"`
@@ -52,11 +51,6 @@ func sectionFromMap(m map[string]any) Section {
 	decodeYAMLMap(m, &fields)
 	section.Type = fields.Type
 	section.Topics = topicsFromAny(m["topics"])
-
-	if using, ok := m["using"].(map[string]any); ok {
-		repo := repoFromMap(using)
-		section.Using = &repo
-	}
 
 	if repos, ok := m["repo"].([]any); ok {
 		section.Repos = make([]content.Repo, 0, len(repos))

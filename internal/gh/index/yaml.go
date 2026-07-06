@@ -62,7 +62,6 @@ func normalizeConfigRepo(config *ConfigRepo) {
 	base := topicBase(config.Tag, config.Type)
 
 	normalizeTopics(config.Topics, base)
-	normalizeRepoTopics(&config.Using, base, true)
 	for _, repo := range config.Repos {
 		normalizeRepoTopics(repo, base, false)
 	}

@@ -152,7 +152,7 @@ func emitSectionEvent(fn func(WalkerEvent) error, relPath, filenameStem string, 
 	})
 }
 
-// emitRepoEvents yields events for repo entries and the using entry in a section.
+// emitRepoEvents yields events for repo entries in a section.
 func emitRepoEvents(fn func(WalkerEvent) error, relPath, filenameStem string, sectionIdx int, section map[string]any) error {
 	// Process repo entries
 	if repos, ok := section["repo"].([]any); ok {
@@ -171,22 +171,6 @@ func emitRepoEvents(fn func(WalkerEvent) error, relPath, filenameStem string, se
 					return err2
 				}
 			}
-		}
-	}
-
-	// Process using entry
-	if using, ok := section["using"].(map[string]any); ok {
-		if err2 := fn(WalkerEvent{
-			Type:         evRepo,
-			File:         relPath,
-			FilenameStem: filenameStem,
-			SectionIndex: sectionIdx,
-			RepoIndex:    0,
-			Relation:     "using",
-			Repo:         repoFromMap(using),
-			Section:      sectionFromMap(section),
-		}); err2 != nil {
-			return err2
 		}
 	}
 

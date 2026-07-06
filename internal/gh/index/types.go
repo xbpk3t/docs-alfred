@@ -22,7 +22,6 @@ type ConfigRepo struct {
 	Tag        string         `yaml:"tag"`
 	Repos      Repos          `yaml:"repo"`
 	Topics     content.Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
-	Using      Repository     `yaml:"using,omitempty"`
 }
 
 type ConfigRepos []*ConfigRepo
@@ -64,9 +63,9 @@ func HasNix(repo *content.Repo) bool {
 }
 
 func HasSubRepos(repo *content.Repo) bool {
-	return len(repo.SubRepos) > 0 || len(repo.ReplacedRepos) > 0 || len(repo.RelatedRepos) > 0
+	return len(repo.RelatedRepos) > 0
 }
 
 func IsSubOrDepOrRelRepo(repo *content.Repo) bool {
-	return repo.IsSubRepo || repo.IsReplacedRepo || repo.IsRelatedRepo
+	return repo.IsRelatedRepo
 }

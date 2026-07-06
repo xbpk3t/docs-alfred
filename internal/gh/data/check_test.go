@@ -79,8 +79,6 @@ func TestWalkGhRepos_TypedEvents(t *testing.T) {
       meta:
         slug: intro
         hasPic: true
-  using:
-    url: https://github.com/acme/tool
   repo:
     - url: https://github.com/acme/repo
       des: repo desc
@@ -115,15 +113,12 @@ func TestWalkGhRepos_TypedEvents(t *testing.T) {
 	require.Len(t, section.Topics, 1)
 	assert.Equal(t, "intro", section.Topics[0].Meta.Slug)
 	assert.True(t, section.Topics[0].HasPicture())
-	require.NotNil(t, section.Using)
-	assert.Equal(t, "https://github.com/acme/tool", section.Using.URL)
 	assert.Equal(t, "https://github.com/acme/repo", repo.URL)
 	assert.Equal(t, "repo desc", repo.Des)
 	require.Len(t, repo.Topics, 1)
 	require.Len(t, repo.Topics[0].Record, 1)
 	assert.Equal(t, "shipped", repo.Topics[0].Record[0].Des)
 	assert.True(t, relations[evTypeRepo])
-	assert.True(t, relations["using"])
 }
 
 func TestGhCheck_TypedRecordValidation(t *testing.T) {
@@ -352,12 +347,9 @@ func TestGhCheck_EffectiveMaxLines(t *testing.T) {
 	assert.Equal(t, defaultMaxLines, opts3.effectiveMaxLines())
 }
 
-func TestGhCheck_UsingEntry(t *testing.T) {
+func TestGhCheck_RepoEntry(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: go
-  using:
-    url: https://github.com/acme/using-tool
-    des: using tool
   repo:
     - url: https://github.com/acme/repo
   record: []
@@ -365,8 +357,7 @@ func TestGhCheck_UsingEntry(t *testing.T) {
 
 	result, err := RunGhCheck(tmpDir)
 	require.NoError(t, err)
-	// using + repo = 2 entries
-	assert.Equal(t, 2, result.TotalEntries)
+	assert.Equal(t, 1, result.TotalEntries)
 }
 
 func TestGhCheck_EmptyRepoList(t *testing.T) {

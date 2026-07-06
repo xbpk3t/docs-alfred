@@ -19,14 +19,10 @@ type Repo struct {
 	TopicName      string   `json:"-"                yaml:"-"`
 	MainRepo       string   `json:"-"                yaml:"-"`
 	Topics         Topics   `json:"topics,omitempty" yaml:"topics,omitempty"`
-	ReplacedRepos  Repos    `json:"rep,omitempty"    yaml:"rep,omitempty"`
 	RelatedRepos   Repos    `json:"rel,omitempty"    yaml:"rel,omitempty"`
 	Cmd            []string `json:"cmd,omitempty"   yaml:"cmd,omitempty"`
 	Record         []Record `json:"record,omitempty" yaml:"record,omitempty"`
-	SubRepos       Repos    `json:"sub,omitempty"    yaml:"sub,omitempty"`
 	Score          int      `json:"score,omitempty"  yaml:"score,omitempty"`
-	IsSubRepo      bool     `json:"-"                yaml:"-"`
-	IsReplacedRepo bool     `json:"-"                yaml:"-"`
 	IsRelatedRepo  bool     `json:"-"                yaml:"-"`
 	HasRecord      bool     `json:"-"                yaml:"-"`
 	RecordValid    bool     `json:"-"                yaml:"-"`
