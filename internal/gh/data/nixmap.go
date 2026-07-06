@@ -44,7 +44,7 @@ func LoadNixData(ghRoot string) (ghMap map[string]map[string]bool, falsePkgs map
 		}
 		ghMap[cat][short] = true
 
-		if !r.IsDotfiles {
+		if r.IsDotfiles != nil && !*r.IsDotfiles {
 			falsePkgs[short] = true
 		}
 	}

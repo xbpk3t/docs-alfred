@@ -16,11 +16,12 @@ import (
 
 // NixDiff holds the structured nix diff result.
 type NixDiff struct {
-	GhOnly        map[string][]string `json:"ghOnly"`
-	DfOnly        map[string][]string `json:"dfOnly"`
-	CrossCategory map[string]CrossPkg `json:"crossCategory"`
-	Issues        []checkutil.Issue   `json:"issues"`
-	Shared        int                 `json:"shared"`
+	GhOnly           map[string][]string `json:"ghOnly"`
+	DfOnly           map[string][]string `json:"dfOnly"`
+	CrossCategory    map[string]CrossPkg `json:"crossCategory"`
+	FalsePkgConflict map[string][]string `json:"falsePkgConflict"`
+	Issues           []checkutil.Issue   `json:"issues"`
+	Shared           int                 `json:"shared"`
 }
 
 type CrossPkg struct {
@@ -30,10 +31,11 @@ type CrossPkg struct {
 
 func (d *NixDiff) Summary() map[string]any {
 	return map[string]any{
-		"ghOnly":        len(d.GhOnly),
-		"dfOnly":        len(d.DfOnly),
-		"crossCategory": len(d.CrossCategory),
-		"shared":        d.Shared,
+		"ghOnly":           len(d.GhOnly),
+		"dfOnly":           len(d.DfOnly),
+		"crossCategory":    len(d.CrossCategory),
+		"falsePkgConflict": len(d.FalsePkgConflict),
+		"shared":           d.Shared,
 	}
 }
 
@@ -159,13 +161,14 @@ func MergeResult(cat *CatDiff, nix NixDiff) *DiffResult {
 	})
 
 	summary := map[string]any{
-		"shared":      len(cat.Shared),
-		"dfOnly":      len(cat.DfOnly),
-		"ghOnly":      len(cat.GhOnly),
-		"nixGhOnly":   len(nix.GhOnly),
-		"nixDfOnly":   len(nix.DfOnly),
-		"nixCrossCat": len(nix.CrossCategory),
-		"nixShared":   nix.Shared,
+		"shared":             len(cat.Shared),
+		"dfOnly":             len(cat.DfOnly),
+		"ghOnly":             len(cat.GhOnly),
+		"nixGhOnly":          len(nix.GhOnly),
+		"nixDfOnly":          len(nix.DfOnly),
+		"nixCrossCat":        len(nix.CrossCategory),
+		"nixFalsePkgConflict": len(nix.FalsePkgConflict),
+		"nixShared":          nix.Shared,
 	}
 
 	return &DiffResult{
@@ -194,9 +197,10 @@ type pkgPresence struct {
 // classify partitions pkgState into gh-only, df-only, shared, and cross-category.
 func classify(pkgState map[string]*pkgPresence, dotfilesFalsePkgs map[string]bool) *NixDiff {
 	diff := &NixDiff{
-		GhOnly:        make(map[string][]string),
-		DfOnly:        make(map[string][]string),
-		CrossCategory: make(map[string]CrossPkg),
+		GhOnly:           make(map[string][]string),
+		DfOnly:           make(map[string][]string),
+		CrossCategory:    make(map[string]CrossPkg),
+		FalsePkgConflict: make(map[string][]string),
 	}
 
 	for pkg, p := range pkgState {
@@ -225,7 +229,14 @@ func classify(pkgState map[string]*pkgPresence, dotfilesFalsePkgs map[string]boo
 			})
 
 		case len(p.GHCats) > 0 && len(p.DFCats) > 0:
-			if hasOverlap(p.GHCats, p.DFCats) {
+			if dotfilesFalsePkgs[pkg] {
+				diff.FalsePkgConflict[pkg] = p.DFCats
+				diff.Issues = append(diff.Issues, checkutil.Issue{
+					File:     "data/gh",
+					Severity: checkutil.SeverityError,
+					Message:  fmt.Sprintf("false-pkg-conflict: %s is marked isDotfiles: false but exists in dotfiles (%s)", pkg, strings.Join(p.DFCats, ", ")),
+				})
+			} else if hasOverlap(p.GHCats, p.DFCats) {
 				diff.Shared++
 			} else {
 				diff.CrossCategory[pkg] = CrossPkg{GHCats: p.GHCats, DFCats: p.DFCats}

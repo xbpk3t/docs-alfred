@@ -86,18 +86,54 @@ func walkSelectPkgs(n *parser.Node, p *parser.Parser, add func(string)) {
 }
 
 // walkBindNode handles `programs.XXX` / `services.XXX` binding nodes.
+// Supports both dotted form (programs.bash.enable = true) and nested form
+// (programs = { bash = { enable = true; }; }).
 func walkBindNode(n *parser.Node, p *parser.Parser, add func(string)) {
 	if n.Type != parser.BindNode || len(n.Nodes) < 1 {
 		return
 	}
 	attrNames := collectAttrNames(n.Nodes[0], p)
-	if len(attrNames) < 2 {
+	if len(attrNames) < 1 {
 		return
 	}
 	first := attrNames[0]
-	if first == "programs" || first == "services" {
+	if first != "programs" && first != "services" {
+		return
+	}
+
+	// dotted form: programs.bash.enable = true → attrNames = ["programs","bash","enable"]
+	if len(attrNames) >= 2 {
 		if target := attrNames[1]; target != "" && !isSkip(target) {
 			add(target)
+		}
+		return
+	}
+
+	// nested form: programs = { bash = { ... }; } → attrNames = ["programs"]
+	// walk into value node's children to extract inner binding names
+	if first == "programs" && len(n.Nodes) >= 2 {
+		walkProgramsValue(n.Nodes[1], p, add)
+	}
+}
+
+// walkProgramsValue extracts binding names from a programs/services attrset value.
+// Only extracts bindings whose value is an attrset (e.g. bash = { ... }),
+// skipping simple assignments (e.g. enable = true).
+func walkProgramsValue(val *parser.Node, p *parser.Parser, add func(string)) {
+	if val == nil {
+		return
+	}
+	for _, child := range val.Nodes {
+		if child.Type == parser.BindNode && len(child.Nodes) >= 2 {
+			if names := collectAttrNames(child.Nodes[0], p); len(names) >= 1 {
+				if target := names[0]; target != "" && !isSkip(target) && child.Nodes[1].Type == parser.SetNode {
+					add(target)
+				}
+			}
+		}
+		// peel non-BindNode wrappers but don't recurse into BindNode values
+		if child.Type != parser.BindNode {
+			walkProgramsValue(child, p, add)
 		}
 	}
 }

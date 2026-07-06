@@ -244,10 +244,11 @@ func TestRunDigestWritesSameTopicInInboxOrderAfterReverseCompletion(t *testing.T
 	cfg.Wiki.Concurrency = 3
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("inbox\n"), 0o600))
 	deps := &dependencies{
-		fetcher:    fetcher,
-		classifier: classifier,
-		writer:     serviceWriter{},
-		inbox:      &fakeInbox{entries: entries},
+		fetcher:         fetcher,
+		classifier:      classifier,
+		writer:          serviceWriter{},
+		inbox:           &fakeInbox{entries: entries},
+		validTopicPaths: map[string]bool{"topic/path": true},
 	}
 
 	type runResult struct {

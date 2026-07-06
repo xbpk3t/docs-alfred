@@ -51,6 +51,13 @@ var nixSkip = map[string]bool{
 	"enable": true, "package": true,
 	"system": true, "path": true, "cc": true,
 	"remote_server": true, "ssh": true, "home-manager": true,
+	// NixOS service/desktop config keys (not packages)
+	"desktopManager": true, "displayManager": true, "smartd": true,
+	"sudo_local": true,
+	// Third-party module program names (not standard NixOS packages)
+	"context7": true, "github": true,
+	// Flake inputs / infra modules (not packages)
+	"nix-index-database": true,
 }
 
 func isSkip(name string) bool {

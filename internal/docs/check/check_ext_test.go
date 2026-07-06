@@ -3,6 +3,7 @@ package workspaceops
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,6 +79,33 @@ func TestCollectActualWikiDirsDepth2(t *testing.T) {
 	// depth-3 "a/b/c" should not be collected at wiki level
 }
 
+// --- collectActualTopicDirs ---
+
+func TestCollectActualTopicDirsEmpty(t *testing.T) {
+	dirs, err := collectActualTopicDirs(t.TempDir())
+	require.NoError(t, err)
+	assert.Empty(t, dirs)
+}
+
+func TestCollectActualTopicDirs(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "folder", "type", "topic"), 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "folder", "type", ".hidden"), 0o700))
+
+	dirs, err := collectActualTopicDirs(root)
+	require.NoError(t, err)
+	assert.Contains(t, dirs, "folder/type/topic")
+	assert.NotContains(t, dirs, "folder/type/.hidden")
+}
+
+// --- collectExpectedTopics ---
+
+func TestCollectExpectedTopicsEmpty(t *testing.T) {
+	set, err := collectExpectedTopics(t.TempDir())
+	require.NoError(t, err)
+	assert.Empty(t, set)
+}
+
 // --- computeDirDiff ---
 
 func TestComputeDirDiff(t *testing.T) {
@@ -143,12 +171,56 @@ func TestRunWikiCheckMatchingStructure(t *testing.T) {
 	// Create matching structure
 	require.NoError(t, os.MkdirAll(filepath.Join(ghRoot, "algo"), 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(ghRoot, "algo", "go.yml"), []byte("- type: go\n  topics:\n    - topic: test\n"), 0o600))
-	require.NoError(t, os.MkdirAll(filepath.Join(wikiRoot, "algo", "go"), 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(wikiRoot, "algo", "go", "test"), 0o700))
 
 	result, err := RunWikiCheck(WikiCheckInput{GhRoot: ghRoot, WikiRoot: wikiRoot})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	// May have OKF issues from missing frontmatter but no structural issues
+	// No topic mismatch issues
+	for _, issue := range result.Issues {
+		assert.NotContains(t, issue.Message, "wiki topic dir not in data/gh topics")
+	}
+}
+
+func TestRunWikiCheckTopicMismatch(t *testing.T) {
+	ghRoot := t.TempDir()
+	wikiRoot := t.TempDir()
+
+	// YAML defines topic "terminal"
+	require.NoError(t, os.MkdirAll(filepath.Join(ghRoot, "desktop"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(ghRoot, "desktop", "GUI.yml"), []byte("- type: GUI\n  topics:\n    - topic: terminal\n"), 0o600))
+	// Wiki has "terminal-zzz" instead of "terminal"
+	require.NoError(t, os.MkdirAll(filepath.Join(wikiRoot, "desktop", "GUI", "terminal-zzz"), 0o700))
+
+	result, err := RunWikiCheck(WikiCheckInput{GhRoot: ghRoot, WikiRoot: wikiRoot})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Issues)
+	found := false
+	for _, issue := range result.Issues {
+		if strings.Contains(issue.Message, "wiki topic dir not in data/gh topics") && strings.Contains(issue.Message, "terminal-zzz") {
+			found = true
+			assert.Equal(t, checkutil.SeverityError, issue.Severity)
+		}
+	}
+	assert.True(t, found, "expected topic mismatch issue for terminal-zzz, got: %+v", result.Issues)
+}
+
+func TestRunWikiCheckTopicMatch(t *testing.T) {
+	ghRoot := t.TempDir()
+	wikiRoot := t.TempDir()
+
+	// YAML defines topic "terminal"
+	require.NoError(t, os.MkdirAll(filepath.Join(ghRoot, "desktop"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(ghRoot, "desktop", "GUI.yml"), []byte("- type: GUI\n  topics:\n    - topic: terminal\n"), 0o600))
+	// Wiki has matching "terminal"
+	require.NoError(t, os.MkdirAll(filepath.Join(wikiRoot, "desktop", "GUI", "terminal"), 0o700))
+
+	result, err := RunWikiCheck(WikiCheckInput{GhRoot: ghRoot, WikiRoot: wikiRoot})
+	require.NoError(t, err)
+	// No topic mismatch issues
+	for _, issue := range result.Issues {
+		assert.NotContains(t, issue.Message, "wiki topic dir not in data/gh topics")
+	}
 }
 
 func TestRunWikiCheckMissingWikiDir(t *testing.T) {

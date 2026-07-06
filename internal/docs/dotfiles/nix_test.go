@@ -125,6 +125,23 @@ func TestParseNixRefs_Dedup(t *testing.T) {
 	assert.Equal(t, 1, countOccurrences(refs, "hello"))
 }
 
+func TestParseNixRefs_NestedAttrset(t *testing.T) {
+	code := `{ ... }: {
+  programs = {
+    bash = { enable = true; };
+    zsh = { enable = true; };
+  };
+  services = {
+    nginx = { enable = true; };
+  };
+}`
+	refs := parseNixRefs(code)
+	assert.Contains(t, refs, "bash")
+	assert.Contains(t, refs, "zsh")
+	// services nested attrset is not extracted (too many false positives from NixOS modules)
+	assert.NotContains(t, refs, "nginx")
+}
+
 func TestParseNixRefs_DottedPath(t *testing.T) {
 	code := `{ pkgs, ... }: [ pkgs.my-package pkgs.hello ]`
 	refs := parseNixRefs(code)

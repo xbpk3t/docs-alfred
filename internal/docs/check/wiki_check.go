@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
@@ -38,6 +39,9 @@ func (r *WikiCheckResult) Summary() map[string]any {
 }
 
 // RunWikiCheck checks that wiki/ and data/gh/ have matching folder structures.
+// Validates at two levels:
+//   - depth-1/depth-2 (folder/type): YAML file exists → wiki dir must exist
+//   - depth-3 (topic): wiki topic dir must match a topic defined in the YAML's topics field
 func RunWikiCheck(input WikiCheckInput) (*WikiCheckResult, error) {
 	slog.Info("Running wiki check", "gh-root", input.GhRoot, "wiki-root", input.WikiRoot)
 
@@ -58,6 +62,13 @@ func RunWikiCheck(input WikiCheckInput) (*WikiCheckResult, error) {
 	extra = filterContainerDirs(extra, expectedDirs)
 	issues := buildWikiIssues(missing, extra)
 
+	// Topic-level validation: wiki depth-3 dirs must match YAML topics.
+	topicIssues, err := checkTopicDirs(input.GhRoot, input.WikiRoot)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, topicIssues...)
+
 	// Append OKF v0.1 frontmatter check.
 	okfIssues, err := RunWikiCheckOKF(input.WikiRoot)
 	if err != nil {
@@ -72,6 +83,91 @@ func RunWikiCheck(input WikiCheckInput) (*WikiCheckResult, error) {
 		MissingWikiDirs:  missing,
 		ExtraWikiDirs:    extra,
 	}, nil
+}
+
+// checkTopicDirs validates that wiki depth-3 dirs match topics defined in data/gh YAML.
+func checkTopicDirs(ghRoot, wikiRoot string) ([]checkutil.Issue, error) {
+	// Load expected topic paths from data/gh YAML.
+	expectedTopics, err := collectExpectedTopics(ghRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect actual wiki depth-3 dirs.
+	actualTopics, err := collectActualTopicDirs(wikiRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	var issues []checkutil.Issue
+	for _, topic := range actualTopics {
+		if !expectedTopics[topic] {
+			issues = append(issues, checkutil.Issue{
+				File:     topic,
+				Severity: checkutil.SeverityError,
+				Message:  "wiki topic dir not in data/gh topics: " + topic,
+			})
+		}
+	}
+
+	return issues, nil
+}
+
+// collectExpectedTopics loads topic paths from data/gh YAML files via ghindex.
+// Returns an empty set (not an error) when no YAML files exist.
+func collectExpectedTopics(ghRoot string) (map[string]bool, error) {
+	configRepos, err := ghindex.LoadConfigReposFromDir(ghRoot)
+	if err != nil {
+		// No YAML files → no expected topics, not an error.
+		slog.Warn("No gh YAML found for topic check", "gh-root", ghRoot, "error", err)
+
+		return make(map[string]bool), nil
+	}
+
+	candidates := configRepos.TopicCatalog()
+	set := make(map[string]bool, len(candidates))
+	for _, c := range candidates {
+		set[c.Path] = true
+	}
+
+	return set, nil
+}
+
+// collectActualTopicDirs collects depth-3 wiki directories (folder/type/topic).
+func collectActualTopicDirs(wikiRoot string) ([]string, error) {
+	var dirs []string
+	d1Entries, err := os.ReadDir(wikiRoot)
+	if err != nil {
+		return nil, fmt.Errorf("read wiki root: %w", err)
+	}
+
+	for _, d1 := range d1Entries {
+		if !d1.IsDir() || strings.HasPrefix(d1.Name(), ".") {
+			continue
+		}
+		d2Entries, err := os.ReadDir(filepath.Join(wikiRoot, d1.Name()))
+		if err != nil {
+			continue
+		}
+		for _, d2 := range d2Entries {
+			if !d2.IsDir() || strings.HasPrefix(d2.Name(), ".") {
+				continue
+			}
+			d3Entries, err := os.ReadDir(filepath.Join(wikiRoot, d1.Name(), d2.Name()))
+			if err != nil {
+				continue
+			}
+			for _, d3 := range d3Entries {
+				if !d3.IsDir() || strings.HasPrefix(d3.Name(), ".") {
+					continue
+				}
+				dirs = append(dirs, d1.Name()+"/"+d2.Name()+"/"+d3.Name())
+			}
+		}
+	}
+	slices.Sort(dirs)
+
+	return dirs, nil
 }
 
 // toSet converts a string slice to a lookup set.

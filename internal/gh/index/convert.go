@@ -10,13 +10,20 @@ func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
 
 	for _, config := range cr {
+		// Propagate type-level isDotfiles to repos, but only when explicitly set.
+		// nil means "not set" so we skip propagation, avoiding zero-value false
+		// overriding repo-level values.
 		config.Using.Tag = config.Tag
-		config.Using.IsDotfiles = config.IsDotfiles
+		if config.IsDotfiles != nil {
+			config.Using.IsDotfiles = config.IsDotfiles
+		}
 		repos = append(repos, processRepo(&config.Using, config.Type)...)
 
 		for i := range config.Repos {
 			config.Repos[i].Tag = config.Tag
-			config.Repos[i].IsDotfiles = config.IsDotfiles
+			if config.IsDotfiles != nil {
+				config.Repos[i].IsDotfiles = config.IsDotfiles
+			}
 			repos = append(repos, processRepo(config.Repos[i], config.Type)...)
 		}
 

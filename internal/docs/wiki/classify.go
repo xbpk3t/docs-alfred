@@ -377,17 +377,13 @@ func (c *Classifier) classificationCandidates(
 	title,
 	content string,
 ) ([]ghindex.TopicCandidate, error) {
-	seen := make(map[string]bool)
-	candidates := appendUniqueTopicCandidates(nil, seen, scanWikiCandidates(c.WikiRoot))
-
 	remote, err := c.ghTopicCatalog()
 	if err != nil {
-		return candidates, err
+		return nil, err
 	}
 	ranked := rankTopicCandidates(remote, title+"\n"+urlStr+"\n"+truncate(content, 3000), c.CandidateLimit)
-	candidates = appendUniqueTopicCandidates(candidates, seen, ranked)
 
-	return candidates, nil
+	return ranked, nil
 }
 
 func (c *Classifier) ghTopicCatalog() ([]ghindex.TopicCandidate, error) {
@@ -841,8 +837,17 @@ func (c *Classifier) validateAIClassificationTopic(
 	if !candidatePathSet(candidates)[topicPath] {
 		return fallbackUncategorized(c.WikiRoot, candidates), nil
 	}
+	// Must be exactly folder/type/topic (depth 3).
+	if !validateTopicPathDepth(topicPath) {
+		return fallbackUncategorized(c.WikiRoot, candidates), nil
+	}
 
 	return topicPath, nil
+}
+
+// validateTopicPathDepth ensures topicPath has exactly 3 segments (folder/type/topic).
+func validateTopicPathDepth(path string) bool {
+	return strings.Count(path, "/") == 2
 }
 
 // fallbackUncategorized returns "zzz/ss/uncategorized" if it exists in the
@@ -1005,21 +1010,17 @@ func FormatTopicCandidates(candidates []ghindex.TopicCandidate) string {
 	return formatTopicCandidates(candidates)
 }
 
-// LoadClassificationCandidates loads and ranks topic candidates from wiki root and gh.yml.
+// LoadClassificationCandidates loads and ranks topic candidates from gh.yml.
 // Used by ccx session export for the merged classify+title AI call.
 func LoadClassificationCandidates(wikiRoot string) []ghindex.TopicCandidate {
-	seen := make(map[string]bool)
-	candidates := appendUniqueTopicCandidates(nil, seen, scanWikiCandidates(wikiRoot))
-
 	remote, err := ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
 	if err != nil {
-		slog.Warn("Local topic catalog unavailable; using wiki-only candidates", "error", err)
+		slog.Warn("Local topic catalog unavailable", "error", err)
 
-		return candidates
+		return nil
 	}
 
 	ranked := rankTopicCandidates(remote, "", 120)
-	candidates = appendUniqueTopicCandidates(candidates, seen, ranked)
 
-	return candidates
+	return ranked
 }

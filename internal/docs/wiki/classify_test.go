@@ -114,9 +114,7 @@ func TestValidateAIClassificationAcceptsCandidate(t *testing.T) {
 }
 
 func TestClassificationCandidatesRetriesRemoteCatalogAfterFailure(t *testing.T) {
-	root := t.TempDir()
-	require.NoError(t, makeTopicDir(root, "local/tool/demo"))
-	classifier := NewClassifier(nil, root, "")
+	classifier := NewClassifier(nil, t.TempDir(), "")
 	calls := 0
 	classifier.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
 		calls++
@@ -129,20 +127,16 @@ func TestClassificationCandidatesRetriesRemoteCatalogAfterFailure(t *testing.T) 
 
 	first, err := classifier.classificationCandidates(context.Background(), "https://example.com", "title", "content")
 	require.Error(t, err)
-	assertCandidatePath(t, first, "local/tool/demo")
-	assertNoCandidatePath(t, first, "remote/tool/demo")
+	assert.Nil(t, first)
 
 	second, err := classifier.classificationCandidates(context.Background(), "https://example.com", "title", "content")
 	require.NoError(t, err)
-	assertCandidatePath(t, second, "local/tool/demo")
 	assertCandidatePath(t, second, "remote/tool/demo")
 	require.Equal(t, 2, calls)
 }
 
-func TestClassificationCandidatesKeepLocalFallbackWhenRemoteUnavailable(t *testing.T) {
-	root := t.TempDir()
-	require.NoError(t, makeTopicDir(root, "local/tool/demo"))
-	classifier := NewClassifier(nil, root, "")
+func TestClassificationCandidatesReturnsErrorWhenRemoteUnavailable(t *testing.T) {
+	classifier := NewClassifier(nil, t.TempDir(), "")
 	classifier.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
 		return nil, errors.New("remote down")
 	}
@@ -150,7 +144,7 @@ func TestClassificationCandidatesKeepLocalFallbackWhenRemoteUnavailable(t *testi
 	candidates, err := classifier.classificationCandidates(context.Background(), "https://example.com", "title", "content")
 
 	require.Error(t, err)
-	assertCandidatePath(t, candidates, "local/tool/demo")
+	assert.Nil(t, candidates)
 }
 
 func TestTruncateKeepsUTF8Valid(t *testing.T) {

@@ -13,6 +13,7 @@ import (
 	"github.com/adrg/frontmatter"
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
@@ -47,9 +48,10 @@ func (k FailureKind) String() string { return string(k) }
 
 // WriteOptions contains options for writing wiki entries.
 type WriteOptions struct {
-	WikiRoot string
-	BatchID  string
-	DryRun   bool
+	ValidTopicPaths map[string]bool
+	WikiRoot        string
+	BatchID         string
+	DryRun          bool
 }
 
 var pathLocks = struct {
@@ -92,6 +94,17 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 		_, err := WriteFailureEntry(item, FailureClassify, "empty topic path", opts)
 
 		return "", err
+	}
+
+	// If ValidTopicPaths is set, validate topicPath before writing.
+	// Invalid paths route to uncat.md for manual review instead of creating new directories.
+	if opts != nil && opts.ValidTopicPaths != nil && !opts.ValidTopicPaths[item.TopicPath] {
+		slog.Warn("Topic path not in gh.yml, routing to uncat.md", "topic", item.TopicPath, "url", item.URL)
+		reviewItem := *item
+		reviewItem.NeedsManualReview = true
+		reviewItem.Type = TypeInbox
+
+		return WriteManualReviewEntry(&reviewItem, opts)
 	}
 
 	topicDir := resolveTopicDir(item, opts)
@@ -145,6 +158,26 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 
 func resolveTopicDir(item *ClassifyItem, opts *WriteOptions) string {
 	return filepath.Join(opts.WikiRoot, item.TopicPath)
+}
+
+// LoadValidTopicPaths loads valid topic paths from the local gh.yml cache.
+// Returns a set of folder/type/topic paths that are valid for writing.
+func LoadValidTopicPaths() map[string]bool {
+	remote, err := ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
+	if err != nil {
+		slog.Warn("Local topic catalog unavailable for write validation", "error", err)
+
+		return nil
+	}
+
+	valid := make(map[string]bool, len(remote))
+	for _, c := range remote {
+		if validateTopicPathDepth(c.Path) {
+			valid[c.Path] = true
+		}
+	}
+
+	return valid
 }
 
 func buildEntry(item *ClassifyItem) string {
