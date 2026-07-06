@@ -97,11 +97,9 @@ func TestWalkGhRepos_ValidData(t *testing.T) {
 	assert.Equal(t, 1, repoEvents)
 }
 
-func TestWalkGhRepos_UsingEntry(t *testing.T) {
+func TestWalkGhRepos_RepoEntry(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: language
-  using:
-    url: https://github.com/acme/using-repo
   repo:
     - url: https://github.com/acme/repo
 `), 0644))
@@ -115,7 +113,7 @@ func TestWalkGhRepos_UsingEntry(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 2, repoCount) // using + repo
+	assert.Equal(t, 1, repoCount)
 }
 
 func TestWalkGhRepos_NonMappingInSection(t *testing.T) {
@@ -348,11 +346,9 @@ func TestWalkGhRepos_SectionCallbackError(t *testing.T) {
 	assert.ErrorIs(t, err, expectedErr)
 }
 
-func TestWalkGhRepos_UsingCallbackError(t *testing.T) {
+func TestWalkGhRepos_RepoCallbackError(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: test
-  using:
-    url: https://github.com/a/b
   repo:
     - url: https://github.com/c/d
   record: []
@@ -360,7 +356,7 @@ func TestWalkGhRepos_UsingCallbackError(t *testing.T) {
 
 	var callCount int
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
-		if ev.Type == evRepo && ev.Relation == "using" {
+		if ev.Type == evRepo && ev.Relation == evTypeRepo {
 			callCount++
 
 			return assert.AnError

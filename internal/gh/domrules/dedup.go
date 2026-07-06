@@ -142,7 +142,7 @@ func RunGHDuplicateCheck(targetDir string) (*DuplicateReport, error) {
 	return groupURLDuplicates(repoEntries), nil
 }
 
-// collectGhRepoEntries reads all gh YAML files and collects repo/using entries with URLs.
+// collectGhRepoEntries reads all gh YAML files and collects repo entries with URLs.
 func collectGhRepoEntries(targetDir string) ([]ghEntry, error) {
 	entries, err := os.ReadDir(targetDir)
 	if err != nil {
@@ -175,7 +175,7 @@ func collectGhRepoEntries(targetDir string) ([]ghEntry, error) {
 	return repoEntries, nil
 }
 
-// parseGhYAMLEntries extracts repo/using URL entries from a single gh YAML file.
+// parseGhYAMLEntries extracts repo URL entries from a single gh YAML file.
 func parseGhYAMLEntries(yf, targetDir string) ([]ghEntry, error) {
 	data, err := os.ReadFile(yf)
 	if err != nil {
@@ -202,17 +202,8 @@ func parseGhYAMLEntries(yf, targetDir string) ([]ghEntry, error) {
 	return entries, nil
 }
 
-// appendGhURLEntries extracts 'using' and 'repo' URLs from a parsed YAML item.
+// appendGhURLEntries extracts 'repo' URLs from a parsed YAML item.
 func appendGhURLEntries(entries []ghEntry, relFile, typeName string, item map[string]any) []ghEntry {
-	// Check 'using'
-	if using, ok := item["using"].(map[string]any); ok {
-		if u, ok := using["url"].(string); ok && u != "" {
-			entries = append(entries, ghEntry{
-				file: relFile, typeName: typeName, relation: "using", url: u,
-			})
-		}
-	}
-
 	// Check 'repo' array
 	if repos, ok := item["repo"].([]any); ok {
 		for _, r := range repos {

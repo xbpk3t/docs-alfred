@@ -7,13 +7,12 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 )
 
-func TestTopicCatalogIncludesConfigUsingRepoAndNestedTopics(t *testing.T) {
+func TestTopicCatalogIncludesConfigRepoAndNestedTopics(t *testing.T) {
 	repos := ConfigRepos{
 		{
 			Tag:    "kernel",
 			Type:   "tool",
 			Topics: content.Topics{{Topic: "Config Topic", Meta: &content.TopicMeta{Slug: "config-topic"}}},
-			Using:  Repository{Topics: content.Topics{{Topic: "Using Topic"}}},
 			Repos: Repos{
 				{
 					URL: "https://github.com/acme/main-repo",
@@ -22,9 +21,9 @@ func TestTopicCatalogIncludesConfigUsingRepoAndNestedTopics(t *testing.T) {
 						Meta:  &content.TopicMeta{Slug: "parent-topic"},
 						Sub:   content.Topics{{Topic: "Child Topic", Meta: &content.TopicMeta{Slug: "child-topic"}}},
 					}},
-					SubRepos: Repos{{
-						URL:    "https://github.com/acme/sub-repo",
-						Topics: content.Topics{{Topic: "Sub Topic"}},
+					RelatedRepos: Repos{{
+						URL:    "https://github.com/acme/related-repo",
+						Topics: content.Topics{{Topic: "Related Topic"}},
 					}},
 				},
 			},
@@ -34,10 +33,9 @@ func TestTopicCatalogIncludesConfigUsingRepoAndNestedTopics(t *testing.T) {
 	catalog := repos.TopicCatalog()
 
 	assertCatalogHas(t, catalog, "kernel/tool/config-topic", "gh:config")
-	assertCatalogHas(t, catalog, "kernel/tool/Using Topic", "gh:using")
 	assertCatalogHas(t, catalog, "kernel/tool/main-repo/parent-topic", "gh:repo")
 	assertCatalogHas(t, catalog, "kernel/tool/main-repo/parent-topic/child-topic", "gh:repo")
-	assertCatalogHas(t, catalog, "kernel/tool/sub-repo/Sub Topic", "gh:repo")
+	assertCatalogHas(t, catalog, "kernel/tool/related-repo/Related Topic", "gh:repo")
 }
 
 func TestTopicCatalogUsesPicDirAsCanonicalPath(t *testing.T) {
@@ -153,17 +151,13 @@ func TestCanonicalTopicPath_WithPicDir(t *testing.T) {
 	assert.Equal(t, "custom/path", path)
 }
 
-func TestTopicCatalog_WithReplacedAndRelatedRepos(t *testing.T) {
+func TestTopicCatalog_WithRelatedRepos(t *testing.T) {
 	repos := ConfigRepos{{
 		Tag:  "kernel",
 		Type: "tool",
 		Repos: Repos{{
 			URL:    "https://github.com/acme/main",
 			Topics: content.Topics{{Topic: "Main Topic", Meta: &content.TopicMeta{Slug: "main-topic"}}},
-			ReplacedRepos: Repos{{
-				URL:    "https://github.com/acme/old",
-				Topics: content.Topics{{Topic: "Old Topic"}},
-			}},
 			RelatedRepos: Repos{{
 				URL:    "https://github.com/acme/related",
 				Topics: content.Topics{{Topic: "Related Topic"}},
@@ -173,7 +167,6 @@ func TestTopicCatalog_WithReplacedAndRelatedRepos(t *testing.T) {
 
 	catalog := repos.TopicCatalog()
 	assertCatalogHas(t, catalog, "kernel/tool/main/main-topic", "gh:repo")
-	assertCatalogHas(t, catalog, "kernel/tool/old/Old Topic", "gh:repo")
 	assertCatalogHas(t, catalog, "kernel/tool/related/Related Topic", "gh:repo")
 }
 

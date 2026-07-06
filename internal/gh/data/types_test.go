@@ -28,19 +28,6 @@ func TestSectionFromMap(t *testing.T) {
 	assert.Len(t, section.Record, 1)
 }
 
-func TestSectionFromMap_Using(t *testing.T) {
-	m := map[string]any{
-		"type": "tool",
-		"using": map[string]any{
-			"url": "https://github.com/owner/using-repo",
-			"des": "using desc",
-		},
-	}
-	section := sectionFromMap(m)
-	require.NotNil(t, section.Using)
-	assert.Equal(t, "https://github.com/owner/using-repo", section.Using.URL)
-}
-
 func TestSectionFromMap_Topics(t *testing.T) {
 	m := map[string]any{
 		"type": "tool",
@@ -213,24 +200,6 @@ func TestRecordsFromAny(t *testing.T) {
 
 // --- Additional focused tests ---
 
-func TestSectionFromMap_WithUsingEntry(t *testing.T) {
-	m := map[string]any{
-		"type": "tool",
-		"using": map[string]any{
-			"url": "https://github.com/acme/framework",
-			"des": "a framework",
-			"zk":  "zk-ref",
-		},
-	}
-	section := sectionFromMap(m)
-	require.NotNil(t, section.Using)
-	assert.Equal(t, "https://github.com/acme/framework", section.Using.URL)
-	assert.Equal(t, "a framework", section.Using.Des)
-	assert.Equal(t, "zk-ref", section.Using.Zk)
-	assert.True(t, section.Using.RecordValid)
-	assert.Empty(t, section.Repos)
-}
-
 func TestSectionFromMap_WithRepos(t *testing.T) {
 	m := map[string]any{
 		"type": "language",
@@ -275,7 +244,6 @@ func TestSectionFromMap_WithRecord(t *testing.T) {
 func TestSectionFromMap_EmptyMap(t *testing.T) {
 	section := sectionFromMap(map[string]any{})
 	assert.Empty(t, section.Type)
-	assert.Nil(t, section.Using)
 	assert.Empty(t, section.Repos)
 	assert.Empty(t, section.Topics)
 	assert.False(t, section.HasRecord)

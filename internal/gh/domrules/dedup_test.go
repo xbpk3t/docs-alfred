@@ -189,15 +189,14 @@ func TestRunGHDuplicateCheck_EmptyDir(t *testing.T) {
 	assert.Empty(t, report.URLDuplicates)
 }
 
-func TestRunGHDuplicateCheck_UsingEntry(t *testing.T) {
+func TestRunGHDuplicateCheck_RepoEntry(t *testing.T) {
 	dir := t.TempDir()
 	tagDir := filepath.Join(dir, "dev")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 	yamlContent := `
 - type: "language"
-  using:
-    url: "https://github.com/owner/repo"
   repo:
+    - url: "https://github.com/owner/repo"
     - url: "https://github.com/owner/repo"
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "go.yml"), []byte(yamlContent), 0644))

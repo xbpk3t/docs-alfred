@@ -295,11 +295,6 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 		// Collect topic dirs
 		collectTopicDirs(section.Topics, typeBase, &dirs)
 
-		// Collect using repo topic dirs
-		if section.Using != nil {
-			collectRepoTopicDirs(section.Using, typeBase, &dirs, true)
-		}
-
 		// Collect repo topic dirs
 		for i := range section.Repos {
 			collectRepoTopicDirs(&section.Repos[i], typeBase, &dirs, false)

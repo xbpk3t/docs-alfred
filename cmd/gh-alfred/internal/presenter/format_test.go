@@ -33,14 +33,13 @@ func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
 	cacheDir := useTempRepoIconCache(t)
 	repos := ghindex.Repos{
 		{
-			URL:       "https://github.com/acme/tool",
-			Des:       "Tooling",
-			Doc:       "data/gh/tool",
-			Tag:       "kernel",
-			Type:      "tool",
-			Topics:    content.Topics{{Topic: "install"}},
-			MainRepo:  "acme/main",
-			IsSubRepo: true,
+			URL:      "https://github.com/acme/tool",
+			Des:      "Tooling",
+			Doc:      "data/gh/tool",
+			Tag:      "kernel",
+			Type:     "tool",
+			Topics:   content.Topics{{Topic: "install"}},
+			MainRepo: "acme/main",
 		},
 		{
 			URL: "https://github.com/acme/external-doc",
@@ -54,7 +53,7 @@ func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
 	assert.Equal(t, "acme/tool", items[0].Title)
 	assert.Equal(t, "https://github.com/acme/tool", items[0].Arg)
 	assert.Equal(t, "acme/tool", items[0].Autocomplete)
-	assert.Equal(t, "[SUB#acme/main] [kernel#tool] Tooling", items[0].Subtitle)
+	assert.Equal(t, "[kernel#tool] Tooling", items[0].Subtitle)
 	assert.Equal(t, filepath.Join(cacheDir, "gh-d1-n0-s0.svg"), items[0].Icon.Path)
 	require.NotNil(t, items[0].Text)
 	assert.Equal(t, "https://github.com/acme/tool", items[0].Text.Copy)

@@ -83,21 +83,6 @@ func TestFormatAlfredItemsWithNixURL(t *testing.T) {
 	assert.Equal(t, "github:acme/tool#tool", items[0].Mods["ctrl"].Arg)
 }
 
-func TestFormatAlfredItemsReplacedRepo(t *testing.T) {
-	useTempRepoIconCache(t)
-	repos := ghindex.Repos{
-		{
-			URL:            "https://github.com/acme/tool",
-			MainRepo:       "acme/main",
-			IsReplacedRepo: true,
-		},
-	}
-
-	items := FormatAlfredItems(repos, "https://docs.lucc.dev/", "")
-	require.Len(t, items, 1)
-	assert.Contains(t, items[0].Subtitle, "[REP#acme/main]")
-}
-
 func TestFormatAlfredItemsRelatedRepo(t *testing.T) {
 	useTempRepoIconCache(t)
 	repos := ghindex.Repos{
