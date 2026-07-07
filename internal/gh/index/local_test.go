@@ -11,11 +11,11 @@ import (
 
 const validGHYML = `- type: tool
   tag: kernel
+  topics:
+    - topic: devops
   repo:
     - url: https://github.com/acme/tool
       des: Tool repository
-      topics:
-        - topic: devops
 `
 
 func TestLoadLocalGHYML_FileExists(t *testing.T) {

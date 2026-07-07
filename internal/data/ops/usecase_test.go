@@ -3,32 +3,12 @@ package dataops
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
-	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
-
-func TestRunDomainCheckPassesGhMaxLinesOverride(t *testing.T) {
-	tmpDir := t.TempDir()
-	content := strings.Repeat("# filler\n", 1000) + "- type: go\n  record: []\n"
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(content), 0644))
-
-	defaultResult, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainGH, Path: tmpDir})
-	require.NoError(t, err)
-	require.True(t, checkutil.HasErrors(defaultResult.Issues))
-
-	overrideResult, err := RunDomainCheck(DomainCheckInput{
-		Domain:     data.DomainGH,
-		Path:       tmpDir,
-		GhMaxLines: 1500,
-	})
-	require.NoError(t, err)
-	require.False(t, checkutil.HasErrors(overrideResult.Issues))
-}
 
 func TestRunDomainCheck_UnknownDomain(t *testing.T) {
 	_, err := RunDomainCheck(DomainCheckInput{Domain: data.DataDomain("unknown")})

@@ -11,7 +11,6 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/internal/gh/goods"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
-	"github.com/xbpk3t/docs-alfred/internal/gh/task"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
@@ -88,8 +87,6 @@ func RunDomainRender(cfg DomainRenderConfig) (*DomainRenderResult, error) {
 func createRendererForDomain(domain string) (render.Renderer, error) {
 	var renderer render.Renderer
 	switch domain {
-	case "task":
-		renderer = task.NewTaskYAMLRender()
 	case "gh":
 		renderer = ghindex.NewGithubYAMLRender("")
 	case "goods":

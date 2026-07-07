@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 )
 
 func TestRepository_IsValid(t *testing.T) {
@@ -51,14 +50,6 @@ func TestRepository_GetDes(t *testing.T) {
 func TestRepository_GetURL(t *testing.T) {
 	r := &Repository{URL: "https://github.com/a/b"}
 	assert.Equal(t, "https://github.com/a/b", GetURL(r))
-}
-
-func TestRepository_HasQs(t *testing.T) {
-	r1 := &Repository{Topics: []content.Topic{{Topic: "t1"}}}
-	assert.True(t, HasQs(r1))
-
-	r2 := &Repository{}
-	assert.False(t, HasQs(r2))
 }
 
 func TestRepository_HasNix(t *testing.T) {

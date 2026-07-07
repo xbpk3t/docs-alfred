@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -86,7 +85,6 @@ func newRenderCmd(dataPath *string) *cobra.Command {
 
 func newCheckCmd(dataPath *string) *cobra.Command {
 	var ruleScope string
-	var ghMaxLines int
 
 	cmd := &cobra.Command{
 		Use:   "check <domain>",
@@ -98,27 +96,21 @@ func newCheckCmd(dataPath *string) *cobra.Command {
 				return err
 			}
 
-			return runDomainCheck(domain, *dataPath, ruleScope, ghMaxLines)
+			return runDomainCheck(domain, *dataPath, ruleScope)
 		},
 	}
 
-	cmd.Flags().IntVar(&ghMaxLines, "max-lines", 0, "Override data/gh maximum YAML file line count for gh checks")
 	cmd.Flags().StringVar(&ruleScope, "rule-scope", "", "Override structured data check rule scope")
 	_ = cmd.Flags().MarkHidden("rule-scope")
 
 	return cmd
 }
 
-func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string, ghMaxLines int) error {
-	if ghMaxLines < 0 {
-		return errors.New("--max-lines must be greater than or equal to 0")
-	}
-
+func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string) error {
 	result, err := dataops.RunDomainCheck(dataops.DomainCheckInput{
-		Domain:     domain,
-		Path:       dataPath,
-		RuleScope:  ruleScope,
-		GhMaxLines: ghMaxLines,
+		Domain:    domain,
+		Path:      dataPath,
+		RuleScope: ruleScope,
 	})
 	if err != nil {
 		return err

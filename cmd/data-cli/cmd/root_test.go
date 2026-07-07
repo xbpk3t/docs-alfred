@@ -14,17 +14,6 @@ func TestRootCommandOwnsDataActions(t *testing.T) {
 	requireCommandNames(t, root.Commands(), []string{"check", "dedup", "render", "schema"})
 }
 
-func TestCheckCommandExposesGhMaxLinesFlag(t *testing.T) {
-	checkCmd, _, err := newRootCmd().Find([]string{"check", "gh"})
-	require.NoError(t, err)
-	require.NotNil(t, checkCmd.Flag("max-lines"))
-}
-
-func TestRunDomainCheckRejectsNegativeMaxLines(t *testing.T) {
-	err := runDomainCheck("gh", "", "", -1)
-	require.ErrorContains(t, err, "--max-lines")
-}
-
 func requireCommandNames(t *testing.T, commands []*cobra.Command, want []string) {
 	t.Helper()
 

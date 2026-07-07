@@ -15,7 +15,7 @@ type TopicCandidate struct {
 	Source  string `json:"source,omitempty"`
 }
 
-// TopicCatalog extracts all topic paths from config-level and repo topics.
+// TopicCatalog extracts all topic paths from config-level topics.
 func (cr ConfigRepos) TopicCatalog() []TopicCandidate {
 	seen := make(map[string]bool)
 	var candidates []TopicCandidate
@@ -43,8 +43,7 @@ func appendRepoTopicCandidates(
 			continue
 		}
 		repoName := urlutil.RepoName(repo.URL)
-		base := joinPath(tag, typeName, repoName)
-		*candidates = appendTopicCandidates(*candidates, seen, repo.Topics, base, "gh:repo")
+		_ = repoName
 		appendRepoTopicCandidates(candidates, seen, repo.RelatedRepos, tag, typeName)
 	}
 }
@@ -67,7 +66,6 @@ func appendTopicCandidates(
 				Source:  source,
 			})
 		}
-		candidates = appendTopicCandidates(candidates, seen, topic.Sub, topicPath, source)
 	}
 
 	return candidates
@@ -76,9 +74,6 @@ func appendTopicCandidates(
 func canonicalTopicPath(topic *content.Topic, base string) string {
 	if topic == nil {
 		return cleanCatalogPath(base)
-	}
-	if topic.PicDir != "" {
-		return cleanCatalogPath(topic.PicDir)
 	}
 
 	return cleanCatalogPath(joinPath(base, topicDirName(topic)))

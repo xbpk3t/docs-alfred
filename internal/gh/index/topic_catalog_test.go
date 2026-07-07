@@ -7,24 +7,16 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 )
 
-func TestTopicCatalogIncludesConfigRepoAndNestedTopics(t *testing.T) {
+func TestTopicCatalogIncludesConfigRepoTopics(t *testing.T) {
 	repos := ConfigRepos{
 		{
 			Tag:    "kernel",
 			Type:   "tool",
-			Topics: content.Topics{{Topic: "Config Topic", Meta: &content.TopicMeta{Slug: "config-topic"}}},
+			Topics: content.Topics{{Topic: "Config Topic"}},
 			Repos: Repos{
 				{
-					URL: "https://github.com/acme/main-repo",
-					Topics: content.Topics{{
-						Topic: "Parent Topic",
-						Meta:  &content.TopicMeta{Slug: "parent-topic"},
-						Sub:   content.Topics{{Topic: "Child Topic", Meta: &content.TopicMeta{Slug: "child-topic"}}},
-					}},
-					RelatedRepos: Repos{{
-						URL:    "https://github.com/acme/related-repo",
-						Topics: content.Topics{{Topic: "Related Topic"}},
-					}},
+					URL:            "https://github.com/acme/main-repo",
+					RelatedRepos: Repos{{URL: "https://github.com/acme/related-repo"}},
 				},
 			},
 		},
@@ -32,22 +24,7 @@ func TestTopicCatalogIncludesConfigRepoAndNestedTopics(t *testing.T) {
 
 	catalog := repos.TopicCatalog()
 
-	assertCatalogHas(t, catalog, "kernel/tool/config-topic", "gh:config")
-	assertCatalogHas(t, catalog, "kernel/tool/main-repo/parent-topic", "gh:repo")
-	assertCatalogHas(t, catalog, "kernel/tool/main-repo/parent-topic/child-topic", "gh:repo")
-	assertCatalogHas(t, catalog, "kernel/tool/related-repo/Related Topic", "gh:repo")
-}
-
-func TestTopicCatalogUsesPicDirAsCanonicalPath(t *testing.T) {
-	repos := ConfigRepos{{
-		Tag:    "kernel",
-		Type:   "tool",
-		Topics: content.Topics{{Topic: "Display", PicDir: "custom/topic/path"}},
-	}}
-
-	catalog := repos.TopicCatalog()
-
-	assertCatalogHas(t, catalog, "custom/topic/path", "gh:config")
+	assertCatalogHas(t, catalog, "kernel/tool/Config Topic", "gh:config")
 }
 
 func assertCatalogHas(t *testing.T, catalog []TopicCandidate, path, source string) {
@@ -129,63 +106,13 @@ func TestTopicBase(t *testing.T) {
 
 func TestTopicDirName(t *testing.T) {
 	assert.Equal(t, "topic-name", topicDirName(&content.Topic{Topic: "topic-name"}))
-	assert.Equal(t, "slug", topicDirName(&content.Topic{Topic: "t", Meta: &content.TopicMeta{Slug: "slug"}}))
 	assert.Empty(t, topicDirName(nil))
-	assert.Equal(t, "topic", topicDirName(&content.Topic{Topic: "topic", Meta: &content.TopicMeta{}}))
 }
 
 func TestTopicCatalog_NilConfig(t *testing.T) {
 	cr := ConfigRepos{nil}
 	catalog := cr.TopicCatalog()
 	assert.Empty(t, catalog)
-}
-
-func TestCanonicalTopicPath_NilTopic(t *testing.T) {
-	path := canonicalTopicPath(nil, "base/path")
-	assert.Equal(t, "base/path", path)
-}
-
-func TestCanonicalTopicPath_WithPicDir(t *testing.T) {
-	topic := &content.Topic{Topic: "t", PicDir: "custom/path"}
-	path := canonicalTopicPath(topic, "base")
-	assert.Equal(t, "custom/path", path)
-}
-
-func TestTopicCatalog_WithRelatedRepos(t *testing.T) {
-	repos := ConfigRepos{{
-		Tag:  "kernel",
-		Type: "tool",
-		Repos: Repos{{
-			URL:    "https://github.com/acme/main",
-			Topics: content.Topics{{Topic: "Main Topic", Meta: &content.TopicMeta{Slug: "main-topic"}}},
-			RelatedRepos: Repos{{
-				URL:    "https://github.com/acme/related",
-				Topics: content.Topics{{Topic: "Related Topic"}},
-			}},
-		}},
-	}}
-
-	catalog := repos.TopicCatalog()
-	assertCatalogHas(t, catalog, "kernel/tool/main/main-topic", "gh:repo")
-	assertCatalogHas(t, catalog, "kernel/tool/related/Related Topic", "gh:repo")
-}
-
-func TestTopicCatalog_DuplicatePaths(t *testing.T) {
-	// Same topic path should only appear once
-	repos := ConfigRepos{{
-		Tag:    "kernel",
-		Type:   "tool",
-		Topics: content.Topics{{Topic: "same", Meta: &content.TopicMeta{Slug: "same"}}},
-	}}
-
-	catalog := repos.TopicCatalog()
-	count := 0
-	for _, c := range catalog {
-		if c.Path == "kernel/tool/same" {
-			count++
-		}
-	}
-	assert.Equal(t, 1, count)
 }
 
 func TestTopicCatalog_EmptyRepos(t *testing.T) {
