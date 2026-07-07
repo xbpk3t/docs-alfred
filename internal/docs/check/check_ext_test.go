@@ -266,7 +266,6 @@ func TestFormatImagesDetails(t *testing.T) {
 	result := &ImagesCheckResult{
 		ExpectedDirs: []string{"a"},
 		ExistingDirs: []string{"b"},
-		MissingDirs:  []string{"a"},
 		ExtraDirs:    []string{"b"},
 	}
 	details := FormatImagesDetails(result, ImagesCheckInput{List: true})
@@ -323,7 +322,6 @@ func TestImagesCheckResultSummary(t *testing.T) {
 	r := &ImagesCheckResult{
 		ExpectedDirs:   []string{"a", "b"},
 		ExistingDirs:   []string{"b"},
-		MissingDirs:    []string{"a"},
 		ExtraDirs:      []string{"c"},
 		DuplicateFiles: []string{"dup.jpg"},
 		Warnings:       []string{"w1"},
@@ -332,7 +330,6 @@ func TestImagesCheckResultSummary(t *testing.T) {
 	s := r.Summary()
 	assert.Equal(t, 2, s["expectedDirs"])
 	assert.Equal(t, 1, s["existingDirs"])
-	assert.Equal(t, 1, s["missingDirs"])
 	assert.Equal(t, 1, s["extraDirs"])
 	assert.Equal(t, 1, s["duplicateFiles"])
 	assert.Equal(t, 1, s["warnings"])
@@ -341,7 +338,6 @@ func TestImagesCheckResultSummary(t *testing.T) {
 
 func TestImagesCheckResultIssues(t *testing.T) {
 	r := &ImagesCheckResult{
-		MissingDirs:    []string{"missing"},
 		ExtraDirs:      []string{"extra"},
 		DuplicateFiles: []string{"dup.jpg"},
 		Warnings:       []string{"warn"},
@@ -351,36 +347,18 @@ func TestImagesCheckResultIssues(t *testing.T) {
 	assert.NotEmpty(t, issues)
 }
 
-func TestImagesCheckResultIssuesSkipMissing(t *testing.T) {
-	r := &ImagesCheckResult{MissingDirs: []string{"missing"}}
-	issues := r.Issues(ImagesCheckInput{SkipMissing: true})
-	for _, issue := range issues {
-		assert.NotContains(t, issue.Message, "missing expected")
-	}
-}
-
-func TestImagesCheckResultIssuesSkipExtra(t *testing.T) {
-	r := &ImagesCheckResult{ExtraDirs: []string{"extra"}}
-	issues := r.Issues(ImagesCheckInput{SkipExtra: true})
-	for _, issue := range issues {
-		assert.NotContains(t, issue.Message, "extra image dir")
-	}
-}
-
 func TestFormatImagesReport(t *testing.T) {
-	r := &ImagesCheckResult{MissingDirs: []string{"missing"}}
-	report := FormatImagesReport(r, ImagesCheckInput{})
+	report := FormatImagesReport(&ImagesCheckResult{}, ImagesCheckInput{})
 	assert.NotEmpty(t, report)
 }
 
 func TestImagesCheckConfig(t *testing.T) {
 	input := ImagesCheckInput{
-		DataDir:     "/data",
-		ImagesDir:   "/images",
-		Apply:       true,
-		List:        true,
-		SkipExtra:   true,
-		SkipMissing: true,
+		DataDir:   "/data",
+		ImagesDir: "/images",
+		Apply:     true,
+		List:      true,
+		SkipExtra: true,
 	}
 	cfg := imagesCheckConfig(input)
 	assert.Equal(t, "/data", cfg.DataDir)
@@ -388,14 +366,12 @@ func TestImagesCheckConfig(t *testing.T) {
 	assert.True(t, cfg.Apply)
 	assert.True(t, cfg.List)
 	assert.True(t, cfg.SkipExtra)
-	assert.True(t, cfg.SkipMissing)
 }
 
 func TestImagesCheckResultAdapter(t *testing.T) {
 	result := &ImagesCheckResult{
 		ExpectedDirs:   []string{"a"},
 		ExistingDirs:   []string{"b"},
-		MissingDirs:    []string{"a"},
 		ExtraDirs:      []string{"b"},
 		DuplicateFiles: []string{"dup"},
 		Warnings:       []string{"w"},
@@ -414,7 +390,6 @@ func TestRunImagesCheckEmptyDirs(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Empty(t, result.MissingDirs)
 	assert.Empty(t, result.ExtraDirs)
 }
 

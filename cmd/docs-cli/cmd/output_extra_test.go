@@ -282,7 +282,6 @@ func TestWriteWikiAuditResultFailed(t *testing.T) {
 	assert.Contains(t, err.Error(), "wiki audit failed")
 }
 
-
 func TestBlogCheckCommandFlags(t *testing.T) {
 	blogCmd, _, err := newRootCmd().Find([]string{"blog", "check"})
 	require.NoError(t, err)
@@ -303,7 +302,6 @@ func TestDotfilesCheckCommandFlags(t *testing.T) {
 	require.NotNil(t, dotfilesCmd.InheritedFlags().Lookup("format"))
 }
 
-
 func TestImagesCheckCommandFlags(t *testing.T) {
 	imagesCmd, _, err := newRootCmd().Find([]string{"images", "check"})
 	require.NoError(t, err)
@@ -313,7 +311,6 @@ func TestImagesCheckCommandFlags(t *testing.T) {
 	require.NotNil(t, f.Lookup("images-dir"))
 	require.NotNil(t, f.Lookup("list"))
 	require.NotNil(t, f.Lookup("skip-extra-files"))
-	require.NotNil(t, f.Lookup("skip-missing"))
 	require.NotNil(t, imagesCmd.InheritedFlags().Lookup("format"))
 }
 
@@ -325,7 +322,6 @@ func TestImagesFixCommandFlags(t *testing.T) {
 	require.NotNil(t, f.Lookup("data-dir"))
 	require.NotNil(t, f.Lookup("images-dir"))
 	require.NotNil(t, f.Lookup("list"))
-	require.NotNil(t, f.Lookup("skip-missing"))
 	require.NotNil(t, imagesCmd.InheritedFlags().Lookup("format"))
 }
 

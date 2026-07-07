@@ -7,8 +7,9 @@ import (
 
 // Section is a typed representation of a data/gh YAML section.
 type Section struct {
-	Type  string         `yaml:"type"`
-	Repos []content.Repo `yaml:"repo"`
+	Type   string          `yaml:"type"`
+	Repos  []content.Repo  `yaml:"repo"`
+	Topics []content.Topic `yaml:"topics"`
 }
 
 // Repo is an alias for content.Repo.
@@ -36,7 +37,7 @@ func sectionFromMap(m map[string]any) Section {
 	var fields sectionFields
 	decodeYAMLMap(m, &fields)
 
-	section := Section{Type: fields.Type}
+	section := Section{Type: fields.Type, Topics: topicsFromAny(m["topics"])}
 
 	if repos, ok := m["repo"].([]any); ok {
 		section.Repos = make([]content.Repo, 0, len(repos))
@@ -60,6 +61,22 @@ func repoFromMap(m map[string]any) content.Repo {
 		NixURL: fields.Nix,
 		Doc:    fields.Doc,
 	}
+}
+
+func topicsFromAny(v any) []content.Topic {
+	items, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+
+	topics := make([]content.Topic, 0, len(items))
+	for _, item := range items {
+		if topicMap, ok := item.(map[string]any); ok {
+			topics = append(topics, topicFromMap(topicMap))
+		}
+	}
+
+	return topics
 }
 
 func topicFromMap(m map[string]any) content.Topic {

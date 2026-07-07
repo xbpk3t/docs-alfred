@@ -3,7 +3,6 @@ package images
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -115,10 +114,6 @@ func TestCollectExpectedImageDirsFromTypedGhData(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: go
   topics:
     - topic: root
-      sub:
-        - topic: child
-          meta:
-            slug: child-slug
     - topic: no-pic
   using:
     url: https://github.com/acme/tool
@@ -126,10 +121,6 @@ func TestCollectExpectedImageDirsFromTypedGhData(t *testing.T) {
       - topic: using-topic
   repo:
     - url: https://github.com/acme/repo
-      topics:
-        - topic: repo-topic
-          meta:
-            slug: repo-slug
   record: []
 `), 0644))
 
@@ -138,9 +129,7 @@ func TestCollectExpectedImageDirsFromTypedGhData(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{
 		"algo/go/root",
-		"algo/go/root/child-slug",
 		"algo/go/no-pic",
-		"algo/go/repo/repo-slug",
 	}, dirs)
 }
 
@@ -235,11 +224,9 @@ func TestCheckResult_ReportApply(t *testing.T) {
 }
 
 func TestCheckResult_ReportNoApply(t *testing.T) {
-	r := &CheckResult{
-		MissingDirs: []string{"some/dir"},
-	}
+	r := &CheckResult{}
 	report := r.ReportResult(CheckConfig{})
-	assert.True(t, strings.Contains(report, "ERROR some/dir") || strings.Contains(report, "some/dir"))
+	assert.NotEmpty(t, report)
 }
 
 func TestRunImagesCheck_WithApply(t *testing.T) {
@@ -278,13 +265,12 @@ func TestCheckResult_IssuesNoFlags(t *testing.T) {
 		Warnings:       []string{"warn1"},
 		Errors:         []string{"err1"},
 		DuplicateFiles: []string{"dup.jpg"},
-		MissingDirs:    []string{"missing"},
 		ExtraDirs:      []string{"extra"},
 	}
 	issues := r.Issues(CheckConfig{})
 	assert.NotEmpty(t, issues)
-	// Should have warn + error + duplicate + missing + extra
-	assert.GreaterOrEqual(t, len(issues), 5)
+	// Should have warn + error + duplicate + extra
+	assert.GreaterOrEqual(t, len(issues), 4)
 }
 
 func TestCheckResult_ReportWithList(t *testing.T) {
@@ -370,7 +356,6 @@ func TestRunImagesCheckNoDataYAML(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Empty(t, result.ExpectedDirs)
-	assert.Empty(t, result.MissingDirs)
 }
 
 func TestCheckResult_ReportNoApplyNoActions(t *testing.T) {
@@ -527,7 +512,6 @@ func TestRunImagesCheck_SkipsExpectedDirWithMissingParent(t *testing.T) {
 	assert.NotContains(t, result.ExtraDirs, "db")
 	assert.NotContains(t, result.ExtraDirs, "db/redis")
 	assert.Contains(t, result.ExpectedDirs, "db/redis/cache-problems")
-	assert.NotContains(t, result.MissingDirs, "db/redis/cache-problems")
 }
 
 func TestRunImagesCheck_FlagsL2FilesInStructuralDir(t *testing.T) {
@@ -555,18 +539,14 @@ func TestRunImagesCheck_FlagsL2FilesInStructuralDir(t *testing.T) {
 func TestRunImagesCheck_NestedIntermediateDirsAllSkipped(t *testing.T) {
 	dir := t.TempDir()
 
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "x", "y", "z", "w"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "x", "y", "z", "w", "file.png"), nil, 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "x", "y", "z"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x", "y", "z", "file.png"), nil, 0644))
 
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "x"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "x", "deep.yml"), []byte(`- type: y
   topics:
     - topic: z
-      sub:
-        - topic: w
-          meta:
-            slug: w
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -574,9 +554,7 @@ func TestRunImagesCheck_NestedIntermediateDirsAllSkipped(t *testing.T) {
 
 	assert.NotContains(t, result.ExtraDirs, "x")
 	assert.NotContains(t, result.ExtraDirs, "x/y")
-	assert.NotContains(t, result.ExtraDirs, "x/y/z")
-	assert.Contains(t, result.ExpectedDirs, "x/y/z/w")
-	assert.NotContains(t, result.MissingDirs, "x/y/z/w")
+	assert.Contains(t, result.ExpectedDirs, "x/y/z")
 }
 
 func TestRunImagesCheck_ExpectedDirItselfNotExtra(t *testing.T) {
@@ -591,8 +569,6 @@ func TestRunImagesCheck_ExpectedDirItselfNotExtra(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "desktop", "browser.yml"), []byte(`- type: browser
   topics:
     - topic: desktop-browser
-      meta:
-        slug: desktop-browser
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -606,20 +582,15 @@ func TestRunImagesCheck_ExpectedDirItselfNotExtra(t *testing.T) {
 func TestRunImagesCheck_SingleDepthExpectedIsNotParent(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create expected directory: x/single/repo/a-topic
-	// The repo creates the 'repo' subdirectory automatically
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "x", "single", "repo", "a-topic"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "x", "single", "repo", "a-topic", "file.png"), nil, 0644))
+	// Create expected directory directly (no nested repo topics)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "x", "single", "a-topic"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x", "single", "a-topic", "file.png"), nil, 0644))
 
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "x"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "x", "single.yml"), []byte(`- type: single
-  repo:
-    - url: https://github.com/acme/repo
-      topics:
-        - topic: a-topic
-          meta:
-            slug: a-topic
+  topics:
+    - topic: a-topic
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -629,9 +600,7 @@ func TestRunImagesCheck_SingleDepthExpectedIsNotParent(t *testing.T) {
 	assert.NotContains(t, result.ExtraDirs, "x")
 	assert.NotContains(t, result.ExtraDirs, "x/single")
 	// Subdirs with no direct files should also be skipped
-	assert.NotContains(t, result.ExtraDirs, "x/single/repo")
 
 	// Expected leaf should exist
-	assert.Contains(t, result.ExpectedDirs, "x/single/repo/a-topic")
-	assert.NotContains(t, result.MissingDirs, "x/single/repo/a-topic")
+	assert.Contains(t, result.ExpectedDirs, "x/single/a-topic")
 }

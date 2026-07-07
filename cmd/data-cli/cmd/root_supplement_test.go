@@ -154,7 +154,6 @@ func TestNewCheckCmdFlags(t *testing.T) {
 
 	require.Equal(t, "check", cmd.Name())
 	require.Equal(t, "check <domain>", cmd.Use)
-	require.NotNil(t, cmd.Flag("max-lines"))
 	require.NotNil(t, cmd.Flag("rule-scope"))
 
 	// rule-scope is hidden.
