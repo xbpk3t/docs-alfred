@@ -12,19 +12,17 @@ import (
 
 // ImagesCheckInput holds input for images check.
 type ImagesCheckInput struct {
-	DataDir     string
-	ImagesDir   string
-	Apply       bool
-	List        bool
-	SkipExtra   bool
-	SkipMissing bool
+	DataDir   string
+	ImagesDir string
+	Apply     bool
+	List      bool
+	SkipExtra bool
 }
 
 // ImagesCheckResult holds images check results.
 type ImagesCheckResult struct {
 	ExpectedDirs   []string
 	ExistingDirs   []string
-	MissingDirs    []string
 	ExtraDirs      []string
 	DuplicateFiles []string
 	Warnings       []string
@@ -34,12 +32,11 @@ type ImagesCheckResult struct {
 
 func imagesCheckConfig(input ImagesCheckInput) images.CheckConfig {
 	return images.CheckConfig{
-		DataDir:     input.DataDir,
-		ImagesDir:   input.ImagesDir,
-		Apply:       input.Apply,
-		List:        input.List,
-		SkipExtra:   input.SkipExtra,
-		SkipMissing: input.SkipMissing,
+		DataDir:   input.DataDir,
+		ImagesDir: input.ImagesDir,
+		Apply:     input.Apply,
+		List:      input.List,
+		SkipExtra: input.SkipExtra,
 	}
 }
 
@@ -47,7 +44,6 @@ func imagesCheckResult(result *ImagesCheckResult) *images.CheckResult {
 	return &images.CheckResult{
 		ExpectedDirs:   result.ExpectedDirs,
 		ExistingDirs:   result.ExistingDirs,
-		MissingDirs:    result.MissingDirs,
 		ExtraDirs:      result.ExtraDirs,
 		DuplicateFiles: result.DuplicateFiles,
 		Warnings:       result.Warnings,
@@ -66,7 +62,6 @@ func (r *ImagesCheckResult) Summary() map[string]any {
 	return map[string]any{
 		"expectedDirs":   len(r.ExpectedDirs),
 		"existingDirs":   len(r.ExistingDirs),
-		"missingDirs":    len(r.MissingDirs),
 		"extraDirs":      len(r.ExtraDirs),
 		"duplicateFiles": len(r.DuplicateFiles),
 		"warnings":       len(r.Warnings),
@@ -86,7 +81,6 @@ func RunImagesCheck(input ImagesCheckInput) (*ImagesCheckResult, error) {
 	return &ImagesCheckResult{
 		ExpectedDirs:   result.ExpectedDirs,
 		ExistingDirs:   result.ExistingDirs,
-		MissingDirs:    result.MissingDirs,
 		ExtraDirs:      result.ExtraDirs,
 		DuplicateFiles: result.DuplicateFiles,
 		Warnings:       result.Warnings,
@@ -103,8 +97,8 @@ func FormatImagesReport(result *ImagesCheckResult, input ImagesCheckInput) strin
 // FormatImagesDetails formats non-status images check details for text output.
 func FormatImagesDetails(result *ImagesCheckResult, input ImagesCheckInput) string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "summary: expected=%d existing=%d missing=%d extra=%d duplicates=%d\n",
-		len(result.ExpectedDirs), len(result.ExistingDirs), len(result.MissingDirs),
+	fmt.Fprintf(&out, "summary: expected=%d existing=%d extra=%d duplicates=%d\n",
+		len(result.ExpectedDirs), len(result.ExistingDirs),
 		len(result.ExtraDirs), len(result.DuplicateFiles))
 
 	if input.List {

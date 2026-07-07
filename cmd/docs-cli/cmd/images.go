@@ -11,11 +11,10 @@ import (
 )
 
 type imagesCheckFlags struct {
-	dataDir     string
-	imagesDir   string
-	list        bool
-	skipExtra   bool
-	skipMissing bool
+	dataDir   string
+	imagesDir string
+	list      bool
+	skipExtra bool
 }
 
 func newImagesCmd() *cobra.Command {
@@ -37,11 +36,10 @@ func newImagesCheckCmd() *cobra.Command {
 		Short: "Check docs-images against data/gh expectations",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runImagesCheck(workspaceuc.ImagesCheckInput{
-				DataDir:     flags.dataDir,
-				ImagesDir:   flags.imagesDir,
-				List:        flags.list,
-				SkipExtra:   flags.skipExtra,
-				SkipMissing: flags.skipMissing,
+				DataDir:   flags.dataDir,
+				ImagesDir: flags.imagesDir,
+				List:      flags.list,
+				SkipExtra: flags.skipExtra,
 			}, output.GetFormat(cmd))
 		},
 	}
@@ -50,8 +48,6 @@ func newImagesCheckCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.imagesDir, "images-dir", "docs-images", "docs-images path")
 	cmd.Flags().BoolVar(&flags.list, "list", false, "Print full lists")
 	cmd.Flags().BoolVar(&flags.skipExtra, "skip-extra-files", false, "Ignore extra files")
-	cmd.Flags().BoolVar(&flags.skipMissing, "skip-missing", false, "Do not fail on missing expected dirs")
-
 	return cmd
 }
 
@@ -62,11 +58,10 @@ func newImagesFixCmd() *cobra.Command {
 		Short: "Fix docs-images consistency issues that can be repaired safely",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runImagesFix(workspaceuc.ImagesCheckInput{
-				DataDir:     flags.dataDir,
-				ImagesDir:   flags.imagesDir,
-				Apply:       true,
-				List:        flags.list,
-				SkipMissing: flags.skipMissing,
+				DataDir:   flags.dataDir,
+				ImagesDir: flags.imagesDir,
+				Apply:     true,
+				List:      flags.list,
 			}, output.GetFormat(cmd))
 		},
 	}
@@ -74,7 +69,6 @@ func newImagesFixCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
 	cmd.Flags().StringVar(&flags.imagesDir, "images-dir", "docs-images", "docs-images path")
 	cmd.Flags().BoolVar(&flags.list, "list", false, "Print full lists")
-	cmd.Flags().BoolVar(&flags.skipMissing, "skip-missing", false, "Do not fail on missing expected dirs")
 
 	return cmd
 }

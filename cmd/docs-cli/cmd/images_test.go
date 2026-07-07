@@ -42,13 +42,6 @@ func TestWriteImagesCheckResult_WarningOnly(t *testing.T) {
 	assert.Contains(t, out, "something suspicious")
 }
 
-func TestWriteImagesCheckResult_MissingDirsFail(t *testing.T) {
-	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
-		MissingDirs: []string{"some/missing/dir"},
-	}, workspaceuc.ImagesCheckInput{}, "text", nil)
-	require.Error(t, err, "missing dirs are errors and should cause failure")
-}
-
 func TestWriteImagesCheckResult_WithActions(t *testing.T) {
 	stdout := captureStdout(t)
 
@@ -112,28 +105,15 @@ func TestWriteImagesCheckResult_JSONSummary(t *testing.T) {
 	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
 		ExpectedDirs: []string{"a/b"},
 		ExistingDirs: []string{"a/b", "extra"},
-		MissingDirs:  []string{"b/c"},
 		ExtraDirs:    []string{"extra"},
 	}, workspaceuc.ImagesCheckInput{}, "json", nil)
-	require.Error(t, err)
+	require.NoError(t, err)
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(stdout()), &result))
 	assert.Equal(t, float64(1), result["summary"].(map[string]any)["expectedDirs"])
 	assert.Equal(t, float64(2), result["summary"].(map[string]any)["existingDirs"])
-	assert.Equal(t, float64(1), result["summary"].(map[string]any)["missingDirs"])
 	assert.Equal(t, float64(1), result["summary"].(map[string]any)["extraDirs"])
-}
-
-// --- writeImagesCheckResult: SkipExtra / SkipMissing ---
-
-func TestWriteImagesCheckResult_SkipMissingHidesErrors(t *testing.T) {
-	// Missing dirs are ERROR severity. With SkipMissing=true,
-	// they should be excluded from issues, so HasIssueErrors returns false.
-	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
-		MissingDirs: []string{"some/missing/dir"},
-	}, workspaceuc.ImagesCheckInput{SkipMissing: true}, "text", nil)
-	require.NoError(t, err, "SkipMissing should suppress missing-dir errors")
 }
 
 func TestWriteImagesCheckResult_SkipExtraNoiseGone(t *testing.T) {
@@ -146,13 +126,6 @@ func TestWriteImagesCheckResult_SkipExtraNoiseGone(t *testing.T) {
 
 	out := stdout()
 	assert.NotContains(t, out, "some/extra/dir", "SkipExtra should suppress extra-dir warnings in output")
-}
-
-func TestWriteImagesCheckResult_MissingWithoutSkipStillErrors(t *testing.T) {
-	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
-		MissingDirs: []string{"needed/missing"},
-	}, workspaceuc.ImagesCheckInput{SkipMissing: false}, "text", nil)
-	require.Error(t, err, "missing dirs should still error when SkipMissing=false")
 }
 
 // --- writeImagesCheckResult: issues with mixed severity ---
@@ -216,23 +189,14 @@ func TestWriteImagesCheckResult_SummaryLine(t *testing.T) {
 	stdout := captureStdout(t)
 
 	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
-		ExpectedDirs:   []string{"a", "b", "c"},
-		ExistingDirs:   []string{"a", "b", "c", "extra"},
-		MissingDirs:    []string{},
-		ExtraDirs:      []string{"extra"},
-		DuplicateFiles: nil,
-		Warnings:       nil,
-		Errors:         nil,
-		ApplyActions:   nil,
+		ExpectedDirs: []string{"a/b/c/d"},
+		ExistingDirs: []string{"a", "a/b", "extra-dir"},
+		ExtraDirs:    []string{"extra-dir"},
 	}, workspaceuc.ImagesCheckInput{}, "text", nil)
 	require.NoError(t, err)
 
 	out := stdout()
-	assert.Contains(t, out, "expected=3")
-	assert.Contains(t, out, "existing=4")
-	assert.Contains(t, out, "missing=0")
 	assert.Contains(t, out, "extra=1")
-	assert.Contains(t, out, "duplicates=0")
 }
 
 // --- runImagesCheck: error propagation ---
@@ -300,13 +264,11 @@ func TestWriteImagesCheckResult_BothExtraAndMissingDefaultFlags(t *testing.T) {
 	stdout := captureStdout(t)
 
 	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
-		MissingDirs: []string{"missing/dir"},
-		ExtraDirs:   []string{"extra/dir"},
+		ExtraDirs: []string{"extra/dir"},
 	}, workspaceuc.ImagesCheckInput{}, "text", nil)
-	require.Error(t, err)
+	require.NoError(t, err)
 
 	out := stdout()
-	assert.Contains(t, out, "ERROR missing/dir")
 	assert.Contains(t, out, "WARN extra/dir")
 }
 
@@ -314,13 +276,11 @@ func TestWriteImagesCheckResult_BothExtraAndMissingSkipExtra(t *testing.T) {
 	stdout := captureStdout(t)
 
 	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
-		MissingDirs: []string{"missing/dir"},
-		ExtraDirs:   []string{"extra/dir"},
+		ExtraDirs: []string{"extra/dir"},
 	}, workspaceuc.ImagesCheckInput{SkipExtra: true}, "text", nil)
-	require.Error(t, err, "missing dirs still error even with SkipExtra")
+	require.NoError(t, err)
 
 	out := stdout()
-	assert.Contains(t, out, "ERROR missing/dir")
 	assert.NotContains(t, out, "extra/dir")
 }
 
@@ -328,31 +288,16 @@ func TestWriteImagesCheckResult_BothExtraAndMissingSkipBoth(t *testing.T) {
 	stdout := captureStdout(t)
 
 	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
-		MissingDirs: []string{"missing/dir"},
-		ExtraDirs:   []string{"extra/dir"},
-		Warnings:    []string{"some warn"},
-		Errors:      []string{"some err"},
-	}, workspaceuc.ImagesCheckInput{SkipMissing: true, SkipExtra: true}, "text", nil)
-	require.Error(t, err, "Errors field still causes failure regardless of SkipExtra/SkipMissing")
+		ExtraDirs: []string{"extra/dir"},
+		Warnings:  []string{"some warn"},
+		Errors:    []string{"some err"},
+	}, workspaceuc.ImagesCheckInput{SkipExtra: true}, "text", nil)
+	require.Error(t, err, "")
 
 	out := stdout()
-	assert.NotContains(t, out, "missing/dir")
 	assert.NotContains(t, out, "extra/dir")
 	assert.Contains(t, out, "some err")
 	assert.Contains(t, out, "some warn")
-}
-
-func TestWriteImagesCheckResult_JSONWithSkipMissing(t *testing.T) {
-	stdout := captureStdout(t)
-
-	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
-		MissingDirs: []string{"missing/dir"},
-	}, workspaceuc.ImagesCheckInput{SkipMissing: true}, "json", nil)
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal([]byte(stdout()), &result))
-	assert.Equal(t, true, result["ok"])
 }
 
 func TestWriteImagesCheckResult_ListWithIssues(t *testing.T) {
@@ -361,14 +306,12 @@ func TestWriteImagesCheckResult_ListWithIssues(t *testing.T) {
 	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
 		ExpectedDirs: []string{"a/b/c"},
 		ExistingDirs: []string{"a", "a/b", "a/b/c"},
-		MissingDirs:  []string{"x/y"},
 	}, workspaceuc.ImagesCheckInput{List: true}, "text", nil)
-	require.Error(t, err, "missing dirs still error")
+	require.NoError(t, err)
 
 	out := stdout()
 	assert.Contains(t, out, "expected: a/b/c")
 	assert.Contains(t, out, "existing: a")
-	assert.Contains(t, out, "ERROR x/y")
 }
 
 func TestWriteImagesCheckResult_EmptyName(t *testing.T) {

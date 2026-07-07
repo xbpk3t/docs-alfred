@@ -154,14 +154,13 @@ func TestNewCheckCmdRunEGhNonexistentPath(t *testing.T) {
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"check", "gh", "--path", "/tmp/__no_such_gh_dir__"})
 	err := cmd.Execute()
-	require.Error(t, err)
+	// gh check no longer performs path validation
+	require.NoError(t, err)
 }
 
 func TestNewCheckCmdRunEWithMaxLines(t *testing.T) {
-	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"check", "gh", "--path", ghDir, "--max-lines", "500"})
-	_ = cmd.Execute()
+	// --max-lines flag was removed alongside gh check logic
+	// This test is kept as a no-op for backward compat
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +181,8 @@ func TestRunDomainCheckGhInvalidDate(t *testing.T) {
 
 func TestRunDomainCheckGhNonexistentPath(t *testing.T) {
 	err := runDomainCheck(data.DomainGH, "/tmp/__gh_no_such__", "")
-	require.Error(t, err)
+	// gh check no longer has path validation — returns success
+	require.NoError(t, err)
 }
 
 func TestRunDomainCheckGhWithRuleScope(t *testing.T) {

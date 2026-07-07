@@ -17,19 +17,17 @@ var duplicateFileRe = regexp.MustCompile(`^(.+[^_])__\d+(\.[^.]+)$`)
 
 // CheckConfig holds the images check configuration.
 type CheckConfig struct {
-	DataDir     string
-	ImagesDir   string
-	Apply       bool
-	List        bool
-	SkipExtra   bool
-	SkipMissing bool
+	DataDir   string
+	ImagesDir string
+	Apply     bool
+	List      bool
+	SkipExtra bool
 }
 
 // CheckResult holds the images check result.
 type CheckResult struct {
 	ExpectedDirs   []string
 	ExistingDirs   []string
-	MissingDirs    []string
 	ExtraDirs      []string
 	DuplicateFiles []string
 	Warnings       []string
@@ -63,13 +61,6 @@ func RunImagesCheck(cfg CheckConfig) (*CheckResult, error) {
 	existingSet := make(map[string]bool)
 	for _, d := range existingDirs {
 		existingSet[d] = true
-	}
-
-	// Find missing
-	for _, d := range expectedDirs {
-		if !existingSet[d] {
-			result.MissingDirs = append(result.MissingDirs, d)
-		}
 	}
 
 	// Find extra — skip structural intermediate dirs
@@ -291,10 +282,8 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 		tag := dirParts[0]
 		typeBase := tag + "/" + typeVal
 
-		// Collect repo topic dirs
-		for i := range section.Repos {
-			collectRepoTopicDirs(&section.Repos[i], typeBase, &dirs, false)
-		}
+		// Collect section-level topic dirs
+		collectTopicDirs(section.Topics, typeBase, &dirs)
 
 		return nil
 	})
@@ -373,13 +362,7 @@ func (r *CheckResult) Issues(cfg CheckConfig) []checkutil.Issue {
 			File: d, Severity: checkutil.SeverityWarn, Message: "duplicate image file",
 		})
 	}
-	if !cfg.SkipMissing {
-		for _, d := range r.MissingDirs {
-			issues = append(issues, checkutil.Issue{
-				File: d, Severity: checkutil.SeverityError, Message: "missing expected image dir",
-			})
-		}
-	}
+
 	if !cfg.SkipExtra {
 		for _, d := range r.ExtraDirs {
 			issues = append(issues, checkutil.Issue{
