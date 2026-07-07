@@ -20,9 +20,8 @@ func main() {
 
 	rootCmd := &cobra.Command{
 		Use:   "ccx",
-		Short: "Claude Code eXtend - Session management tools",
-		Long: `ccx provides tools for managing Claude Code sessions,
-including session chain walking and session export to wiki.`,
+		Short: "Agent session export tools",
+		Long:  `ccx provides tools for exporting Claude Code and Codex sessions to wiki.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
 		},

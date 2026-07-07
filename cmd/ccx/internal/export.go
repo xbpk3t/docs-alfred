@@ -14,11 +14,12 @@ import (
 	"text/template"
 	"time"
 
-	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
-	session "github.com/xbpk3t/docs-alfred/pkg/ai/session"
+	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
+	session "github.com/xbpk3t/docs-alfred/pkg/ai/session"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
+	"github.com/xbpk3t/docs-alfred/pkg/validator"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,7 +27,8 @@ import (
 var promptFS embed.FS
 
 const (
-	roleUser = "user"
+	roleUser          = "user"
+	fallbackTopicPath = "zzz/ss/uncategorized"
 
 	// mergedAITimeout is the timeout for the single merged AI call
 	// that handles both classification and title generation.
@@ -36,9 +38,10 @@ const (
 // ExportInput contains inputs for session export.
 type ExportInput struct {
 	AIConfig  *ai.ClientConfig
+	Agent     Agent `validate:"required|in:cc,codex"`
 	WikiRoot  string
 	OutputDir string
-	SessionID string // Explicit session ID; overrides CLAUDE_CODE_SESSION_ID env var.
+	SessionID string // Explicit session/thread ID; defaults to the selected agent env var.
 	DryRun    bool
 	Verbose   bool
 }
@@ -68,26 +71,22 @@ type classifyTitleResult struct {
 }
 
 // ExportSession exports the current session to wiki.
-func ExportSession(input ExportInput) (*ExportResult, error) {
+func ExportSession(input *ExportInput) (*ExportResult, error) {
 	if err := validateExportInput(input); err != nil {
 		return nil, err
 	}
 
-	chain, err := WalkSessionChain(input.SessionID)
+	resolved, err := ResolveSession(input.Agent, input.SessionID)
 	if err != nil {
-		return nil, fmt.Errorf("walk session chain: %w", err)
-	}
-
-	if len(chain) == 0 {
-		return nil, errors.New("no sessions found in chain")
+		return nil, fmt.Errorf("resolve session: %w", err)
 	}
 
 	if input.Verbose {
-		fmt.Fprintf(os.Stderr, "Found %d sessions in chain\n", len(chain))
+		fmt.Fprintf(os.Stderr, "Resolved %s session %s\n", resolved.Agent, resolved.SessionID)
+		fmt.Fprintf(os.Stderr, "Transcript: %s\n", resolved.TranscriptPath)
 	}
 
-	// Parse all sessions directly from JSONL (no claude-extract needed)
-	messages, err := extractAndMergeSessions(chain, input.Verbose)
+	messages, err := parseResolvedSession(resolved, input.Verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +114,7 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 		}, nil
 	}
 
-	if err := writeExportFile(outputPath, title, messages); err != nil {
+	if err := writeExportFile(outputPath, title, resolved.Source, messages); err != nil {
 		return nil, err
 	}
 
@@ -128,7 +127,15 @@ func ExportSession(input ExportInput) (*ExportResult, error) {
 }
 
 // validateExportInput validates the export input parameters.
-func validateExportInput(input ExportInput) error {
+func validateExportInput(input *ExportInput) error {
+	if input == nil {
+		return errors.New("export input is nil")
+	}
+
+	if err := validator.Struct(input); err != nil {
+		return err
+	}
+
 	if input.OutputDir != "" {
 		return nil
 	}
@@ -145,20 +152,10 @@ func validateExportInput(input ExportInput) error {
 	return nil
 }
 
-// extractAndMergeSessions parses all session JSONL files for the chain,
-// filters out noise, and returns the clean messages.
-// This replaces the old claude-extract pipeline.
-func extractAndMergeSessions(chain []ChainRecord, verbose bool) ([]session.Message, error) {
-	// Build list of transcript paths from the chain
-	paths := make([]string, len(chain))
-	for i, c := range chain {
-		paths[i] = c.TranscriptPath
-	}
-
-	// Parse all sessions directly from JSONL (no external tool needed)
-	messages, err := session.ParseAll(paths)
+func parseResolvedSession(resolved SessionRef, verbose bool) ([]session.Message, error) {
+	messages, err := parseTranscript(resolved)
 	if err != nil {
-		return nil, fmt.Errorf("parse sessions: %w", err)
+		return nil, err
 	}
 
 	if verbose {
@@ -175,22 +172,50 @@ func extractAndMergeSessions(chain []ChainRecord, verbose bool) ([]session.Messa
 	return messages, nil
 }
 
+func parseTranscript(resolved SessionRef) ([]session.Message, error) {
+	switch resolved.Agent {
+	case AgentCC:
+		messages, err := session.Parse(resolved.TranscriptPath)
+		if err != nil {
+			return nil, fmt.Errorf("parse cc session: %w", err)
+		}
+
+		return messages, nil
+	case AgentCodex:
+		messages, err := session.ParseCodex(resolved.TranscriptPath)
+		if err != nil {
+			return nil, fmt.Errorf("parse codex session: %w", err)
+		}
+
+		return messages, nil
+	default:
+		return nil, fmt.Errorf("unsupported agent %q", resolved.Agent)
+	}
+}
+
 // classifyAndGenerateTitle performs a single AI call to classify content and generate titles.
-// Falls back to empty topicPath + fallbackTitle on failure.
-func classifyAndGenerateTitle(messages []session.Message, input ExportInput) (string, string, string) {
+// Falls back to the uncategorized topic and a user-message-derived title on failure.
+func classifyAndGenerateTitle(messages []session.Message, input *ExportInput) (string, string, string) {
 	topicPath, title, engTitle, err := mergedClassifyAndTitle(messages, input)
 	if err != nil {
 		slog.Warn("Merged AI call failed, using fallback", "error", err)
-		fallback := fallbackTitle(extractUserMessages(messages))
 
-		return "", fallback, fallback
+		return fallbackExportMetadata(messages)
 	}
 
 	return topicPath, title, engTitle
 }
 
+func fallbackExportMetadata(messages []session.Message) (string, string, string) {
+	userMessages := extractUserMessages(messages)
+	title := fallbackDisplayTitle(userMessages)
+	engTitle := fallbackSlugTitle(userMessages)
+
+	return fallbackTopicPath, title, engTitle
+}
+
 // mergedClassifyAndTitle makes a single AI call to determine topicPath, title, and engTitle.
-func mergedClassifyAndTitle(messages []session.Message, input ExportInput) (string, string, string, error) {
+func mergedClassifyAndTitle(messages []session.Message, input *ExportInput) (string, string, string, error) {
 	candidates := wikisvc.LoadClassificationCandidates(input.WikiRoot)
 	if len(candidates) == 0 {
 		return "", "", "", errors.New("no topic candidates available")
@@ -221,8 +246,43 @@ func mergedClassifyAndTitle(messages []session.Message, input ExportInput) (stri
 	if title == "" || engTitle == "" {
 		return "", "", "", errors.New("empty title from AI")
 	}
+	topicPath := normalizeTopicPath(input.WikiRoot, result.TopicPath, candidates)
 
-	return result.TopicPath, title, engTitle, nil
+	return topicPath, title, engTitle, nil
+}
+
+func normalizeTopicPath(wikiRoot, topicPath string, candidates []ghindex.TopicCandidate) string {
+	topicPath = strings.TrimSpace(topicPath)
+	if topicPath == "" || topicPath == "none" || topicPath == "inbox" {
+		return fallbackTopicPath
+	}
+	if err := wikisvc.ValidateRelativeWikiPath(wikiRoot, topicPath); err != nil {
+		slog.Warn("AI topic path is unsafe, using fallback", "topic", topicPath, "error", err)
+
+		return fallbackTopicPath
+	}
+	if !hasTopicCandidate(candidates, topicPath) {
+		slog.Warn("AI topic path is not in candidates, using fallback", "topic", topicPath)
+
+		return fallbackTopicPath
+	}
+	if strings.Count(topicPath, "/") != 2 {
+		slog.Warn("AI topic path has unsupported depth, using fallback", "topic", topicPath)
+
+		return fallbackTopicPath
+	}
+
+	return topicPath
+}
+
+func hasTopicCandidate(candidates []ghindex.TopicCandidate, topicPath string) bool {
+	for _, candidate := range candidates {
+		if candidate.Path == topicPath {
+			return true
+		}
+	}
+
+	return false
 }
 
 // renderClassifyTitlePrompt renders the classify-title.txt prompt template.
@@ -302,11 +362,8 @@ func selectMessages(messages []string, head, tail int) []string {
 func trimTitle(title string) string {
 	title = strings.TrimSpace(title)
 	title = strings.Trim(title, `"'「」『』`)
-	if len(title) > 50 {
-		title = title[:50]
-	}
 
-	return title
+	return truncateRunes(title, 50)
 }
 
 // trimEngTitle cleans up an English title for use as filename.
@@ -314,31 +371,30 @@ func trimEngTitle(engTitle string) string {
 	engTitle = strings.TrimSpace(engTitle)
 	engTitle = strings.Trim(engTitle, `"'「」『』`)
 	engTitle = slugTitle(engTitle)
-	if len(engTitle) > 50 {
-		engTitle = engTitle[:50]
-	}
-
-	return engTitle
+	return truncateRunes(engTitle, 50)
 }
 
-// fallbackTitle generates a fallback title from user messages, skipping URLs.
-func fallbackTitle(userMessages []string) string {
+// fallbackDisplayTitle generates a readable fallback title from user messages, skipping URLs.
+func fallbackDisplayTitle(userMessages []string) string {
 	for _, msg := range userMessages {
-		title := strings.TrimSpace(msg)
-		if idx := strings.IndexByte(title, '\n'); idx > 0 {
-			title = title[:idx]
+		title := fallbackTitleSeed(msg)
+		if title != "" {
+			return trimTitle(title)
 		}
+	}
 
-		// Skip messages that are just URLs
-		lower := strings.ToLower(title)
-		if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+	return time.Now().Format("2006-01-02 15:04:05")
+}
+
+func fallbackSlugTitle(userMessages []string) string {
+	for _, msg := range userMessages {
+		title := fallbackTitleSeed(msg)
+		if title == "" {
 			continue
 		}
 
 		title = slugTitle(title)
-		if len(title) > 50 {
-			title = title[:50]
-		}
+		title = truncateRunes(title, 50)
 		if title != "" {
 			return title
 		}
@@ -347,9 +403,23 @@ func fallbackTitle(userMessages []string) string {
 	return time.Now().Format("2006-01-02-15-04-05")
 }
 
+func fallbackTitleSeed(msg string) string {
+	title := strings.TrimSpace(msg)
+	if idx := strings.IndexByte(title, '\n'); idx > 0 {
+		title = title[:idx]
+	}
+
+	lower := strings.ToLower(title)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return ""
+	}
+
+	return title
+}
+
 // writeExportFile writes the final markdown file with Turn-structured formatting.
-func writeExportFile(outputPath, title string, messages []session.Message) error {
-	frontmatter, err := generateFrontmatter(title)
+func writeExportFile(outputPath, title, source string, messages []session.Message) error {
+	frontmatter, err := generateFrontmatter(title, source)
 	if err != nil {
 		return err
 	}
@@ -368,12 +438,12 @@ func writeExportFile(outputPath, title string, messages []session.Message) error
 }
 
 // generateFrontmatter generates YAML frontmatter for the wiki file.
-func generateFrontmatter(title string) (string, error) {
+func generateFrontmatter(title, source string) (string, error) {
 	fm := Frontmatter{
 		Type:   "research",
 		Title:  title,
 		Date:   time.Now().Format("2006-01-02"),
-		Source: "claude-code",
+		Source: source,
 	}
 
 	data, err := yaml.Marshal(fm)
@@ -385,7 +455,7 @@ func generateFrontmatter(title string) (string, error) {
 }
 
 // determineOutputPath determines the output path for the exported session.
-func determineOutputPath(input ExportInput, title, topicPath string) string {
+func determineOutputPath(input *ExportInput, title, topicPath string) string {
 	// Generate filename
 	date := time.Now().Format("2006-01-02")
 	filename := fmt.Sprintf("%s-%s.md", date, title)
@@ -412,4 +482,17 @@ func determineOutputPath(input ExportInput, title, topicPath string) string {
 
 func slugTitle(value string) string {
 	return textutil.SlugFilename(value)
+}
+
+func truncateRunes(value string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+
+	return string(runes[:limit])
 }

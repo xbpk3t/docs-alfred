@@ -12,6 +12,7 @@ import (
 func newSessionExportCmd() *cobra.Command {
 	var flags struct {
 		config    string
+		agent     string
 		wikiRoot  string
 		outputDir string
 		session   string
@@ -22,14 +23,13 @@ func newSessionExportCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Export session to wiki",
-		Long: `Export the current Claude Code session to wiki markdown.
+		Long: `Export the current agent session to wiki markdown.
 
 This command:
-1. Walks the session chain to collect all linked sessions
-2. Calls cc2md for each session to get markdown
-3. Merges all markdown into single file
-4. AI classifies content to determine topic path
-5. Writes to wiki/<topic>/YYYY-MM-DD-semantic-title.md`,
+1. Resolves a Claude Code or Codex transcript
+2. Parses user/assistant messages into markdown
+3. AI classifies content to determine topic path
+4. Writes to wiki/<topic>/YYYY-MM-DD-semantic-title.md`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			cfg, err := loadExportConfig(flags.config, exportConfigOverrides{
 				WikiRoot: flags.wikiRoot,
@@ -45,6 +45,7 @@ This command:
 			}
 
 			input := internal.ExportInput{
+				Agent:     internal.Agent(flags.agent),
 				DryRun:    flags.dryRun,
 				Verbose:   flags.verbose,
 				WikiRoot:  cfg.WikiRoot,
@@ -53,7 +54,7 @@ This command:
 				AIConfig:  buildAIConfig(cfg),
 			}
 
-			result, err := internal.ExportSession(input)
+			result, err := internal.ExportSession(&input)
 			if err != nil {
 				return fmt.Errorf("export session: %w", err)
 			}
@@ -62,12 +63,14 @@ This command:
 		},
 	}
 
+	cmd.Flags().StringVar(&flags.agent, "agent", "", "Agent runtime: cc or codex")
 	cmd.Flags().StringVar(&flags.config, "config", "", "Config file path")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show what would be done without writing")
 	cmd.Flags().BoolVar(&flags.verbose, "verbose", false, "Verbose output")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory")
 	cmd.Flags().StringVar(&flags.outputDir, "output-dir", "", "Output directory (overrides wiki-root)")
-	cmd.Flags().StringVar(&flags.session, "session", "", "Session ID to export (overrides CLAUDE_CODE_SESSION_ID)")
+	cmd.Flags().StringVar(&flags.session, "session", "", "Session/thread ID to export (defaults to agent env var)")
+	_ = cmd.MarkFlagRequired("agent")
 
 	return cmd
 }
