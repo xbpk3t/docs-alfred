@@ -57,7 +57,6 @@ type Topic struct {
 	Tables      Tables          `json:"tables,omitempty" yaml:"tables,omitempty"`
 	Record      []Record        `json:"record,omitempty" yaml:"record,omitempty"`
 	IsX         bool            `json:"isX,omitempty"    yaml:"isX,omitempty"`
-	HasPic      bool            `json:"hasPic,omitempty" yaml:"hasPic,omitempty"`
 	HasRecord   bool            `json:"-"                yaml:"-"`
 	RecordValid bool            `json:"-"                yaml:"-"`
 }
@@ -66,7 +65,6 @@ type Topics []Topic
 
 type TopicMeta struct {
 	Slug   string `json:"slug,omitempty"   yaml:"slug,omitempty"`
-	HasPic bool   `json:"hasPic,omitempty" yaml:"hasPic,omitempty"`
 	IsX    bool   `json:"isX,omitempty"    yaml:"isX,omitempty"`
 }
 
@@ -91,9 +89,4 @@ func (t *Topic) DirName() string {
 	}
 
 	return t.Topic
-}
-
-// HasPicture reports whether a topic expects an image directory.
-func (t *Topic) HasPicture() bool {
-	return (t.Meta != nil && t.Meta.HasPic) || t.HasPic
 }
