@@ -115,25 +115,21 @@ func TestCollectExpectedImageDirsFromTypedGhData(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: go
   topics:
     - topic: root
-      hasPic: true
       sub:
         - topic: child
           meta:
             slug: child-slug
-            hasPic: true
     - topic: no-pic
   using:
     url: https://github.com/acme/tool
     topics:
       - topic: using-topic
-        hasPic: true
   repo:
     - url: https://github.com/acme/repo
       topics:
         - topic: repo-topic
           meta:
             slug: repo-slug
-            hasPic: true
   record: []
 `), 0644))
 
@@ -143,7 +139,7 @@ func TestCollectExpectedImageDirsFromTypedGhData(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"algo/go/root",
 		"algo/go/root/child-slug",
-		"algo/go/using-topic",
+		"algo/go/no-pic",
 		"algo/go/repo/repo-slug",
 	}, dirs)
 }
@@ -465,7 +461,6 @@ func TestRunImagesCheck_SkipsStructuralDirsWithoutDirectFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: algo
   topics:
     - topic: scheduler
-      hasPic: true
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -489,7 +484,6 @@ func TestRunImagesCheck_FlagsStructuralDirsWithDirectFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: algo
   topics:
     - topic: scheduler
-      hasPic: true
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -525,7 +519,6 @@ func TestRunImagesCheck_SkipsExpectedDirWithMissingParent(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "db", "storage.yml"), []byte(`- type: redis
   topics:
     - topic: cache-problems
-      hasPic: true
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -550,7 +543,6 @@ func TestRunImagesCheck_FlagsL2FilesInStructuralDir(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "ai", "skills.yml"), []byte(`- type: skills
   topics:
     - topic: sub-topic
-      hasPic: true
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -571,12 +563,10 @@ func TestRunImagesCheck_NestedIntermediateDirsAllSkipped(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "x", "deep.yml"), []byte(`- type: y
   topics:
     - topic: z
-      hasPic: true
       sub:
         - topic: w
           meta:
             slug: w
-            hasPic: true
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -603,7 +593,6 @@ func TestRunImagesCheck_ExpectedDirItselfNotExtra(t *testing.T) {
     - topic: desktop-browser
       meta:
         slug: desktop-browser
-      hasPic: true
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -631,7 +620,6 @@ func TestRunImagesCheck_SingleDepthExpectedIsNotParent(t *testing.T) {
         - topic: a-topic
           meta:
             slug: a-topic
-            hasPic: true
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})

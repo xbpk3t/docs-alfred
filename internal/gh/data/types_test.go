@@ -45,7 +45,6 @@ func TestSectionFromMap_Topics(t *testing.T) {
 	require.Len(t, section.Topics, 1)
 	assert.Equal(t, "overview", section.Topics[0].Topic)
 	assert.Equal(t, "intro", section.Topics[0].Meta.Slug)
-	assert.True(t, section.Topics[0].Meta.HasPic)
 }
 
 func TestSectionFromMap_InvalidRecord(t *testing.T) {
@@ -136,7 +135,6 @@ func TestTopicFromMap(t *testing.T) {
 	}
 	topic := topicFromMap(m)
 	assert.Equal(t, "main", topic.Topic)
-	assert.True(t, topic.HasPic)
 	assert.Equal(t, "main-slug", topic.Meta.Slug)
 	assert.Len(t, topic.Sub, 1)
 	assert.True(t, topic.HasRecord)
@@ -155,23 +153,6 @@ func TestTopic_DirName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, tt.topic.DirName())
-		})
-	}
-}
-
-func TestTopic_HasPicture(t *testing.T) {
-	tests := []struct {
-		name  string
-		topic Topic
-		want  bool
-	}{
-		{"meta hasPic", Topic{Meta: &TopicMeta{HasPic: true}, HasPic: true}, true},
-		{"topic hasPic", Topic{HasPic: true}, true},
-		{"neither", Topic{}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.topic.HasPicture())
 		})
 	}
 }
@@ -355,22 +336,6 @@ func TestTopic_DirName_WithoutMetaSlug(t *testing.T) {
 		Meta:  &TopicMeta{Slug: ""},
 	}
 	assert.Equal(t, "my-topic", topic.DirName())
-}
-
-func TestTopic_HasPicture_WithMetaHasPic(t *testing.T) {
-	topic := Topic{
-		Meta:   &TopicMeta{HasPic: true},
-		HasPic: false,
-	}
-	assert.True(t, topic.HasPicture())
-}
-
-func TestTopic_HasPicture_WithTopicHasPic(t *testing.T) {
-	topic := Topic{
-		Meta:   &TopicMeta{HasPic: false},
-		HasPic: true,
-	}
-	assert.True(t, topic.HasPicture())
 }
 
 func TestSectionFromMap_RepoNonMappingItem(t *testing.T) {

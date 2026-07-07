@@ -78,7 +78,6 @@ func TestWalkGhRepos_TypedEvents(t *testing.T) {
     - topic: overview
       meta:
         slug: intro
-        hasPic: true
   repo:
     - url: https://github.com/acme/repo
       des: repo desc
@@ -112,7 +111,6 @@ func TestWalkGhRepos_TypedEvents(t *testing.T) {
 	assert.Equal(t, "go", section.Type)
 	require.Len(t, section.Topics, 1)
 	assert.Equal(t, "intro", section.Topics[0].Meta.Slug)
-	assert.True(t, section.Topics[0].HasPicture())
 	assert.Equal(t, "https://github.com/acme/repo", repo.URL)
 	assert.Equal(t, "repo desc", repo.Des)
 	require.Len(t, repo.Topics, 1)

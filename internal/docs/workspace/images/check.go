@@ -316,9 +316,7 @@ func collectTopicDirs(topics []ghdata.Topic, base string, dirs *[]string) {
 
 		topicBase := base + "/" + topicDirName
 
-		if topic.HasPicture() {
-			*dirs = append(*dirs, topicBase)
-		}
+		*dirs = append(*dirs, topicBase)
 
 		// 收集 topic 内嵌 repo 的图片目录
 		for _, repo := range topic.Repos {

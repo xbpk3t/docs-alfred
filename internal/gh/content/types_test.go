@@ -12,8 +12,7 @@ func TestTopicMarshalJSONProducesValidJSON(t *testing.T) {
 	topic := Topic{
 		Topic:  "Parent",
 		Des:    "description",
-		Meta:   &TopicMeta{Slug: "parent", HasPic: true},
-		HasPic: true,
+		Meta:   &TopicMeta{Slug: "parent"},
 		Sub: Topics{
 			{Topic: "Child"},
 		},
@@ -24,8 +23,7 @@ func TestTopicMarshalJSONProducesValidJSON(t *testing.T) {
 	assert.JSONEq(t, `{
 		"topic":"Parent",
 		"des":"description",
-		"sub":[{"topic":"Child"}],
-		"hasPic":true
+		"sub":[{"topic":"Child"}]
 	}`, string(data))
 	assert.NotContains(t, string(data), "meta")
 }

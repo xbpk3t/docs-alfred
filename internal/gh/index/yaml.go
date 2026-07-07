@@ -92,9 +92,6 @@ func normalizeTopics(topics content.Topics, base string) {
 
 func normalizeTopic(topic *content.Topic, base string) {
 	if topic.Meta != nil {
-		if topic.Meta.HasPic {
-			topic.HasPic = true
-		}
 		if topic.Meta.IsX {
 			topic.IsX = true
 		}
@@ -102,7 +99,8 @@ func normalizeTopic(topic *content.Topic, base string) {
 
 	topicDir := topicDirName(topic)
 	topicBase := joinPath(base, topicDir)
-	if topic.PicDir == "" && topic.HasPic && topicBase != "" {
+
+	if topic.PicDir == "" && topicBase != "" {
 		topic.PicDir = topicBase
 	}
 

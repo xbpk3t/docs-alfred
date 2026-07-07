@@ -40,9 +40,8 @@ type repoFields struct {
 }
 
 type topicFields struct {
-	Topic  string          `yaml:"topic"`
+	Topic  string            `yaml:"topic"`
 	Meta   content.TopicMeta `yaml:"meta"`
-	HasPic bool            `yaml:"hasPic"`
 }
 
 func sectionFromMap(m map[string]any) Section {
@@ -110,7 +109,6 @@ func topicFromMap(m map[string]any) content.Topic {
 	decodeYAMLMap(m, &fields)
 	topic.Topic = fields.Topic
 	topic.Meta = &fields.Meta
-	topic.HasPic = fields.HasPic
 	topic.Sub = topicsFromAny(m["sub"])
 
 	// 解析 topic 内嵌的 repos
