@@ -1,6 +1,6 @@
 # ccx
 
-Claude Code session management CLI。当前支持 session chain walking 和 session export to wiki。
+Agent session export CLI。当前支持将 Claude Code 或 Codex session 导出为 wiki markdown。
 
 ## 安装
 
@@ -8,43 +8,36 @@ Claude Code session management CLI。当前支持 session chain walking 和 sess
 go install github.com/xbpk3t/docs-alfred/ccx@main
 ```
 
-依赖 `claude-extract`：
-
-```bash
-uv tool install claude-conversation-extractor
-```
-
 ## 命令
-
-### session chain
-
-查看当前 session 的 chain 信息。
-
-```bash
-ccx session chain          # 默认输出
-ccx session chain --json   # JSON 格式
-ccx session chain --raw    # 原始输出
-```
 
 ### session export
 
 将当前 session 导出为 wiki 格式的 markdown 文件。
 
 ```bash
-# 预览，不实际写入
-ccx session export --dry-run --verbose
+# Claude Code：默认读取 CLAUDE_CODE_SESSION_ID
+ccx session export --agent cc --dry-run --verbose
+
+# Codex：默认读取 CODEX_THREAD_ID，并从 ~/.codex/state_5.sqlite 查 rollout_path
+ccx session export --agent codex --dry-run --verbose
+
+# 显式指定 session/thread ID
+ccx session export --agent cc --session "$CLAUDE_CODE_SESSION_ID"
+ccx session export --agent codex --session "$CODEX_THREAD_ID"
 
 # 指定 wiki 根目录
-ccx session export --wiki-root /path/to/wiki
+ccx session export --agent cc --wiki-root /path/to/wiki
 
 # 指定输出目录（覆盖 wiki-root）
-ccx session export --output-dir /tmp/output
+ccx session export --agent codex --output-dir /tmp/output
 ```
 
 **关键 flag：**
 
 | Flag | 说明 |
 |------|------|
+| `--agent` | 必填，支持 `cc` 或 `codex` |
+| `--session` | 可选；`cc` 对应 Claude session ID，`codex` 对应 Codex thread ID |
 | `--wiki-root` | wiki 根目录，支持绝对/相对路径 |
 | `--output-dir` | 输出目录，覆盖 `--wiki-root` |
 | `--dry-run` | 预览模式，不创建文件 |
@@ -61,7 +54,7 @@ Frontmatter：
 type: research
 title: session-title
 date: "2026-06-19"
-source: claude-code
+source: claude-code # 或 codex
 ---
 ```
 
@@ -73,9 +66,9 @@ source: claude-code
 ## 消息过滤规则
 
 - 只保留 `user` 和 `assistant` 角色
-- 跳过空消息、`tool_use`、`thinking blocks`
-- 系统消息（`<command-name>`、`<local-command-stdout>` 等）被过滤
-- 内容从 `<command-args>` 标签中提取
+- Claude Code：跳过 `tool_use`、`thinking blocks`、`tool_result`、系统注入消息
+- Codex：只读取 rollout 中 `response_item` 的 user/assistant text blocks，跳过 developer、tool、reasoning 和上下文注入
+- 内容从 Claude `<command-args>` 标签中提取
 
 ## AI 功能
 
@@ -104,11 +97,10 @@ ccx/
 ├── cmd/
 │   ├── session.go       # session 子命令
 │   ├── session_export.go
-│   ├── session_chain.go
 │   └── config.go
 └── internal/
     ├── export.go        # 导出逻辑
-    └── chain.go         # chain walking 逻辑
+    └── session_ref.go   # agent session/thread 解析
 ```
 
 设计要点：`cmd/` 处理 CLI 参数和输出，`internal/` 封装核心逻辑，错误处理带 fallback 机制。
