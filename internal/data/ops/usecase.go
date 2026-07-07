@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/xbpk3t/docs-alfred/internal/data/render"
-	"github.com/xbpk3t/docs-alfred/internal/gh/data"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/internal/gh/goods"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -13,10 +12,9 @@ import (
 
 // DomainCheckInput holds input for domain data check.
 type DomainCheckInput struct {
-	Domain     data.DataDomain
-	Path       string // empty = default for domain
-	RuleScope  string // empty = default for domain
-	GhMaxLines int    // <= 0 = default for gh checks
+	Domain    data.DataDomain
+	Path      string // empty = default for domain
+	RuleScope string // empty = default for domain
 }
 
 // DomainCheckResult holds the result of a domain data check.
@@ -40,7 +38,6 @@ type domainCheckOptions struct {
 	path       string
 	scope      string
 	spec       data.DomainSpec
-	ghMaxLines int
 }
 
 func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, error) {
@@ -61,17 +58,12 @@ func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, erro
 		}
 	}
 
-	return domainCheckOptions{spec: spec, path: path, scope: scope, ghMaxLines: input.GhMaxLines}, nil
+	return domainCheckOptions{spec: spec, path: path, scope: scope}, nil
 }
 
 func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions) (*DomainCheckResult, error) {
 	if domain == data.DomainGH {
-		result, err := ghdata.RunGhCheckWithOptions(opts.path, ghdata.CheckOptions{MaxLines: opts.ghMaxLines})
-		if err != nil {
-			return nil, err
-		}
-
-		return &DomainCheckResult{Issues: result.Issues}, nil
+		return &DomainCheckResult{}, nil
 	}
 
 	if domain == data.DomainGoods {

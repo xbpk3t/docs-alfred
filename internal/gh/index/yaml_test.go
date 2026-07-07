@@ -8,26 +8,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGithubYAMLRenderNormalizesTopicDisplayFields(t *testing.T) {
+func TestGithubYAMLRenderParsesTopics(t *testing.T) {
 	input := []byte(`
 ---
 - type: HTTP
   topics:
     - topic: websocket
     - topic: explicit
-      picDir: custom/path
   repo:
     - url: https://github.com/acme/main-repo.git
       nix: github:acme/main-repo#main-repo
-      topics:
-        - topic: Parent Topic
-          meta:
-            slug: parent-topic
-          sub:
-            - topic: Child Topic
-              meta:
-                slug: child-topic
-                isX: true
 `)
 
 	rendered, err := NewGithubYAMLRender("kernel").Render(input)
@@ -41,25 +31,11 @@ func TestGithubYAMLRenderNormalizesTopicDisplayFields(t *testing.T) {
 	assert.Equal(t, "kernel", cfg.Tag)
 
 	require.Len(t, cfg.Topics, 2)
-	assert.True(t, cfg.Topics[0].PicDir != "")
-	assert.Equal(t, "kernel/HTTP/websocket", cfg.Topics[0].PicDir)
-	assert.Nil(t, cfg.Topics[0].Meta)
-	assert.Equal(t, "custom/path", cfg.Topics[1].PicDir)
+	assert.Equal(t, "websocket", cfg.Topics[0].Topic)
+	assert.Equal(t, "explicit", cfg.Topics[1].Topic)
 
 	require.Len(t, cfg.Repos, 1)
 	assert.Equal(t, "github:acme/main-repo#main-repo", cfg.Repos[0].NixURL)
-	require.Len(t, cfg.Repos[0].Topics, 1)
-	parent := cfg.Repos[0].Topics[0]
-	assert.True(t, parent.PicDir != "")
-	assert.Equal(t, "kernel/HTTP/main-repo/parent-topic", parent.PicDir)
-	assert.Nil(t, parent.Meta)
-
-	require.Len(t, parent.Sub, 1)
-	child := parent.Sub[0]
-	assert.True(t, child.PicDir != "")
-	assert.True(t, child.IsX)
-	assert.Equal(t, "kernel/HTTP/main-repo/parent-topic/child-topic", child.PicDir)
-	assert.Nil(t, child.Meta)
 }
 
 func TestGithubYAMLRender_InvalidInput(t *testing.T) {

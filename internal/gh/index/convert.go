@@ -38,11 +38,6 @@ func processTopicRepos(topic *content.Topic, tag, typeName string) Repos {
 		repos = append(repos, processRepo(topic.Repos[i], typeName)...)
 	}
 
-	// 递归处理子 topics
-	for i := range topic.Sub {
-		repos = append(repos, processTopicRepos(&topic.Sub[i], tag, typeName)...)
-	}
-
 	return repos
 }
 

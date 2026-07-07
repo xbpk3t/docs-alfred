@@ -7,7 +7,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
-	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 type GithubYAMLRender struct {
@@ -28,11 +27,6 @@ func NewGithubYAMLRender(tag string) *GithubYAMLRender {
 func (g *GithubYAMLRender) GetCurrentFileName() string {
 	return g.currentFile
 }
-
-//// SetCurrentFile 设置当前处理的文件名
-// func (g *GithubYAMLRender) SetCurrentFile(filename string) {
-//	g.currentFile = filename
-//}
 
 func (g *GithubYAMLRender) Render(data []byte) (string, error) {
 	// 解析YAML数据为ConfigRepos类型
@@ -71,17 +65,8 @@ func normalizeRepoTopics(repo *Repository, base string, useBase bool) {
 	if repo == nil {
 		return
 	}
-
-	topicBase := base
-	if !useBase {
-		repoName := urlutil.RepoName(repo.URL)
-		if repoName == "" {
-			return
-		}
-		topicBase = joinPath(base, repoName)
-	}
-
-	normalizeTopics(repo.Topics, topicBase)
+	_ = base
+	_ = useBase
 }
 
 func normalizeTopics(topics content.Topics, base string) {
@@ -91,27 +76,18 @@ func normalizeTopics(topics content.Topics, base string) {
 }
 
 func normalizeTopic(topic *content.Topic, base string) {
-	if topic.Meta != nil {
-		if topic.Meta.IsX {
-			topic.IsX = true
-		}
-	}
-
-	topicDir := topicDirName(topic)
-	topicBase := joinPath(base, topicDir)
-
-	if topic.PicDir == "" && topicBase != "" {
-		topic.PicDir = topicBase
-	}
-
 	// 处理 topic 内的 repos
 	for i := range topic.Repos {
-		normalizeRepoTopics(topic.Repos[i], topicBase, false)
+		normalizeRepoTopics(topic.Repos[i], base, false)
+	}
+}
+
+func topicDirName(topic *content.Topic) string {
+	if topic == nil {
+		return ""
 	}
 
-	normalizeTopics(topic.Sub, topicBase)
-
-	topic.Meta = nil
+	return topic.Topic
 }
 
 func topicBase(tag, typeName string) string {
@@ -120,17 +96,6 @@ func topicBase(tag, typeName string) string {
 	}
 
 	return joinPath(tag, typeName)
-}
-
-func topicDirName(topic *content.Topic) string {
-	if topic == nil {
-		return ""
-	}
-	if topic.Meta != nil && topic.Meta.Slug != "" {
-		return topic.Meta.Slug
-	}
-
-	return topic.Topic
 }
 
 func joinPath(parts ...string) string {

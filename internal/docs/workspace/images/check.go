@@ -10,7 +10,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/gh/data"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
-	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // Patterns for duplicate file detection: name__NUMBER.ext.
@@ -292,9 +291,6 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 		tag := dirParts[0]
 		typeBase := tag + "/" + typeVal
 
-		// Collect topic dirs
-		collectTopicDirs(section.Topics, typeBase, &dirs)
-
 		// Collect repo topic dirs
 		for i := range section.Repos {
 			collectRepoTopicDirs(&section.Repos[i], typeBase, &dirs, false)
@@ -317,37 +313,14 @@ func collectTopicDirs(topics []ghdata.Topic, base string, dirs *[]string) {
 		topicBase := base + "/" + topicDirName
 
 		*dirs = append(*dirs, topicBase)
-
-		// 收集 topic 内嵌 repo 的图片目录
-		for _, repo := range topic.Repos {
-			repoName := urlutil.RepoName(repo.URL)
-			if repoName == "" {
-				continue
-			}
-			repoBase := topicBase + "/" + repoName
-			// 收集 repo 的 topics 的图片目录
-			collectTopicDirs(repo.Topics, repoBase, dirs)
-		}
-
-		// 递归处理子 topics
-		collectTopicDirs(topic.Sub, topicBase, dirs)
 	}
 }
 
 func collectRepoTopicDirs(repo *ghdata.Repo, base string, dirs *[]string, useBase bool) {
-	urlStr := repo.URL
-	repoName := urlutil.RepoName(urlStr)
-	if repoName == "" {
-		return
-	}
-
-	repoBase := base + "/" + repoName
-	topicBase := repoBase
-	if useBase {
-		topicBase = base
-	}
-
-	collectTopicDirs(repo.Topics, topicBase, dirs)
+	_ = repo
+	_ = base
+	_ = dirs
+	_ = useBase
 }
 
 // collectExistingFilesAndDirs returns both directories and files in imagesDir.

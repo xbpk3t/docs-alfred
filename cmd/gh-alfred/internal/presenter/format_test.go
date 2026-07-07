@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 )
 
@@ -38,7 +37,6 @@ func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
 			Doc:      "data/gh/tool",
 			Tag:      "kernel",
 			Type:     "tool",
-			Topics:   content.Topics{{Topic: "install"}},
 			MainRepo: "acme/main",
 		},
 		{

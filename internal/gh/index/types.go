@@ -54,10 +54,6 @@ func GetURL(repo *content.Repo) string {
 	return repo.URL
 }
 
-func HasQs(repo *content.Repo) bool {
-	return len(repo.Topics) > 0
-}
-
 func HasNix(repo *content.Repo) bool {
 	return strings.TrimSpace(repo.NixURL) != ""
 }

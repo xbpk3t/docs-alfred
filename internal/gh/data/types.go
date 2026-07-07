@@ -7,12 +7,8 @@ import (
 
 // Section is a typed representation of a data/gh YAML section.
 type Section struct {
-	Type        string           `yaml:"type"`
-	Repos       []content.Repo   `yaml:"repo"`
-	Topics      []content.Topic  `yaml:"topics"`
-	Record      []content.Record `yaml:"record"`
-	HasRecord   bool             `yaml:"-"`
-	RecordValid bool             `yaml:"-"`
+	Type  string         `yaml:"type"`
+	Repos []content.Repo `yaml:"repo"`
 }
 
 // Repo is an alias for content.Repo.
@@ -21,12 +17,6 @@ type Repo = content.Repo
 // Topic is an alias for content.Topic.
 type Topic = content.Topic
 
-// Record is an alias for content.Record.
-type Record = content.Record
-
-// TopicMeta is an alias for content.TopicMeta.
-type TopicMeta = content.TopicMeta
-
 type sectionFields struct {
 	Type string `yaml:"type"`
 }
@@ -34,22 +24,19 @@ type sectionFields struct {
 type repoFields struct {
 	URL string `yaml:"url"`
 	Des string `yaml:"des"`
-	Zk  string `yaml:"zk"`
 	Nix string `yaml:"nix"`
 	Doc string `yaml:"doc"`
 }
 
 type topicFields struct {
-	Topic  string            `yaml:"topic"`
-	Meta   content.TopicMeta `yaml:"meta"`
+	Topic string `yaml:"topic"`
 }
 
 func sectionFromMap(m map[string]any) Section {
-	section := Section{RecordValid: true}
 	var fields sectionFields
 	decodeYAMLMap(m, &fields)
-	section.Type = fields.Type
-	section.Topics = topicsFromAny(m["topics"])
+
+	section := Section{Type: fields.Type}
 
 	if repos, ok := m["repo"].([]any); ok {
 		section.Repos = make([]content.Repo, 0, len(repos))
@@ -60,56 +47,26 @@ func sectionFromMap(m map[string]any) Section {
 		}
 	}
 
-	if record, ok := m["record"]; ok {
-		section.HasRecord = true
-		section.Record, section.RecordValid = recordsFromAny(record)
-	}
-
 	return section
 }
 
 func repoFromMap(m map[string]any) content.Repo {
-	repo := content.Repo{RecordValid: true}
 	var fields repoFields
 	decodeYAMLMap(m, &fields)
-	repo.URL = fields.URL
-	repo.Des = fields.Des
-	repo.Zk = fields.Zk
-	repo.NixURL = fields.Nix
-	repo.Doc = fields.Doc
-	repo.Topics = topicsFromAny(m["topics"])
 
-	if record, ok := m["record"]; ok {
-		repo.HasRecord = true
-		repo.Record, repo.RecordValid = recordsFromAny(record)
+	return content.Repo{
+		URL:    fields.URL,
+		Des:    fields.Des,
+		NixURL: fields.Nix,
+		Doc:    fields.Doc,
 	}
-
-	return repo
-}
-
-func topicsFromAny(v any) []content.Topic {
-	items, ok := v.([]any)
-	if !ok {
-		return nil
-	}
-
-	topics := make([]content.Topic, 0, len(items))
-	for _, item := range items {
-		if topicMap, ok := item.(map[string]any); ok {
-			topics = append(topics, topicFromMap(topicMap))
-		}
-	}
-
-	return topics
 }
 
 func topicFromMap(m map[string]any) content.Topic {
-	topic := content.Topic{RecordValid: true}
 	var fields topicFields
 	decodeYAMLMap(m, &fields)
-	topic.Topic = fields.Topic
-	topic.Meta = &fields.Meta
-	topic.Sub = topicsFromAny(m["sub"])
+
+	topic := content.Topic{Topic: fields.Topic}
 
 	// 解析 topic 内嵌的 repos
 	if repos, ok := m["repo"].([]any); ok {
@@ -122,30 +79,7 @@ func topicFromMap(m map[string]any) content.Topic {
 		}
 	}
 
-	if record, ok := m["record"]; ok {
-		topic.HasRecord = true
-		topic.Record, topic.RecordValid = recordsFromAny(record)
-	}
-
 	return topic
-}
-
-func recordsFromAny(v any) ([]content.Record, bool) {
-	items, ok := v.([]any)
-	if !ok || items == nil {
-		return nil, false
-	}
-
-	records := make([]content.Record, 0, len(items))
-	for _, item := range items {
-		if recordMap, ok := item.(map[string]any); ok {
-			record := content.Record{}
-			decodeYAMLMap(recordMap, &record)
-			records = append(records, record)
-		}
-	}
-
-	return records, true
 }
 
 func decodeYAMLMap(input, output any) {

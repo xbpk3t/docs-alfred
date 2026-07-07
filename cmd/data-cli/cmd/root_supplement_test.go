@@ -72,18 +72,12 @@ func TestNewDedupCmdWithInvalidDomain(t *testing.T) {
 
 func TestRunDomainCheckWithValidDomain(t *testing.T) {
 	// Test with gh domain and default path - may fail due to missing data but tests path
-	err := runDomainCheck("gh", "", "", 0)
+	err := runDomainCheck("gh", "", "")
 	_ = err
 }
 
 func TestRunDomainDedupWithValidDomain(t *testing.T) {
 	err := runDomainDedup("gh", "")
-	_ = err
-}
-
-func TestRunDomainCheckZeroMaxLines(t *testing.T) {
-	err := runDomainCheck("gh", "", "", 0)
-	// Tests the non-negative max-lines path
 	_ = err
 }
 
