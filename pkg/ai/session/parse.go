@@ -98,7 +98,6 @@ func Parse(path string) ([]Message, error) {
 }
 
 // ParseAll parses multiple JSONL files and merges all messages sorted by timestamp.
-// This is used for session chains (main session + sidechains).
 func ParseAll(paths []string) ([]Message, error) {
 	var all []Message
 	for _, p := range paths {
