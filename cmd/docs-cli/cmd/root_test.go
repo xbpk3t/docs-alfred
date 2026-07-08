@@ -12,7 +12,7 @@ func TestRootCommandOwnsWorkspaceResources(t *testing.T) {
 	root := newRootCmd()
 
 	require.Equal(t, "docs-cli", root.Name())
-	requireCommandNames(t, root.Commands(), []string{"blog", "dotfiles", "images", "schema", wikiCommandName})
+	requireCommandNames(t, root.Commands(), []string{"dotfiles", "images", "schema", wikiCommandName})
 	requireNoCommand(t, root, cmdCheck)
 	requireNoCommand(t, root, "sync-record")
 	requireNoCommand(t, root, "alfred")
@@ -25,13 +25,6 @@ func TestImagesCommandOwnsImageActions(t *testing.T) {
 	require.NoError(t, err)
 
 	requireCommandNames(t, imagesCmd.Commands(), []string{cmdCheck, "fix"})
-}
-
-func TestBlogCommandOwnsBlogActions(t *testing.T) {
-	blogCmd, _, err := newRootCmd().Find([]string{"blog"})
-	require.NoError(t, err)
-
-	requireCommandNames(t, blogCmd.Commands(), []string{cmdCheck})
 }
 
 func TestDotfilesCommandOwnsDotfilesActions(t *testing.T) {

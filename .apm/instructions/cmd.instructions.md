@@ -13,7 +13,7 @@ applyTo: "cmd/**"
 
 ## docs-cli
 
-子命令：`images`、`blog`、`dotfiles`、`wiki`。
+子命令：`images`、`dotfiles`、`wiki`。
 
 - 上游 `$HOME/Desktop/docs` 是 source of truth。不凭空修改 YAML schema、topic 目录规则、record 规则或 image mapping。
 - `images --apply` 会修复/创建内容；默认只跑 check/list。

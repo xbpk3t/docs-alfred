@@ -11,7 +11,6 @@ go install github.com/xbpk3t/docs-alfred/cmd/docs-cli@main
 ```shell
 docs-cli images check
 docs-cli images fix
-docs-cli blog check
 docs-cli dotfiles check
 docs-cli dotfiles sync-record
 # Classify and summarize explicit URLs into wiki

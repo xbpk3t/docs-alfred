@@ -282,16 +282,6 @@ func TestWriteWikiAuditResultFailed(t *testing.T) {
 	assert.Contains(t, err.Error(), "wiki audit failed")
 }
 
-func TestBlogCheckCommandFlags(t *testing.T) {
-	blogCmd, _, err := newRootCmd().Find([]string{"blog", "check"})
-	require.NoError(t, err)
-
-	f := blogCmd.Flags()
-	require.NotNil(t, f.Lookup("data-dir"))
-	require.NotNil(t, f.Lookup("blog-dir"))
-	require.NotNil(t, blogCmd.InheritedFlags().Lookup("format"))
-}
-
 func TestDotfilesCheckCommandFlags(t *testing.T) {
 	dotfilesCmd, _, err := newRootCmd().Find([]string{"dotfiles", "check"})
 	require.NoError(t, err)
