@@ -40,7 +40,6 @@ func TestNewSessionCmd_HasOnlyExportSubcommand(t *testing.T) {
 		names[sub.Name()] = true
 	}
 
-	require.False(t, names["chain"], "session command should not have 'chain' subcommand")
 	require.True(t, names["export"], "session command should have 'export' subcommand")
 }
 

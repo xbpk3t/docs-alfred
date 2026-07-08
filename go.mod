@@ -13,7 +13,6 @@ require (
 	github.com/PuerkitoBio/purell v1.2.2
 	github.com/adrg/frontmatter v0.2.0
 	github.com/adrg/xdg v0.5.3
-	github.com/agnivade/levenshtein v1.2.1
 	github.com/asticode/go-astisub v0.40.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
@@ -36,10 +35,9 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/knadh/koanf/parsers/yaml v0.1.0
 	github.com/knadh/koanf/providers/env/v2 v2.0.0
-	github.com/knadh/koanf/providers/file v1.1.2
 	github.com/knadh/koanf/v2 v2.1.2
-	github.com/lithammer/fuzzysearch v1.1.8
 	github.com/mmcdole/gofeed v1.3.0
+	github.com/orivej/go-nix v0.0.0-20180830055821-dae45d921a44
 	github.com/resend/resend-go/v2 v2.27.0
 	github.com/samber/lo v1.52.0
 	github.com/samber/mo v1.17.0
@@ -55,7 +53,6 @@ require (
 	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/text v0.37.0
-	golang.org/x/time v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.53.0
 	mvdan.cc/xurls/v2 v2.6.0
@@ -73,7 +70,6 @@ require (
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
 	github.com/go-git/go-billy/v6 v6.0.0-alpha.1 // indirect
 	github.com/go-shiori/dom v0.0.0-20230515143342-73569d674e1c // indirect
@@ -98,7 +94,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/orivej/go-nix v0.0.0-20180830055821-dae45d921a44 // indirect
 	github.com/pjbgf/sha1cd v0.6.0 // indirect
 	github.com/pkoukk/tiktoken-go v0.1.6 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
