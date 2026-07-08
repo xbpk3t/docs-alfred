@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/internal/docs/workspace/blog"
 	"github.com/xbpk3t/docs-alfred/internal/docs/workspace/images"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
@@ -111,39 +110,4 @@ func FormatImagesDetails(result *ImagesCheckResult, input ImagesCheckInput) stri
 	}
 
 	return out.String()
-}
-
-// BlogCheckInput holds input for blog check.
-type BlogCheckInput struct {
-	DataDir string
-	BlogDir string
-}
-
-// BlogCheckResult holds blog check results.
-type BlogCheckResult struct {
-	Issues   []checkutil.Issue
-	GHTypes  int
-	BlogDirs int
-}
-
-// Summary returns count-oriented blog check details for structured output.
-func (r *BlogCheckResult) Summary() map[string]any {
-	return map[string]any{
-		"ghTypes":  r.GHTypes,
-		"blogDirs": r.BlogDirs,
-	}
-}
-
-// RunBlogCheck checks blog/data consistency.
-func RunBlogCheck(input BlogCheckInput) (*BlogCheckResult, error) {
-	result, err := blog.RunCheck(input.DataDir, input.BlogDir)
-	if err != nil {
-		return nil, err
-	}
-
-	return &BlogCheckResult{
-		Issues:   result.Issues,
-		GHTypes:  result.GHTypes,
-		BlogDirs: result.BlogDirs,
-	}, nil
 }

@@ -27,7 +27,6 @@ func newRootCmd() *cobra.Command {
 	output.FormatFlag(rootCmd, &format, output.FormatText, []string{output.FormatText, output.FormatJSON}, "Output format: text or json")
 
 	rootCmd.AddCommand(newImagesCmd())
-	rootCmd.AddCommand(newBlogCmd())
 	rootCmd.AddCommand(newDotfilesCmd())
 	rootCmd.AddCommand(newWikiCmd())
 	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))

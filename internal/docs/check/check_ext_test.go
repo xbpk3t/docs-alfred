@@ -273,48 +273,6 @@ func TestFormatImagesDetails(t *testing.T) {
 	assert.Contains(t, details, "existing:")
 }
 
-// --- RunBlogCheck ---
-
-func TestRunBlogCheckMissingBlogDir(t *testing.T) {
-	dataDir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "cat"), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "cat", "type.yml"), []byte("- type: t"), 0o600))
-
-	result, err := RunBlogCheck(BlogCheckInput{DataDir: dataDir, BlogDir: "/tmp/nonexistent-blog"})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-}
-
-func TestRunBlogCheckMatching(t *testing.T) {
-	dataDir := t.TempDir()
-	blogDir := t.TempDir()
-
-	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "cat"), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "cat", "type.yml"), []byte("- type: t"), 0o600))
-	require.NoError(t, os.MkdirAll(filepath.Join(blogDir, "cat", "type"), 0o700))
-
-	result, err := RunBlogCheck(BlogCheckInput{DataDir: dataDir, BlogDir: blogDir})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-}
-
-func TestRunBlogCheckExtraBlogDir(t *testing.T) {
-	dataDir := t.TempDir()
-	blogDir := t.TempDir()
-
-	require.NoError(t, os.MkdirAll(filepath.Join(blogDir, "cat", "type"), 0o700))
-
-	result, err := RunBlogCheck(BlogCheckInput{DataDir: dataDir, BlogDir: blogDir})
-	require.NoError(t, err)
-	assert.NotEmpty(t, result.Issues)
-}
-
-func TestBlogCheckResultSummary(t *testing.T) {
-	r := &BlogCheckResult{GHTypes: 5, BlogDirs: 3}
-	s := r.Summary()
-	assert.Equal(t, 5, s["ghTypes"])
-	assert.Equal(t, 3, s["blogDirs"])
-}
 
 // --- ImagesCheckResult ---
 
@@ -393,15 +351,6 @@ func TestRunImagesCheckEmptyDirs(t *testing.T) {
 	assert.Empty(t, result.ExtraDirs)
 }
 
-func TestRunBlogCheckEmpty(t *testing.T) {
-	result, err := RunBlogCheck(BlogCheckInput{
-		DataDir: t.TempDir(),
-		BlogDir: t.TempDir(),
-	})
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-}
-
 func TestRunWikiCheckNonExistentGhRoot(t *testing.T) {
 	_, err := RunWikiCheck(WikiCheckInput{
 		GhRoot:   "/tmp/nonexistent-gh-root-12345",
@@ -423,14 +372,6 @@ func TestRunImagesCheckError(t *testing.T) {
 	_, err := RunImagesCheck(ImagesCheckInput{
 		DataDir:   "/tmp/nonexistent-data-12345",
 		ImagesDir: t.TempDir(),
-	})
-	require.Error(t, err)
-}
-
-func TestRunBlogCheckError(t *testing.T) {
-	_, err := RunBlogCheck(BlogCheckInput{
-		DataDir: "/tmp/nonexistent-data-12345",
-		BlogDir: t.TempDir(),
 	})
 	require.Error(t, err)
 }
