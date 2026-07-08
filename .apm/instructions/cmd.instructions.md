@@ -49,7 +49,7 @@ applyTo: "cmd/**"
 
 ## ccx
 
-子命令：`session`（含 `chain`、`export`）。
+子命令：`session`（含 `export`）。
 
 遵循通用规则，无额外约束。
 

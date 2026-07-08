@@ -32,7 +32,7 @@ const (
 
 	// mergedAITimeout is the timeout for the single merged AI call
 	// that handles both classification and title generation.
-	mergedAITimeout = 100 * time.Second
+	mergedAITimeout = 200 * time.Second
 )
 
 // ExportInput contains inputs for session export.
@@ -216,12 +216,7 @@ func fallbackExportMetadata(messages []session.Message) (string, string, string)
 
 // mergedClassifyAndTitle makes a single AI call to determine topicPath, title, and engTitle.
 func mergedClassifyAndTitle(messages []session.Message, input *ExportInput) (string, string, string, error) {
-	candidates := wikisvc.LoadClassificationCandidates(input.WikiRoot)
-	if len(candidates) == 0 {
-		return "", "", "", errors.New("no topic candidates available")
-	}
-
-	prompt, err := renderClassifyTitlePrompt(candidates, messages)
+	prompt, candidates, err := renderClassifyTitlePrompt(messages)
 	if err != nil {
 		return "", "", "", fmt.Errorf("render prompt: %w", err)
 	}
@@ -286,12 +281,18 @@ func hasTopicCandidate(candidates []ghindex.TopicCandidate, topicPath string) bo
 }
 
 // renderClassifyTitlePrompt renders the classify-title.txt prompt template.
-func renderClassifyTitlePrompt(candidates []ghindex.TopicCandidate, messages []session.Message) (string, error) {
+// Returns the rendered prompt and topic candidates for validation.
+func renderClassifyTitlePrompt(messages []session.Message) (string, []ghindex.TopicCandidate, error) {
+	candidates := wikisvc.LoadClassificationCandidates("")
+	if len(candidates) == 0 {
+		return "", nil, errors.New("no topic candidates available")
+	}
+
 	tmpl, err := template.New("classify-title.txt").
 		Option("missingkey=error").
 		ParseFS(promptFS, "prompts/classify-title.txt")
 	if err != nil {
-		return "", fmt.Errorf("parse prompt: %w", err)
+		return "", nil, fmt.Errorf("parse prompt: %w", err)
 	}
 
 	userMessages := extractUserMessages(messages)
@@ -301,16 +302,16 @@ func renderClassifyTitlePrompt(candidates []ghindex.TopicCandidate, messages []s
 	}
 
 	data := map[string]string{
-		"CandidateTree": wikisvc.FormatTopicCandidates(candidates),
+		"CandidateTree": wikisvc.FormatTopicCandidatesGrouped(candidates),
 		"Content":       content,
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("render prompt: %w", err)
+		return "", nil, fmt.Errorf("render prompt: %w", err)
 	}
 
-	return buf.String(), nil
+	return buf.String(), candidates, nil
 }
 
 // parseClassifyTitleResult parses the JSON response from the merged AI call.

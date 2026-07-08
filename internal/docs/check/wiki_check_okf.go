@@ -24,6 +24,7 @@ var validOKFTypes = map[string]bool{
 	"session":    true,
 	"review":     true,
 	"blog":       true,
+	"blog-draft": true,
 	"log":        true,
 	"digest":     true,
 	"reference":  true,

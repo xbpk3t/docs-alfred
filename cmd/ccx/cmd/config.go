@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/creasty/defaults"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
@@ -57,6 +58,7 @@ func loadExportConfig(path string, overrides exportConfigOverrides) (*exportConf
 
 func buildAIConfig(cfg *exportConfig) *ai.ClientConfig {
 	resolved := ai.DefaultConfig()
+	resolved.Timeout = 200 * time.Second
 	if cfg != nil {
 		if cfg.AI.APIKey != "" {
 			resolved.APIKey = cfg.AI.APIKey

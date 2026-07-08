@@ -1010,8 +1010,64 @@ func FormatTopicCandidates(candidates []ghindex.TopicCandidate) string {
 	return formatTopicCandidates(candidates)
 }
 
-// LoadClassificationCandidates loads and ranks topic candidates from gh.yml.
-// Used by ccx session export for the merged classify+title AI call.
+// FormatTopicCandidatesGrouped formats topic candidates grouped by tag for progressive classification.
+// Output is hierarchical:
+//
+//	### AI
+//	  LLM: LLM, claude-code, model-routing
+//	  agent: agent, agent-fwk, agent-memory
+//	### algo
+//	  algo: 算法思维, 动态规划
+func FormatTopicCandidatesGrouped(candidates []ghindex.TopicCandidate) string {
+	_ = formatTopicCandidates // silence lint; template function kept for compatibility
+	// Group by tag → type → topics.
+	groups := make(map[string]map[string][]string)
+	var tagOrder []string
+	seenTag := make(map[string]bool)
+	for _, c := range candidates {
+		parts := strings.SplitN(c.Path, "/", 3)
+		if len(parts) < 2 {
+			continue
+		}
+		tag := parts[0]
+		typ := parts[1]
+		topic := ""
+		if len(parts) > 2 {
+			topic = parts[2]
+		}
+		if _, ok := groups[tag]; !ok {
+			groups[tag] = make(map[string][]string)
+			if !seenTag[tag] {
+				seenTag[tag] = true
+				tagOrder = append(tagOrder, tag)
+			}
+		}
+		if topic != "" && topic != typ {
+			groups[tag][typ] = append(groups[tag][typ], topic)
+		}
+	}
+
+	var lines []string
+	for _, tag := range tagOrder {
+		lines = append(lines, fmt.Sprintf("### %s", tag))
+		types := groups[tag]
+		var typeOrder []string
+		for typ := range types {
+			typeOrder = append(typeOrder, typ)
+		}
+		sort.Strings(typeOrder)
+		for _, typ := range typeOrder {
+			topics := types[typ]
+			lines = append(lines, fmt.Sprintf("  %s: %s", typ, strings.Join(topics, ", ")))
+		}
+		lines = append(lines, "")
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// LoadClassificationCandidates loads topic candidates from gh.yml.
+// Used by ccx session export for topic path validation.
 func LoadClassificationCandidates(wikiRoot string) []ghindex.TopicCandidate {
 	remote, err := ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
 	if err != nil {
@@ -1020,7 +1076,5 @@ func LoadClassificationCandidates(wikiRoot string) []ghindex.TopicCandidate {
 		return nil
 	}
 
-	ranked := rankTopicCandidates(remote, "", 120)
-
-	return ranked
+	return remote
 }
