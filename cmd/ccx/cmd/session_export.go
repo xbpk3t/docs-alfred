@@ -26,8 +26,8 @@ func newSessionExportCmd() *cobra.Command {
 		Long: `Export the current agent session to wiki markdown.
 
 This command:
-1. Resolves a Claude Code or Codex transcript
-2. Parses user/assistant messages into markdown
+1. Detects the agent runtime (Claude Code or Codex) from environment, or uses --agent
+2. Resolves and parses the session transcript
 3. AI classifies content to determine topic path
 4. Writes to wiki/<topic>/YYYY-MM-DD-semantic-title.md`,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -44,13 +44,24 @@ This command:
 				}
 			}
 
+			agent := internal.Agent(flags.agent)
+			sessionID := flags.session
+
+			if agent == "" {
+				var agentErr error
+				agent, sessionID, agentErr = internal.DetectAgent(flags.session)
+				if agentErr != nil {
+					return fmt.Errorf("detect agent: %w", agentErr)
+				}
+			}
+
 			input := internal.ExportInput{
-				Agent:     internal.Agent(flags.agent),
+				Agent:     agent,
+				SessionID: sessionID,
 				DryRun:    flags.dryRun,
 				Verbose:   flags.verbose,
 				WikiRoot:  cfg.WikiRoot,
 				OutputDir: flags.outputDir,
-				SessionID: flags.session,
 				AIConfig:  buildAIConfig(cfg),
 			}
 
@@ -63,14 +74,13 @@ This command:
 		},
 	}
 
-	cmd.Flags().StringVar(&flags.agent, "agent", "", "Agent runtime: cc or codex")
+	cmd.Flags().StringVar(&flags.agent, "agent", "", "Agent runtime: cc or codex (auto-detected from env if omitted)")
 	cmd.Flags().StringVar(&flags.config, "config", "", "Config file path")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show what would be done without writing")
 	cmd.Flags().BoolVar(&flags.verbose, "verbose", false, "Verbose output")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory")
 	cmd.Flags().StringVar(&flags.outputDir, "output-dir", "", "Output directory (overrides wiki-root)")
 	cmd.Flags().StringVar(&flags.session, "session", "", "Session/thread ID to export (defaults to agent env var)")
-	_ = cmd.MarkFlagRequired("agent")
 
 	return cmd
 }

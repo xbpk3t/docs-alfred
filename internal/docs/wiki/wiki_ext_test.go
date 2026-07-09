@@ -711,6 +711,20 @@ func TestParseClassifyOnlyResultInvalid(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseClassifyOnlyResultRejectsTrailingText(t *testing.T) {
+	// New strict behavior: trailing text after JSON causes parse failure.
+	// Retry layer handles this instead of manual extraction.
+	_, err := parseClassifyOnlyResult(`{"topicPath":"ai/tool"}` + "\nsome trailing text")
+	require.Error(t, err, "should reject trailing text after JSON")
+}
+
+func TestParseClassifyOnlyResultRejectsCodeFence(t *testing.T) {
+	// Code-fence-wrapped JSON is now rejected by parseClassifyOnlyResult.
+	// The retry layer in classifyOnly will retry and the model should return clean JSON.
+	_, err := parseClassifyOnlyResult("```json\n{\"topicPath\":\"ai/tool\"}\n```")
+	require.Error(t, err, "should reject code-fence-wrapped JSON")
+}
+
 // --- isManualReviewWithGoodContent ---
 
 func TestIsManualReviewWithGoodContent(t *testing.T) {

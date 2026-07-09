@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/samber/mo"
 	_ "modernc.org/sqlite"
 )
 
@@ -31,6 +32,45 @@ type SessionRef struct {
 	SessionID      string
 	TranscriptPath string
 	Source         string
+}
+
+// DetectAgent detects the agent runtime from environment variables.
+// Returns the detected agent and the resolved session ID from the env var.
+// Caller may override the session ID via input.SessionID before calling ResolveSession.
+func DetectAgent(sessionOverride string) (Agent, string, error) {
+	cc := envVar(claudeSessionEnv)
+	cx := envVar(codexThreadEnv)
+
+	id := sessionOverride
+	pick := func(v mo.Option[string], agent Agent) (Agent, string, error) {
+		if id == "" {
+			id = v.MustGet()
+		}
+		return agent, id, nil
+	}
+
+	switch {
+	case cc.IsPresent() && cx.IsAbsent():
+		return pick(cc, AgentCC)
+	case cx.IsPresent() && cc.IsAbsent():
+		return pick(cx, AgentCodex)
+	case cc.IsPresent() && cx.IsPresent():
+		return "", "", fmt.Errorf("ambiguous: both %s and %s are set", claudeSessionEnv, codexThreadEnv)
+	default:
+		if sessionOverride != "" {
+			return "", "", fmt.Errorf("no session ID found; use --agent to specify cc or codex for session %q", sessionOverride)
+		}
+		return "", "", fmt.Errorf("no session ID found; set %s or %s, or use --agent", claudeSessionEnv, codexThreadEnv)
+	}
+}
+
+// envVar returns os.Getenv(name) as a mo.Option.
+// Returns None when the variable is unset or empty.
+func envVar(name string) mo.Option[string] {
+	if v := os.Getenv(name); v != "" {
+		return mo.Some(v)
+	}
+	return mo.None[string]()
 }
 
 // ResolveSession resolves an agent session/thread ID to a transcript JSONL file.
