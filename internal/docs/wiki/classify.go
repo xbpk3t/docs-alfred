@@ -18,6 +18,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
@@ -265,7 +266,8 @@ type classifyOnlyResult struct {
 	NeedsManualReview bool               `json:"needsManualReview"`
 }
 
-// classifyOnly runs the first AI call: classify topic, type, and metadata.
+// classifyOnly runs the AI classification call with retry.
+// Retries on AI call failure, JSON parse failure, or validation failure.
 func (c *Classifier) classifyOnly(
 	ctx context.Context,
 	urlStr, title, contentType, content string,
@@ -273,7 +275,7 @@ func (c *Classifier) classifyOnly(
 	maxLen int,
 ) (*aiClassification, error) {
 	prompt, err := renderPrompt("classify-json.txt", &promptData{
-		CandidateTree: formatTopicCandidates(candidates),
+		CandidateTree: FormatTopicCandidatesGrouped(candidates),
 		Title:         truncate(title, 200),
 		URL:           urlStr,
 		ContentType:   contentType,
@@ -283,39 +285,51 @@ func (c *Classifier) classifyOnly(
 		return nil, fmt.Errorf("render classify prompt: %w", err)
 	}
 
-	result, err := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
+	var result *aiClassification
+	err = retry.Do(
+		func() error {
+			r, e := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
+			if e != nil {
+				return fmt.Errorf("AI classify call: %w", e)
+			}
+
+			parsed, e := parseClassifyOnlyResult(r)
+			if e != nil {
+				return fmt.Errorf("parse classify JSON: %w", e)
+			}
+
+			if e := validateClassifyResult(parsed); e != nil {
+				return fmt.Errorf("validate classify result: %w", e)
+			}
+
+			result = &aiClassification{
+				TopicPath:         parsed.TopicPath,
+				WikiType:          parsed.WikiType,
+				ContentType:       parsed.ContentType,
+				Summary:           parsed.Summary,
+				Metadata:          parsed.Metadata,
+				Confidence:        parsed.Confidence,
+				NeedsManualReview: parsed.NeedsManualReview,
+				RejectReason:      parsed.RejectReason,
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(1*time.Second),
+		retry.DelayType(retry.BackOffDelay),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("AI classify call: %w", err)
+		return nil, err
 	}
-
-	parsed, err := parseClassifyOnlyResult(result)
-	if err != nil {
-		return nil, fmt.Errorf("parse classify JSON: %w", err)
-	}
-
-	if err := validateClassifyResult(parsed); err != nil {
-		return nil, fmt.Errorf("validate classify result: %w", err)
-	}
-
-	// Convert to aiClassification for reuse of validation methods.
-	return &aiClassification{
-		TopicPath:         parsed.TopicPath,
-		WikiType:          parsed.WikiType,
-		ContentType:       parsed.ContentType,
-		Summary:           parsed.Summary,
-		Metadata:          parsed.Metadata,
-		Confidence:        parsed.Confidence,
-		NeedsManualReview: parsed.NeedsManualReview,
-		RejectReason:      parsed.RejectReason,
-	}, nil
+	return result, nil
 }
 
 func parseClassifyOnlyResult(raw string) (*classifyOnlyResult, error) {
+	raw = strings.TrimSpace(raw)
 	var result classifyOnlyResult
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		return nil, err
 	}
-
 	return &result, nil
 }
 
@@ -373,17 +387,16 @@ func renderPrompt(name string, data *promptData) (string, error) {
 
 func (c *Classifier) classificationCandidates(
 	_ context.Context,
-	urlStr,
-	title,
-	content string,
+	_,
+	_,
+	_ string,
 ) ([]ghindex.TopicCandidate, error) {
 	remote, err := c.ghTopicCatalog()
 	if err != nil {
 		return nil, err
 	}
-	ranked := rankTopicCandidates(remote, title+"\n"+urlStr+"\n"+truncate(content, 3000), c.CandidateLimit)
 
-	return ranked, nil
+	return remote, nil
 }
 
 func (c *Classifier) ghTopicCatalog() ([]ghindex.TopicCandidate, error) {
@@ -592,7 +605,7 @@ func formatTopicCandidates(candidates []ghindex.TopicCandidate) string {
 type StructuredSummary struct {
 	Overview         string   `json:"overview"                   validate:"required"`
 	Detail           string   `json:"detail,omitempty"`
-	KeyQuotes        string   `json:"keyQuotes,omitempty"`
+	KeyQuotes        []string `json:"keyQuotes,omitempty"`
 	WorthNoting      string   `json:"worthNoting,omitempty"`
 	CriticalThinking string   `json:"criticalThinking,omitempty"`
 	KeyPoints        []string `json:"keyPoints"                  validate:"required|min_len:1"`
