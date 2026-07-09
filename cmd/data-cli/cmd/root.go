@@ -38,6 +38,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newRenderCmd(&dataPath))
 	rootCmd.AddCommand(newCheckCmd(&dataPath))
 	rootCmd.AddCommand(newDedupCmd(&dataPath))
+	rootCmd.AddCommand(newDumpCmd(&dataPath))
 	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
