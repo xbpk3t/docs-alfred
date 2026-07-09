@@ -99,13 +99,32 @@ func TestNewSessionExportCmd_RunE_Flags(t *testing.T) {
 	}
 }
 
-func TestNewSessionExportCmd_Execute_MissingAgent(t *testing.T) {
+func TestNewSessionExportCmd_Execute_NoAgentNoEnv(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+
 	cmd := NewSessionCmd()
 	cmd.SetArgs([]string{"export"})
 
 	err := cmd.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), `required flag(s) "agent" not set`)
+	assert.Contains(t, err.Error(), "no session ID found")
+}
+
+func TestNewSessionExportCmd_Execute_DetectAgentFromEnv(t *testing.T) {
+	sessionID := "auto-session"
+	t.Setenv("CLAUDE_CODE_SESSION_ID", sessionID)
+	t.Setenv("CODEX_THREAD_ID", "")
+
+	// DetectAgent should pick up CC from env, then resolve fails on file not found.
+	// That's fine — we're testing that detect happens before resolve.
+	cmd := NewSessionCmd()
+	cmd.SetArgs([]string{"export", "--dry-run"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	// If detect succeeded, resolve should fail on missing transcript
+	assert.Contains(t, err.Error(), "resolve session")
 }
 
 func TestNewSessionExportCmd_Execute_ConfigLoadError(t *testing.T) {
