@@ -4,7 +4,6 @@ import (
 	"html"
 	"net/url"
 	"path"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -25,7 +24,6 @@ type URLRef struct {
 // ExtractOptions configures URL extraction behavior.
 type ExtractOptions struct {
 	BaseURL        string
-	Markdown       bool
 	BareURLs       bool
 	HTMLAnchors    bool
 	Relaxed        bool
@@ -35,14 +33,9 @@ type ExtractOptions struct {
 	TranscriptOnly bool
 }
 
-var markdownLinkURLPattern = regexp.MustCompile(`\[[^\]]+\]\((https?://[^)\s]+)(?:\s+"[^"]*")?\)`)
-
 // ExtractURLRefs extracts URL references from text according to opts.
 func ExtractURLRefs(text string, opts ExtractOptions) []URLRef {
 	var refs []URLRef
-	if opts.Markdown {
-		refs = append(refs, extractMarkdownURLRefs(text, opts)...)
-	}
 	if opts.HTMLAnchors {
 		refs = append(refs, extractHTMLAnchorURLRefs(text, opts)...)
 	}
@@ -52,23 +45,6 @@ func ExtractURLRefs(text string, opts ExtractOptions) []URLRef {
 	sort.SliceStable(refs, func(i, j int) bool { return refs[i].Start < refs[j].Start })
 	if opts.Deduplicate {
 		refs = dedupeURLRefs(refs)
-	}
-
-	return refs
-}
-
-func extractMarkdownURLRefs(text string, opts ExtractOptions) []URLRef {
-	matches := markdownLinkURLPattern.FindAllStringSubmatchIndex(text, -1)
-	refs := make([]URLRef, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 4 || match[2] < 0 || match[3] < match[2] {
-			continue
-		}
-		cleaned := CleanURL(text[match[2]:match[3]], CleanOptions{BaseURL: opts.BaseURL, HTTPOnly: opts.HTTPOnly})
-		if !keepExtractedURL(cleaned, opts) {
-			continue
-		}
-		refs = append(refs, newURLRef(cleaned, match[0], match[1], opts.Normalize))
 	}
 
 	return refs

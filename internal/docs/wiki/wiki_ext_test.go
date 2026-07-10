@@ -119,9 +119,19 @@ func TestExtractWeixinSavedPath(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "found",
+			name:   "found in list output",
+			output: "- title: test\n  saved: /tmp/weixin/file.md\n  other: val",
+			want:   "/tmp/weixin/file.md",
+		},
+		{
+			name:   "found in mapping output",
 			output: "title: test\nsaved: /tmp/weixin/file.md\nother: val",
 			want:   "/tmp/weixin/file.md",
+		},
+		{
+			name:   "skips empty saved entries",
+			output: "- title: empty\n  saved: \"\"\n- title: valid\n  saved: /tmp/weixin/second.md",
+			want:   "/tmp/weixin/second.md",
 		},
 		{
 			name:   "not found",
@@ -133,6 +143,16 @@ func TestExtractWeixinSavedPath(t *testing.T) {
 			output: "",
 			want:   "",
 		},
+		{
+			name:   "whitespace-only saved",
+			output: "saved: \"   \"",
+			want:   "",
+		},
+		{
+			name:   "invalid YAML",
+			output: "saved: [",
+			want:   "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -141,10 +161,52 @@ func TestExtractWeixinSavedPath(t *testing.T) {
 	}
 }
 
-func TestExtractSavedPathFromLine(t *testing.T) {
-	assert.Equal(t, "/tmp/file.md", extractSavedPathFromLine("  saved: /tmp/file.md"))
-	assert.Empty(t, extractSavedPathFromLine("no saved field"))
-	assert.Empty(t, extractSavedPathFromLine("saved:"))
+func TestFirstSavedPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []weixinDownloadEntry
+		want    string
+	}{
+		{
+			name:    "nil slice",
+			entries: nil,
+			want:    "",
+		},
+		{
+			name:    "empty slice",
+			entries: []weixinDownloadEntry{},
+			want:    "",
+		},
+		{
+			name: "all empty saved",
+			entries: []weixinDownloadEntry{
+				{Saved: ""},
+				{Saved: "  "},
+			},
+			want: "",
+		},
+		{
+			name: "first non-empty wins",
+			entries: []weixinDownloadEntry{
+				{Saved: ""},
+				{Saved: "/path/first.md"},
+				{Saved: "/path/second.md"},
+			},
+			want: "/path/first.md",
+		},
+		{
+			name: "trim whitespace and return",
+			entries: []weixinDownloadEntry{
+				{Saved: "  /path/trimmed.md  "},
+			},
+			want: "/path/trimmed.md",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, firstSavedPath(tt.entries))
+		})
+	}
 }
 
 // --- cleanExtractReason / isMissingTranscriptReason ---

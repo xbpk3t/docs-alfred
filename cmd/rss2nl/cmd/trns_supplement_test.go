@@ -106,7 +106,7 @@ func TestHasTranscriptLinksEnclosureWithTranscript(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// toEpisodeRef
+// EpisodeRefFromFeedItem
 // ---------------------------------------------------------------------------
 
 func TestToEpisodeRefWithEnclosure(t *testing.T) {
@@ -120,7 +120,7 @@ func TestToEpisodeRefWithEnclosure(t *testing.T) {
 			{URL: "https://example.com/audio.mp3"},
 		},
 	}
-	ref := toEpisodeRef(item, "Feed Title", "https://feed.com")
+	ref := transcript.EpisodeRefFromFeedItem(item, "Feed Title", "https://feed.com")
 	assert.Equal(t, "Episode 1", ref.Title)
 	assert.Equal(t, "https://example.com/ep1", ref.URL)
 	assert.Equal(t, "ep1", ref.GUID)
@@ -141,14 +141,14 @@ func TestToEpisodeRefWithTranscriptExtensions(t *testing.T) {
 			},
 		},
 	}
-	ref := toEpisodeRef(item, "Feed", "https://feed.com")
+	ref := transcript.EpisodeRefFromFeedItem(item, "Feed", "https://feed.com")
 	require.Len(t, ref.TranscriptLinks, 1)
 	assert.Equal(t, "https://example.com/t.txt", ref.TranscriptLinks[0].URL)
 }
 
 func TestToEpisodeRefNoEnclosure(t *testing.T) {
 	item := &gofeed.Item{Title: "Episode 3", Link: "https://example.com/ep3"}
-	ref := toEpisodeRef(item, "Feed", "https://feed.com")
+	ref := transcript.EpisodeRefFromFeedItem(item, "Feed", "https://feed.com")
 	assert.Empty(t, ref.EnclosureURL)
 }
 
@@ -161,7 +161,7 @@ func TestToEpisodeRefTranscriptExtNoURL(t *testing.T) {
 			},
 		},
 	}
-	ref := toEpisodeRef(item, "Feed", "https://feed.com")
+	ref := transcript.EpisodeRefFromFeedItem(item, "Feed", "https://feed.com")
 	assert.Empty(t, ref.TranscriptLinks)
 }
 
@@ -174,7 +174,7 @@ func TestToEpisodeRefNonPodcastExtension(t *testing.T) {
 			},
 		},
 	}
-	ref := toEpisodeRef(item, "Feed", "https://feed.com")
+	ref := transcript.EpisodeRefFromFeedItem(item, "Feed", "https://feed.com")
 	assert.Empty(t, ref.TranscriptLinks)
 }
 
@@ -187,7 +187,7 @@ func TestToEpisodeRefNonTranscriptTag(t *testing.T) {
 			},
 		},
 	}
-	ref := toEpisodeRef(item, "Feed", "https://feed.com")
+	ref := transcript.EpisodeRefFromFeedItem(item, "Feed", "https://feed.com")
 	assert.Empty(t, ref.TranscriptLinks)
 }
 
@@ -479,7 +479,7 @@ func TestProcessNewsletterTrnsItemsProcessorReturnsEmptyURL(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// toEpisodeRef edge cases
+// EpisodeRefFromFeedItem edge cases
 // ---------------------------------------------------------------------------
 
 func TestToEpisodeRefTranscriptNonPodcastNamespace(t *testing.T) {
@@ -492,7 +492,7 @@ func TestToEpisodeRefTranscriptNonPodcastNamespace(t *testing.T) {
 			},
 		},
 	}
-	ref := toEpisodeRef(item, "Feed", "https://feed.com")
+	ref := transcript.EpisodeRefFromFeedItem(item, "Feed", "https://feed.com")
 	// "atom" does not contain "podcast" or "transcript", so links are skipped
 	assert.Empty(t, ref.TranscriptLinks)
 }
@@ -506,7 +506,7 @@ func TestToEpisodeRefMultipleEnclosures(t *testing.T) {
 			{URL: "https://example.com/audio2.mp3"},
 		},
 	}
-	ref := toEpisodeRef(item, "Feed", "https://feed.com")
+	ref := transcript.EpisodeRefFromFeedItem(item, "Feed", "https://feed.com")
 	assert.Equal(t, "https://example.com/audio1.mp3", ref.EnclosureURL)
 }
 

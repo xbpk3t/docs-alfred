@@ -33,6 +33,18 @@ func TestParseWechatFile(t *testing.T) {
 	require.Equal(t, "wx-trade-1", records[0].SourceTradeNo)
 	require.Equal(t, int64(3550), records[0].AmountCents)
 	require.Equal(t, "2026-05", records[0].OccurredAt.Format("2006-01"))
+	require.Equal(t, "麦当劳", records[0].Counterparty)
+	require.Equal(t, "早餐", records[0].ItemName)
+	require.Equal(t, "支付成功", records[0].Status)
+	require.Equal(t, "支出", records[0].InOut)
+
+	require.Equal(t, model.SourceWechat, records[1].Source)
+	require.Equal(t, "wx-trade-2", records[1].SourceTradeNo)
+	require.Equal(t, int64(10000), records[1].AmountCents)
+	require.Equal(t, "朋友", records[1].Counterparty)
+	require.Empty(t, records[1].ItemName) // "/" in CSV is cleaned to empty
+	require.Equal(t, "支付成功", records[1].Status)
+	require.Equal(t, "收入", records[1].InOut)
 }
 
 func TestParseAlipayFile(t *testing.T) {
@@ -43,6 +55,17 @@ func TestParseAlipayFile(t *testing.T) {
 	require.Equal(t, "alipay_sample.csv", records[0].SourceFile)
 	require.Equal(t, "ali-trade-1", records[0].SourceTradeNo)
 	require.Equal(t, int64(4000), records[0].AmountCents)
+	require.Equal(t, "面馆", records[0].Counterparty)
+	require.Equal(t, "午餐", records[0].ItemName)
+	require.Equal(t, "交易成功", records[0].Status)
+	require.Equal(t, "支出", records[0].InOut)
+
+	require.Equal(t, "ali-trade-2", records[1].SourceTradeNo)
+	require.Equal(t, int64(100000), records[1].AmountCents)
+	require.Equal(t, "工资", records[1].Counterparty)
+	require.Equal(t, "工资", records[1].ItemName)
+	require.Equal(t, "交易成功", records[1].Status)
+	require.Equal(t, "收入", records[1].InOut)
 }
 
 func TestStableID(t *testing.T) {

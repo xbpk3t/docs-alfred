@@ -140,13 +140,15 @@ func TestParseInboxMarkdownLinksAndBareURLs(t *testing.T) {
 	entries, err := ParseInbox(path)
 
 	require.NoError(t, err)
-	require.Len(t, entries, 3)
+	require.Len(t, entries, 4)
 	assert.Equal(t, "https://t.co/abc", entries[0].URL)
 	assert.Equal(t, 0, entries[0].LineIndex)
-	assert.Equal(t, "https://x.com/user/status/1", entries[1].URL)
+	assert.Equal(t, "https://t.co/quoted", entries[1].URL)
 	assert.Equal(t, 1, entries[1].LineIndex)
-	assert.Equal(t, "https://example.com/post", entries[2].URL)
-	assert.Equal(t, 2, entries[2].LineIndex)
+	assert.Equal(t, "https://x.com/user/status/1", entries[2].URL)
+	assert.Equal(t, 1, entries[2].LineIndex)
+	assert.Equal(t, "https://example.com/post", entries[3].URL)
+	assert.Equal(t, 2, entries[3].LineIndex)
 }
 
 func TestParseInboxExtractsMultipleURLsFromOneLine(t *testing.T) {
@@ -164,7 +166,7 @@ func TestParseInboxExtractsMultipleURLsFromOneLine(t *testing.T) {
 	assert.Equal(t, 0, entries[1].LineIndex)
 }
 
-func TestParseInboxRejectsMalformedMarkdownURLCapture(t *testing.T) {
+func TestParseInboxExtractsURLsFromMalformedMarkdownURLCapture(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "inbox.md")
 	require.NoError(t, os.WriteFile(path, []byte(`- https://t.co/abc](https://x.com/user/status/1)
 `), 0o600))
@@ -172,7 +174,9 @@ func TestParseInboxRejectsMalformedMarkdownURLCapture(t *testing.T) {
 	entries, err := ParseInbox(path)
 
 	require.NoError(t, err)
-	require.Empty(t, entries)
+	require.Len(t, entries, 2)
+	assert.Equal(t, "https://t.co/abc", entries[0].URL)
+	assert.Equal(t, "https://x.com/user/status/1", entries[1].URL)
 }
 
 func TestFlushInboxKeepsUnhandledURLOnMultiURLLine(t *testing.T) {
@@ -720,4 +724,51 @@ func TestWriteManualReviewEntryFull(t *testing.T) {
 	assert.Contains(t, content, "Type: text")
 	assert.Contains(t, content, "overview")
 	assert.Contains(t, content, "Overview text")
+}
+
+// --- extractInboxLineURLRefs ---
+
+func TestExtractInboxLineURLRefsEmpty(t *testing.T) {
+	refs := extractInboxLineURLRefs("just text, no url")
+	assert.Empty(t, refs)
+}
+
+func TestExtractInboxLineURLRefsBareURL(t *testing.T) {
+	refs := extractInboxLineURLRefs("https://example.com/article")
+	require.Len(t, refs, 1)
+	assert.Equal(t, "https://example.com/article", refs[0].URL)
+}
+
+func TestExtractInboxLineURLRefsMarkdownLink(t *testing.T) {
+	refs := extractInboxLineURLRefs("[click here](https://example.com)")
+	require.Len(t, refs, 1)
+	assert.Equal(t, "https://example.com", refs[0].URL)
+}
+
+func TestExtractInboxLineURLRefsMixedBareAndMarkdown(t *testing.T) {
+	refs := extractInboxLineURLRefs("- [tweet](https://t.co/abc) and https://example.com/post")
+	require.Len(t, refs, 2)
+	assert.Equal(t, "https://t.co/abc", refs[0].URL)
+	assert.Equal(t, "https://example.com/post", refs[1].URL)
+}
+
+func TestExtractInboxLineURLRefsMalformedMarkdownExtractsURLs(t *testing.T) {
+	refs := extractInboxLineURLRefs("https://t.co/abc](https://x.com/user/status/1)")
+	require.Len(t, refs, 2)
+	assert.Equal(t, "https://t.co/abc", refs[0].URL)
+	assert.Equal(t, "https://x.com/user/status/1", refs[1].URL)
+}
+
+func TestExtractInboxLineURLRefsDedupFalsePreservesDuplicates(t *testing.T) {
+	refs := extractInboxLineURLRefs("https://example.com/a https://example.com/a")
+	require.Len(t, refs, 2)
+	assert.Equal(t, "https://example.com/a", refs[0].URL)
+	assert.Equal(t, "https://example.com/a", refs[1].URL)
+}
+
+func TestExtractInboxLineURLRefsBareAndMarkdownOrder(t *testing.T) {
+	refs := extractInboxLineURLRefs("https://example.com/a [link](https://example.com/b)")
+	require.Len(t, refs, 2)
+	assert.Equal(t, "https://example.com/a", refs[0].URL)
+	assert.Equal(t, "https://example.com/b", refs[1].URL)
 }

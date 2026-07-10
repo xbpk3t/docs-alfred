@@ -9,7 +9,6 @@ import (
 
 func TestExtractURLRefsMarkdownLinksWithTitles(t *testing.T) {
 	refs := ExtractURLRefs(`- [demo](https://example.com/a "title") https://example.com/b`, ExtractOptions{
-		Markdown:    true,
 		BareURLs:    true,
 		HTTPOnly:    true,
 		Normalize:   true,
@@ -18,7 +17,6 @@ func TestExtractURLRefsMarkdownLinksWithTitles(t *testing.T) {
 
 	require.Len(t, refs, 2)
 	require.Equal(t, "https://example.com/a", refs[0].URL)
-	require.Equal(t, 2, refs[0].Start)
 	require.Equal(t, "https://example.com/b", refs[1].URL)
 }
 
@@ -101,7 +99,7 @@ func TestExtractURLRefs_EmptyText(t *testing.T) {
 
 func TestExtractURLRefs_MarkdownNoMatch(t *testing.T) {
 	// A markdown-like text that doesn't match the URL pattern
-	refs := ExtractURLRefs(`[text](not-a-url)`, ExtractOptions{Markdown: true})
+	refs := ExtractURLRefs(`[text](not-a-url)`, ExtractOptions{BareURLs: true})
 	require.Empty(t, refs)
 }
 
@@ -306,7 +304,7 @@ func TestMaskRanges_EqualStart(t *testing.T) {
 func TestExtractURLRefs_MarkdownTranscriptOnlyFiltered(t *testing.T) {
 	// Markdown link to a non-transcript URL with TranscriptOnly
 	refs := ExtractURLRefs(`[link](https://example.com/page.html)`, ExtractOptions{
-		Markdown:       true,
+		BareURLs:       true,
 		TranscriptOnly: true,
 		HTTPOnly:       true,
 	})
@@ -315,7 +313,7 @@ func TestExtractURLRefs_MarkdownTranscriptOnlyFiltered(t *testing.T) {
 
 func TestExtractURLRefs_MarkdownTranscriptMatch(t *testing.T) {
 	refs := ExtractURLRefs(`[transcript](https://example.com/transcript.json)`, ExtractOptions{
-		Markdown:       true,
+		BareURLs:       true,
 		TranscriptOnly: true,
 		HTTPOnly:       true,
 	})

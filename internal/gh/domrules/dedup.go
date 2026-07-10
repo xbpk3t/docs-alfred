@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/go-viper/mapstructure/v2"
 	yaml "github.com/goccy/go-yaml"
 	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -182,7 +181,7 @@ func parseGhYAMLEntries(yf, targetDir string) ([]ghEntry, error) {
 		return nil, err
 	}
 
-	var items []map[string]any
+	var items []ghYAMLItem
 	if err := yaml.Unmarshal(data, &items); err != nil {
 		return nil, err
 	}
@@ -191,33 +190,26 @@ func parseGhYAMLEntries(yf, targetDir string) ([]ghEntry, error) {
 
 	var entries []ghEntry
 	for _, item := range items {
-		typeName, _ := item["type"].(string)
-		if typeName == "" {
+		if item.Type == "" {
 			continue
 		}
-
-		entries = appendGhURLEntries(entries, relFile, typeName, item)
+		for _, repo := range item.Repos {
+			if repo.URL != "" {
+				entries = append(entries, ghEntry{file: relFile, typeName: item.Type, relation: "repo", url: repo.URL})
+			}
+		}
 	}
 
 	return entries, nil
 }
 
-// appendGhURLEntries extracts 'repo' URLs from a parsed YAML item.
-func appendGhURLEntries(entries []ghEntry, relFile, typeName string, item map[string]any) []ghEntry {
-	// Check 'repo' array
-	if repos, ok := item["repo"].([]any); ok {
-		for _, r := range repos {
-			if repo, ok := r.(map[string]any); ok {
-				if u, ok := repo["url"].(string); ok && u != "" {
-					entries = append(entries, ghEntry{
-						file: relFile, typeName: typeName, relation: "repo", url: u,
-					})
-				}
-			}
-		}
-	}
+type ghYAMLItem struct {
+	Type  string       `yaml:"type"`
+	Repos []ghYAMLRepo `yaml:"repo"`
+}
 
-	return entries
+type ghYAMLRepo struct {
+	URL string `yaml:"url"`
 }
 
 // groupURLDuplicates groups gh entries by URL and returns a report of duplicates.
@@ -262,8 +254,7 @@ func parseDomainFiles(targetDir string) ([]parsedItem, error) {
 			continue
 		}
 
-		// Parse multi-document YAML using the generic parser
-		docs, err := parser.NewParser[[]map[string]any](data).ParseMulti()
+		docs, err := parser.NewParser[[]yamlItem](data).ParseMulti()
 		if err != nil {
 			continue
 		}
@@ -276,29 +267,27 @@ func parseDomainFiles(targetDir string) ([]parsedItem, error) {
 	return items, nil
 }
 
-// yamlItem is the exported-field struct used for mapstructure decoding.
 type yamlItem struct {
-	Name   string   `mapstructure:"name"`
-	Author string   `mapstructure:"author"`
-	URL    string   `mapstructure:"url"`
-	Tags   []string `mapstructure:"tags"`
-	Score  int      `mapstructure:"score"`
+	Name   string   `yaml:"name"`
+	Author string   `yaml:"author"`
+	URL    string   `yaml:"url"`
+	Tags   []string `yaml:"tags"`
+	Score  int      `yaml:"score"`
 }
 
-func parseYAMLDocItems(doc []map[string]any, fileName string) []parsedItem {
+func parseYAMLDocItems(doc []yamlItem, fileName string) []parsedItem {
 	var items []parsedItem
 	for _, item := range doc {
-		var yi yamlItem
-		if err := mapstructure.Decode(item, &yi); err != nil || yi.Name == "" {
+		if item.Name == "" {
 			continue
 		}
 		items = append(items, parsedItem{
 			file:   fileName,
-			name:   yi.Name,
-			author: yi.Author,
-			score:  yi.Score,
-			tags:   yi.Tags,
-			url:    yi.URL,
+			name:   item.Name,
+			author: item.Author,
+			score:  item.Score,
+			tags:   item.Tags,
+			url:    item.URL,
 		})
 	}
 

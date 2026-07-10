@@ -434,7 +434,7 @@ func processEpisode(
 	provider transcript.Provider,
 	feedTitle, feedURL string,
 ) trnsIndexEntry {
-	epRef := toEpisodeRef(item, feedTitle, feedURL)
+	epRef := transcript.EpisodeRefFromFeedItem(item, feedTitle, feedURL)
 	key := cache.Key(feedURL, epRef.GUID, epRef.URL, epRef.Title)
 
 	// Check cache
@@ -506,47 +506,6 @@ func processEpisode(
 		Status:         statusFound,
 		TranscriptPath: cache.CacheFilePath(key),
 	}
-}
-
-func toEpisodeRef(item *gofeed.Item, feedTitle, feedURL string) transcript.EpisodeRef {
-	ref := transcript.EpisodeRef{
-		Title:       item.Title,
-		URL:         item.Link,
-		GUID:        item.GUID,
-		Description: item.Description,
-		Content:     item.Content,
-		FeedTitle:   feedTitle,
-		FeedURL:     feedURL,
-	}
-
-	// Get enclosure URL
-	if len(item.Enclosures) > 0 {
-		ref.EnclosureURL = item.Enclosures[0].URL
-	}
-
-	// Extract transcript links from RSS extensions (podcast:transcript)
-	for ns, extMap := range item.Extensions {
-		nsLower := strings.ToLower(ns)
-		if !strings.Contains(nsLower, "podcast") && !strings.Contains(nsLower, "transcript") {
-			continue
-		}
-		for tag, exts := range extMap {
-			if !strings.Contains(strings.ToLower(tag), "transcript") {
-				continue
-			}
-			for _, e := range exts {
-				link := transcript.TranscriptLink{
-					URL:  e.Attrs["url"],
-					Type: e.Attrs["type"],
-				}
-				if link.URL != "" {
-					ref.TranscriptLinks = append(ref.TranscriptLinks, link)
-				}
-			}
-		}
-	}
-
-	return ref
 }
 
 // -- Helpers --

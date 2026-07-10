@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/opencli"
@@ -246,26 +247,33 @@ func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *
 // and returns the value of the `saved:` field (the absolute path to the saved
 // markdown file).
 func extractWeixinSavedPath(yamlOutput string) string {
-	for line := range strings.SplitSeq(yamlOutput, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "saved:") {
-			if path := extractSavedPathFromLine(line); path != "" {
-				return path
-			}
+	var entries []weixinDownloadEntry
+	if err := yaml.Unmarshal([]byte(yamlOutput), &entries); err == nil {
+		if path := firstSavedPath(entries); path != "" {
+			return path
 		}
+	}
+
+	var entry weixinDownloadEntry
+	if err := yaml.Unmarshal([]byte(yamlOutput), &entry); err == nil {
+		return strings.TrimSpace(entry.Saved)
 	}
 
 	return ""
 }
 
-// extractSavedPathFromLine extracts the saved file path from a YAML line
-// containing the "saved:" field. Returns empty string if no path found.
-func extractSavedPathFromLine(line string) string {
-	_, after, ok := strings.Cut(line, "saved: ")
-	if !ok {
-		return ""
+type weixinDownloadEntry struct {
+	Saved string `yaml:"saved"`
+}
+
+func firstSavedPath(entries []weixinDownloadEntry) string {
+	for _, entry := range entries {
+		if path := strings.TrimSpace(entry.Saved); path != "" {
+			return path
+		}
 	}
 
-	return strings.TrimSpace(after)
+	return ""
 }
 
 func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extraArgs []string) *ContentFetchResult {
