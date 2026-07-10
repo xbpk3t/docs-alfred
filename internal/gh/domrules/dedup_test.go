@@ -332,9 +332,9 @@ func TestParseGhYAMLEntries_InvalidYAML(t *testing.T) {
 }
 
 func TestParseYAMLDocItems_EmptyName(t *testing.T) {
-	doc := []map[string]any{
-		{"name": "", "author": "A"},
-		{"author": "B"}, // no name key
+	doc := []yamlItem{
+		{Author: "A"},
+		{Author: "B"},
 	}
 	items := parseYAMLDocItems(doc, "test.yml")
 	assert.Empty(t, items)

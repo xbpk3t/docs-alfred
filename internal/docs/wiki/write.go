@@ -504,12 +504,7 @@ func extractInboxLineURLs(line string) []string {
 }
 
 func extractInboxLineURLRefs(line string) []urlutil.URLRef {
-	if lineHasRawMalformedURL(line) {
-		return nil
-	}
-
 	return urlutil.ExtractURLRefs(line, urlutil.ExtractOptions{
-		Markdown:    true,
 		BareURLs:    true,
 		HTTPOnly:    true,
 		Normalize:   true,

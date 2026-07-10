@@ -512,3 +512,9 @@ func TestLineHasRawMalformedURLLinkInMiddle(t *testing.T) {
 	// URL in middle of line that's not a malformed capture
 	assert.False(t, lineHasRawMalformedURL("Check https://example.com for more"))
 }
+
+func TestLineHasRawMalformedURLDetected(t *testing.T) {
+	// Bare URL followed by ]( -> malformed markdown capture
+	assert.True(t, lineHasRawMalformedURL("https://t.co/abc](https://x.com/user/1)"))
+	assert.True(t, lineHasRawMalformedURL("http://example.com](other)"))
+}
