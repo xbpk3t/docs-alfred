@@ -41,6 +41,7 @@ type ExportInput struct {
 	Agent     Agent `validate:"required|in:cc,codex"`
 	WikiRoot  string
 	OutputDir string
+	ProjectDir string // Resolved project directory; set once by CLI layer.
 	SessionID string // Explicit session/thread ID; defaults to the selected agent env var.
 	DryRun    bool
 	Verbose   bool
@@ -76,7 +77,7 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 		return nil, err
 	}
 
-	resolved, err := ResolveSession(input.Agent, input.SessionID)
+	resolved, err := ResolveSession(input.Agent, input.SessionID, input.ProjectDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve session: %w", err)
 	}
@@ -141,9 +142,7 @@ func validateExportInput(input *ExportInput) error {
 	}
 
 	wikiRoot := input.WikiRoot
-	if !filepath.IsAbs(wikiRoot) {
-		wikiRoot = filepath.Join(getProjectDir(), wikiRoot)
-	}
+	// WikiRoot is always absolute — canonicalized at config-load time.
 
 	if _, err := os.Stat(wikiRoot); os.IsNotExist(err) {
 		return fmt.Errorf("wiki-root does not exist: %s", input.WikiRoot)
@@ -347,7 +346,14 @@ func extractUserMessages(messages []session.Message) []string {
 }
 
 // selectMessages selects head messages from the beginning and tail messages from the end.
+// If head+tail exceeds len(messages), returns all messages without duplication.
 func selectMessages(messages []string, head, tail int) []string {
+	if head < 0 {
+		head = 0
+	}
+	if tail < 0 {
+		tail = 0
+	}
 	if len(messages) <= head+tail {
 		return messages
 	}
@@ -462,15 +468,14 @@ func determineOutputPath(input *ExportInput, title, topicPath string) string {
 	filename := fmt.Sprintf("%s-%s.md", date, title)
 
 	// Determine base directory
+	// WikiRoot is always absolute — canonicalized at config-load time.
 	baseDir := input.WikiRoot
 	if input.OutputDir != "" {
 		baseDir = input.OutputDir
-	}
-
-	// If relative path, make it relative to project root
-	if !filepath.IsAbs(baseDir) {
-		projectDir := getProjectDir()
-		baseDir = filepath.Join(projectDir, baseDir)
+		// Only OutputDir may be relative; resolve it against project root.
+		if !filepath.IsAbs(baseDir) {
+			baseDir = filepath.Join(input.ProjectDir, baseDir)
+		}
 	}
 
 	// Add topic path if available

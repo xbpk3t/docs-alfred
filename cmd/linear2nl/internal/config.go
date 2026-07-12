@@ -38,6 +38,8 @@ type MorningConfig struct {
 }
 
 // AIConfig holds AI summary configuration.
+// Streaming is not exposed here — pkg/ai.DefaultConfig enables it by default
+// so all linear2nl AI calls bypass Cloudflare 524 upstream timeouts.
 type AIConfig struct {
 	Model    string        `default:"deepseek-v4-flash" koanf:"model"`
 	Language string        `default:"zh"                koanf:"language"`

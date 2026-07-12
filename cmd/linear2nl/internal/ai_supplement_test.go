@@ -3,6 +3,7 @@ package internal
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,7 +20,6 @@ func newMockOpenAIServer(content string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
 			http.NotFound(w, r)
-
 			return
 		}
 
@@ -28,7 +28,45 @@ func newMockOpenAIServer(content string) *httptest.Server {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"error": map[string]any{"message": "mock error", "type": "server_error"},
 			})
+			return
+		}
 
+		// Detect streaming by reading request body
+		isStream := false
+		var reqBody map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
+			if s, ok := reqBody["stream"].(bool); ok {
+				isStream = s
+			}
+		}
+
+		if isStream {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Connection", "keep-alive")
+			flusher, _ := w.(http.Flusher)
+
+			delta := map[string]any{
+				"choices": []map[string]any{{
+					"index":         0,
+					"delta":         map[string]any{"content": content},
+					"finish_reason": nil,
+				}},
+			}
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", mustJSON(delta))
+			if flusher != nil {
+				flusher.Flush()
+			}
+
+			finish := map[string]any{
+				"choices": []map[string]any{{
+					"index":         0,
+					"delta":         map[string]any{},
+					"finish_reason": "stop",
+				}},
+			}
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", mustJSON(finish))
+			_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 			return
 		}
 
@@ -53,6 +91,11 @@ func newMockOpenAIServer(content string) *httptest.Server {
 			},
 		})
 	}))
+}
+
+func mustJSON(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
 }
 
 // --- chat() method tests ---

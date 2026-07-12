@@ -6,11 +6,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/samber/mo"
 	_ "modernc.org/sqlite"
 )
+
+// projectsBase returns $HOME/.claude/projects.
+func projectsBase() string {
+	return filepath.Join(os.Getenv("HOME"), ".claude", "projects")
+}
 
 const (
 	AgentCC    Agent = "cc"
@@ -22,6 +28,15 @@ const (
 	claudeSessionEnv = "CLAUDE_CODE_SESSION_ID"
 	codexThreadEnv   = "CODEX_THREAD_ID"
 )
+
+// maxScanDisplayMatches is the maximum number of matching paths shown
+// in the error message when findSessionByScan finds multiple matches.
+const maxScanDisplayMatches = 10
+
+// errSessionNotFound is returned by findSessionByScan when no project
+// directory contains the requested session file. It lets callers
+// distinguish "not found anywhere" from other scan errors.
+var errSessionNotFound = errors.New("session not found")
 
 // Agent identifies the coding agent runtime that owns a session transcript.
 type Agent string
@@ -74,10 +89,12 @@ func envVar(name string) mo.Option[string] {
 }
 
 // ResolveSession resolves an agent session/thread ID to a transcript JSONL file.
-func ResolveSession(agent Agent, sessionIDOverride string) (SessionRef, error) {
+// projectDir is the resolved project directory (from GetProjectDir), called once
+// by the CLI layer and threaded through to avoid multiple os.Getwd calls.
+func ResolveSession(agent Agent, sessionIDOverride, projectDir string) (SessionRef, error) {
 	switch agent {
 	case AgentCC:
-		return resolveClaudeSession(sessionIDOverride)
+		return resolveClaudeSession(sessionIDOverride, projectDir)
 	case AgentCodex:
 		return resolveCodexSession(sessionIDOverride)
 	default:
@@ -85,8 +102,7 @@ func ResolveSession(agent Agent, sessionIDOverride string) (SessionRef, error) {
 	}
 }
 
-func resolveClaudeSession(sessionIDOverride string) (SessionRef, error) {
-	projectDir := getProjectDir()
+func resolveClaudeSession(sessionIDOverride, projectDir string) (SessionRef, error) {
 	sessionID, err := resolveSessionID(sessionIDOverride, claudeSessionEnv)
 	if err != nil {
 		return SessionRef{}, err
@@ -95,7 +111,18 @@ func resolveClaudeSession(sessionIDOverride string) (SessionRef, error) {
 	pathKey := strings.ReplaceAll(projectDir, "/", "-")
 	transcriptPath := filepath.Join(os.Getenv("HOME"), ".claude", "projects", pathKey, sessionID+".jsonl")
 	if err := requireFile(transcriptPath); err != nil {
-		return SessionRef{}, fmt.Errorf("cc transcript %q: %w", transcriptPath, err)
+		// Direct path failed - try scanning all project directories.
+		found, scanErr := findSessionByScan(sessionID)
+		if scanErr != nil {
+			if errors.Is(scanErr, errSessionNotFound) {
+				// Session genuinely not found anywhere - original
+				// direct-path error is more informative.
+				return SessionRef{}, fmt.Errorf("cc transcript %q: %w", transcriptPath, err)
+			}
+			// Multiple matches or structural scan error - surface that.
+			return SessionRef{}, fmt.Errorf("%w", scanErr)
+		}
+		transcriptPath = found
 	}
 
 	return SessionRef{
@@ -112,7 +139,7 @@ func resolveCodexSession(sessionIDOverride string) (SessionRef, error) {
 		return SessionRef{}, err
 	}
 
-	statePath := codexStatePath()
+	statePath := discoverCodexStatePath()
 	rolloutPath, err := lookupCodexRolloutPath(statePath, sessionID)
 	if err != nil {
 		return SessionRef{}, err
@@ -179,12 +206,92 @@ func requireFile(path string) error {
 	return nil
 }
 
-func codexStatePath() string {
-	return filepath.Join(os.Getenv("HOME"), ".codex", "state_5.sqlite")
+// findSessionByScan scans all project directories under ~/.claude/projects/
+// for a file named <sessionID>.jsonl. Returns the path if exactly one match
+// is found. Errors if zero or multiple matches exist.
+func findSessionByScan(sessionID string) (string, error) {
+	base := projectsBase()
+
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return "", fmt.Errorf("scan %s: %w", base, err)
+	}
+
+	var matches []string
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
+		candidate := filepath.Join(base, entry.Name(), sessionID+".jsonl")
+		if err := requireFile(candidate); err == nil {
+			matches = append(matches, candidate)
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("session %q not found in %s: %w", sessionID, base, errSessionNotFound)
+	case 1:
+		return matches[0], nil
+	default:
+		display := matches
+		if len(display) > maxScanDisplayMatches {
+			display = display[:maxScanDisplayMatches]
+		}
+		return "", fmt.Errorf("session %q found in multiple project directories:\n%s\n(%d total matches)",
+			sessionID, strings.Join(display, "\n"), len(matches))
+	}
 }
 
-// getProjectDir returns the project directory.
-func getProjectDir() string {
+// discoverCodexStatePath finds the most recent Codex state database by scanning
+// ~/.codex/ for state_*.sqlite files. Falls back to state_5.sqlite if none found.
+func discoverCodexStatePath() string {
+	base := filepath.Join(os.Getenv("HOME"), ".codex")
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return filepath.Join(base, "state_5.sqlite")
+	}
+
+	type candidate struct {
+		info os.FileInfo
+		path string
+	}
+	var candidates []candidate
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), "state_") || !strings.HasSuffix(e.Name(), ".sqlite") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		candidates = append(candidates, candidate{
+				info: info,
+				path: filepath.Join(base, e.Name()),
+			})
+	}
+
+	if len(candidates) == 0 {
+		return filepath.Join(base, "state_5.sqlite")
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		ti := candidates[i].info.ModTime()
+		tj := candidates[j].info.ModTime()
+		if !ti.Equal(tj) {
+			return ti.After(tj)
+		}
+		return candidates[i].path > candidates[j].path // tie-break by name
+	})
+
+	return candidates[0].path
+}
+
+// GetProjectDir returns the project directory, used for session resolution
+// and wiki-root path canonicalization. First checks CLAUDE_PROJECT_DIR env var,
+// falls back to the current working directory.
+func GetProjectDir() string {
 	if projectDir := os.Getenv("CLAUDE_PROJECT_DIR"); projectDir != "" {
 		return projectDir
 	}

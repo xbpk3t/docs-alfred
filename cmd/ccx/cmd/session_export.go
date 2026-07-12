@@ -31,6 +31,8 @@ This command:
 3. AI classifies content to determine topic path
 4. Writes to wiki/<topic>/YYYY-MM-DD-semantic-title.md`,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			projectDir := internal.GetProjectDir()
+
 			cfg, err := loadExportConfig(flags.config, exportConfigOverrides{
 				WikiRoot: flags.wikiRoot,
 			})
@@ -62,6 +64,7 @@ This command:
 				Verbose:   flags.verbose,
 				WikiRoot:  cfg.WikiRoot,
 				OutputDir: flags.outputDir,
+				ProjectDir: projectDir,
 				AIConfig:  buildAIConfig(cfg),
 			}
 

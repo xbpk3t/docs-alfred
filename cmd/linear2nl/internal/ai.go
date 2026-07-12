@@ -40,6 +40,8 @@ type AIProvider struct {
 
 // NewAIProvider creates an AIProvider from config.
 func NewAIProvider(cfg AIConfig) *AIProvider {
+	// Streaming inherits DefaultConfig (true) via ConfigWithOverrides — do not
+	// overwrite with a zero-value bool (would re-enable CF 524).
 	clientCfg := ai.ConfigWithOverrides(cfg.APIKey, cfg.BaseURL, cfg.Model)
 	clientCfg.Timeout = cfg.Timeout
 	lang := cfg.Language

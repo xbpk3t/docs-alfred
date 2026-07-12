@@ -24,7 +24,9 @@ func TestLoadExportConfigPrefersFlagsThenEnvThenYAML(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Equal(t, "flag-wiki", got.WikiRoot, "WikiRoot should use flag override")
+	// WikiRoot is canonicalized to absolute path; verify ending.
+	require.True(t, filepath.IsAbs(got.WikiRoot), "WikiRoot should be canonicalized to absolute")
+	require.Equal(t, "flag-wiki", filepath.Base(got.WikiRoot), "WikiRoot should use flag override")
 	require.Equal(t, "env-key", got.AI.APIKey, "APIKey should use env value")
 	require.Equal(t, "https://flag.example/v1", got.AI.BaseURL, "BaseURL should use flag override")
 	require.Equal(t, "flag-model", got.AI.Model, "Model should use flag override")
@@ -38,7 +40,9 @@ func TestLoadExportConfigWithoutFileUsesEnvDefaults(t *testing.T) {
 
 	got, err := loadExportConfig("", exportConfigOverrides{})
 	require.NoError(t, err)
-	require.Equal(t, "env-wiki", got.WikiRoot, "WikiRoot should use env value")
+	// WikiRoot is canonicalized to absolute path; verify ending.
+	require.True(t, filepath.IsAbs(got.WikiRoot), "WikiRoot should be canonicalized to absolute")
+	require.Equal(t, "env-wiki", filepath.Base(got.WikiRoot), "WikiRoot should use env value")
 	require.Equal(t, "env-key", got.AI.APIKey)
 	require.Equal(t, "https://env.example/v1", got.AI.BaseURL)
 	require.Equal(t, "env-model", got.AI.Model)

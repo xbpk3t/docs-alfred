@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +24,13 @@ func TestDefaultConfig_Defaults(t *testing.T) {
 	assert.Empty(t, cfg.APIKey, "no env var → empty key")
 	assert.Equal(t, "https://api.lucc.dev/v1", cfg.BaseURL, "default base URL")
 	assert.Equal(t, "deepseek-v4-flash", cfg.Model, "default model")
+	assert.True(t, cfg.Streaming, "streaming on by default to bypass CF 524")
+}
+
+func TestDefaultConfig_StreamingTrue(t *testing.T) {
+	cfg := DefaultConfig()
+	assert.True(t, cfg.Streaming)
+	assert.True(t, ConfigWithOverrides("k", "https://x/v1", "m").Streaming)
 }
 
 func TestDefaultConfig_WithEnv(t *testing.T) {
@@ -77,22 +85,22 @@ func TestChat_Content(t *testing.T) {
 	assert.Equal(t, "hello", got)
 }
 
-func TestChat_ReasoningContentFallback(t *testing.T) {
+func TestChat_ReasoningContentNotFalledBack(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"reasoning_content":"reasoning"}}]}`))
 	}))
 	defer server.Close()
 
-	got, err := Chat(&ClientConfig{
+	_, err := Chat(&ClientConfig{
 		APIKey:  "sk-test",
 		BaseURL: server.URL,
 		Model:   "test-model",
 		Timeout: time.Second,
 	}, []Message{{Role: RoleUser, Content: "hello"}})
 
-	require.NoError(t, err)
-	assert.Equal(t, "reasoning", got)
+	// reasoning_content alone is not the response — it's chain-of-thought.
+	require.Error(t, err)
 }
 
 func TestChat_HTTPError(t *testing.T) {
@@ -267,11 +275,11 @@ func TestExtractContentAndValidate_ValidContent(t *testing.T) {
 }
 
 func TestExtractContentAndValidate_ReasoningOnly(t *testing.T) {
-	content, err := extractContentAndValidate(&llms.ContentResponse{
+	_, err := extractContentAndValidate(&llms.ContentResponse{
 		Choices: []*llms.ContentChoice{{Content: "", ReasoningContent: "thinking"}},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, "thinking", content)
+	// reasoning_content is not the response — return empty error.
+	require.Error(t, err)
 }
 
 func TestExtractChoiceContent_ContentPreferred(t *testing.T) {
@@ -363,4 +371,117 @@ func TestChat_EmptyBothContentAndReasoning(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, "empty response from AI model", err.Error())
+}
+
+// writeSSE writes a minimal OpenAI-compatible chat completion stream.
+func writeSSE(w http.ResponseWriter, deltas ...map[string]any) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	flusher, _ := w.(http.Flusher)
+	for _, delta := range deltas {
+		payload, _ := json.Marshal(map[string]any{
+			"choices": []map[string]any{{
+				"index":         0,
+				"delta":         delta,
+				"finish_reason": nil,
+			}},
+		})
+		_, _ = w.Write([]byte("data: "))
+		_, _ = w.Write(payload)
+		_, _ = w.Write([]byte("\n\n"))
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+	finish, _ := json.Marshal(map[string]any{
+		"choices": []map[string]any{{
+			"index":         0,
+			"delta":         map[string]any{},
+			"finish_reason": "stop",
+		}},
+	})
+	_, _ = w.Write([]byte("data: "))
+	_, _ = w.Write(finish)
+	_, _ = w.Write([]byte("\n\ndata: [DONE]\n\n"))
+	if flusher != nil {
+		flusher.Flush()
+	}
+}
+
+func TestChat_Streaming_SendsStreamTrue(t *testing.T) {
+	var sawStream bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		if s, ok := body["stream"].(bool); ok && s {
+			sawStream = true
+		}
+		writeSSE(w, map[string]any{"content": "streamed"})
+	}))
+	defer server.Close()
+
+	got, err := Chat(&ClientConfig{
+		APIKey:    "sk-test",
+		BaseURL:   server.URL,
+		Model:     "test-model",
+		Timeout:   time.Second,
+		Streaming: true,
+	}, []Message{{Role: RoleUser, Content: "hello"}})
+
+	require.NoError(t, err)
+	assert.True(t, sawStream, "request must set stream=true")
+	assert.Equal(t, "streamed", got)
+}
+
+func TestChat_Streaming_ReasoningThenContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeSSE(w,
+			map[string]any{"reasoning_content": "thinking hard"},
+			map[string]any{"content": `{"ok":true}`},
+		)
+	}))
+	defer server.Close()
+
+	got, err := Chat(&ClientConfig{
+		APIKey:    "sk-test",
+		BaseURL:   server.URL,
+		Model:     "test-model",
+		Timeout:   time.Second,
+		Streaming: true,
+	}, []Message{{Role: RoleUser, Content: "hello"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, `{"ok":true}`, got, "only content is returned; reasoning is ignored")
+}
+
+func TestChatContext_NoDeadline_GetsDefaultTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		writeSSE(w, map[string]any{"content": "late"})
+	}))
+	defer server.Close()
+
+	// Background ctx has no deadline; ensureDeadline must apply cfg.Timeout.
+	_, err := ChatContext(context.Background(), &ClientConfig{
+		APIKey:    "sk-test",
+		BaseURL:   server.URL,
+		Model:     "test-model",
+		Timeout:   50 * time.Millisecond,
+		Streaming: true,
+	}, []Message{{Role: RoleUser, Content: "hello"}})
+
+	require.Error(t, err, "short timeout must cancel hung streaming call")
+}
+
+func TestEnsureDeadline_PreservesExistingDeadline(t *testing.T) {
+	parent, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	got, gotCancel := ensureDeadline(parent, 50*time.Millisecond)
+	defer gotCancel()
+
+	parentDL, ok := parent.Deadline()
+	require.True(t, ok)
+	gotDL, ok := got.Deadline()
+	require.True(t, ok)
+	assert.Equal(t, parentDL, gotDL, "must not shrink an existing deadline")
 }
