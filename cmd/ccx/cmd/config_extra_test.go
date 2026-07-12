@@ -196,7 +196,10 @@ func TestLoadExportConfig_EmptyPathUsesDefaults(t *testing.T) {
 
 	cfg, err := loadExportConfig("", exportConfigOverrides{})
 	require.NoError(t, err)
-	require.Equal(t, "wiki", cfg.WikiRoot)
+
+	// WikiRoot is canonicalized to absolute path at config-load time.
+	require.True(t, filepath.IsAbs(cfg.WikiRoot), "WikiRoot should be canonicalized to absolute")
+	require.Equal(t, "wiki", filepath.Base(cfg.WikiRoot))
 	require.Equal(t, "https://api.lucc.dev/v1", cfg.AI.BaseURL)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
 }
@@ -213,6 +216,9 @@ func TestLoadExportConfig_OverridePartial(t *testing.T) {
 		WikiRoot: "override-wiki",
 	})
 	require.NoError(t, err)
-	require.Equal(t, "override-wiki", cfg.WikiRoot, "flag override should take precedence")
+
+	// WikiRoot is canonicalized to absolute path at config-load time.
+	require.True(t, filepath.IsAbs(cfg.WikiRoot), "WikiRoot should be canonicalized to absolute")
+	require.Equal(t, "override-wiki", filepath.Base(cfg.WikiRoot), "flag override should take precedence")
 	require.Equal(t, "yaml-model", cfg.AI.Model, "YAML value should be preserved for non-overridden fields")
 }

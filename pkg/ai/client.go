@@ -12,9 +12,10 @@ import (
 	"github.com/tmc/langchaingo/llms/openai"
 )
 
-// DefaultAITimeout is the default HTTP timeout for AI chat requests.
-// Kept at 45s — fast-fail on slow models so retries don't blow the per-URL budget.
-const DefaultAITimeout = 45 * time.Second
+// DefaultAITimeout is the fallback call deadline when no Timeout is configured.
+// 60s is generous enough for short prompts (linear2nl, rss2nl) without making
+// hangs unbearable. Wiki digest uses its own perURLTimeout ctx; ccx sets 200s.
+const DefaultAITimeout = 60 * time.Second
 
 // Role constants for chat messages.
 const (
@@ -28,8 +29,9 @@ type ClientConfig struct {
 	APIKey      string
 	BaseURL     string
 	Model       string
-	Timeout     time.Duration // HTTP client timeout; 0 uses default 3 min
-	Temperature float64       // Sampling temperature; 0 uses API default
+	Timeout     time.Duration // call deadline; 0 uses DefaultAITimeout
+	Temperature float64       // sampling temperature; 0 uses API default
+	Streaming   bool          // SSE streaming (bypasses Cloudflare 524 timeout)
 }
 
 // Message represents a chat message.
@@ -59,7 +61,7 @@ type ChatResponse struct {
 
 // DefaultConfig creates a client config from environment variables.
 // LLM_AxonHub is a fallback API key (same as TS behavior), NOT a model name.
-// Model and BaseURL can be overridden via ConfigOpts or YAML config.
+// Streaming is enabled by default — it bypasses Cloudflare 524 upstream timeouts.
 func DefaultConfig() *ClientConfig {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
@@ -67,9 +69,10 @@ func DefaultConfig() *ClientConfig {
 	}
 
 	cfg := &ClientConfig{
-		APIKey:  apiKey,
-		BaseURL: os.Getenv("OPENAI_BASE_URL"),
-		Model:   os.Getenv("LLM_MODEL"),
+		APIKey:    apiKey,
+		BaseURL:   os.Getenv("OPENAI_BASE_URL"),
+		Model:     os.Getenv("LLM_MODEL"),
+		Streaming: true,
 	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = "https://api.lucc.dev/v1"
@@ -111,16 +114,22 @@ func ChatContext(ctx context.Context, cfg *ClientConfig, messages []Message) (st
 		return "", errors.New("OPENAI_API_KEY not set")
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = DefaultAITimeout
+	timeout := resolveTimeout(cfg.Timeout)
+	ctx, cancel := ensureDeadline(ctx, timeout)
+	defer cancel()
+
+	// Streaming uses http.Client with no timeout — the ctx deadline governs
+	// lifetime. Non-streaming sets the HTTP timeout to the resolved value.
+	httpTimeout := timeout
+	if cfg.Streaming {
+		httpTimeout = 0
 	}
 
 	model, err := openai.New(
 		openai.WithToken(cfg.APIKey),
 		openai.WithBaseURL(cfg.BaseURL),
 		openai.WithModel(cfg.Model),
-		openai.WithHTTPClient(&http.Client{Timeout: timeout}),
+		openai.WithHTTPClient(&http.Client{Timeout: httpTimeout}),
 	)
 	if err != nil {
 		return "", fmt.Errorf("create AI client: %w", err)
@@ -133,6 +142,15 @@ func ChatContext(ctx context.Context, cfg *ClientConfig, messages []Message) (st
 	if cfg.Temperature > 0 {
 		callOptions = append(callOptions, llms.WithTemperature(cfg.Temperature))
 	}
+	if cfg.Streaming {
+		// Streaming bypasses Cloudflare's ~100s upstream timeout.
+		// A no-op StreamingFunc tells langchaingo to set stream=true;
+		// combineStreamingChatResponse collects both content and
+		// reasoning_content deltas into the final response.
+		callOptions = append(callOptions, llms.WithStreamingFunc(func(_ context.Context, _ []byte) error {
+			return nil
+		}))
+	}
 
 	resp, err := model.GenerateContent(ctx, toLLMSMessages(messages), callOptions...)
 	if err != nil {
@@ -144,6 +162,24 @@ func ChatContext(ctx context.Context, cfg *ClientConfig, messages []Message) (st
 	}
 
 	return extractContentAndValidate(resp)
+}
+
+// resolveTimeout resolves cfg.Timeout to a concrete duration.
+func resolveTimeout(t time.Duration) time.Duration {
+	if t > 0 {
+		return t
+	}
+	return DefaultAITimeout
+}
+
+// ensureDeadline wraps ctx with a timeout only when ctx has none.
+// This prevents hangs when streaming is on and the caller uses
+// context.Background() without a deadline. Caller must defer cancel().
+func ensureDeadline(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, d)
 }
 
 // extractContentAndValidate validates the AI response and returns the content.
@@ -160,12 +196,12 @@ func extractContentAndValidate(resp *llms.ContentResponse) (string, error) {
 	return content, nil
 }
 
+// extractChoiceContent returns the model's final response content.
+// reasoning_content is the model's internal thinking and MUST NOT be used
+// as the response — it's not structured output, it's the chain-of-thought.
 func extractChoiceContent(choice *llms.ContentChoice) string {
 	if choice.Content != "" {
 		return choice.Content
-	}
-	if choice.ReasoningContent != "" {
-		return choice.ReasoningContent
 	}
 
 	return ""

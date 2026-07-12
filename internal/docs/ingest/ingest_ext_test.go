@@ -250,15 +250,13 @@ func TestResolveInboxConfigDefaults(t *testing.T) {
 	ic := resolveInboxConfig(cfg)
 	assert.Equal(t, 5, ic.concurrency)
 	assert.Equal(t, 3*time.Minute, ic.perURLTimeout)
-	assert.Equal(t, uint(3), ic.maxRetries)
 }
 
 func TestResolveInboxConfigExplicit(t *testing.T) {
-	cfg := &Config{Wiki: WikiConfig{Concurrency: 10, PerURLTimeout: 120, MaxRetries: 5}}
+	cfg := &Config{Wiki: WikiConfig{Concurrency: 10, PerURLTimeout: 120}}
 	ic := resolveInboxConfig(cfg)
 	assert.Equal(t, 10, ic.concurrency)
 	assert.Equal(t, 120*time.Second, ic.perURLTimeout)
-	assert.Equal(t, uint(5), ic.maxRetries)
 }
 
 // --- requireDir / requireFile ---
@@ -315,6 +313,7 @@ func TestNewAIConfig(t *testing.T) {
 	assert.Equal(t, "https://api.example.com/v1", ac.BaseURL)
 	assert.Equal(t, "model", ac.Model)
 	assert.Equal(t, 0.5, ac.Temperature)
+	assert.True(t, ac.Streaming, "inherits DefaultConfig streaming even without YAML field")
 }
 
 // --- Error types ---
@@ -739,7 +738,7 @@ func TestPrepareInboxEntryFetchFailureError(t *testing.T) {
 	}
 
 	entry := wikisvc.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
-	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second, maxRetries: 1}
+	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second}
 	result := prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg)
 	assert.Equal(t, pendingFetchFailure, result.Kind)
 	assert.Equal(t, wikisvc.FailureResolve, result.FailureType)
@@ -754,7 +753,7 @@ func TestPrepareInboxEntryClassifyRetryError(t *testing.T) {
 	// No classifier result → nil → classifyRetryError
 
 	entry := wikisvc.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
-	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second, maxRetries: 1}
+	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second}
 	result := prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg)
 	assert.Equal(t, pendingSummary, result.Kind)
 	require.NotNil(t, result.Item)

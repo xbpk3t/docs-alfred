@@ -6,9 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/avast/retry-go/v4"
 	"golang.org/x/sync/errgroup"
 
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
@@ -97,39 +95,18 @@ func prepareInboxEntry(
 		return pendingExtractFailureWrite(item, "video content too short (likely no transcript)")
 	}
 
-	// Retry only the classify step — fetch result is cached from above.
-	var result pendingURLWrite
-	err := retry.Do(
-		func() error {
-			classifyResult, classifyErr := classifyURLOnly(urlCtx, deps, entry.URL, fetchResult)
-			if classifyErr == nil {
-				result = classifyResult
-			}
-
-			return classifyErr
-		},
-		retry.Context(urlCtx),
-		retry.Attempts(inboxCfg.maxRetries),
-		retry.Delay(20*time.Second),
-		retry.DelayType(retry.BackOffDelay),
-		retry.LastErrorOnly(true),
-		retry.RetryIf(func(err error) bool {
-			var classifyErr *classifyRetryError
-
-			return errors.As(err, &classifyErr)
-		}),
-		retry.OnRetry(func(n uint, retryErr error) {
-			slog.Warn("Retrying wiki classify", "url", entry.URL, "attempt", n+1, "error", retryErr)
-		}),
-	)
-	if err != nil {
-		var classifyErr *classifyRetryError
-		if errors.As(err, &classifyErr) {
-			// Content was fetched but AI classify failed (timeout / rate limit).
-			// Route to uncat.md with fetched content instead of discarding it.
+	// Classify using pre-fetched content. Outer retry removed (streaming
+	// bypasses CF 524 timeout, so transient errors are rare). Inner retries
+	// in classifyOnly handle AI call failures.
+	result, classifyErr := classifyURLOnly(urlCtx, deps, entry.URL, fetchResult)
+	if classifyErr != nil {
+		var cerr *classifyRetryError
+		if errors.As(classifyErr, &cerr) {
+			// Content was fetched but AI classify failed (transient error).
+			// Route to uncat.md with fetched content.
 			return pendingURLWrite{
 				URL:  entry.URL,
-				Kind: pendingSummary, // via writeSummary → NeedsManualReview → WriteManualReviewEntry → uncat.md
+				Kind: pendingSummary,
 				Item: &wikisvc.ClassifyItem{
 					URL:               entry.URL,
 					Title:             fetchResult.Title,
@@ -144,7 +121,7 @@ func prepareInboxEntry(
 			}
 		}
 
-		return newPendingUnhandled(entry.URL, err.Error())
+		return newPendingUnhandled(entry.URL, classifyErr.Error())
 	}
 
 	return result

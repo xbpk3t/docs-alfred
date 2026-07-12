@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"time"
 
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
@@ -266,11 +265,13 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 }
 
 func newAIConfig(cfg *Config) *ai.ClientConfig {
-	return &ai.ClientConfig{
-		APIKey:      cfg.AI.APIKey,
-		BaseURL:     cfg.AI.BaseURL,
-		Model:       cfg.AI.Model,
-		Temperature: cfg.AI.Temperature,
-		Timeout:     time.Duration(cfg.AI.Timeout) * time.Second,
-	}
+	// Start from DefaultConfig so Streaming defaults to true. Do not assign
+	// Streaming from a zero-value bool — that would re-enable CF 524 for
+	// tests/hand-built configs that never went through creasty defaults.
+	ac := ai.DefaultConfig()
+	ac.APIKey = cfg.AI.APIKey
+	ac.BaseURL = cfg.AI.BaseURL
+	ac.Model = cfg.AI.Model
+	ac.Temperature = cfg.AI.Temperature
+	return ac
 }

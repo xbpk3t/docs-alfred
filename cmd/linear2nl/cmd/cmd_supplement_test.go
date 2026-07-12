@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -323,10 +324,7 @@ func TestNewExportCmdConfigError(t *testing.T) {
 
 func TestBuildPerIssueReviewsAIValidResponse(t *testing.T) {
 	responseJSON := `{"reviews":[{"identifier":"LUC-1","title":"Task","progress":["did stuff"],"knowledge":["learned"],"review":["looks good"]}],"summary":["s1"]}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + jsonMarshalString(responseJSON) + `}}]}`))
-	}))
+	srv := mockOpenAIChatServer(responseJSON)
 	t.Cleanup(srv.Close)
 
 	aiClient := internal.NewAIProvider(internal.AIConfig{
@@ -347,10 +345,7 @@ func TestBuildPerIssueReviewsAIValidResponse(t *testing.T) {
 }
 
 func TestBuildPerIssueReviewsAIEmptyResponse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":""}}]}`))
-	}))
+	srv := mockOpenAIChatServer("")
 	t.Cleanup(srv.Close)
 
 	aiClient := internal.NewAIProvider(internal.AIConfig{
@@ -369,10 +364,7 @@ func TestBuildPerIssueReviewsAIEmptyResponse(t *testing.T) {
 }
 
 func TestBuildPerIssueReviewsAIInvalidJSON(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"not json"}}]}`))
-	}))
+	srv := mockOpenAIChatServer("not json")
 	t.Cleanup(srv.Close)
 
 	aiClient := internal.NewAIProvider(internal.AIConfig{
@@ -392,10 +384,7 @@ func TestBuildPerIssueReviewsAIInvalidJSON(t *testing.T) {
 
 func TestBuildEveningSummaryWithAIReviewResult(t *testing.T) {
 	responseJSON := `{"reviews":[{"identifier":"LUC-1","title":"Task","progress":["did stuff"],"knowledge":["learned"],"review":["looks good"]},{"identifier":"LUC-2","title":"Task 2","progress":["changed"],"knowledge":[],"review":[]}],"summary":["s1"]}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + jsonMarshalString(responseJSON) + `}}]}`))
-	}))
+	srv := mockOpenAIChatServer(responseJSON)
 	t.Cleanup(srv.Close)
 
 	aiClient := internal.NewAIProvider(internal.AIConfig{
@@ -447,6 +436,48 @@ func TestToIssueDetailsEmpty(t *testing.T) {
 	assert.Empty(t, details)
 }
 
+
+// mockOpenAIChatServer returns an OpenAI-compatible chat/completions server.
+// Supports streaming (pkg/ai default) and non-streaming JSON responses.
+func mockOpenAIChatServer(content string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		isStream := false
+		var reqBody map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err == nil {
+			if s, ok := reqBody["stream"].(bool); ok {
+				isStream = s
+			}
+		}
+		if isStream {
+			w.Header().Set("Content-Type", "text/event-stream")
+			delta, _ := json.Marshal(map[string]any{
+				"choices": []map[string]any{{
+					"index":         0,
+					"delta":         map[string]any{"content": content},
+					"finish_reason": nil,
+				}},
+			})
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", delta)
+			finish, _ := json.Marshal(map[string]any{
+				"choices": []map[string]any{{
+					"index":         0,
+					"delta":         map[string]any{},
+					"finish_reason": "stop",
+				}},
+			})
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", finish)
+			_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{
+				"message": map[string]any{"content": content},
+			}},
+		})
+	}))
+}
+
 func jsonMarshalString(s string) string {
 	b, _ := json.Marshal(s)
 
@@ -473,10 +504,7 @@ func TestBuildMorningPlanEmptyDetails(t *testing.T) {
 
 func TestBuildMorningPlanAIValidResponse(t *testing.T) {
 	responseJSON := `{"reviews":[{"identifier":"LUC-1","title":"Task","context":["ctx"],"bottleneck":["bn"],"advice":["adv"]}]}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + jsonMarshalString(responseJSON) + `}}]}`))
-	}))
+	srv := mockOpenAIChatServer(responseJSON)
 	t.Cleanup(srv.Close)
 
 	aiClient := internal.NewAIProvider(internal.AIConfig{
@@ -497,10 +525,7 @@ func TestBuildMorningPlanAIValidResponse(t *testing.T) {
 }
 
 func TestBuildMorningPlanAIEmptyResponse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":""}}]}`))
-	}))
+	srv := mockOpenAIChatServer("")
 	t.Cleanup(srv.Close)
 
 	aiClient := internal.NewAIProvider(internal.AIConfig{
@@ -519,10 +544,7 @@ func TestBuildMorningPlanAIEmptyResponse(t *testing.T) {
 }
 
 func TestBuildMorningPlanAIInvalidJSON(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"not json"}}]}`))
-	}))
+	srv := mockOpenAIChatServer("not json")
 	t.Cleanup(srv.Close)
 
 	aiClient := internal.NewAIProvider(internal.AIConfig{
@@ -1176,10 +1198,7 @@ func TestBuildMorningPlanMultipleIssues(t *testing.T) {
 		{"identifier":"LUC-1","title":"Task 1","context":["ctx1"],"bottleneck":["bn1"],"advice":["adv1"]},
 		{"identifier":"LUC-2","title":"Task 2","context":["ctx2"],"bottleneck":[],"advice":["adv2"]}
 	]}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + jsonMarshalString(responseJSON) + `}}]}`))
-	}))
+	srv := mockOpenAIChatServer(responseJSON)
 	t.Cleanup(srv.Close)
 
 	aiClient := internal.NewAIProvider(internal.AIConfig{

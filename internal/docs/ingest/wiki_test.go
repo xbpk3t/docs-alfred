@@ -385,7 +385,7 @@ This changed-only audit entry is clean and long enough to avoid historical pollu
 `), 0o600))
 	cfg := &Config{
 		AI:   AIConfig{Model: "model", BaseURL: "https://example.com/v1"},
-		Wiki: WikiConfig{WikiRoot: wikiRoot, Concurrency: 1, PerURLTimeout: 1, MaxRetries: 1},
+		Wiki: WikiConfig{WikiRoot: wikiRoot, Concurrency: 1, PerURLTimeout: 1},
 	}
 
 	result, err := RunAudit(context.Background(), AuditInput{
@@ -421,7 +421,6 @@ func testConfig(t *testing.T) *Config {
 			WikiRoot:      wikiRoot,
 			Concurrency:   1,
 			PerURLTimeout: 1,
-			MaxRetries:    1,
 		},
 	}
 }

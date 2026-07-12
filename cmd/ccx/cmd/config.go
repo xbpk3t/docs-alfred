@@ -3,9 +3,11 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/creasty/defaults"
+	"github.com/xbpk3t/docs-alfred/cmd/ccx/internal"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
 )
@@ -44,6 +46,13 @@ func loadExportConfig(path string, overrides exportConfigOverrides) (*exportConf
 	if overrides.WikiRoot != "" {
 		cfg.WikiRoot = overrides.WikiRoot
 	}
+
+	// Canonicalize wiki-root to an absolute path so downstream code
+	// never needs to resolve it relative to a potentially-wrong CWD.
+	if !filepath.IsAbs(cfg.WikiRoot) {
+		cfg.WikiRoot = filepath.Join(internal.GetProjectDir(), cfg.WikiRoot)
+	}
+
 	if overrides.AI != nil {
 		if overrides.AI.BaseURL != "" {
 			cfg.AI.BaseURL = overrides.AI.BaseURL
@@ -59,6 +68,7 @@ func loadExportConfig(path string, overrides exportConfigOverrides) (*exportConf
 func buildAIConfig(cfg *exportConfig) *ai.ClientConfig {
 	resolved := ai.DefaultConfig()
 	resolved.Timeout = 200 * time.Second
+	resolved.Streaming = true
 	if cfg != nil {
 		if cfg.AI.APIKey != "" {
 			resolved.APIKey = cfg.AI.APIKey

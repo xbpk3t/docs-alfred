@@ -35,7 +35,6 @@ type WikiConfig struct {
 	Driver         string          `default:"opencli"                     yaml:"driver"`
 	Concurrency    int             `default:"3"       validate:"gte:1"    yaml:"concurrency"`
 	PerURLTimeout  int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
-	MaxRetries     int             `default:"6"       validate:"gte:0"    yaml:"maxRetries"`
 	MaxContentSize int             `default:"20000"                       yaml:"maxContentSize"`
 	Media          wikiMediaConfig `yaml:"media"`
 }
@@ -46,12 +45,12 @@ type wikiMediaConfig struct {
 }
 
 // AIConfig contains AI model settings.
+// Streaming is owned by pkg/ai.DefaultConfig (true by default); not a YAML knob.
 type AIConfig struct {
 	APIKey      string  `yaml:"apiKey"`
 	Model       string  `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
 	BaseURL     string  `default:"https://api.lucc.dev/v1" validate:"required|url" yaml:"baseUrl"`
 	Temperature float64 `default:"0.3"                     yaml:"temperature"`
-	Timeout     int     `yaml:"timeout"` // AI HTTP timeout in seconds; 0 defaults to 45s
 }
 
 // LoadConfig loads wiki config from disk, preserving defaults for omitted fields.
@@ -107,23 +106,18 @@ func defaultConfig() Config {
 type inboxConfig struct {
 	concurrency   int
 	perURLTimeout time.Duration
-	maxRetries    uint
 }
 
 func resolveInboxConfig(cfg *Config) inboxConfig {
 	resolved := inboxConfig{
 		concurrency:   cfg.Wiki.Concurrency,
 		perURLTimeout: time.Duration(cfg.Wiki.PerURLTimeout) * time.Second,
-		maxRetries:    uint(cfg.Wiki.MaxRetries),
 	}
 	if resolved.concurrency <= 0 {
 		resolved.concurrency = 5
 	}
 	if resolved.perURLTimeout <= 0 {
 		resolved.perURLTimeout = 3 * time.Minute
-	}
-	if resolved.maxRetries <= 0 {
-		resolved.maxRetries = 3
 	}
 
 	return resolved
