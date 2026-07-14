@@ -10,7 +10,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
-	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 )
 
 func processAddURL(ctx context.Context, deps *dependencies, wikiRoot, urlStr string, dryRun bool) URLResult {
@@ -102,22 +101,17 @@ func prepareInboxEntry(
 	if classifyErr != nil {
 		var cerr *classifyRetryError
 		if errors.As(classifyErr, &cerr) {
-			// Content was fetched but AI classify failed (transient error).
-			// Route to uncat.md with fetched content.
+			// Content was fetched but AI classify failed. Log as AI error JSONL
+			// (inbox still flushes; human re-adds URL). Do not dump raw into uncat.
+			msg := "AI classify unavailable after retries"
+			if cerr.message != "" {
+				msg = msg + ": " + cerr.message
+			}
+
 			return pendingURLWrite{
-				URL:  entry.URL,
-				Kind: pendingSummary,
-				Item: &wikisvc.ClassifyItem{
-					URL:               entry.URL,
-					Title:             fetchResult.Title,
-					ContentType:       contentType,
-					Type:              wikisvc.TypeDeepDive,
-					NeedsManualReview: true,
-					Summary: &wikisvc.StructuredSummary{
-						Overview: "Content fetched but AI classify unavailable. Raw content:\n\n```\n" +
-							strings.ReplaceAll(textutil.TruncateUTF8(fetchResult.Body, 2000), "```", "'''") + "\n```",
-					},
-				},
+				URL:   entry.URL,
+				Kind:  pendingAIError,
+				Error: msg,
 			}
 		}
 
@@ -186,19 +180,14 @@ func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) (
 			return pendingExtractFailureWrite(item, "extraction failed: empty content"), nil
 		}
 
-		return pendingURLWrite{}, &classifyRetryError{message: "classification failed: AI error"}
+		return pendingURLWrite{
+			URL:   urlStr,
+			Kind:  pendingAIError,
+			Error: "AI classify unavailable after retries: classification failed: AI error",
+		}, nil
 	}
 
-	item := &wikisvc.ClassifyItem{
-		URL:               urlStr,
-		Title:             title,
-		ContentType:       classResult.ContentType,
-		TopicPath:         classResult.TopicPath,
-		Type:              classResult.WikiType,
-		Summary:           classResult.Summary,
-		MetadataBlock:     classResult.MetadataBlock,
-		NeedsManualReview: classResult.NeedsManualReview,
-	}
+	item := classifyItemFromResult(urlStr, title, classResult)
 
 	if shouldWriteClassifyFailure(classResult) {
 		extraInfo := classifyFailureInfo(classResult)
@@ -229,16 +218,7 @@ func classifyURLOnly(ctx context.Context, deps *dependencies, urlStr string, fet
 		return pendingURLWrite{}, &classifyRetryError{message: "classification failed: AI error"}
 	}
 
-	item := &wikisvc.ClassifyItem{
-		URL:               urlStr,
-		Title:             title,
-		ContentType:       classResult.ContentType,
-		TopicPath:         classResult.TopicPath,
-		Type:              classResult.WikiType,
-		Summary:           classResult.Summary,
-		MetadataBlock:     classResult.MetadataBlock,
-		NeedsManualReview: classResult.NeedsManualReview,
-	}
+	item := classifyItemFromResult(urlStr, title, classResult)
 
 	if shouldWriteClassifyFailure(classResult) {
 		extraInfo := classifyFailureInfo(classResult)
@@ -247,6 +227,22 @@ func classifyURLOnly(ctx context.Context, deps *dependencies, urlStr string, fet
 	}
 
 	return pendingURLWrite{URL: urlStr, Kind: pendingSummary, Item: item}, nil
+}
+
+func classifyItemFromResult(urlStr, title string, classResult *wikisvc.ClassifyResult) *wikisvc.ClassifyItem {
+	return &wikisvc.ClassifyItem{
+		URL:               urlStr,
+		Title:             title,
+		ContentType:       classResult.ContentType,
+		TopicPath:         classResult.TopicPath,
+		Type:              classResult.WikiType,
+		Summary:           classResult.Summary,
+		MetadataBlock:     classResult.MetadataBlock,
+		SuggestedTopic:    classResult.SuggestedTopic,
+		RouteReason:       classResult.RouteReason,
+		Confidence:        classResult.Confidence,
+		NeedsManualReview: classResult.NeedsManualReview,
+	}
 }
 
 func pendingClassifyFailureWrite(item *wikisvc.ClassifyItem, extraInfo string) pendingURLWrite {

@@ -22,10 +22,11 @@
 ## 分类原则
 - 如果 URL 是 GitHub/GitLab 等代码仓库，或正文明显在评测/介绍某个开源项目，优先使用 review。
 - 如果正文是可读的文章、问答、教程、研究博客或视频/播客 transcript，并且候选目录中存在明确匹配主题，选择语义最接近的候选 path。
-- 不要为了提高归档率而选择泛化、牵强或仅有弱关联的 topic；候选不明确时返回 topicPath="none"、wikiType="inbox"、needsManualReview=true。
+- **明确匹配必须归档**：当正文核心主题与某一候选 path 明确对应时，必须选择该 path 并设置 needsManualReview=false；不得因「略犹豫」「话题稍宽」就返回 topicPath="none"+needsManualReview=true。confidence 应反映匹配强度，明确匹配时 conf 通常 ≥ 0.7。
+- 不要为了提高归档率而选择泛化、牵强或仅有弱关联的 topic；**仅当**候选都完全不匹配或信息不足时，才返回 topicPath="none"、wikiType="inbox"、needsManualReview=true。
 - **严禁选择 zzz/ 开头的兜底路径**，除非正文内容确实完全无法归类到任意具体技术分类（例如纯个人生活感悟、纯娱乐、非技术随笔）。zzz/ 只用于非技术内容，有技术价值的内容必须先尝试匹配具体分类。
 - **分类选择要精确**：选候选中最匹配文章核心主题的 path。例如分析 AI 经济的文章应该选 `zzz/efficacy/economics` 或 `AI/LLM/LLM概念`，不是 `AI/LLM/AI写文`；讲 SRE 运维的文章应该优先匹配 `devops/` 下的运维相关 topic，不是随便选一个 devops/ 下的 topic。
-- needsManualReview=true 优先于选 zzz/。不确定时返回 none+inbox。
+- needsManualReview 仅用于：信息不足/空壳页、多主题无法定主、非技术且无合适 zzz 项、或候选确实无一匹配。有明确技术匹配时不要标 NMR。不确定且无明确匹配时返回 none+inbox。
 - topicPath 必须从候选列表中逐字选择；不要创造新 path。格式为 {tag}/{type}/{topic}。
 - summary 应基于正文内容，不要复述网页标题或候选目录。
 - 所有字符串值必须是合法 JSON string；不要把 Markdown 编号写成 `\1.`、`\2.`、`\3.` 这类非法 JSON 转义。

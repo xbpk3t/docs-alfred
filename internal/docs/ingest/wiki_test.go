@@ -73,10 +73,10 @@ func TestRunAddURLsWritesClassifyFailure(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, result.OK())
-	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
-	require.Equal(t, wikisvc.FailureClassify, result.URLResults[0].FailureType)
-	require.Len(t, deps.writer.failures, 1)
-	require.Contains(t, deps.writer.failures[0].extraInfo, "summary")
+	// Good summary with none path → uncat success (not classify failure)
+	require.Equal(t, StatusSummaryWritten, result.URLResults[0].Status)
+	require.Contains(t, result.URLResults[0].OutputPath, "uncat.md")
+	require.Empty(t, deps.writer.failures)
 }
 
 func TestRunAddURLsTreatsInboxWikiTypeAsClassifyFailure(t *testing.T) {

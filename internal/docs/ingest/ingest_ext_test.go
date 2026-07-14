@@ -703,12 +703,12 @@ func TestPrepareURLAttemptNilClassifierNonEmptyContent(t *testing.T) {
 		Title: "Title",
 		Body:  "some real content here",
 	}
-	// No classifier result set → returns nil, content non-empty → classifyRetryError
+	// No classifier result → AI unavailable pending (handled failure, not unhandled err)
 
-	_, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
-	require.Error(t, err)
-	var classifyErr *classifyRetryError
-	assert.ErrorAs(t, err, &classifyErr)
+	pending, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
+	require.NoError(t, err)
+	assert.Equal(t, pendingAIError, pending.Kind)
+	assert.Contains(t, pending.Error, "AI classify unavailable")
 }
 
 func TestPrepareURLAttemptClassifyFailure(t *testing.T) {
@@ -750,15 +750,14 @@ func TestPrepareInboxEntryClassifyRetryError(t *testing.T) {
 		Title: "Title",
 		Body:  "some real content here",
 	}
-	// No classifier result → nil → classifyRetryError
+	// No classifier result → AI error JSONL path (not raw uncat dump)
 
 	entry := wikisvc.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
 	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second}
 	result := prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg)
-	assert.Equal(t, pendingSummary, result.Kind)
-	require.NotNil(t, result.Item)
-	assert.True(t, result.Item.NeedsManualReview)
-	assert.Contains(t, result.Item.Summary.Overview, "some real content")
+	assert.Equal(t, pendingAIError, result.Kind)
+	assert.Contains(t, result.Error, "AI classify unavailable")
+	assert.Nil(t, result.Item)
 }
 
 // --- processAddURL ---
@@ -867,6 +866,7 @@ func TestWriteAIErrorDryRun(t *testing.T) {
 
 func TestWriteSummaryNeedsManualReview(t *testing.T) {
 	deps := newFakeDeps()
+	// NMR + legal topic path + overview → promote to topic write (recall)
 	item := &wikisvc.ClassifyItem{
 		URL:               "https://example.com",
 		Title:             "Test",
@@ -879,17 +879,38 @@ func TestWriteSummaryNeedsManualReview(t *testing.T) {
 	result := writeSummary(deps.dependencies(), t.TempDir(), item, false)
 	assert.Equal(t, StatusSummaryWritten, result.Status)
 	assert.True(t, result.Handled)
+	assert.Contains(t, result.OutputPath, "summary.md")
+	assert.NotContains(t, result.OutputPath, "uncat.md")
+	assert.False(t, item.NeedsManualReview)
+}
+
+func TestWriteSummaryNeedsManualReviewNoTopicGoesUncat(t *testing.T) {
+	deps := newFakeDeps()
+	item := &wikisvc.ClassifyItem{
+		URL:               "https://example.com",
+		Title:             "Test",
+		TopicPath:         "",
+		Type:              wikisvc.TypeInbox,
+		Summary:           &wikisvc.StructuredSummary{Overview: "summary"},
+		NeedsManualReview: true,
+		RouteReason:       wikisvc.RouteReasonNoTopicMatch,
+	}
+
+	result := writeSummary(deps.dependencies(), t.TempDir(), item, false)
+	assert.Equal(t, StatusSummaryWritten, result.Status)
+	assert.True(t, result.Handled)
 	assert.Contains(t, result.OutputPath, "uncat.md")
 }
 
 func TestWriteSummaryManualReviewWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.failureErr = errors.New("disk full")
+	// No topic path → stays on uncat path and hits WriteManualReviewEntry error
 	item := &wikisvc.ClassifyItem{
 		URL:               "https://example.com",
 		Title:             "Test",
-		TopicPath:         "topic/path",
-		Type:              wikisvc.TypeDeepDive,
+		TopicPath:         "",
+		Type:              wikisvc.TypeInbox,
 		Summary:           &wikisvc.StructuredSummary{Overview: "summary"},
 		NeedsManualReview: true,
 	}
@@ -1010,11 +1031,12 @@ func TestProcessAddURLUnhandledClassifyRetryError(t *testing.T) {
 		Title: "Title",
 		Body:  "some real content",
 	}
-	// No classifier result → classifyRetryError → unhandled after retries
+	// No classifier result → AI failure JSONL (handled), not unhandled
 
 	result := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
-	// classifyRetryError → processAddURL catches as unhandled
-	assert.Equal(t, StatusUnhandledError, result.Status)
+	assert.Equal(t, StatusFailureWritten, result.Status)
+	assert.True(t, result.Handled)
+	assert.Equal(t, wikisvc.FailureAI, result.FailureType)
 }
 
 // --- RunDigest no entries handled (unhandled error) ---

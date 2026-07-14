@@ -86,6 +86,38 @@ func lockPath(path string) func() {
 	}
 }
 
+// routeInvalidTopicPath fuzzy-resolves or reroutes invalid topic paths to uncat.
+// Returns routed=true when the caller should return immediately.
+func routeInvalidTopicPath(item *ClassifyItem, opts *WriteOptions) (bool, string, error) {
+	if opts == nil || opts.ValidTopicPaths == nil || opts.ValidTopicPaths[item.TopicPath] {
+		return false, "", nil
+	}
+	if resolved, ok := ResolveTopicPathAmong(item.TopicPath, opts.ValidTopicPaths); ok {
+		slog.Info("Resolved topic path via fuzzy match",
+			"from", item.TopicPath, "to", resolved, "url", item.URL)
+		if item.SuggestedTopic == "" {
+			item.SuggestedTopic = item.TopicPath
+		}
+		item.TopicPath = resolved
+
+		return false, "", nil
+	}
+
+	slog.Warn("Topic path not in gh.yml, routing to uncat.md",
+		"topic", item.TopicPath, "url", item.URL, "reason", RouteReasonInvalidTopicPath)
+	reviewItem := *item
+	reviewItem.NeedsManualReview = true
+	reviewItem.Type = TypeInbox
+	if reviewItem.SuggestedTopic == "" {
+		reviewItem.SuggestedTopic = item.TopicPath
+	}
+	reviewItem.RouteReason = RouteReasonInvalidTopicPath
+	reviewItem.TopicPath = ""
+	out, err := WriteManualReviewEntry(&reviewItem, opts)
+
+	return true, out, err
+}
+
 // WriteSummary writes a structured summary.md entry with YAML frontmatter.
 // Follows TS writer.ts: appendToSummaryFile.
 func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
@@ -97,14 +129,9 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 	}
 
 	// If ValidTopicPaths is set, validate topicPath before writing.
-	// Invalid paths route to uncat.md for manual review instead of creating new directories.
-	if opts != nil && opts.ValidTopicPaths != nil && !opts.ValidTopicPaths[item.TopicPath] {
-		slog.Warn("Topic path not in gh.yml, routing to uncat.md", "topic", item.TopicPath, "url", item.URL)
-		reviewItem := *item
-		reviewItem.NeedsManualReview = true
-		reviewItem.Type = TypeInbox
-
-		return WriteManualReviewEntry(&reviewItem, opts)
+	// Try fuzzy leaf match first (AI often gets parent wrong or strips *** from leaf).
+	if routed, outPath, err := routeInvalidTopicPath(item, opts); routed {
+		return outPath, err
 	}
 
 	topicDir := resolveTopicDir(item, opts)
@@ -281,12 +308,17 @@ func WriteFailureEntry(item *ClassifyItem, failureType FailureKind, extraInfo st
 	}
 
 	entry := DigestEntry{
-		URL:         itemURL(item),
-		Stage:       digestStageForFailure(failureType),
-		Status:      DigestFailure,
-		FailureKind: string(failureType),
-		Error:       extraInfo,
-		TopicPath:   item.TopicPath,
+		URL:            itemURL(item),
+		Stage:          digestStageForFailure(failureType),
+		Status:         DigestFailure,
+		FailureKind:    string(failureType),
+		Error:          extraInfo,
+		TopicPath:      item.TopicPath,
+		SuggestedTopic: item.SuggestedTopic,
+		Reason:         item.RouteReason,
+	}
+	if entry.Reason == "" && failureType == FailureAI {
+		entry.Reason = RouteReasonAIUnavailable
 	}
 
 	path, err := LogDigestEntry(&entry, opts)
@@ -306,11 +338,13 @@ func LogSuccessEntry(item *ClassifyItem, outputPath string, opts *WriteOptions) 
 	}
 
 	entry := DigestEntry{
-		URL:        itemURL(item),
-		Stage:      StageWrite,
-		Status:     DigestSuccess,
-		TopicPath:  item.TopicPath,
-		OutputPath: outputPath,
+		URL:            itemURL(item),
+		Stage:          StageWrite,
+		Status:         DigestSuccess,
+		TopicPath:      item.TopicPath,
+		SuggestedTopic: item.SuggestedTopic,
+		Reason:         item.RouteReason,
+		OutputPath:     outputPath,
 	}
 
 	return LogDigestEntry(&entry, opts)
@@ -323,9 +357,14 @@ func WriteManualReviewEntry(item *ClassifyItem, opts *WriteOptions) (string, err
 		return "", nil
 	}
 
+	if item.RouteReason == "" {
+		item.RouteReason = RouteReasonNeedsManualReview
+	}
+
 	path := filepath.Join(opts.WikiRoot, "uncat.md")
 	if opts.DryRun {
-		slog.Info("[DRY RUN] Would append to uncat.md", "path", path, "url", item.URL)
+		slog.Info("[DRY RUN] Would append to uncat.md",
+			"path", path, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
 
 		return path, nil
 	}
@@ -342,7 +381,8 @@ func WriteManualReviewEntry(item *ClassifyItem, opts *WriteOptions) (string, err
 		return "", fmt.Errorf("write uncat.md: %w", err)
 	}
 
-	slog.Info("Manual review entry appended", "path", path, "url", item.URL)
+	slog.Info("Manual review entry appended",
+		"path", path, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
 
 	// Log success to JSONL so uncat.md entries count toward the success rate.
 	if _, err := LogSuccessEntry(item, path, opts); err != nil {
@@ -362,12 +402,23 @@ func buildReviewEntryMeta(item *ClassifyItem) (title, metaBlock string) {
 	}
 
 	// Build codeblock metadata section matching buildEntry format.
-	metaBlock = fmt.Sprintf("URL: %s\n", item.URL)
+	var b strings.Builder
+	fmt.Fprintf(&b, "URL: %s\n", item.URL)
 	if item.MetadataBlock != "" {
-		metaBlock += item.MetadataBlock
+		b.WriteString(item.MetadataBlock)
+		if !strings.HasSuffix(item.MetadataBlock, "\n") {
+			b.WriteByte('\n')
+		}
 	} else if item.Type != "" {
-		metaBlock += fmt.Sprintf("Type: %s", item.Type)
+		fmt.Fprintf(&b, "Type: %s\n", item.Type)
 	}
+	if item.RouteReason != "" {
+		fmt.Fprintf(&b, "reason: %s\n", item.RouteReason)
+	}
+	if item.SuggestedTopic != "" {
+		fmt.Fprintf(&b, "suggestedTopic: %s\n", item.SuggestedTopic)
+	}
+	metaBlock = strings.TrimRight(b.String(), "\n")
 
 	return
 }

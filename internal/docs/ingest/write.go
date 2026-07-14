@@ -39,9 +39,18 @@ func newWriteOpts(deps *dependencies, wikiRoot string, dryRun bool) *wikisvc.Wri
 }
 
 func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyItem, dryRun bool) URLResult {
+	// Recall path: legal topic + good summary → write topic even if NMR was set upstream.
+	// Classifier normally clears NMR when promoting; this is a safety net for partial items.
+	if item.NeedsManualReview && canWriteTopicDespiteNMR(item, deps) {
+		item.NeedsManualReview = false
+	}
+
 	// Items with NeedsManualReview and good content get written to wiki/uncat.md
 	// for manual triage, not under a topic dir.
 	if item.NeedsManualReview {
+		if item.RouteReason == "" {
+			item.RouteReason = wikisvc.RouteReasonNeedsManualReview
+		}
 		path, err := deps.writer.WriteManualReviewEntry(
 			item,
 			newWriteOpts(deps, wikiRoot, dryRun),
@@ -87,13 +96,46 @@ func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyIte
 	}
 }
 
+// canWriteTopicDespiteNMR is a write-layer safety net: if item still has NMR but
+// carries a ValidTopicPaths path + overview, promote to topic write.
+// Also performs fuzzy resolve for the item in-place.
+func canWriteTopicDespiteNMR(item *wikisvc.ClassifyItem, deps *dependencies) bool {
+	if item == nil || strings.TrimSpace(item.TopicPath) == "" {
+		return false
+	}
+	if item.Summary == nil || strings.TrimSpace(item.Summary.Overview) == "" {
+		return false
+	}
+	if deps != nil && deps.validTopicPaths != nil && !deps.validTopicPaths[item.TopicPath] {
+		return resolveAndSetItemTopic(item, deps.validTopicPaths)
+	}
+
+	return true
+}
+
+// resolveAndSetItemTopic attempts fuzzy resolve; if it fails, clears TopicPath
+// to prevent downstream tries. Returns true when TopicPath is usable.
+func resolveAndSetItemTopic(item *wikisvc.ClassifyItem, valid map[string]bool) bool {
+	resolved, ok := wikisvc.ResolveTopicPathAmong(item.TopicPath, valid)
+	if !ok {
+		return false
+	}
+	if item.SuggestedTopic == "" {
+		item.SuggestedTopic = item.TopicPath
+	}
+	item.TopicPath = resolved
+
+	return true
+}
+
 func shouldWriteClassifyFailure(result *wikisvc.ClassifyResult) bool {
 	if result == nil {
 		return true
 	}
-	// If NeedsManualReview but content was good (AI produced a valid summary),
-	// treat as success — write layer will route to uncat.md for manual review.
-	if result.NeedsManualReview && result.Summary != nil && strings.TrimSpace(result.Summary.Overview) != "" {
+	// Good content (non-empty summary overview) → always a write-layer decision,
+	// never a classify reject. The write layer routes: legal topic → summary.md,
+	// NMR / no topic → uncat.md with reason.
+	if result.Summary != nil && strings.TrimSpace(result.Summary.Overview) != "" {
 		return false
 	}
 
@@ -252,7 +294,11 @@ func writeAIError(
 	message string,
 	dryRun bool,
 ) URLResult {
-	item := &wikisvc.ClassifyItem{URL: urlStr, Title: urlStr}
+	item := &wikisvc.ClassifyItem{
+		URL:         urlStr,
+		Title:       urlStr,
+		RouteReason: wikisvc.RouteReasonAIUnavailable,
+	}
 	path, err := deps.writer.WriteFailureEntry(
 		item,
 		wikisvc.FailureAI,

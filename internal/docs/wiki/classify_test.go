@@ -61,12 +61,15 @@ func TestValidateAIClassificationFallsBackToUncategorized(t *testing.T) {
 	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, ContentText)
 
 	require.NoError(t, err)
-	assert.Equal(t, "zzz/ss/uncategorized", result.TopicPath)
+	assert.Empty(t, result.TopicPath)
+	assert.True(t, result.NeedsManualReview)
+	assert.Equal(t, RouteReasonInvalidTopicPath, result.RouteReason)
+	assert.Equal(t, "ai/tool/missing", result.SuggestedTopic)
 }
 
 func TestValidateAIClassificationRejectsLowConfidence(t *testing.T) {
 	classifier := NewClassifier(nil, t.TempDir(), "")
-	_, err := classifier.validateAIClassification(&aiClassification{
+	result, err := classifier.validateAIClassification(&aiClassification{
 		TopicPath:   "ai/tool/demo",
 		WikiType:    TypeDeepDive,
 		ContentType: ContentText,
@@ -74,8 +77,12 @@ func TestValidateAIClassificationRejectsLowConfidence(t *testing.T) {
 		Confidence:  0.1,
 	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, ContentText)
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "confidence")
+	// Low conf + good summary → uncat triage (not hard reject).
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.NeedsManualReview)
+	assert.Equal(t, RouteReasonNeedsManualReview, result.RouteReason)
+	assert.Equal(t, "ai/tool/demo", result.SuggestedTopic)
 }
 
 func TestRejectedClassifyResultPreservesDiagnostics(t *testing.T) {
@@ -154,9 +161,6 @@ func TestTruncateKeepsUTF8Valid(t *testing.T) {
 	assert.Equal(t, "你...", result)
 }
 
-func makeTopicDir(root, topicPath string) error {
-	return os.MkdirAll(filepath.Join(root, filepath.FromSlash(topicPath)), 0o700)
-}
 
 func assertCandidatePath(t *testing.T, candidates []ghindex.TopicCandidate, want string) {
 	t.Helper()
@@ -168,14 +172,6 @@ func assertCandidatePath(t *testing.T, candidates []ghindex.TopicCandidate, want
 	assert.Failf(t, "missing candidate", "want %s in %#v", want, candidates)
 }
 
-func assertNoCandidatePath(t *testing.T, candidates []ghindex.TopicCandidate, want string) {
-	t.Helper()
-	for _, candidate := range candidates {
-		if candidate.Path == want {
-			assert.Failf(t, "unexpected candidate", "got %s in %#v", want, candidates)
-		}
-	}
-}
 
 // --- validateAIClassificationBasics ---
 
@@ -279,7 +275,7 @@ func TestValidateAIClassificationTopicEmptyPath(t *testing.T) {
 		TopicPath: "",
 	}, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "zzz/ss/uncategorized", topicPath)
+	assert.Empty(t, topicPath)
 }
 
 func TestValidateAIClassificationTopicNone(t *testing.T) {
@@ -288,7 +284,7 @@ func TestValidateAIClassificationTopicNone(t *testing.T) {
 		TopicPath: "none",
 	}, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "zzz/ss/uncategorized", topicPath)
+	assert.Empty(t, topicPath)
 }
 
 func TestValidateAIClassificationTopicInbox(t *testing.T) {
@@ -297,7 +293,7 @@ func TestValidateAIClassificationTopicInbox(t *testing.T) {
 		TopicPath: "inbox",
 	}, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "zzz/ss/uncategorized", topicPath)
+	assert.Empty(t, topicPath)
 }
 
 func TestValidateAIClassificationTopicValidCandidate(t *testing.T) {
@@ -317,7 +313,7 @@ func TestValidateAIClassificationTopicNotInCandidates(t *testing.T) {
 		TopicPath: "ai/tool/other",
 	}, candidates)
 	require.NoError(t, err)
-	assert.Equal(t, "zzz/ss/uncategorized", topicPath)
+	assert.Empty(t, topicPath)
 }
 
 func TestValidateAIClassificationTopicInvalidPath(t *testing.T) {
@@ -326,22 +322,22 @@ func TestValidateAIClassificationTopicInvalidPath(t *testing.T) {
 		TopicPath: "../escape",
 	}, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "zzz/ss/uncategorized", topicPath)
+	assert.Empty(t, topicPath)
 }
 
 // --- fallbackUncategorized ---
 
 func TestFallbackUncategorizedWithCandidates(t *testing.T) {
 	candidates := []ghindex.TopicCandidate{{Path: "zzz/ss/uncategorized"}}
-	assert.Equal(t, "zzz/ss/uncategorized", fallbackUncategorized("/wiki", candidates))
+	assert.Empty(t, fallbackUncategorized("/wiki", candidates))
 }
 
 func TestFallbackUncategorizedWithoutCandidates(t *testing.T) {
-	assert.Equal(t, "zzz/ss/uncategorized", fallbackUncategorized("/wiki", nil))
+	assert.Empty(t, fallbackUncategorized("/wiki", nil))
 }
 
 func TestFallbackUncategorizedEmptyCandidates(t *testing.T) {
-	assert.Equal(t, "zzz/ss/uncategorized", fallbackUncategorized("/wiki", []ghindex.TopicCandidate{}))
+	assert.Empty(t, fallbackUncategorized("/wiki", []ghindex.TopicCandidate{}))
 }
 
 // --- rejectedClassifyResult ---
@@ -538,12 +534,27 @@ func TestValidateAIClassificationManualReviewWithGoodContent(t *testing.T) {
 	}, nil, ContentText)
 	require.NoError(t, err)
 	assert.True(t, result.NeedsManualReview)
-	assert.Equal(t, "zzz/ss/uncategorized", result.TopicPath)
+	assert.Empty(t, result.TopicPath)
+	assert.Equal(t, RouteReasonNoTopicMatch, result.RouteReason)
+}
+
+func TestValidateAIClassificationManualReviewPromotesValidTopic(t *testing.T) {
+	c := NewClassifier(nil, t.TempDir(), "")
+	result, err := c.validateAIClassification(&aiClassification{
+		TopicPath:         "ai/tool/demo",
+		NeedsManualReview: true,
+		Summary:           &StructuredSummary{Overview: "good overview", KeyPoints: []string{"point"}},
+		WikiType:          TypeInbox,
+		Confidence:        0.9,
+	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, ContentText)
+	require.NoError(t, err)
+	assert.False(t, result.NeedsManualReview)
+	assert.Equal(t, "ai/tool/demo", result.TopicPath)
+	assert.Equal(t, TypeDeepDive, result.WikiType)
+	assert.Equal(t, "ai/tool/demo", result.SuggestedTopic)
 }
 
 func TestValidateAIClassificationRejectReason(t *testing.T) {
-	// validateAIClassification doesn't check RejectReason; that's done by buildClassifyResult.
-	// With nil candidates, topic falls back to uncategorized and RejectReason is empty.
 	c := NewClassifier(nil, t.TempDir(), "")
 	result, err := c.validateAIClassification(&aiClassification{
 		RejectReason: "content not suitable",
@@ -552,10 +563,9 @@ func TestValidateAIClassificationRejectReason(t *testing.T) {
 		Confidence:   0.9,
 		Summary:      &StructuredSummary{Overview: "overview"},
 	}, nil, ContentText)
-	require.NoError(t, err)
+	require.Error(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, "zzz/ss/uncategorized", result.TopicPath)
-	assert.Empty(t, result.RejectReason) // not propagated by validateAIClassification
+	assert.Contains(t, result.RejectReason, "content not suitable")
 }
 
 func TestValidateAIClassificationEmptySummary(t *testing.T) {
@@ -569,7 +579,7 @@ func TestValidateAIClassificationEmptySummary(t *testing.T) {
 	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, ContentText)
 	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "empty summary")
+	assert.Contains(t, err.Error(), "unavailable")
 }
 
 func TestValidateAIClassificationWhitespaceOverview(t *testing.T) {
@@ -583,7 +593,7 @@ func TestValidateAIClassificationWhitespaceOverview(t *testing.T) {
 	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, ContentText)
 	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "empty summary")
+	assert.Contains(t, err.Error(), "unavailable")
 }
 
 // --- ensureWithinWikiRoot ---
@@ -845,6 +855,7 @@ func TestBuildClassifyResultManualReviewWithGoodContent(t *testing.T) {
 	require.NotNil(t, result)
 	assert.True(t, result.NeedsManualReview)
 	assert.Empty(t, result.TopicPath)
+	assert.Equal(t, RouteReasonNoTopicMatch, result.RouteReason)
 }
 
 func TestBuildClassifyResultRejectReason(t *testing.T) {
@@ -865,6 +876,7 @@ func TestBuildClassifyResultValidationFails(t *testing.T) {
 	result := c.buildClassifyResult(&aiClassification{
 		WikiType:   "invalid",
 		Confidence: 0.9,
+		Summary:    &StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
 	}, ContentText, nil, "https://example.com")
 	require.NotNil(t, result)
 	assert.Contains(t, result.RejectReason, "invalid wiki type")
@@ -879,9 +891,11 @@ func TestBuildClassifyResultTopicValidationFails(t *testing.T) {
 		Confidence:  0.9,
 		Summary:     &StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
 	}, ContentText, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, "https://example.com")
-	// Topic validation fails -> falls back to uncategorized, which is valid
 	require.NotNil(t, result)
-	assert.Equal(t, "zzz/ss/uncategorized", result.TopicPath)
+	assert.Empty(t, result.TopicPath)
+	assert.True(t, result.NeedsManualReview)
+	assert.Equal(t, RouteReasonInvalidTopicPath, result.RouteReason)
+	assert.Equal(t, "../escape", result.SuggestedTopic)
 }
 
 func TestBuildClassifyResultEmptySummary(t *testing.T) {
@@ -934,6 +948,7 @@ func TestBuildClassifyResultValidFullResult(t *testing.T) {
 
 func TestBuildClassifyResultWithNeedsManualReview(t *testing.T) {
 	c := NewClassifier(nil, t.TempDir(), "")
+	// NMR + valid path + high conf → promote to topic write
 	result := c.buildClassifyResult(&aiClassification{
 		TopicPath:         "ai/tool/demo",
 		WikiType:          TypeDeepDive,
@@ -946,7 +961,47 @@ func TestBuildClassifyResultWithNeedsManualReview(t *testing.T) {
 		},
 	}, ContentText, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, "https://example.com")
 	require.NotNil(t, result)
+	assert.False(t, result.NeedsManualReview)
+	assert.Equal(t, "ai/tool/demo", result.TopicPath)
+}
+
+func TestBuildClassifyResultNMRNoneGoesUncat(t *testing.T) {
+	c := NewClassifier(nil, t.TempDir(), "")
+	result := c.buildClassifyResult(&aiClassification{
+		TopicPath:         "none",
+		WikiType:          TypeInbox,
+		ContentType:       ContentText,
+		Confidence:        0.9,
+		NeedsManualReview: true,
+		Summary: &StructuredSummary{
+			Overview:  "overview",
+			KeyPoints: []string{"point"},
+		},
+	}, ContentText, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, "https://example.com")
+	require.NotNil(t, result)
 	assert.True(t, result.NeedsManualReview)
+	assert.Empty(t, result.TopicPath)
+	assert.Equal(t, RouteReasonNoTopicMatch, result.RouteReason)
+}
+
+func TestBuildClassifyResultNMRLowConfKeepsUncat(t *testing.T) {
+	c := NewClassifier(nil, t.TempDir(), "")
+	result := c.buildClassifyResult(&aiClassification{
+		TopicPath:         "ai/tool/demo",
+		WikiType:          TypeDeepDive,
+		ContentType:       ContentText,
+		Confidence:        0.1,
+		NeedsManualReview: true,
+		Summary: &StructuredSummary{
+			Overview:  "overview",
+			KeyPoints: []string{"point"},
+		},
+	}, ContentText, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, "https://example.com")
+	require.NotNil(t, result)
+	assert.True(t, result.NeedsManualReview)
+	assert.Empty(t, result.TopicPath)
+	assert.Equal(t, RouteReasonNeedsManualReview, result.RouteReason)
+	assert.Equal(t, "ai/tool/demo", result.SuggestedTopic)
 }
 
 // --- NewClassifier with negative MinConfidence ---
@@ -955,4 +1010,38 @@ func TestNewClassifierNegativeMinConfidence(t *testing.T) {
 	c := NewClassifier(nil, t.TempDir(), "")
 	// MinConfidence is set to 0.30 in constructor, then 0.45 if <= 0
 	assert.Greater(t, c.MinConfidence, 0.0)
+}
+
+
+func TestNormalizeTopicLeafKey(t *testing.T) {
+	assert.Equal(t, "golang代码常用写法", normalizeTopicLeafKey("***golang代码常用写法***（comma-ok, options模式）"))
+	assert.Equal(t, "quic", normalizeTopicLeafKey("QUIC"))
+}
+
+func TestFuzzyMatchTopicPathQUICWrongParent(t *testing.T) {
+	cands := []ghindex.TopicCandidate{
+		{Path: "kernel/HTTP/QUIC", Display: "QUIC"},
+		{Path: "kernel/NP/UDP", Display: "UDP"},
+	}
+	got, ok := fuzzyMatchTopicPath("kernel/NP/QUIC", cands)
+	require.True(t, ok)
+	assert.Equal(t, "kernel/HTTP/QUIC", got)
+}
+
+func TestFuzzyMatchTopicPathGolangDecoratedLeaf(t *testing.T) {
+	cands := []ghindex.TopicCandidate{
+		{Path: "langs/golang/***golang代码常用写法***（comma-ok, options模式, builder模式, private-struct(avoid call), Callback as param）", Display: "***golang代码常用写法***（comma-ok, options模式, builder模式, private-struct(avoid call), Callback as param）"},
+		{Path: "langs/golang/slice", Display: "slice"},
+	}
+	got, ok := fuzzyMatchTopicPath("langs/golang/golang代码常用写法", cands)
+	require.True(t, ok)
+	assert.Contains(t, got, "golang代码常用写法")
+}
+
+func TestResolveWritableTopicPathUsesFuzzy(t *testing.T) {
+	c := NewClassifier(nil, t.TempDir(), "")
+	cands := []ghindex.TopicCandidate{{Path: "kernel/HTTP/QUIC", Display: "QUIC"}}
+	got, ok := c.resolveWritableTopicPath("kernel/NP/QUIC", cands)
+	require.True(t, ok)
+	assert.Equal(t, "kernel/HTTP/QUIC", got)
 }
