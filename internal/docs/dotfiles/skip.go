@@ -56,6 +56,8 @@ var nixSkip = map[string]bool{
 	"sudo_local": true,
 	// Third-party module program names (not standard NixOS packages)
 	"context7": true, "github": true,
+	"coreutils":    true,
+	"agent-skills": true,
 	// Flake inputs / infra modules (not packages)
 	"nix-index-database": true,
 }

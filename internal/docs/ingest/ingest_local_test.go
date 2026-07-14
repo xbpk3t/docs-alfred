@@ -203,7 +203,6 @@ func TestProcessLocalDirClassifyFailure(t *testing.T) {
 		TopicPath:    "none",
 		WikiType:     wikisvc.TypeInbox,
 		ContentType:  wikisvc.ContentVideo,
-		RejectReason: "low quality",
 		Summary:      &wikisvc.StructuredSummary{Overview: "something"},
 	}
 
@@ -214,8 +213,9 @@ func TestProcessLocalDirClassifyFailure(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "transcript.md"), []byte(strings.Repeat("transcript content. ", 50)), 0o600))
 
 	result := processLocalDir(context.Background(), deps.dependencies(), wikiRoot, dir)
-	assert.Equal(t, StatusFailureWritten, result.Status)
-	assert.Equal(t, wikisvc.FailureClassify, result.FailureType)
+	// Good summary with none path → uncat success, not failure JSONL
+	assert.Equal(t, StatusSummaryWritten, result.Status)
+	assert.Contains(t, result.OutputPath, "uncat.md")
 }
 
 func TestProcessLocalDirVideoTooShort(t *testing.T) {

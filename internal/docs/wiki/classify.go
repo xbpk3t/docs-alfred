@@ -38,6 +38,14 @@ const (
 
 const noneVal = "none"
 
+// RouteReason values explain why an item went to uncat.md (or related routes).
+const (
+	RouteReasonNeedsManualReview = "needs_manual_review"
+	RouteReasonNoTopicMatch      = "no_topic_match"
+	RouteReasonInvalidTopicPath  = "invalid_topic_path"
+	RouteReasonAIUnavailable     = "ai_classify_unavailable"
+)
+
 // minContentForVideo is the minimum content length (in runes) for video content
 // to be classified. Below this threshold the fetched content is likely just
 // metadata (title, stats, description) without a transcript, making classification
@@ -62,6 +70,9 @@ type ClassifyItem struct {
 	Type              ClassifyType       `json:"type"`
 	Summary           *StructuredSummary `json:"summary"`
 	MetadataBlock     string             `json:"metadataBlock,omitempty"`
+	SuggestedTopic    string             `json:"suggestedTopic,omitempty"`
+	RouteReason       string             `json:"routeReason,omitempty"`
+	Confidence        float64            `json:"confidence,omitempty"`
 	NeedsManualReview bool               `json:"needsManualReview,omitempty"`
 }
 
@@ -73,6 +84,8 @@ type ClassifyResult struct {
 	Summary           *StructuredSummary `json:"summary"`
 	MetadataBlock     string             `json:"metadataBlock,omitempty"`
 	RejectReason      string             `json:"rejectReason,omitempty"`
+	SuggestedTopic    string             `json:"suggestedTopic,omitempty"`
+	RouteReason       string             `json:"routeReason,omitempty"`
 	Confidence        float64            `json:"confidence,omitempty"`
 	NeedsManualReview bool               `json:"needsManualReview,omitempty"`
 }
@@ -98,8 +111,8 @@ type Classifier struct {
 type ClassifierOption func(*Classifier)
 
 // WithGHTopicsCachePath sets the cache path for remote gh.yml.
-func WithGHTopicsCachePath(path string) ClassifierOption {
-	return func(c *Classifier) { c.GhTopicsCachePath = path }
+func WithGHTopicsCachePath(cachePath string) ClassifierOption {
+	return func(c *Classifier) { c.GhTopicsCachePath = cachePath }
 }
 
 // WithGHTopicsMaxAge sets the remote gh.yml cache TTL.
@@ -206,42 +219,57 @@ func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content str
 
 // buildClassifyResult processes the AI classification result and builds a ClassifyResult.
 // It handles manual review, rejection, validation, metadata building, and empty summary checks.
+//
+// Recall-oriented routing: when the AI marks needsManualReview but still provides a
+// candidate-valid topicPath with confidence >= MinConfidence and a non-empty overview,
+// the item is treated as a normal topic write (NMR is cleared).
 func (c *Classifier) buildClassifyResult(classified *aiClassification, contentType string, candidates []ghindex.TopicCandidate, urlStr string) *ClassifyResult {
-	if c.isManualReviewWithGoodContent(classified) {
-		return &ClassifyResult{
-			TopicPath:         "",
-			WikiType:          classified.WikiType,
-			ContentType:       contentType,
-			Summary:           classified.Summary,
-			Confidence:        classified.Confidence,
-			NeedsManualReview: true,
+	if classified == nil {
+		return nil
+	}
+
+	suggested := suggestedTopicFromAI(classified.TopicPath)
+
+	if classified.Summary == nil || strings.TrimSpace(classified.Summary.Overview) == "" {
+		if classified.RejectReason != "" {
+			return rejectedClassifyResult(classified, contentType, errors.New(classified.RejectReason))
 		}
+		slog.Warn("Empty summary from classification", "url", urlStr)
+
+		return nil
 	}
 
 	if classified.RejectReason != "" {
 		return rejectedClassifyResult(classified, contentType, errors.New(classified.RejectReason))
 	}
 
+	// NMR + good summary: try to promote to topic when path is usable; else uncat with reason.
+	if classified.NeedsManualReview {
+		return c.routeManualReviewWithGoodContent(classified, contentType, candidates, suggested)
+	}
+
 	if validationErr := c.validateAIClassificationBasics(classified); validationErr != nil {
+		// Low confidence with good summary → uncat (not hard reject), keep suggested topic.
+		if classified.Confidence < c.MinConfidence {
+			return c.manualReviewRouteResult(classified, contentType, suggested, RouteReasonNeedsManualReview)
+		}
 		slog.Warn("AI classification rejected", "url", urlStr, "error", validationErr)
 
 		return rejectedClassifyResult(classified, contentType, validationErr)
 	}
 
-	topicPath, err := c.validateAIClassificationTopic(classified, candidates)
-	if err != nil {
-		slog.Warn("AI topic validation failed", "url", urlStr, "error", err)
+	topicPath, topicOK := c.resolveWritableTopicPath(classified.TopicPath, candidates)
+	if !topicOK {
+		reason := RouteReasonNoTopicMatch
+		raw := strings.TrimSpace(classified.TopicPath)
+		if raw != "" && raw != noneVal && raw != "inbox" {
+			reason = RouteReasonInvalidTopicPath
+		}
 
-		return nil
+		return c.manualReviewRouteResult(classified, contentType, suggested, reason)
 	}
 
 	metaBlock := buildMetaBlock(classified)
-
-	if classified.Summary == nil || strings.TrimSpace(classified.Summary.Overview) == "" {
-		slog.Warn("Empty summary from classification", "url", urlStr)
-
-		return nil
-	}
 
 	return &ClassifyResult{
 		TopicPath:         topicPath,
@@ -249,9 +277,297 @@ func (c *Classifier) buildClassifyResult(classified *aiClassification, contentTy
 		ContentType:       contentType,
 		Summary:           classified.Summary,
 		MetadataBlock:     metaBlock,
+		SuggestedTopic:    suggested,
 		Confidence:        classified.Confidence,
-		NeedsManualReview: classified.NeedsManualReview,
+		NeedsManualReview: false,
 	}
+}
+
+// routeManualReviewWithGoodContent implements recall-oriented NMR handling.
+func (c *Classifier) routeManualReviewWithGoodContent(
+	classified *aiClassification,
+	contentType string,
+	candidates []ghindex.TopicCandidate,
+	suggested string,
+) *ClassifyResult {
+	topicPath, topicOK := c.resolveWritableTopicPath(classified.TopicPath, candidates)
+	if topicOK && classified.Confidence >= c.MinConfidence {
+		metaBlock := buildMetaBlock(classified)
+		wikiType := classified.WikiType
+		if !isValidClassifyType(wikiType) || wikiType == TypeInbox {
+			wikiType = TypeDeepDive
+		}
+
+		return &ClassifyResult{
+			TopicPath:         topicPath,
+			WikiType:          wikiType,
+			ContentType:       contentType,
+			Summary:           classified.Summary,
+			MetadataBlock:     metaBlock,
+			SuggestedTopic:    suggested,
+			Confidence:        classified.Confidence,
+			NeedsManualReview: false,
+		}
+	}
+
+	reason := RouteReasonNeedsManualReview
+	if !topicOK {
+		raw := strings.TrimSpace(classified.TopicPath)
+		if raw == "" || raw == noneVal || raw == "inbox" {
+			reason = RouteReasonNoTopicMatch
+		} else {
+			reason = RouteReasonInvalidTopicPath
+		}
+	}
+
+	return c.manualReviewRouteResult(classified, contentType, suggested, reason)
+}
+
+// manualReviewRouteResult builds an uncat-bound result with preserved summary + attribution.
+func (c *Classifier) manualReviewRouteResult(
+	classified *aiClassification,
+	contentType string,
+	suggested string,
+	reason string,
+) *ClassifyResult {
+	wikiType := classified.WikiType
+	if !isValidClassifyType(wikiType) {
+		wikiType = TypeInbox
+	}
+
+	return &ClassifyResult{
+		TopicPath:         "",
+		WikiType:          wikiType,
+		ContentType:       contentType,
+		Summary:           classified.Summary,
+		MetadataBlock:     "",
+		SuggestedTopic:    suggested,
+		RouteReason:       reason,
+		Confidence:        classified.Confidence,
+		NeedsManualReview: true,
+	}
+}
+
+// suggestedTopicFromAI keeps AI's original path for observability when non-sentinel.
+func suggestedTopicFromAI(topicPath string) string {
+	topicPath = strings.TrimSpace(topicPath)
+	if topicPath == "" || topicPath == noneVal || topicPath == "inbox" {
+		return ""
+	}
+
+	return topicPath
+}
+
+// resolveWritableTopicPath returns a candidate-valid depth-3 path, or false.
+// Exact match first; then fuzzy leaf match (strip ***, parens, wrong parent type).
+func (c *Classifier) resolveWritableTopicPath(topicPath string, candidates []ghindex.TopicCandidate) (string, bool) {
+	topicPath = strings.TrimSpace(topicPath)
+	if topicPath == "" || topicPath == noneVal || topicPath == "inbox" {
+		return "", false
+	}
+	if err := ValidateRelativeWikiPath(c.WikiRoot, topicPath); err != nil {
+		// still try fuzzy — AI often invents almost-right paths
+		if resolved, ok := fuzzyMatchTopicPath(topicPath, candidates); ok {
+			return resolved, true
+		}
+
+		return "", false
+	}
+	if validateTopicPathDepth(topicPath) {
+		if len(candidates) == 0 || candidatePathSet(candidates)[topicPath] {
+			return topicPath, true
+		}
+	}
+	if resolved, ok := fuzzyMatchTopicPath(topicPath, candidates); ok {
+		return resolved, true
+	}
+
+	return "", false
+}
+
+// normalizeTopicLeafKey strips markdown stars, parenthetical notes, and lowercases
+// for leaf comparison (e.g. "***golang代码常用写法***（…）" → "golang代码常用写法").
+func normalizeTopicLeafKey(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "*", "")
+	s = stripParentheticalNotes(s)
+	s = strings.Join(strings.Fields(s), "")
+
+	return strings.ToLower(s)
+}
+
+func stripParentheticalNotes(s string) string {
+	for {
+		next := stripOneParenthetical(s, "（", "）")
+		next = stripOneParenthetical(next, "(", ")")
+		next = strings.TrimSpace(next)
+		if next == s {
+			return s
+		}
+		s = next
+	}
+}
+
+func stripOneParenthetical(s, open, closeDelim string) string {
+	i := strings.Index(s, open)
+	if i < 0 {
+		return s
+	}
+	j := strings.Index(s[i:], closeDelim)
+	if j < 0 {
+		return s
+	}
+
+	return s[:i] + s[i+j+len(closeDelim):]
+}
+
+// leafKeysSimilar reports whether two normalized leaf keys are a confident match.
+func leafKeysSimilar(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	if len(a) < 4 && len(b) < 4 {
+		return false
+	}
+	if !strings.Contains(a, b) && !strings.Contains(b, a) {
+		return false
+	}
+	short, long := a, b
+	if len(short) > len(long) {
+		short, long = long, short
+	}
+
+	return len(short) >= 4 && len(short)*2 >= len(long)
+}
+
+type fuzzyTopicHit struct {
+	path string
+	tag  string
+	typ  string
+}
+
+func candidateMatchesLeaf(c ghindex.TopicCandidate, leafKey string) bool {
+	parts := strings.Split(strings.Trim(c.Path, "/"), "/")
+	if len(parts) != 3 {
+		return false
+	}
+	if leafKeysSimilar(normalizeTopicLeafKey(parts[2]), leafKey) {
+		return true
+	}
+
+	return leafKeysSimilar(normalizeTopicLeafKey(c.Display), leafKey)
+}
+
+func collectFuzzyTopicHits(leafKey string, candidates []ghindex.TopicCandidate) []fuzzyTopicHit {
+	var hits []fuzzyTopicHit
+	seen := map[string]bool{}
+	for _, c := range candidates {
+		if !candidateMatchesLeaf(c, leafKey) || seen[c.Path] {
+			continue
+		}
+		parts := strings.Split(strings.Trim(c.Path, "/"), "/")
+		if len(parts) != 3 {
+			continue
+		}
+		seen[c.Path] = true
+		hits = append(hits, fuzzyTopicHit{path: c.Path, tag: parts[0], typ: parts[1]})
+	}
+
+	return hits
+}
+
+func pickUniqueHit(hits []fuzzyTopicHit) (string, bool) {
+	if len(hits) == 1 {
+		return hits[0].path, true
+	}
+
+	return "", false
+}
+
+func filterHitsByTagType(hits []fuzzyTopicHit, tag, typ string) []fuzzyTopicHit {
+	var out []fuzzyTopicHit
+	for _, h := range hits {
+		if strings.EqualFold(h.tag, tag) && strings.EqualFold(h.typ, typ) {
+			out = append(out, h)
+		}
+	}
+
+	return out
+}
+
+func filterHitsByTag(hits []fuzzyTopicHit, tag string) []fuzzyTopicHit {
+	var out []fuzzyTopicHit
+	for _, h := range hits {
+		if strings.EqualFold(h.tag, tag) {
+			out = append(out, h)
+		}
+	}
+
+	return out
+}
+
+// disambiguateFuzzyHits prefers same tag/type, then same tag.
+func disambiguateFuzzyHits(parts []string, hits []fuzzyTopicHit) (string, bool) {
+	if path, ok := pickUniqueHit(hits); ok {
+		return path, true
+	}
+	switch {
+	case len(parts) >= 3:
+		if path, ok := pickUniqueHit(filterHitsByTagType(hits, parts[0], parts[1])); ok {
+			return path, true
+		}
+		return pickUniqueHit(filterHitsByTag(hits, parts[0]))
+	case len(parts) == 2:
+		return pickUniqueHit(filterHitsByTag(hits, parts[0]))
+	default:
+		return "", false
+	}
+}
+
+// fuzzyMatchTopicPath maps an AI-invented path onto a unique catalog path by leaf.
+// Examples:
+//
+//	kernel/NP/QUIC → kernel/HTTP/QUIC
+//	langs/golang/golang代码常用写法 → langs/golang/***golang代码常用写法***（…）
+func fuzzyMatchTopicPath(topicPath string, candidates []ghindex.TopicCandidate) (string, bool) {
+	if len(candidates) == 0 {
+		return "", false
+	}
+	parts := strings.Split(strings.Trim(topicPath, "/"), "/")
+	if len(parts) == 0 {
+		return "", false
+	}
+	leafKey := normalizeTopicLeafKey(parts[len(parts)-1])
+	if leafKey == "" {
+		return "", false
+	}
+	hits := collectFuzzyTopicHits(leafKey, candidates)
+	if len(hits) == 0 {
+		return "", false
+	}
+
+	return disambiguateFuzzyHits(parts, hits)
+}
+
+// ResolveTopicPathAmong maps topicPath onto a key in valid (exact or fuzzy leaf).
+// Used by the write layer when ValidTopicPaths rejects an almost-correct AI path.
+func ResolveTopicPathAmong(topicPath string, valid map[string]bool) (string, bool) {
+	topicPath = strings.TrimSpace(topicPath)
+	if topicPath == "" || valid == nil {
+		return "", false
+	}
+	if valid[topicPath] {
+		return topicPath, true
+	}
+	cands := make([]ghindex.TopicCandidate, 0, len(valid))
+	for p := range valid {
+		cands = append(cands, ghindex.TopicCandidate{Path: p, Display: filepath.Base(p)})
+	}
+
+	return fuzzyMatchTopicPath(topicPath, cands)
 }
 
 // classifyOnlyResult holds the parsed JSON from the classify-only AI call.
@@ -482,8 +798,8 @@ func scanTypeCandidates(
 		if !topic.IsDir() || strings.HasPrefix(topic.Name(), ".") {
 			continue
 		}
-		path := strings.Join([]string{topName, typ.Name(), topic.Name()}, "/")
-		candidates = append(candidates, ghindex.TopicCandidate{Path: path, Display: topic.Name(), Source: "wiki"})
+		topicPath := strings.Join([]string{topName, typ.Name(), topic.Name()}, "/")
+		candidates = append(candidates, ghindex.TopicCandidate{Path: topicPath, Display: topic.Name(), Source: "wiki"})
 	}
 
 	return candidates
@@ -762,54 +1078,21 @@ func (c *Classifier) validateAIClassification(
 	candidates []ghindex.TopicCandidate,
 	detectedContentType string,
 ) (*ClassifyResult, error) {
-	if c.isManualReviewWithGoodContent(result) {
-		return c.uncategorizedClassifyResult(result, detectedContentType), nil
+	// Shared path with ClassifyURL: recall-oriented NMR + no fake uncategorized path.
+	out := c.buildClassifyResult(result, detectedContentType, candidates, "")
+	if out == nil {
+		return nil, errors.New("classification result unavailable")
+	}
+	if out.RejectReason != "" {
+		return out, errors.New(out.RejectReason)
 	}
 
-	if err := c.validateAIClassificationBasics(result); err != nil {
-		return nil, err
-	}
-	topicPath, err := c.validateAIClassificationTopic(result, candidates)
-	if err != nil {
-		return nil, err
-	}
-	summary, err := validateAIClassificationSummary(result)
-	if err != nil {
-		return nil, err
-	}
-
-	metaBlock := buildMetaBlock(result)
-
-	return &ClassifyResult{
-		TopicPath:         topicPath,
-		WikiType:          result.WikiType,
-		ContentType:       detectedContentType,
-		Summary:           summary,
-		MetadataBlock:     metaBlock,
-		Confidence:        result.Confidence,
-		NeedsManualReview: result.NeedsManualReview,
-	}, nil
-}
-
-// uncategorizedClassifyResult produces a ClassifyResult with NeedsManualReview=true
-// and TopicPath=uncategorized, preserving the AI-generated summary. Used when the
-// AI has good content but no matching topic — the write layer will route to uncat.md.
-func (c *Classifier) uncategorizedClassifyResult(result *aiClassification, detectedContentType string) *ClassifyResult {
-	return &ClassifyResult{
-		TopicPath:         fallbackUncategorized(c.WikiRoot, nil),
-		WikiType:          result.WikiType,
-		ContentType:       detectedContentType,
-		Summary:           result.Summary,
-		MetadataBlock:     "",
-		Confidence:        result.Confidence,
-		NeedsManualReview: true,
-	}
+	return out, nil
 }
 
 // isManualReviewWithGoodContent returns true when the AI explicitly marked
-// NeedsManualReview but still produced a valid summary — meaning the content was
-// good, only the topic match failed. In this case we route to uncategorized
-// rather than rejecting outright.
+// NeedsManualReview but still produced a valid summary — content is salvageable
+// for topic write or uncat triage (not a hard classify reject).
 func (c *Classifier) isManualReviewWithGoodContent(result *aiClassification) bool {
 	return result != nil && result.NeedsManualReview &&
 		result.Summary != nil && strings.TrimSpace(result.Summary.Overview) != ""
@@ -839,38 +1122,24 @@ func (c *Classifier) validateAIClassificationTopic(
 	result *aiClassification,
 	candidates []ghindex.TopicCandidate,
 ) (string, error) {
-	topicPath := strings.TrimSpace(result.TopicPath)
-	if topicPath == "" || topicPath == noneVal || topicPath == "inbox" {
-		return fallbackUncategorized(c.WikiRoot, candidates), nil
-	}
-	//nolint: nilerr // validate path only for candidate lookup; fallback on any error.
-	if err := ValidateRelativeWikiPath(c.WikiRoot, topicPath); err != nil {
-		return fallbackUncategorized(c.WikiRoot, candidates), nil
-	}
-	if !candidatePathSet(candidates)[topicPath] {
-		return fallbackUncategorized(c.WikiRoot, candidates), nil
-	}
-	// Must be exactly folder/type/topic (depth 3).
-	if !validateTopicPathDepth(topicPath) {
-		return fallbackUncategorized(c.WikiRoot, candidates), nil
+	topicPath, ok := c.resolveWritableTopicPath(result.TopicPath, candidates)
+	if !ok {
+		// No writable topic — caller routes to uncat via empty path + NMR.
+		return "", nil
 	}
 
 	return topicPath, nil
 }
 
 // validateTopicPathDepth ensures topicPath has exactly 3 segments (folder/type/topic).
-func validateTopicPathDepth(path string) bool {
-	return strings.Count(path, "/") == 2
+func validateTopicPathDepth(topicPath string) bool {
+	return strings.Count(topicPath, "/") == 2
 }
 
-// fallbackUncategorized returns "zzz/ss/uncategorized" if it exists in the
-// candidate set, otherwise creates and returns it as a hardcoded fallback.
-func fallbackUncategorized(wikiRoot string, candidates []ghindex.TopicCandidate) string {
-	if candidatePathSet(candidates)["zzz/ss/uncategorized"] {
-		return "zzz/ss/uncategorized"
-	}
-	// Even if not in candidates, accept it — WriteSummary will create the dir.
-	return "zzz/ss/uncategorized"
+// fallbackUncategorized is deprecated: do not invent a fake wiki path.
+// Kept as empty-string helper for tests/callers that still reference the name.
+func fallbackUncategorized(_ string, _ []ghindex.TopicCandidate) string {
+	return ""
 }
 
 func validateAIClassificationSummary(result *aiClassification) (*StructuredSummary, error) {
@@ -902,6 +1171,7 @@ func rejectedClassifyResult(result *aiClassification, detectedContentType string
 		WikiType:          result.WikiType,
 		ContentType:       contentType,
 		Summary:           result.Summary,
+		SuggestedTopic:    suggestedTopicFromAI(result.TopicPath),
 		Confidence:        result.Confidence,
 		NeedsManualReview: result.NeedsManualReview,
 		RejectReason:      reason,
