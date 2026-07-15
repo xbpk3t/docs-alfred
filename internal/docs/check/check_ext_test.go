@@ -302,7 +302,16 @@ func TestImagesCheckResultIssues(t *testing.T) {
 		Errors:         []string{"err"},
 	}
 	issues := r.Issues(ImagesCheckInput{})
-	assert.NotEmpty(t, issues)
+	require.NotEmpty(t, issues)
+
+	for _, issue := range issues {
+		if issue.File == "dup.jpg" {
+			assert.Equal(t, checkutil.SeverityError, issue.Severity, "duplicate file should be ERROR")
+		}
+		if issue.File == "extra" {
+			assert.Equal(t, checkutil.SeverityError, issue.Severity, "extra dir should be ERROR")
+		}
+	}
 }
 
 func TestFormatImagesReport(t *testing.T) {

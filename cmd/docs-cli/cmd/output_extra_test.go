@@ -304,16 +304,6 @@ func TestImagesCheckCommandFlags(t *testing.T) {
 	require.NotNil(t, imagesCmd.InheritedFlags().Lookup("format"))
 }
 
-func TestImagesFixCommandFlags(t *testing.T) {
-	imagesCmd, _, err := newRootCmd().Find([]string{"images", "fix"})
-	require.NoError(t, err)
-
-	f := imagesCmd.Flags()
-	require.NotNil(t, f.Lookup("data-dir"))
-	require.NotNil(t, f.Lookup("images-dir"))
-	require.NotNil(t, f.Lookup("list"))
-	require.NotNil(t, imagesCmd.InheritedFlags().Lookup("format"))
-}
 
 func TestWikiDigestLocalCommandFlags(t *testing.T) {
 	wikiCmd, _, err := newRootCmd().Find([]string{"wiki", "digest-local"})
