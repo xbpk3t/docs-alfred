@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
-	session "github.com/xbpk3t/docs-alfred/pkg/ai/session"
 )
 
 func TestTrimTitle_TruncatesRunes(t *testing.T) {
@@ -25,70 +24,73 @@ func TestGenerateFrontmatter_UsesSource(t *testing.T) {
 	require.Contains(t, frontmatter, "source: codex")
 }
 
-func TestFallbackExportMetadata_UsesFallbackTopic(t *testing.T) {
-	messages := []session.Message{{Role: "user", Content: "请帮我整理 codex export\n\n后续内容"}}
-
-	topicPath, title, engTitle := fallbackExportMetadata(messages)
-
-	require.Equal(t, fallbackTopicPath, topicPath)
-	require.Equal(t, "请帮我整理 codex export", title)
-	require.Equal(t, "qing-bang-wo-zheng-li-codex-export", engTitle)
-}
-
 func TestNormalizeTopicPath(t *testing.T) {
 	wikiRoot := t.TempDir()
 	candidates := []ghindex.TopicCandidate{
 		{Path: "AI/LLM/claude-code"},
-		{Path: fallbackTopicPath},
 	}
 
 	tests := []struct {
 		name      string
 		topicPath string
-		want      string
+		wantOK    string
+		wantErr   bool
+		wantErrMsg string
 	}{
 		{
-			name:      "candidate path",
+			name:      "valid candidate path",
 			topicPath: "AI/LLM/claude-code",
-			want:      "AI/LLM/claude-code",
+			wantOK:    "AI/LLM/claude-code",
 		},
 		{
 			name:      "empty path",
 			topicPath: "",
-			want:      fallbackTopicPath,
+			wantErr:   true,
 		},
 		{
 			name:      "none path",
 			topicPath: "none",
-			want:      fallbackTopicPath,
+			wantErr:   true,
 		},
 		{
 			name:      "inbox path",
 			topicPath: "inbox",
-			want:      fallbackTopicPath,
+			wantErr:   true,
 		},
 		{
 			name:      "unknown path",
 			topicPath: "AI/LLM/missing",
-			want:      fallbackTopicPath,
+			wantErr:   true,
 		},
 		{
 			name:      "unsafe path",
 			topicPath: "../escape",
-			want:      fallbackTopicPath,
+			wantErr:   true,
+			wantErrMsg: "unsafe",
 		},
 		{
-			name:      "wrong depth",
+			name:      "wrong depth (too shallow)",
 			topicPath: "AI/LLM",
-			want:      fallbackTopicPath,
+			wantErr:   true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := normalizeTopicPath(wikiRoot, tt.topicPath, candidates)
+			got, err := normalizeTopicPath(wikiRoot, tt.topicPath, candidates)
 
-			require.Equal(t, tt.want, got)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantErr && tt.wantErrMsg != "" {
+				require.Contains(t, err.Error(), tt.wantErrMsg)
+			} else if tt.wantErr {
+				require.Error(t, err)
+			}
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.wantOK, got)
 		})
 	}
 }
