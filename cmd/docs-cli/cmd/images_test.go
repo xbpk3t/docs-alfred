@@ -42,30 +42,16 @@ func TestWriteImagesCheckResult_WarningOnly(t *testing.T) {
 	assert.Contains(t, out, "something suspicious")
 }
 
-func TestWriteImagesCheckResult_WithActions(t *testing.T) {
-	stdout := captureStdout(t)
-
-	err := writeImagesCheckResult("images fix", &workspaceuc.ImagesCheckResult{
-		ApplyActions: []string{"Hidden 1 extra director(ies)", "Moved 2 file(s) to .temp"},
-	}, workspaceuc.ImagesCheckInput{}, "text", []string{"Hidden 1 extra director(ies)", "Moved 2 file(s) to .temp"})
-	require.NoError(t, err)
-
-	out := stdout()
-	assert.Contains(t, out, "[actions]")
-	assert.Contains(t, out, "Hidden 1 extra director(ies)")
-	assert.Contains(t, out, "Moved 2 file(s) to .temp")
-}
-
 func TestWriteImagesCheckResult_DuplicateFiles(t *testing.T) {
 	stdout := captureStdout(t)
 
 	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
 		DuplicateFiles: []string{"algo/algo/photo__1.jpg"},
 	}, workspaceuc.ImagesCheckInput{}, "text", nil)
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	out := stdout()
-	assert.Contains(t, out, "WARN algo/algo/photo__1.jpg")
+	assert.Contains(t, out, "ERROR algo/algo/photo__1.jpg")
 	assert.Contains(t, out, "duplicate image file")
 }
 
@@ -106,7 +92,7 @@ func TestWriteImagesCheckResult_JSONSummary(t *testing.T) {
 		ExpectedDirs: []string{"a/b"},
 		ExistingDirs: []string{"a/b", "extra"},
 		ExtraDirs:    []string{"extra"},
-	}, workspaceuc.ImagesCheckInput{}, "json", nil)
+	}, workspaceuc.ImagesCheckInput{SkipExtra: true}, "json", nil)
 	require.NoError(t, err)
 
 	var result map[string]any
@@ -122,10 +108,10 @@ func TestWriteImagesCheckResult_SkipExtraNoiseGone(t *testing.T) {
 	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
 		ExtraDirs: []string{"some/extra/dir"},
 	}, workspaceuc.ImagesCheckInput{SkipExtra: true}, "text", nil)
-	require.NoError(t, err, "extra dirs are warnings, not errors anyway")
+	require.NoError(t, err, "SkipExtra suppresses extra-dir issues entirely")
 
 	out := stdout()
-	assert.NotContains(t, out, "some/extra/dir", "SkipExtra should suppress extra-dir warnings in output")
+	assert.NotContains(t, out, "some/extra/dir", "SkipExtra should suppress extra-dir issues in output")
 }
 
 // --- writeImagesCheckResult: issues with mixed severity ---
@@ -192,7 +178,7 @@ func TestWriteImagesCheckResult_SummaryLine(t *testing.T) {
 		ExpectedDirs: []string{"a/b/c/d"},
 		ExistingDirs: []string{"a", "a/b", "extra-dir"},
 		ExtraDirs:    []string{"extra-dir"},
-	}, workspaceuc.ImagesCheckInput{}, "text", nil)
+	}, workspaceuc.ImagesCheckInput{SkipExtra: true}, "text", nil)
 	require.NoError(t, err)
 
 	out := stdout()
@@ -209,31 +195,6 @@ func TestRunImagesCheck_NonExistentDataDir(t *testing.T) {
 	require.Error(t, err)
 }
 
-// --- writeImagesCheckResult: Fix result text ---
-
-func TestWriteImagesCheckResult_FixWithActions(t *testing.T) {
-	stdout := captureStdout(t)
-
-	err := writeImagesCheckResult("images fix", &workspaceuc.ImagesCheckResult{
-		ApplyActions: []string{"No fixes needed"},
-	}, workspaceuc.ImagesCheckInput{}, "text", []string{"No fixes needed"})
-	require.NoError(t, err)
-
-	out := stdout()
-	assert.Contains(t, out, "images fix passed")
-	assert.Contains(t, out, "[actions]")
-	assert.Contains(t, out, "No fixes needed")
-}
-
-func TestWriteImagesCheckResult_FixWithErrorsAndActions(t *testing.T) {
-	err := writeImagesCheckResult("images fix", &workspaceuc.ImagesCheckResult{
-		Errors:       []string{"something wrong"},
-		ApplyActions: []string{"did something"},
-	}, workspaceuc.ImagesCheckInput{}, "text", []string{"did something"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "images fix failed")
-}
-
 // --- edge cases ---
 
 func TestWriteImagesCheckResult_EmptyFormat(t *testing.T) {
@@ -246,30 +207,16 @@ func TestWriteImagesCheckResult_EmptyFormat(t *testing.T) {
 	assert.Contains(t, out, "images check passed")
 }
 
-func TestWriteImagesCheckResult_JSONWithActions(t *testing.T) {
-	stdout := captureStdout(t)
-
-	err := writeImagesCheckResult("images fix", &workspaceuc.ImagesCheckResult{
-		ApplyActions: []string{"moved 2 files"},
-	}, workspaceuc.ImagesCheckInput{}, "json", []string{"moved 2 files"})
-	require.NoError(t, err)
-
-	var result map[string]any
-	require.NoError(t, json.Unmarshal([]byte(stdout()), &result))
-	assert.Equal(t, "images fix", result["name"])
-	assert.Equal(t, true, result["ok"])
-}
-
 func TestWriteImagesCheckResult_BothExtraAndMissingDefaultFlags(t *testing.T) {
 	stdout := captureStdout(t)
 
 	err := writeImagesCheckResult("images check", &workspaceuc.ImagesCheckResult{
 		ExtraDirs: []string{"extra/dir"},
 	}, workspaceuc.ImagesCheckInput{}, "text", nil)
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	out := stdout()
-	assert.Contains(t, out, "WARN extra/dir")
+	assert.Contains(t, out, "ERROR extra/dir")
 }
 
 func TestWriteImagesCheckResult_BothExtraAndMissingSkipExtra(t *testing.T) {

@@ -24,7 +24,6 @@ func newImagesCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(newImagesCheckCmd())
-	cmd.AddCommand(newImagesFixCmd())
 
 	return cmd
 }
@@ -51,28 +50,6 @@ func newImagesCheckCmd() *cobra.Command {
 	return cmd
 }
 
-func newImagesFixCmd() *cobra.Command {
-	var flags imagesCheckFlags
-	cmd := &cobra.Command{
-		Use:   "fix",
-		Short: "Fix docs-images consistency issues that can be repaired safely",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runImagesFix(workspaceuc.ImagesCheckInput{
-				DataDir:   flags.dataDir,
-				ImagesDir: flags.imagesDir,
-				Apply:     true,
-				List:      flags.list,
-			}, output.GetFormat(cmd))
-		},
-	}
-
-	cmd.Flags().StringVar(&flags.dataDir, "data-dir", "data/gh", "data/gh path")
-	cmd.Flags().StringVar(&flags.imagesDir, "images-dir", "docs-images", "docs-images path")
-	cmd.Flags().BoolVar(&flags.list, "list", false, "Print full lists")
-
-	return cmd
-}
-
 func runImagesCheck(input workspaceuc.ImagesCheckInput, format string) error {
 	fmt.Fprintf(os.Stderr, "Checking docs-images from data-dir=%q images-dir=%q...\n", input.DataDir, input.ImagesDir)
 
@@ -82,25 +59,6 @@ func runImagesCheck(input workspaceuc.ImagesCheckInput, format string) error {
 	}
 
 	return writeImagesCheckResult("images check", result, input, format, nil)
-}
-
-func runImagesFix(input workspaceuc.ImagesCheckInput, format string) error {
-	fmt.Fprintf(os.Stderr, "Fixing docs-images from data-dir=%q images-dir=%q...\n", input.DataDir, input.ImagesDir)
-
-	applyResult, err := workspaceuc.RunImagesCheck(input)
-	if err != nil {
-		return err
-	}
-
-	checkInput := input
-	checkInput.Apply = false
-	checkInput.SkipExtra = input.SkipExtra
-	result, err := workspaceuc.RunImagesCheck(checkInput)
-	if err != nil {
-		return err
-	}
-
-	return writeImagesCheckResult("images fix", result, checkInput, format, applyResult.ApplyActions)
 }
 
 func writeImagesCheckResult(

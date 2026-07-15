@@ -359,14 +359,14 @@ func (r *CheckResult) Issues(cfg CheckConfig) []checkutil.Issue {
 	}
 	for _, d := range r.DuplicateFiles {
 		issues = append(issues, checkutil.Issue{
-			File: d, Severity: checkutil.SeverityWarn, Message: "duplicate image file",
+			File: d, Severity: checkutil.SeverityError, Message: "duplicate image file",
 		})
 	}
 
 	if !cfg.SkipExtra {
 		for _, d := range r.ExtraDirs {
 			issues = append(issues, checkutil.Issue{
-				File: d, Severity: checkutil.SeverityWarn, Message: "extra image dir",
+				File: d, Severity: checkutil.SeverityError, Message: "extra image dir",
 			})
 		}
 	}

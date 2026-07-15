@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ghdata "github.com/xbpk3t/docs-alfred/internal/gh/data"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
 func TestDuplicateFileRe(t *testing.T) {
@@ -268,9 +269,21 @@ func TestCheckResult_IssuesNoFlags(t *testing.T) {
 		ExtraDirs:      []string{"extra"},
 	}
 	issues := r.Issues(CheckConfig{})
-	assert.NotEmpty(t, issues)
-	// Should have warn + error + duplicate + extra
-	assert.GreaterOrEqual(t, len(issues), 4)
+	require.GreaterOrEqual(t, len(issues), 4)
+
+	var gotExtra, gotDup bool
+	for _, issue := range issues {
+		if issue.File == "dup.jpg" {
+			gotDup = true
+			assert.Equal(t, checkutil.SeverityError, issue.Severity, "duplicate file should be ERROR")
+		}
+		if issue.File == "extra" {
+			gotExtra = true
+			assert.Equal(t, checkutil.SeverityError, issue.Severity, "extra dir should be ERROR")
+		}
+	}
+	assert.True(t, gotExtra, "extra dir issue should be present")
+	assert.True(t, gotDup, "duplicate file issue should be present")
 }
 
 func TestCheckResult_ReportWithList(t *testing.T) {

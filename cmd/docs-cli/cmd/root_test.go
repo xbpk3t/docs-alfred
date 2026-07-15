@@ -24,7 +24,7 @@ func TestImagesCommandOwnsImageActions(t *testing.T) {
 	imagesCmd, _, err := newRootCmd().Find([]string{"images"})
 	require.NoError(t, err)
 
-	requireCommandNames(t, imagesCmd.Commands(), []string{cmdCheck, "fix"})
+	requireCommandNames(t, imagesCmd.Commands(), []string{cmdCheck})
 }
 
 func TestDotfilesCommandOwnsDotfilesActions(t *testing.T) {
