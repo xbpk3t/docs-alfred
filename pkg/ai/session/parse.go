@@ -3,11 +3,9 @@
 package session
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"sort"
 	"strings"
 )
@@ -61,37 +59,21 @@ func parseEvent(raw json.RawMessage) []Message {
 // with tool_results) are emitted as separate Messages. Callers should merge
 // consecutive same-role messages before formatting (see FormatMessages).
 func Parse(path string) ([]Message, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open session file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
 	var messages []Message
-	scanner := bufio.NewScanner(f)
-	// Allow reading lines up to 1MB (JSONL events can be large)
-	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
-
-	lineNum := 0
-	for scanner.Scan() {
-		lineNum++
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
+	err := scanJSONLLines(path, "open session file: %w", "scan session file: %w", func(lineNum int, line string) error {
 		var raw json.RawMessage
 		if err := json.Unmarshal([]byte(line), &raw); err != nil {
 			slog.Warn("skipping malformed JSONL line", "error", err, "line_num", lineNum)
 
-			continue
+			return nil
 		}
 
 		messages = append(messages, parseEvent(raw)...)
-	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan session file: %w", err)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return messages, nil
