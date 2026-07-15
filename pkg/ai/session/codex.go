@@ -1,47 +1,29 @@
 package session
 
 import (
-	"bufio"
 	"encoding/json"
-	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 )
 
 // ParseCodex parses a Codex rollout JSONL file into conversation messages.
 func ParseCodex(path string) ([]Message, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open codex rollout: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
 	var messages []Message
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
-
-	lineNum := 0
-	for scanner.Scan() {
-		lineNum++
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
+	err := scanJSONLLines(path, "open codex rollout: %w", "scan codex rollout: %w", func(lineNum int, line string) error {
 		msg, ok, err := parseCodexLine([]byte(line))
 		if err != nil {
 			slog.Warn("skipping malformed codex JSONL line", "error", err, "line_num", lineNum)
 
-			continue
+			return nil
 		}
 		if ok {
 			messages = append(messages, msg)
 		}
-	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan codex rollout: %w", err)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return messages, nil

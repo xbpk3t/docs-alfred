@@ -3,6 +3,7 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -48,6 +49,20 @@ not-json
 	require.NoError(t, err)
 	require.Len(t, messages, 1)
 	require.Equal(t, "Valid", messages[0].Content)
+}
+
+func TestParseCodex_TokenTooLongIsFatal(t *testing.T) {
+	prev := jsonlScanMaxToken
+	jsonlScanMaxToken = 1024
+	t.Cleanup(func() { jsonlScanMaxToken = prev })
+
+	// Oversized single JSONL line; content is large enough to exceed the lowered max token.
+	path := writeCodexRollout(t, `{"type":"response_item","timestamp":"2026-07-07T07:54:10.899Z","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"`+strings.Repeat("z", 2048)+`"}]}}`+"\n")
+
+	_, err := ParseCodex(path)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "scan codex rollout")
+	require.Contains(t, err.Error(), "token too long")
 }
 
 func writeCodexRollout(t *testing.T, content string) string {

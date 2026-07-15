@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -115,6 +116,49 @@ func TestParse_MalformedJSONL(t *testing.T) {
 	messages, err := Parse(path)
 	require.NoError(t, err)
 	assert.Empty(t, messages)
+}
+
+func TestParse_LineLargerThanOld1MiBLimit(t *testing.T) {
+	// Real CC sessions can embed >1MiB tool_result / toolUseResult lines.
+	// The old Scanner max token was 1MiB and aborted the whole parse.
+	const contentSize = 1200 * 1024
+	path := writeUserJSONL(t, strings.Repeat("x", contentSize))
+
+	messages, err := Parse(path)
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
+	assert.Equal(t, roleUser, messages[0].Role)
+	assert.Len(t, messages[0].Content, contentSize)
+}
+
+func TestParse_TokenTooLongIsFatal(t *testing.T) {
+	prev := jsonlScanMaxToken
+	jsonlScanMaxToken = 1024
+	t.Cleanup(func() { jsonlScanMaxToken = prev })
+
+	path := writeUserJSONL(t, strings.Repeat("y", 2048))
+
+	_, err := Parse(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scan session file")
+	assert.Contains(t, err.Error(), "token too long")
+}
+
+func writeUserJSONL(t *testing.T, content string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	payload, err := json.Marshal(map[string]any{
+		"type":      "user",
+		"timestamp": "2026-01-01T00:00:00Z",
+		"message": map[string]any{
+			"content": content,
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, append(payload, '\n'), 0o600))
+
+	return path
 }
 
 func TestParseAll_FileNotFound(t *testing.T) {
