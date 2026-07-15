@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,8 +26,7 @@ import (
 var promptFS embed.FS
 
 const (
-	roleUser          = "user"
-	fallbackTopicPath = "zzz/ss/uncategorized"
+	roleUser = "user"
 
 	// mergedAITimeout is the timeout for the single merged AI call
 	// that handles both classification and title generation.
@@ -96,7 +94,10 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 		return nil, errors.New("no messages found after parsing and filtering")
 	}
 
-	topicPath, title, engTitle := classifyAndGenerateTitle(messages, input)
+	topicPath, title, engTitle, err := classifyAndGenerateTitle(messages, input)
+	if err != nil {
+		return nil, fmt.Errorf("classify: %w", err)
+	}
 	outputPath := determineOutputPath(input, engTitle, topicPath)
 
 	if input.Verbose {
@@ -193,24 +194,14 @@ func parseTranscript(resolved SessionRef) ([]session.Message, error) {
 }
 
 // classifyAndGenerateTitle performs a single AI call to classify content and generate titles.
-// Falls back to the uncategorized topic and a user-message-derived title on failure.
-func classifyAndGenerateTitle(messages []session.Message, input *ExportInput) (string, string, string) {
+// Returns an error when the AI call fails or the topic path is invalid.
+func classifyAndGenerateTitle(messages []session.Message, input *ExportInput) (string, string, string, error) {
 	topicPath, title, engTitle, err := mergedClassifyAndTitle(messages, input)
 	if err != nil {
-		slog.Warn("Merged AI call failed, using fallback", "error", err)
-
-		return fallbackExportMetadata(messages)
+		return "", "", "", fmt.Errorf("classify and title: %w", err)
 	}
 
-	return topicPath, title, engTitle
-}
-
-func fallbackExportMetadata(messages []session.Message) (string, string, string) {
-	userMessages := extractUserMessages(messages)
-	title := fallbackDisplayTitle(userMessages)
-	engTitle := fallbackSlugTitle(userMessages)
-
-	return fallbackTopicPath, title, engTitle
+	return topicPath, title, engTitle, nil
 }
 
 // mergedClassifyAndTitle makes a single AI call to determine topicPath, title, and engTitle.
@@ -240,33 +231,30 @@ func mergedClassifyAndTitle(messages []session.Message, input *ExportInput) (str
 	if title == "" || engTitle == "" {
 		return "", "", "", errors.New("empty title from AI")
 	}
-	topicPath := normalizeTopicPath(input.WikiRoot, result.TopicPath, candidates)
+	topicPath, err := normalizeTopicPath(input.WikiRoot, result.TopicPath, candidates)
+	if err != nil {
+		return "", "", "", err
+	}
 
 	return topicPath, title, engTitle, nil
 }
 
-func normalizeTopicPath(wikiRoot, topicPath string, candidates []ghindex.TopicCandidate) string {
+func normalizeTopicPath(wikiRoot, topicPath string, candidates []ghindex.TopicCandidate) (string, error) {
 	topicPath = strings.TrimSpace(topicPath)
 	if topicPath == "" || topicPath == "none" || topicPath == "inbox" {
-		return fallbackTopicPath
+		return "", fmt.Errorf("AI returned unresolvable topic path %q", topicPath)
 	}
 	if err := wikisvc.ValidateRelativeWikiPath(wikiRoot, topicPath); err != nil {
-		slog.Warn("AI topic path is unsafe, using fallback", "topic", topicPath, "error", err)
-
-		return fallbackTopicPath
+		return "", fmt.Errorf("AI topic path is unsafe: %w", err)
 	}
 	if !hasTopicCandidate(candidates, topicPath) {
-		slog.Warn("AI topic path is not in candidates, using fallback", "topic", topicPath)
-
-		return fallbackTopicPath
+		return "", fmt.Errorf("AI topic path %q not found in topic candidates", topicPath)
 	}
 	if strings.Count(topicPath, "/") != 2 {
-		slog.Warn("AI topic path has unsupported depth, using fallback", "topic", topicPath)
-
-		return fallbackTopicPath
+		return "", fmt.Errorf("AI topic path %q has unsupported depth", topicPath)
 	}
 
-	return topicPath
+	return topicPath, nil
 }
 
 func hasTopicCandidate(candidates []ghindex.TopicCandidate, topicPath string) bool {
@@ -379,49 +367,6 @@ func trimEngTitle(engTitle string) string {
 	engTitle = strings.Trim(engTitle, `"'「」『』`)
 	engTitle = slugTitle(engTitle)
 	return truncateRunes(engTitle, 50)
-}
-
-// fallbackDisplayTitle generates a readable fallback title from user messages, skipping URLs.
-func fallbackDisplayTitle(userMessages []string) string {
-	for _, msg := range userMessages {
-		title := fallbackTitleSeed(msg)
-		if title != "" {
-			return trimTitle(title)
-		}
-	}
-
-	return time.Now().Format("2006-01-02 15:04:05")
-}
-
-func fallbackSlugTitle(userMessages []string) string {
-	for _, msg := range userMessages {
-		title := fallbackTitleSeed(msg)
-		if title == "" {
-			continue
-		}
-
-		title = slugTitle(title)
-		title = truncateRunes(title, 50)
-		if title != "" {
-			return title
-		}
-	}
-
-	return time.Now().Format("2006-01-02-15-04-05")
-}
-
-func fallbackTitleSeed(msg string) string {
-	title := strings.TrimSpace(msg)
-	if idx := strings.IndexByte(title, '\n'); idx > 0 {
-		title = title[:idx]
-	}
-
-	lower := strings.ToLower(title)
-	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
-		return ""
-	}
-
-	return title
 }
 
 // writeExportFile writes the final markdown file with Turn-structured formatting.
