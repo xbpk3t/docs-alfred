@@ -99,9 +99,21 @@ func TestRunDomainRender_Goods(t *testing.T) {
 	src := filepath.Join(tmpDir, "data")
 	require.NoError(t, os.MkdirAll(src, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(src, "goods.yml"), []byte(`---
-- type: 耳机
-  tag: EDC
+- type: EDC
+  tag: goods
   score: 3
+  topics:
+    - topic: earphones
+      score: 5
+      table:
+        - name: AirPods
+          brand: Apple
+          price: ¥998
+    - topic: multitool
+      table:
+        - name: MR-1098SL
+          brand: Mr.Green
+          price: ¥49
   item:
     - name: C50
       price: ¥179
@@ -116,6 +128,35 @@ func TestRunDomainRender_Goods(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Len(t, result.OutputFiles, 1)
+
+	raw, err := os.ReadFile(result.OutputFiles[0])
+	require.NoError(t, err)
+
+	var decoded []map[string]any
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	require.Len(t, decoded, 1)
+
+	topics, ok := decoded[0]["topics"].([]any)
+	require.True(t, ok)
+	require.Len(t, topics, 2)
+
+	earphones, ok := topics[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "earphones", earphones["topic"])
+	assert.EqualValues(t, 5, earphones["score"])
+	table, ok := earphones["table"].([]any)
+	require.True(t, ok, "earphones.table must survive render; missing means content.Topic lacks Table field")
+	require.Len(t, table, 1)
+	row, ok := table[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "AirPods", row["name"])
+
+	multitool, ok := topics[1].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "multitool", multitool["topic"])
+	mTable, ok := multitool["table"].([]any)
+	require.True(t, ok)
+	assert.Len(t, mTable, 1)
 }
 
 func TestRunDomainRender_Task(t *testing.T) {

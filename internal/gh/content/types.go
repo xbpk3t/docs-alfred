@@ -24,15 +24,17 @@ type Repos []*Repo
 
 // Topic defines a reusable content topic structure shared by multiple domains.
 type Topic struct {
-	Topic string   `json:"topic"            yaml:"topic"`
-	What  []string `json:"what,omitempty"   yaml:"what,omitempty"`
-	HTO   []string `json:"hto,omitempty"    yaml:"hto,omitempty"`
-	Repos Repos    `json:"repos,omitempty"  yaml:"repo,omitempty"`
-	Qs    []string `json:"qs,omitempty"     yaml:"qs,omitempty"`
-	Why   []string `json:"why,omitempty"    yaml:"why,omitempty"`
-	WW    []string `json:"ww,omitempty"     yaml:"ww,omitempty"`
-	HTU   []string `json:"htu,omitempty"    yaml:"htu,omitempty"`
-	HTI   []string `json:"hti,omitempty"    yaml:"hti,omitempty"`
+	Topic string                   `json:"topic"           yaml:"topic"`
+	What  []string                 `json:"what,omitempty"  yaml:"what,omitempty"`
+	HTO   []string                 `json:"hto,omitempty"   yaml:"hto,omitempty"`
+	Repos Repos                    `json:"repos,omitempty" yaml:"repo,omitempty"`
+	Table []map[string]interface{} `json:"table,omitempty" yaml:"table,omitempty"`
+	Qs    []string                 `json:"qs,omitempty"    yaml:"qs,omitempty"`
+	Why   []string                 `json:"why,omitempty"   yaml:"why,omitempty"`
+	WW    []string                 `json:"ww,omitempty"    yaml:"ww,omitempty"`
+	HTU   []string                 `json:"htu,omitempty"   yaml:"htu,omitempty"`
+	HTI   []string                 `json:"hti,omitempty"   yaml:"hti,omitempty"`
+	Score int                      `json:"score,omitempty" yaml:"score,omitempty"`
 }
 
 type Topics []Topic
