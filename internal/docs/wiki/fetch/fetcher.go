@@ -1,8 +1,9 @@
-package wiki
+package fetch
 
 import (
 	"context"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
 	"net/url"
 	"os"
@@ -20,14 +21,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
-// ContentFetchResult holds fetched content metadata and body.
-type ContentFetchResult struct {
-	Title       string      `json:"title"`
-	Body        string      `json:"body"`
-	SourceURL   string      `json:"sourceUrl"`
-	Error       string      `json:"error,omitempty"`
-	FailureKind FailureKind `json:"-"`
-}
+const noneVal = "none"
 
 // Fetcher handles fetching content from various sources.
 type Fetcher struct {
@@ -78,7 +72,7 @@ func NewFetcher(opts ...FetcherOption) *Fetcher {
 // FetchContent fetches content based on the URL pattern.
 // GitHub repos and podcasts are handled directly; all other URLs
 // are delegated to the configured ContentDriver.
-func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) *ContentFetchResult {
+func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) *types.ContentFetchResult {
 	slog.Info("FetchContent", "url", urlStr, "type", contentType)
 
 	if err := urlutil.ValidateURL(urlStr); err != nil {
@@ -94,7 +88,7 @@ func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) 
 	}
 
 	// Podcast/audio bypasses the driver — direct to podcast transcript pipeline.
-	if contentType == ContentAudio || isPodcastLikeURL(u) || isDirectAudioURL(u) {
+	if contentType == types.ContentAudio || isPodcastLikeURL(u) || isDirectAudioURL(u) {
 		if !f.MediaEnabled {
 			return extractFailure(urlStr, "media extraction disabled")
 		}
@@ -117,20 +111,20 @@ func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) 
 
 // --- GitHub repo fetching ---
 
-func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFetchResult {
+func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *types.ContentFetchResult {
 	repoRef, ok := urlutil.GitHubOwnerRepo(rawURL)
 	if !ok {
-		return &ContentFetchResult{SourceURL: rawURL, Error: "not a valid GitHub repo URL"}
+		return &types.ContentFetchResult{SourceURL: rawURL, Error: "not a valid GitHub repo URL"}
 	}
 	owner, repoName := repoRef.Owner, repoRef.Name
 
 	ghClient, err := f.githubClient()
 	if err != nil {
-		return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
+		return &types.ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
 	}
 	repoData, _, err := ghClient.Repositories.Get(ctx, owner, repoName)
 	if err != nil {
-		return &ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
+		return &types.ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
 	}
 
 	licenseName := noneVal
@@ -159,7 +153,7 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *ContentFe
 		title = fmt.Sprintf("%s/%s — %s", owner, repoName, repoData.GetDescription())
 	}
 
-	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
+	return &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 }
 
 func (f *Fetcher) githubClient() (*github.Client, error) {
@@ -187,7 +181,7 @@ func (f *Fetcher) githubClient() (*github.Client, error) {
 
 // --- Podcast/audio fetching ---
 
-func (f *Fetcher) fetchPodcastTranscript(ctx context.Context, rawURL string) *ContentFetchResult {
+func (f *Fetcher) fetchPodcastTranscript(ctx context.Context, rawURL string) *types.ContentFetchResult {
 	lowerURL := strings.ToLower(rawURL)
 	if isDirectAudioURL(lowerURL) {
 		return extractFailure(rawURL, "rss transcript unavailable: direct audio URL has no RSS metadata")
@@ -291,7 +285,7 @@ func (f *Fetcher) fetchTranscriptFromEpisode(
 	ctx context.Context,
 	ep *transcript.EpisodeRef,
 	rawURL string,
-) *ContentFetchResult {
+) *types.ContentFetchResult {
 	providers := []transcript.Provider{
 		transcript.NewRssTranscriptProvider(),
 		transcript.NewDescriptionLinkProvider(),
@@ -326,12 +320,12 @@ func (f *Fetcher) mediaMaxBodySize() int {
 	return bodyLimit
 }
 
-func mediaContentResult(title, rawURL, source, content string, maxBodySize int) *ContentFetchResult {
+func mediaContentResult(title, rawURL, source, content string, maxBodySize int) *types.ContentFetchResult {
 	content = strings.TrimSpace(content)
 	content = textutil.TruncateUTF8(content, maxBodySize)
 	body := fmt.Sprintf("Title: %s\nURL: %s\nTranscript source: %s\n\n%s", title, rawURL, source, content)
 
-	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
+	return &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 }
 
 // --- Content quality assessment ---
@@ -350,7 +344,7 @@ func assessContentQuality(title, body, rawURL string) contentQuality {
 	if cfReason := cloudflareChallengeReason(lower); cfReason != "" {
 		return contentQuality{Reason: cfReason}
 	}
-	if matches := lowQualityMatcher.Match([]byte(lower)); len(matches) > 0 {
+	if matches := LowQualityMatcher.Match([]byte(lower)); len(matches) > 0 {
 		return contentQuality{Reason: "matched error/login shell"}
 	}
 
@@ -383,7 +377,7 @@ func cloudflareChallengeReason(lower string) string {
 	return ""
 }
 
-var lowQualityPatternsList = []string{
+var LowQualityPatternsList = []string{
 	"this page requires javascript",
 	"javascript is not available",
 	"enable javascript",
@@ -404,7 +398,7 @@ var lowQualityPatternsList = []string{
 	"video content requires manual review",
 }
 
-var lowQualityMatcher = ahocorasick.NewStringMatcher(lowQualityPatternsList)
+var LowQualityMatcher = ahocorasick.NewStringMatcher(LowQualityPatternsList)
 
 func isSocialShellDomain(domain string) bool {
 	switch strings.ToLower(domain) {
@@ -483,16 +477,16 @@ func isLinkHeavy(body string) bool {
 
 // --- Failure helpers ---
 
-func extractFailure(rawURL, reason string) *ContentFetchResult {
+func extractFailure(rawURL, reason string) *types.ContentFetchResult {
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
 		reason = "content extraction failed"
 	}
 	if strings.HasPrefix(reason, "extract:") {
-		return &ContentFetchResult{SourceURL: rawURL, Error: reason, FailureKind: FailureExtract}
+		return &types.ContentFetchResult{SourceURL: rawURL, Error: reason, FailureKind: types.FailureExtract}
 	}
 
-	return &ContentFetchResult{SourceURL: rawURL, Error: "extract: " + reason, FailureKind: FailureExtract}
+	return &types.ContentFetchResult{SourceURL: rawURL, Error: "extract: " + reason, FailureKind: types.FailureExtract}
 }
 
 func cleanExtractReason(reason string) string {
@@ -581,4 +575,18 @@ func getGHToken() string {
 	}
 
 	return os.Getenv("GH_TOKEN")
+}
+
+func DetectContentType(urlLower string) string {
+	urlLower = strings.ToLower(strings.TrimSpace(urlLower))
+	if isVideoURL(urlLower) {
+		return types.ContentVideo
+	}
+	if strings.Contains(urlLower, "xiaoyuzhou") ||
+		strings.Contains(urlLower, "podcast") ||
+		strings.Contains(urlLower, "libsyn.com") {
+		return types.ContentAudio
+	}
+
+	return types.ContentText
 }

@@ -1,4 +1,4 @@
-package wiki
+package audit
 
 import (
 	"os"

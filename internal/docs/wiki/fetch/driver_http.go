@@ -1,16 +1,17 @@
-package wiki
+package fetch
 
 import (
 	"bytes"
 	"context"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
 	"net/url"
 	"strings"
 
 	"codeberg.org/readeck/go-readability/v2"
 	"github.com/PuerkitoBio/goquery"
-	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 )
 
@@ -31,23 +32,23 @@ func newHTTPDriver(opts DriverOptions) *httpDriver {
 
 func (d *httpDriver) Name() string { return "http-readability" }
 
-func (d *httpDriver) FetchContent(ctx context.Context, urlStr, contentType string) *ContentFetchResult {
+func (d *httpDriver) FetchContent(ctx context.Context, urlStr, contentType string) *types.ContentFetchResult {
 	data, err := httputil.GetBytes(ctx, urlStr, httputil.RequestOptions{})
 	if err != nil {
-		failureKind := FailureFetch
+		failureKind := types.FailureFetch
 		errorStr := err.Error()
 		if isHTTPBlockError(err) {
-			failureKind = FailureResolve
+			failureKind = types.FailureResolve
 			errorStr = "resolve: " + errorStr
 		}
 
-		return &ContentFetchResult{SourceURL: urlStr, Error: errorStr, FailureKind: failureKind}
+		return &types.ContentFetchResult{SourceURL: urlStr, Error: errorStr, FailureKind: failureKind}
 	}
 
 	return d.handlePageData(ctx, urlStr, data)
 }
 
-func (d *httpDriver) handlePageData(ctx context.Context, rawURL string, data []byte) *ContentFetchResult {
+func (d *httpDriver) handlePageData(ctx context.Context, rawURL string, data []byte) *types.ContentFetchResult {
 	slog.Info("HTTP fetch succeeded", "url", rawURL, "bodyLen", len(data))
 	if result := d.extractWithReadability(data, rawURL); result != nil {
 		return d.ensureContentQuality(ctx, result)
@@ -59,10 +60,10 @@ func (d *httpDriver) handlePageData(ctx context.Context, rawURL string, data []b
 		title = rawURL
 	}
 
-	return d.ensureContentQuality(ctx, &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL})
+	return d.ensureContentQuality(ctx, &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL})
 }
 
-func (d *httpDriver) extractWithReadability(data []byte, rawURL string) *ContentFetchResult {
+func (d *httpDriver) extractWithReadability(data []byte, rawURL string) *types.ContentFetchResult {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return nil
@@ -95,10 +96,10 @@ func (d *httpDriver) extractWithReadability(data []byte, rawURL string) *Content
 
 	slog.Info("go-readability extraction succeeded", "url", rawURL, "bodyLen", len(body))
 
-	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
+	return &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 }
 
-func (d *httpDriver) ensureContentQuality(_ context.Context, result *ContentFetchResult) *ContentFetchResult {
+func (d *httpDriver) ensureContentQuality(_ context.Context, result *types.ContentFetchResult) *types.ContentFetchResult {
 	if result == nil || result.Error != "" {
 		return result
 	}

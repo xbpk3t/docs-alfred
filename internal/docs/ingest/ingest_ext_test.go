@@ -11,7 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
+	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
 )
@@ -23,42 +24,42 @@ func TestShouldWriteClassifyFailureNil(t *testing.T) {
 }
 
 func TestShouldWriteClassifyFailureRejectReason(t *testing.T) {
-	result := &wikisvc.ClassifyResult{RejectReason: "low confidence"}
+	result := &wikitypes.ClassifyResult{RejectReason: "low confidence"}
 	assert.True(t, shouldWriteClassifyFailure(result))
 }
 
 func TestShouldWriteClassifyFailureNeedsManualReview(t *testing.T) {
-	result := &wikisvc.ClassifyResult{NeedsManualReview: true}
+	result := &wikitypes.ClassifyResult{NeedsManualReview: true}
 	assert.True(t, shouldWriteClassifyFailure(result))
 }
 
 func TestShouldWriteClassifyFailureInboxType(t *testing.T) {
-	result := &wikisvc.ClassifyResult{WikiType: wikisvc.TypeInbox}
+	result := &wikitypes.ClassifyResult{WikiType: wikitypes.TypeInbox}
 	assert.True(t, shouldWriteClassifyFailure(result))
 }
 
 func TestShouldWriteClassifyFailureNoneTopicPath(t *testing.T) {
-	result := &wikisvc.ClassifyResult{TopicPath: unclassifiedTopicPath}
+	result := &wikitypes.ClassifyResult{TopicPath: unclassifiedTopicPath}
 	assert.True(t, shouldWriteClassifyFailure(result))
 }
 
 func TestShouldWriteClassifyFailureInboxTopicPath(t *testing.T) {
-	result := &wikisvc.ClassifyResult{TopicPath: inboxTopicPath}
+	result := &wikitypes.ClassifyResult{TopicPath: inboxTopicPath}
 	assert.True(t, shouldWriteClassifyFailure(result))
 }
 
 func TestShouldWriteClassifyFailureValidResult(t *testing.T) {
-	result := &wikisvc.ClassifyResult{
+	result := &wikitypes.ClassifyResult{
 		TopicPath: "topic/path",
-		WikiType:  wikisvc.TypeDeepDive,
+		WikiType:  wikitypes.TypeDeepDive,
 	}
 	assert.False(t, shouldWriteClassifyFailure(result))
 }
 
 func TestShouldWriteClassifyFailureManualReviewWithGoodSummary(t *testing.T) {
-	result := &wikisvc.ClassifyResult{
+	result := &wikitypes.ClassifyResult{
 		NeedsManualReview: true,
-		Summary:           &wikisvc.StructuredSummary{Overview: "good content"},
+		Summary:           &wikitypes.StructuredSummary{Overview: "good content"},
 	}
 	assert.False(t, shouldWriteClassifyFailure(result))
 }
@@ -71,10 +72,10 @@ func TestClassifyFailureInfoNil(t *testing.T) {
 }
 
 func TestClassifyFailureInfoWithRejectReason(t *testing.T) {
-	result := &wikisvc.ClassifyResult{
+	result := &wikitypes.ClassifyResult{
 		RejectReason: "low confidence",
 		TopicPath:    "topic/path",
-		WikiType:     wikisvc.TypeDeepDive,
+		WikiType:     wikitypes.TypeDeepDive,
 		Confidence:   0.3,
 	}
 	info := classifyFailureInfo(result)
@@ -85,9 +86,9 @@ func TestClassifyFailureInfoWithRejectReason(t *testing.T) {
 }
 
 func TestClassifyFailureInfoNoRejectReason(t *testing.T) {
-	result := &wikisvc.ClassifyResult{
+	result := &wikitypes.ClassifyResult{
 		NeedsManualReview: true,
-		Summary:           &wikisvc.StructuredSummary{Overview: "overview", KeyPoints: []string{"p"}},
+		Summary:           &wikitypes.StructuredSummary{Overview: "overview", KeyPoints: []string{"p"}},
 	}
 	info := classifyFailureInfo(result)
 	assert.Contains(t, info, "AI marked the item as inbox/manual review")
@@ -97,35 +98,35 @@ func TestClassifyFailureInfoNoRejectReason(t *testing.T) {
 // --- failureKindForFetchResult ---
 
 func TestFailureKindForFetchResultNil(t *testing.T) {
-	assert.Equal(t, wikisvc.FailureFetch, failureKindForFetchResult(nil))
+	assert.Equal(t, wikitypes.FailureFetch, failureKindForFetchResult(nil))
 }
 
 func TestFailureKindForFetchResultWithKind(t *testing.T) {
-	result := &wikisvc.ContentFetchResult{FailureKind: wikisvc.FailureExtract}
-	assert.Equal(t, wikisvc.FailureExtract, failureKindForFetchResult(result))
+	result := &wikitypes.ContentFetchResult{FailureKind: wikitypes.FailureExtract}
+	assert.Equal(t, wikitypes.FailureExtract, failureKindForFetchResult(result))
 }
 
 func TestFailureKindForFetchResultLegacyExtract(t *testing.T) {
-	result := &wikisvc.ContentFetchResult{Error: "extract: low quality"}
-	assert.Equal(t, wikisvc.FailureExtract, failureKindForFetchResult(result))
+	result := &wikitypes.ContentFetchResult{Error: "extract: low quality"}
+	assert.Equal(t, wikitypes.FailureExtract, failureKindForFetchResult(result))
 }
 
 func TestFailureKindForFetchResultLegacyResolve(t *testing.T) {
-	result := &wikisvc.ContentFetchResult{Error: "resolve: HTTP 403"}
-	assert.Equal(t, wikisvc.FailureResolve, failureKindForFetchResult(result))
+	result := &wikitypes.ContentFetchResult{Error: "resolve: HTTP 403"}
+	assert.Equal(t, wikitypes.FailureResolve, failureKindForFetchResult(result))
 }
 
 func TestFailureKindForFetchResultLegacyFetch(t *testing.T) {
-	result := &wikisvc.ContentFetchResult{Error: "connection refused"}
-	assert.Equal(t, wikisvc.FailureFetch, failureKindForFetchResult(result))
+	result := &wikitypes.ContentFetchResult{Error: "connection refused"}
+	assert.Equal(t, wikitypes.FailureFetch, failureKindForFetchResult(result))
 }
 
 // --- legacyFailureKindFromMessage ---
 
 func TestLegacyFailureKindFromMessage(t *testing.T) {
-	assert.Equal(t, wikisvc.FailureExtract, legacyFailureKindFromMessage("extract: something"))
-	assert.Equal(t, wikisvc.FailureResolve, legacyFailureKindFromMessage("resolve: HTTP error"))
-	assert.Equal(t, wikisvc.FailureFetch, legacyFailureKindFromMessage("connection timeout"))
+	assert.Equal(t, wikitypes.FailureExtract, legacyFailureKindFromMessage("extract: something"))
+	assert.Equal(t, wikitypes.FailureResolve, legacyFailureKindFromMessage("resolve: HTTP error"))
+	assert.Equal(t, wikitypes.FailureFetch, legacyFailureKindFromMessage("connection timeout"))
 }
 
 // --- handledURLsByLine ---
@@ -319,7 +320,7 @@ func TestNewAIConfig(t *testing.T) {
 // --- Error types ---
 
 func TestFetchFailureError(t *testing.T) {
-	e := &fetchFailureError{failureType: wikisvc.FailureFetch, message: "fetch failed"}
+	e := &fetchFailureError{failureType: wikitypes.FailureFetch, message: "fetch failed"}
 	assert.Equal(t, "fetch failed", e.Error())
 }
 
@@ -358,34 +359,34 @@ func TestWritePendingURLAIError(t *testing.T) {
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingAIError, Error: "AI failed"}
 	result := writePendingURL(deps, t.TempDir(), pending, false)
 	assert.Equal(t, StatusFailureWritten, result.Status)
-	assert.Equal(t, wikisvc.FailureAI, result.FailureType)
+	assert.Equal(t, wikitypes.FailureAI, result.FailureType)
 }
 
 func TestWritePendingURLExtractFailure(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
-	item := &wikisvc.ClassifyItem{URL: "https://example.com", Title: "Test"}
+	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingExtractFailure, Item: item, ExtraInfo: "too short"}
 	result := writePendingURL(deps, t.TempDir(), pending, false)
 	assert.Equal(t, StatusFailureWritten, result.Status)
-	assert.Equal(t, wikisvc.FailureExtract, result.FailureType)
+	assert.Equal(t, wikitypes.FailureExtract, result.FailureType)
 }
 
 func TestWritePendingURLFetchFailure(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
-	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingFetchFailure, FailureType: wikisvc.FailureFetch, ExtraInfo: "timeout"}
+	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingFetchFailure, FailureType: wikitypes.FailureFetch, ExtraInfo: "timeout"}
 	result := writePendingURL(deps, t.TempDir(), pending, false)
 	assert.Equal(t, StatusFailureWritten, result.Status)
-	assert.Equal(t, wikisvc.FailureFetch, result.FailureType)
+	assert.Equal(t, wikitypes.FailureFetch, result.FailureType)
 }
 
 func TestWritePendingURLSummaryDryRun(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
-	item := &wikisvc.ClassifyItem{
+	item := &wikitypes.ClassifyItem{
 		URL:       "https://example.com",
 		Title:     "Test",
 		TopicPath: "topic/path",
-		Type:      wikisvc.TypeDeepDive,
-		Summary:   &wikisvc.StructuredSummary{Overview: "summary"},
+		Type:      wikitypes.TypeDeepDive,
+		Summary:   &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingSummary, Item: item}
 	result := writePendingURL(deps, t.TempDir(), pending, true)
@@ -395,7 +396,7 @@ func TestWritePendingURLSummaryDryRun(t *testing.T) {
 
 func TestWritePendingURLFailureDryRun(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
-	item := &wikisvc.ClassifyItem{URL: "https://example.com", Title: "Test"}
+	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingClassifyFailure, Item: item, ExtraInfo: "info"}
 	result := writePendingURL(deps, t.TempDir(), pending, true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
@@ -405,10 +406,10 @@ func TestWritePendingURLFailureDryRun(t *testing.T) {
 // --- Pipeline helpers ---
 
 func TestPendingExtractFailureWrite(t *testing.T) {
-	item := &wikisvc.ClassifyItem{URL: "https://example.com", Title: "Test"}
+	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 	p := pendingExtractFailureWrite(item, "too short")
 	assert.Equal(t, pendingExtractFailure, p.Kind)
-	assert.Equal(t, wikisvc.FailureExtract, p.FailureType)
+	assert.Equal(t, wikitypes.FailureExtract, p.FailureType)
 	assert.Equal(t, "too short", p.ExtraInfo)
 }
 
@@ -429,13 +430,13 @@ func TestNewPendingUnhandled(t *testing.T) {
 func TestServiceWriterWriteSummary(t *testing.T) {
 	root := t.TempDir()
 	w := serviceWriter{}
-	path, err := w.WriteSummary(&wikisvc.ClassifyItem{
+	path, err := w.WriteSummary(&wikitypes.ClassifyItem{
 		URL:       "https://example.com",
 		Title:     "Test",
 		TopicPath: "topic/path",
-		Type:      wikisvc.TypeDeepDive,
-		Summary:   &wikisvc.StructuredSummary{Overview: "summary"},
-	}, &wikisvc.WriteOptions{WikiRoot: root})
+		Type:      wikitypes.TypeDeepDive,
+		Summary:   &wikitypes.StructuredSummary{Overview: "summary"},
+	}, &wikiwrite.WriteOptions{WikiRoot: root})
 	require.NoError(t, err)
 	assert.NotEmpty(t, path)
 }
@@ -444,9 +445,9 @@ func TestServiceWriterWriteFailureEntry(t *testing.T) {
 	root := t.TempDir()
 	w := serviceWriter{}
 	path, err := w.WriteFailureEntry(
-		&wikisvc.ClassifyItem{URL: "https://example.com"},
-		wikisvc.FailureFetch, "timeout",
-		&wikisvc.WriteOptions{WikiRoot: root},
+		&wikitypes.ClassifyItem{URL: "https://example.com"},
+		wikitypes.FailureFetch, "timeout",
+		&wikiwrite.WriteOptions{WikiRoot: root},
 	)
 	require.NoError(t, err)
 	assert.NotEmpty(t, path)
@@ -465,14 +466,14 @@ func TestServiceWriterWriteManualReviewEntry(t *testing.T) {
 	root := t.TempDir()
 	w := serviceWriter{}
 	path, err := w.WriteManualReviewEntry(
-		&wikisvc.ClassifyItem{
+		&wikitypes.ClassifyItem{
 			URL:       "https://example.com",
 			Title:     "Test",
 			TopicPath: "topic/path",
-			Type:      wikisvc.TypeInbox,
-			Summary:   &wikisvc.StructuredSummary{Overview: "needs review"},
+			Type:      wikitypes.TypeInbox,
+			Summary:   &wikitypes.StructuredSummary{Overview: "needs review"},
 		},
-		&wikisvc.WriteOptions{WikiRoot: root},
+		&wikiwrite.WriteOptions{WikiRoot: root},
 	)
 	require.NoError(t, err)
 	assert.NotEmpty(t, path)
@@ -610,14 +611,14 @@ func TestRunDigestParseInboxError(t *testing.T) {
 
 func TestRunDigestFlushInboxError(t *testing.T) {
 	deps := newFakeDeps()
-	deps.inbox.entries = []wikisvc.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
+	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
 	deps.inbox.flushErr = errors.New("flush failed")
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
-	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results["https://example.com/a"] = &wikitypes.ClassifyResult{
 		TopicPath:   "topic/path",
-		WikiType:    wikisvc.TypeDeepDive,
-		ContentType: wikisvc.ContentText,
-		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentText,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 	cfg := testConfig(t)
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/a\n"), 0o600))
@@ -654,14 +655,14 @@ func TestPrepareURLAttemptNilFetchResult(t *testing.T) {
 	require.Error(t, err)
 	var fetchErr *fetchFailureError
 	assert.ErrorAs(t, err, &fetchErr)
-	assert.Equal(t, wikisvc.FailureFetch, fetchErr.failureType)
+	assert.Equal(t, wikitypes.FailureFetch, fetchErr.failureType)
 }
 
 func TestPrepareURLAttemptEmptyFetchResultError(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Error:       "connection refused",
-		FailureKind: wikisvc.FailureFetch,
+		FailureKind: wikitypes.FailureFetch,
 	}
 
 	_, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
@@ -672,7 +673,7 @@ func TestPrepareURLAttemptEmptyFetchResultError(t *testing.T) {
 
 func TestPrepareURLAttemptVideoContentTooShort(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://www.bilibili.com/video/BV1abc/"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://www.bilibili.com/video/BV1abc/"] = &wikitypes.ContentFetchResult{
 		Title: "Video",
 		Body:  "short", // < 600 runes
 	}
@@ -685,7 +686,7 @@ func TestPrepareURLAttemptVideoContentTooShort(t *testing.T) {
 
 func TestPrepareURLAttemptNilClassifierEmptyContent(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Title: "Title",
 		Body:  "  ", // whitespace-only → empty after trim
 	}
@@ -699,7 +700,7 @@ func TestPrepareURLAttemptNilClassifierEmptyContent(t *testing.T) {
 
 func TestPrepareURLAttemptNilClassifierNonEmptyContent(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Title: "Title",
 		Body:  "some real content here",
 	}
@@ -713,13 +714,13 @@ func TestPrepareURLAttemptNilClassifierNonEmptyContent(t *testing.T) {
 
 func TestPrepareURLAttemptClassifyFailure(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Title: "Title",
 		Body:  "some real content here",
 	}
-	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+	deps.classifier.results["https://example.com/a"] = &wikitypes.ClassifyResult{
 		TopicPath:    "none",
-		WikiType:     wikisvc.TypeInbox,
+		WikiType:     wikitypes.TypeInbox,
 		RejectReason: "low quality",
 	}
 
@@ -732,27 +733,27 @@ func TestPrepareURLAttemptClassifyFailure(t *testing.T) {
 
 func TestPrepareInboxEntryFetchFailureError(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Error:       "resolve: HTTP 403",
-		FailureKind: wikisvc.FailureResolve,
+		FailureKind: wikitypes.FailureResolve,
 	}
 
-	entry := wikisvc.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
+	entry := wikiwrite.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
 	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second}
 	result := prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg)
 	assert.Equal(t, pendingFetchFailure, result.Kind)
-	assert.Equal(t, wikisvc.FailureResolve, result.FailureType)
+	assert.Equal(t, wikitypes.FailureResolve, result.FailureType)
 }
 
 func TestPrepareInboxEntryClassifyRetryError(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Title: "Title",
 		Body:  "some real content here",
 	}
 	// No classifier result → AI error JSONL path (not raw uncat dump)
 
-	entry := wikisvc.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
+	entry := wikiwrite.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
 	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second}
 	result := prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg)
 	assert.Equal(t, pendingAIError, result.Kind)
@@ -764,14 +765,14 @@ func TestPrepareInboxEntryClassifyRetryError(t *testing.T) {
 
 func TestProcessAddURLFetchFailure(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Error:       "resolve: HTTP 403",
-		FailureKind: wikisvc.FailureResolve,
+		FailureKind: wikitypes.FailureResolve,
 	}
 
 	result := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
 	assert.Equal(t, StatusFailureWritten, result.Status)
-	assert.Equal(t, wikisvc.FailureResolve, result.FailureType)
+	assert.Equal(t, wikitypes.FailureResolve, result.FailureType)
 }
 
 func TestProcessAddURLUnhandledError(t *testing.T) {
@@ -789,12 +790,12 @@ func TestProcessAddURLUnhandledError(t *testing.T) {
 func TestWriteClassifyFailureWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.failureErr = errors.New("disk full")
-	item := &wikisvc.ClassifyItem{URL: "https://example.com", Title: "Test"}
+	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 
 	result := writeClassifyFailure(deps.dependencies(), t.TempDir(), item, "info", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "disk full")
-	assert.Equal(t, wikisvc.FailureClassify, result.FailureType)
+	assert.Equal(t, wikitypes.FailureClassify, result.FailureType)
 }
 
 // --- writeExtractFailure ---
@@ -802,17 +803,17 @@ func TestWriteClassifyFailureWriterError(t *testing.T) {
 func TestWriteExtractFailureWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.failureErr = errors.New("write failed")
-	item := &wikisvc.ClassifyItem{URL: "https://example.com", Title: "Test"}
+	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 
 	result := writeExtractFailure(deps.dependencies(), t.TempDir(), item, "info", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
-	assert.Equal(t, wikisvc.FailureExtract, result.FailureType)
+	assert.Equal(t, wikitypes.FailureExtract, result.FailureType)
 }
 
 func TestWriteExtractFailureDryRun(t *testing.T) {
 	deps := newFakeDeps()
-	item := &wikisvc.ClassifyItem{URL: "https://example.com", Title: "Test"}
+	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 
 	result := writeExtractFailure(deps.dependencies(), t.TempDir(), item, "info", true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
@@ -826,16 +827,16 @@ func TestWriteFetchFailureWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.failureErr = errors.New("write failed")
 
-	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikisvc.FailureFetch, "timeout", false)
+	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureFetch, "timeout", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
-	assert.Equal(t, wikisvc.FailureFetch, result.FailureType)
+	assert.Equal(t, wikitypes.FailureFetch, result.FailureType)
 }
 
 func TestWriteFetchFailureDryRun(t *testing.T) {
 	deps := newFakeDeps()
 
-	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikisvc.FailureFetch, "timeout", true)
+	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureFetch, "timeout", true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
 	assert.True(t, result.Handled)
 	assert.True(t, deps.writer.failures[0].dryRun)
@@ -850,7 +851,7 @@ func TestWriteAIErrorWriterError(t *testing.T) {
 	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", "AI timeout", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
-	assert.Equal(t, wikisvc.FailureAI, result.FailureType)
+	assert.Equal(t, wikitypes.FailureAI, result.FailureType)
 }
 
 func TestWriteAIErrorDryRun(t *testing.T) {
@@ -867,12 +868,12 @@ func TestWriteAIErrorDryRun(t *testing.T) {
 func TestWriteSummaryNeedsManualReview(t *testing.T) {
 	deps := newFakeDeps()
 	// NMR + legal topic path + overview → promote to topic write (recall)
-	item := &wikisvc.ClassifyItem{
+	item := &wikitypes.ClassifyItem{
 		URL:               "https://example.com",
 		Title:             "Test",
 		TopicPath:         "topic/path",
-		Type:              wikisvc.TypeDeepDive,
-		Summary:           &wikisvc.StructuredSummary{Overview: "summary"},
+		Type:              wikitypes.TypeDeepDive,
+		Summary:           &wikitypes.StructuredSummary{Overview: "summary"},
 		NeedsManualReview: true,
 	}
 
@@ -886,14 +887,14 @@ func TestWriteSummaryNeedsManualReview(t *testing.T) {
 
 func TestWriteSummaryNeedsManualReviewNoTopicGoesUncat(t *testing.T) {
 	deps := newFakeDeps()
-	item := &wikisvc.ClassifyItem{
+	item := &wikitypes.ClassifyItem{
 		URL:               "https://example.com",
 		Title:             "Test",
 		TopicPath:         "",
-		Type:              wikisvc.TypeInbox,
-		Summary:           &wikisvc.StructuredSummary{Overview: "summary"},
+		Type:              wikitypes.TypeInbox,
+		Summary:           &wikitypes.StructuredSummary{Overview: "summary"},
 		NeedsManualReview: true,
-		RouteReason:       wikisvc.RouteReasonNoTopicMatch,
+		RouteReason:       wikitypes.RouteReasonNoTopicMatch,
 	}
 
 	result := writeSummary(deps.dependencies(), t.TempDir(), item, false)
@@ -906,12 +907,12 @@ func TestWriteSummaryManualReviewWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.failureErr = errors.New("disk full")
 	// No topic path → stays on uncat path and hits WriteManualReviewEntry error
-	item := &wikisvc.ClassifyItem{
+	item := &wikitypes.ClassifyItem{
 		URL:               "https://example.com",
 		Title:             "Test",
 		TopicPath:         "",
-		Type:              wikisvc.TypeInbox,
-		Summary:           &wikisvc.StructuredSummary{Overview: "summary"},
+		Type:              wikitypes.TypeInbox,
+		Summary:           &wikitypes.StructuredSummary{Overview: "summary"},
 		NeedsManualReview: true,
 	}
 
@@ -923,12 +924,12 @@ func TestWriteSummaryManualReviewWriterError(t *testing.T) {
 func TestWriteSummaryWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.summaryErr = errors.New("write failed")
-	item := &wikisvc.ClassifyItem{
+	item := &wikitypes.ClassifyItem{
 		URL:       "https://example.com",
 		Title:     "Test",
 		TopicPath: "topic/path",
-		Type:      wikisvc.TypeDeepDive,
-		Summary:   &wikisvc.StructuredSummary{Overview: "summary"},
+		Type:      wikitypes.TypeDeepDive,
+		Summary:   &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 
 	result := writeSummary(deps.dependencies(), t.TempDir(), item, false)
@@ -949,12 +950,12 @@ func TestRequireDirStatError(t *testing.T) {
 
 func TestWriteSummaryNeedsManualReviewDryRun(t *testing.T) {
 	deps := newFakeDeps()
-	item := &wikisvc.ClassifyItem{
+	item := &wikitypes.ClassifyItem{
 		URL:               "https://example.com",
 		Title:             "Test",
 		TopicPath:         "topic/path",
-		Type:              wikisvc.TypeDeepDive,
-		Summary:           &wikisvc.StructuredSummary{Overview: "summary"},
+		Type:              wikitypes.TypeDeepDive,
+		Summary:           &wikitypes.StructuredSummary{Overview: "summary"},
 		NeedsManualReview: true,
 	}
 
@@ -1006,15 +1007,15 @@ func TestRunAuditWikiRootNotFound(t *testing.T) {
 
 func TestPrepareURLAttemptTitleFallback(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Title: "", // empty title → falls back to URL
 		Body:  "some real content here with enough data for classification",
 	}
-	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+	deps.classifier.results["https://example.com/a"] = &wikitypes.ClassifyResult{
 		TopicPath:   "topic/path",
-		WikiType:    wikisvc.TypeDeepDive,
-		ContentType: wikisvc.ContentText,
-		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentText,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 
 	result, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
@@ -1027,7 +1028,7 @@ func TestPrepareURLAttemptTitleFallback(t *testing.T) {
 
 func TestProcessAddURLUnhandledClassifyRetryError(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Title: "Title",
 		Body:  "some real content",
 	}
@@ -1036,14 +1037,14 @@ func TestProcessAddURLUnhandledClassifyRetryError(t *testing.T) {
 	result := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
 	assert.Equal(t, StatusFailureWritten, result.Status)
 	assert.True(t, result.Handled)
-	assert.Equal(t, wikisvc.FailureAI, result.FailureType)
+	assert.Equal(t, wikitypes.FailureAI, result.FailureType)
 }
 
 // --- RunDigest no entries handled (unhandled error) ---
 
 func TestRunDigestNoEntriesHandled(t *testing.T) {
 	deps := newFakeDeps()
-	deps.inbox.entries = []wikisvc.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
+	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
 	deps.fetcher.returnNil = true
 	cfg := testConfig(t)
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/a\n"), 0o600))
@@ -1072,7 +1073,7 @@ func TestResolveDependenciesNilDeps(t *testing.T) {
 func TestResolveDependenciesPartialDeps(t *testing.T) {
 	cfg := testConfig(t)
 	deps := resolveDependencies(cfg, &dependencies{
-		fetcher: &fakeFetcher{results: map[string]*wikisvc.ContentFetchResult{}},
+		fetcher: &fakeFetcher{results: map[string]*wikitypes.ContentFetchResult{}},
 	})
 	assert.NotNil(t, deps)
 	assert.NotNil(t, deps.fetcher)
@@ -1107,11 +1108,11 @@ func TestRunDigestLocalSkipsNonDirEntries(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(subDir, "bv.txt"), []byte("BV1abc123"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(subDir, "title.txt"), []byte("Title"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(subDir, "transcript.md"), []byte(strings.Repeat("transcript content here. ", 50)), 0o600))
-	deps.classifier.results["https://www.bilibili.com/video/BV1abc123/"] = &wikisvc.ClassifyResult{
+	deps.classifier.results["https://www.bilibili.com/video/BV1abc123/"] = &wikitypes.ClassifyResult{
 		TopicPath:   "tech/ai",
-		WikiType:    wikisvc.TypeDeepDive,
-		ContentType: wikisvc.ContentVideo,
-		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentVideo,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 
 	result, err := RunDigestLocal(context.Background(), DigestLocalInput{

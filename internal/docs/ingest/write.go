@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
+	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 )
 
 func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWrite, dryRun bool) URLResult {
@@ -30,15 +32,24 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 }
 
 // newWriteOpts builds WriteOptions with ValidTopicPaths from dependencies.
-func newWriteOpts(deps *dependencies, wikiRoot string, dryRun bool) *wikisvc.WriteOptions {
-	return &wikisvc.WriteOptions{
-		WikiRoot:       wikiRoot,
-		DryRun:         dryRun,
+func newWriteOpts(deps *dependencies, wikiRoot string, dryRun bool) *wikiwrite.WriteOptions {
+	return &wikiwrite.WriteOptions{
+		WikiRoot:        wikiRoot,
+		DryRun:          dryRun,
 		ValidTopicPaths: deps.validTopicPaths,
 	}
 }
 
-func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyItem, dryRun bool) URLResult {
+func writeSummary(deps *dependencies, wikiRoot string, item *wikitypes.ClassifyItem, dryRun bool) URLResult {
+	// Good content with no usable topic (none/inbox) still belongs in uncat.md for triage.
+	// Classifier may leave NeedsManualReview false when overview is non-empty.
+	if !item.NeedsManualReview && isUnclassifiedTopic(item) {
+		item.NeedsManualReview = true
+		if item.RouteReason == "" {
+			item.RouteReason = wikitypes.RouteReasonNoTopicMatch
+		}
+	}
+
 	// Recall path: legal topic + good summary → write topic even if NMR was set upstream.
 	// Classifier normally clears NMR when promoting; this is a safety net for partial items.
 	if item.NeedsManualReview && canWriteTopicDespiteNMR(item, deps) {
@@ -49,7 +60,7 @@ func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyIte
 	// for manual triage, not under a topic dir.
 	if item.NeedsManualReview {
 		if item.RouteReason == "" {
-			item.RouteReason = wikisvc.RouteReasonNeedsManualReview
+			item.RouteReason = wikitypes.RouteReasonNeedsManualReview
 		}
 		path, err := deps.writer.WriteManualReviewEntry(
 			item,
@@ -99,8 +110,12 @@ func writeSummary(deps *dependencies, wikiRoot string, item *wikisvc.ClassifyIte
 // canWriteTopicDespiteNMR is a write-layer safety net: if item still has NMR but
 // carries a ValidTopicPaths path + overview, promote to topic write.
 // Also performs fuzzy resolve for the item in-place.
-func canWriteTopicDespiteNMR(item *wikisvc.ClassifyItem, deps *dependencies) bool {
+func canWriteTopicDespiteNMR(item *wikitypes.ClassifyItem, deps *dependencies) bool {
 	if item == nil || strings.TrimSpace(item.TopicPath) == "" {
+		return false
+	}
+	// Sentinel / inbox paths are never a legal topic write target.
+	if isUnclassifiedTopic(item) {
 		return false
 	}
 	if item.Summary == nil || strings.TrimSpace(item.Summary.Overview) == "" {
@@ -115,8 +130,8 @@ func canWriteTopicDespiteNMR(item *wikisvc.ClassifyItem, deps *dependencies) boo
 
 // resolveAndSetItemTopic attempts fuzzy resolve; if it fails, clears TopicPath
 // to prevent downstream tries. Returns true when TopicPath is usable.
-func resolveAndSetItemTopic(item *wikisvc.ClassifyItem, valid map[string]bool) bool {
-	resolved, ok := wikisvc.ResolveTopicPathAmong(item.TopicPath, valid)
+func resolveAndSetItemTopic(item *wikitypes.ClassifyItem, valid map[string]bool) bool {
+	resolved, ok := wikiclassify.ResolveTopicPathAmong(item.TopicPath, valid)
 	if !ok {
 		return false
 	}
@@ -128,7 +143,17 @@ func resolveAndSetItemTopic(item *wikisvc.ClassifyItem, valid map[string]bool) b
 	return true
 }
 
-func shouldWriteClassifyFailure(result *wikisvc.ClassifyResult) bool {
+// isUnclassifiedTopic reports topics that must not write under a topic dir.
+func isUnclassifiedTopic(item *wikitypes.ClassifyItem) bool {
+	if item == nil {
+		return true
+	}
+	tp := strings.TrimSpace(item.TopicPath)
+	return tp == "" || tp == unclassifiedTopicPath || tp == inboxTopicPath ||
+		item.Type == wikitypes.TypeInbox
+}
+
+func shouldWriteClassifyFailure(result *wikitypes.ClassifyResult) bool {
 	if result == nil {
 		return true
 	}
@@ -139,11 +164,11 @@ func shouldWriteClassifyFailure(result *wikisvc.ClassifyResult) bool {
 		return false
 	}
 
-	return result.RejectReason != "" || result.NeedsManualReview || result.WikiType == wikisvc.TypeInbox ||
+	return result.RejectReason != "" || result.NeedsManualReview || result.WikiType == wikitypes.TypeInbox ||
 		result.TopicPath == unclassifiedTopicPath || result.TopicPath == inboxTopicPath
 }
 
-func classifyFailureInfo(result *wikisvc.ClassifyResult) string {
+func classifyFailureInfo(result *wikitypes.ClassifyResult) string {
 	if result == nil {
 		return "classification failed (returned nil)"
 	}
@@ -166,7 +191,7 @@ func classifyFailureInfo(result *wikisvc.ClassifyResult) string {
 		lines = append(lines, "NeedsManualReview: true")
 	}
 	if result.Summary != nil {
-		if s := strings.TrimSpace(wikisvc.RenderStructuredSummary(result.Summary)); s != "" {
+		if s := strings.TrimSpace(wikiclassify.RenderStructuredSummary(result.Summary)); s != "" {
 			lines = append(lines, "Summary: "+s)
 		}
 	}
@@ -177,13 +202,13 @@ func classifyFailureInfo(result *wikisvc.ClassifyResult) string {
 func writeClassifyFailure(
 	deps *dependencies,
 	wikiRoot string,
-	item *wikisvc.ClassifyItem,
+	item *wikitypes.ClassifyItem,
 	extraInfo string,
 	dryRun bool,
 ) URLResult {
 	path, err := deps.writer.WriteFailureEntry(
 		item,
-		wikisvc.FailureClassify,
+		wikitypes.FailureClassify,
 		extraInfo,
 		newWriteOpts(deps, wikiRoot, dryRun),
 	)
@@ -191,7 +216,7 @@ func writeClassifyFailure(
 		return URLResult{
 			URL:         item.URL,
 			Status:      StatusUnhandledError,
-			FailureType: wikisvc.FailureClassify,
+			FailureType: wikitypes.FailureClassify,
 			Error:       fmt.Sprintf("write classify failure: %v", err),
 		}
 	}
@@ -209,20 +234,20 @@ func writeClassifyFailure(
 		TopicPath:   item.TopicPath,
 		WikiType:    string(item.Type),
 		ContentType: item.ContentType,
-		FailureType: wikisvc.FailureClassify,
+		FailureType: wikitypes.FailureClassify,
 	}
 }
 
 func writeExtractFailure(
 	deps *dependencies,
 	wikiRoot string,
-	item *wikisvc.ClassifyItem,
+	item *wikitypes.ClassifyItem,
 	extraInfo string,
 	dryRun bool,
 ) URLResult {
 	path, err := deps.writer.WriteFailureEntry(
 		item,
-		wikisvc.FailureExtract,
+		wikitypes.FailureExtract,
 		extraInfo,
 		newWriteOpts(deps, wikiRoot, dryRun),
 	)
@@ -230,7 +255,7 @@ func writeExtractFailure(
 		return URLResult{
 			URL:         item.URL,
 			Status:      StatusUnhandledError,
-			FailureType: wikisvc.FailureExtract,
+			FailureType: wikitypes.FailureExtract,
 			Error:       fmt.Sprintf("write extract failure: %v", err),
 		}
 	}
@@ -245,7 +270,7 @@ func writeExtractFailure(
 		Status:      status,
 		Handled:     true,
 		OutputPath:  path,
-		FailureType: wikisvc.FailureExtract,
+		FailureType: wikitypes.FailureExtract,
 	}
 }
 
@@ -253,11 +278,11 @@ func writeFetchFailure(
 	deps *dependencies,
 	wikiRoot,
 	urlStr string,
-	failureType wikisvc.FailureKind,
+	failureType wikitypes.FailureKind,
 	extraInfo string,
 	dryRun bool,
 ) URLResult {
-	item := &wikisvc.ClassifyItem{URL: urlStr, Title: urlStr}
+	item := &wikitypes.ClassifyItem{URL: urlStr, Title: urlStr}
 	path, err := deps.writer.WriteFailureEntry(
 		item,
 		failureType,
@@ -294,14 +319,14 @@ func writeAIError(
 	message string,
 	dryRun bool,
 ) URLResult {
-	item := &wikisvc.ClassifyItem{
+	item := &wikitypes.ClassifyItem{
 		URL:         urlStr,
 		Title:       urlStr,
-		RouteReason: wikisvc.RouteReasonAIUnavailable,
+		RouteReason: wikitypes.RouteReasonAIUnavailable,
 	}
 	path, err := deps.writer.WriteFailureEntry(
 		item,
-		wikisvc.FailureAI,
+		wikitypes.FailureAI,
 		message,
 		newWriteOpts(deps, wikiRoot, dryRun),
 	)
@@ -309,7 +334,7 @@ func writeAIError(
 		return URLResult{
 			URL:         urlStr,
 			Status:      StatusUnhandledError,
-			FailureType: wikisvc.FailureAI,
+			FailureType: wikitypes.FailureAI,
 			Error:       fmt.Sprintf("write AI error: %v", err),
 		}
 	}
@@ -324,6 +349,6 @@ func writeAIError(
 		Status:      status,
 		Handled:     true,
 		OutputPath:  path,
-		FailureType: wikisvc.FailureAI,
+		FailureType: wikitypes.FailureAI,
 	}
 }

@@ -9,7 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikifetch "github.com/xbpk3t/docs-alfred/internal/docs/wiki/fetch"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 )
 
 // DigestLocalInput contains inputs for local directory digest processing.
@@ -120,18 +121,18 @@ func processLocalDir(ctx context.Context, deps *dependencies, wikiRoot, dirPath 
 	url := fmt.Sprintf("https://www.bilibili.com/video/%s/", inputs.bv)
 	slog.Info("Processing local transcript", "bv", inputs.bv, "title", inputs.title)
 
-	contentType := wikisvc.DetectContentType(url)
+	contentType := wikifetch.DetectContentType(url)
 
 	// Pre-classification quality gate for video content.
-	if contentType == wikisvc.ContentVideo && len([]rune(inputs.content)) < 600 {
-		item := &wikisvc.ClassifyItem{
+	if contentType == wikitypes.ContentVideo && len([]rune(inputs.content)) < 600 {
+		item := &wikitypes.ClassifyItem{
 			URL: url, Title: inputs.title,
 			ContentType: contentType,
-			Summary:     &wikisvc.StructuredSummary{Overview: inputs.content},
+			Summary:     &wikitypes.StructuredSummary{Overview: inputs.content},
 		}
 		urlResult := writePendingURL(deps, wikiRoot, &pendingURLWrite{
 			URL: url, Kind: pendingExtractFailure,
-			Item: item, FailureType: wikisvc.FailureExtract,
+			Item: item, FailureType: wikitypes.FailureExtract,
 			ExtraInfo: "video content too short",
 		}, false)
 		urlResult.Handled = true
@@ -141,15 +142,15 @@ func processLocalDir(ctx context.Context, deps *dependencies, wikiRoot, dirPath 
 
 	classResult := deps.classifier.ClassifyURL(ctx, url, inputs.title, inputs.content)
 	if classResult == nil {
-		item := &wikisvc.ClassifyItem{
+		item := &wikitypes.ClassifyItem{
 			URL: url, Title: inputs.title,
 			ContentType: contentType,
-			Summary:     &wikisvc.StructuredSummary{Overview: inputs.content},
+			Summary:     &wikitypes.StructuredSummary{Overview: inputs.content},
 		}
 		if strings.TrimSpace(inputs.content) == "" {
 			return writePendingURL(deps, wikiRoot, &pendingURLWrite{
 				URL: url, Kind: pendingExtractFailure,
-				Item: item, FailureType: wikisvc.FailureExtract,
+				Item: item, FailureType: wikitypes.FailureExtract,
 				ExtraInfo: "empty content",
 			}, false)
 		}
@@ -157,7 +158,7 @@ func processLocalDir(ctx context.Context, deps *dependencies, wikiRoot, dirPath 
 		return URLResult{URL: url, Status: StatusUnhandledError, Error: "classification failed: AI error"}
 	}
 
-	item := &wikisvc.ClassifyItem{
+	item := &wikitypes.ClassifyItem{
 		URL:               url,
 		Title:             inputs.title,
 		ContentType:       classResult.ContentType,
@@ -185,7 +186,7 @@ func processLocalDir(ctx context.Context, deps *dependencies, wikiRoot, dirPath 
 
 		return writePendingURL(deps, wikiRoot, &pendingURLWrite{
 			URL: url, Kind: pendingClassifyFailure,
-			Item: item, FailureType: wikisvc.FailureClassify,
+			Item: item, FailureType: wikitypes.FailureClassify,
 			ExtraInfo: extraInfo,
 		}, false)
 	}

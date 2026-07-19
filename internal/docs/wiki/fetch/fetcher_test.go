@@ -1,7 +1,8 @@
-package wiki
+package fetch
 
 import (
 	"context"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/internal/rss/transcript"
 )
 
@@ -32,7 +32,7 @@ func TestHTTPDriverRejectsLowQualityContent(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	driver := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), server.URL, ContentText)
+	result := driver.FetchContent(context.Background(), server.URL, types.ContentText)
 
 	require.NotNil(t, result)
 	require.Contains(t, result.Error, "extract:")
@@ -62,7 +62,7 @@ func TestFetchPodcastTranscriptUsesRSSTranscript(t *testing.T) {
 	t.Cleanup(feedServer.Close)
 
 	fetcher := NewFetcher()
-	result := fetcher.FetchContent(context.Background(), feedServer.URL+"/feed.xml", ContentAudio)
+	result := fetcher.FetchContent(context.Background(), feedServer.URL+"/feed.xml", types.ContentAudio)
 
 	require.NotNil(t, result)
 	require.Empty(t, result.Error)
@@ -73,7 +73,7 @@ func TestFetchPodcastTranscriptUsesRSSTranscript(t *testing.T) {
 
 func TestFetchDirectAudioDoesNotRunASR(t *testing.T) {
 	fetcher := NewFetcher()
-	result := fetcher.FetchContent(context.Background(), "https://example.com/audio.mp3", ContentAudio)
+	result := fetcher.FetchContent(context.Background(), "https://example.com/audio.mp3", types.ContentAudio)
 
 	require.NotNil(t, result)
 	require.Contains(t, result.Error, "extract:")
@@ -113,7 +113,7 @@ printf '` + strings.Repeat("你好", 100) + `\n'
 
 func TestOpenCLIDriver_BilibiliUsesAdapter(t *testing.T) {
 	driver := newOpenCLIDriver(DriverOptions{})
-	result := driver.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", ContentVideo)
+	result := driver.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", types.ContentVideo)
 	// Will fail because opencli isn't installed, but verifies routing.
 	require.NotNil(t, result)
 }
@@ -125,7 +125,7 @@ func TestHTTPDriver_ExtractsContent(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	driver := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), server.URL, ContentText)
+	result := driver.FetchContent(context.Background(), server.URL, types.ContentText)
 
 	require.NotNil(t, result)
 	require.Empty(t, result.Error)
@@ -138,15 +138,15 @@ func TestDetectContentTypeOnlyTreatsConcreteVideoURLsAsVideo(t *testing.T) {
 		url  string
 		want string
 	}{
-		{name: "youtube watch", url: "https://www.youtube.com/watch?v=abc", want: ContentVideo},
-		{name: "youtube shorts", url: "https://youtube.com/shorts/abc", want: ContentVideo},
-		{name: "youtube embed", url: "https://www.youtube.com/embed/abc", want: ContentVideo},
-		{name: "youtu be", url: "https://youtu.be/abc", want: ContentVideo},
-		{name: "youtube channel", url: "https://www.youtube.com/@VirtualizationHowto/videos", want: ContentText},
-		{name: "youtube playlist", url: "https://www.youtube.com/playlist?list=abc", want: ContentText},
-		{name: "bilibili video", url: "https://www.bilibili.com/video/BV1xx", want: ContentVideo},
-		{name: "bilibili space", url: "https://space.bilibili.com/123", want: ContentText},
-		{name: "bilibili homepage", url: "https://www.bilibili.com/", want: ContentText},
+		{name: "youtube watch", url: "https://www.youtube.com/watch?v=abc", want: types.ContentVideo},
+		{name: "youtube shorts", url: "https://youtube.com/shorts/abc", want: types.ContentVideo},
+		{name: "youtube embed", url: "https://www.youtube.com/embed/abc", want: types.ContentVideo},
+		{name: "youtu be", url: "https://youtu.be/abc", want: types.ContentVideo},
+		{name: "youtube channel", url: "https://www.youtube.com/@VirtualizationHowto/videos", want: types.ContentText},
+		{name: "youtube playlist", url: "https://www.youtube.com/playlist?list=abc", want: types.ContentText},
+		{name: "bilibili video", url: "https://www.bilibili.com/video/BV1xx", want: types.ContentVideo},
+		{name: "bilibili space", url: "https://space.bilibili.com/123", want: types.ContentText},
+		{name: "bilibili homepage", url: "https://www.bilibili.com/", want: types.ContentText},
 	}
 
 	for _, tt := range tests {
@@ -315,7 +315,7 @@ func TestFeedCandidateCollectorAddRemainingItems(t *testing.T) {
 func TestExtractFailureAlreadyHasExtractPrefix(t *testing.T) {
 	r := extractFailure("https://example.com", "extract: custom error")
 	assert.Equal(t, "extract: custom error", r.Error)
-	assert.Equal(t, FailureExtract, r.FailureKind)
+	assert.Equal(t, types.FailureExtract, r.FailureKind)
 }
 
 func TestExtractFailureWhitespaceReason(t *testing.T) {
@@ -377,20 +377,6 @@ func TestGetGHTokenEmpty(t *testing.T) {
 func TestNewFetcherZeroMaxBodySize(t *testing.T) {
 	f := NewFetcher(func(fetcher *Fetcher) { fetcher.MaxBodySize = 0 })
 	assert.Equal(t, 5000, f.MaxBodySize)
-}
-
-// --- scoreTopicCandidate ---
-
-func TestScoreTopicCandidateExactMatch(t *testing.T) {
-	candidate := ghindex.TopicCandidate{Path: "ai/tool/demo", Display: "demo"}
-	score := scoreTopicCandidate(candidate, "ai tool demo")
-	assert.Positive(t, score)
-}
-
-func TestScoreTopicCandidateNoMatch(t *testing.T) {
-	candidate := ghindex.TopicCandidate{Path: "xx/yy/zz", Display: "zz"}
-	score := scoreTopicCandidate(candidate, "completely different query")
-	assert.Equal(t, 0, score)
 }
 
 // --- FetchContent with empty contentType ---
@@ -621,8 +607,10 @@ func TestFetchContentDriverReturnsNil(t *testing.T) {
 // nilDriver is a test driver that always returns nil.
 type nilDriver struct{}
 
-func (d *nilDriver) Name() string                                                    { return "nil" }
-func (d *nilDriver) FetchContent(_ context.Context, _, _ string) *ContentFetchResult { return nil }
+func (d *nilDriver) Name() string { return "nil" }
+func (d *nilDriver) FetchContent(_ context.Context, _, _ string) *types.ContentFetchResult {
+	return nil
+}
 
 // --- FetchContent with RSS feed URL ---
 
@@ -639,7 +627,7 @@ func TestFetchContentRSSFeedURL(t *testing.T) {
 	t.Cleanup(feedServer.Close)
 
 	f := NewFetcher()
-	result := f.FetchContent(context.Background(), feedServer.URL+"/feed.xml", ContentAudio)
+	result := f.FetchContent(context.Background(), feedServer.URL+"/feed.xml", types.ContentAudio)
 	require.NotNil(t, result)
 	// Should fail because feed has no items
 	assert.NotEmpty(t, result.Error)
@@ -759,7 +747,7 @@ func TestFetchContentPodcastURLEnabled(t *testing.T) {
 	t.Cleanup(feedServer.Close)
 
 	f := NewFetcher(WithMediaEnabled(true))
-	result := f.FetchContent(context.Background(), feedServer.URL+"/feed.xml", ContentAudio)
+	result := f.FetchContent(context.Background(), feedServer.URL+"/feed.xml", types.ContentAudio)
 	require.NotNil(t, result)
 	// Will fail because no transcript, but exercises the podcast path
 }
@@ -768,7 +756,7 @@ func TestFetchContentPodcastURLEnabled(t *testing.T) {
 
 func TestFetchContentDriverReturnsNilWithAudioType(t *testing.T) {
 	f := NewFetcher(WithMediaEnabled(false))
-	result := f.FetchContent(context.Background(), "https://example.com/audio.mp3", ContentAudio)
+	result := f.FetchContent(context.Background(), "https://example.com/audio.mp3", types.ContentAudio)
 	require.NotNil(t, result)
 	assert.Contains(t, result.Error, "media extraction disabled")
 }

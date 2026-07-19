@@ -25,8 +25,15 @@ const (
 
 // Config holds wiki workflow configuration.
 type Config struct {
-	AI   AIConfig   `yaml:"ai"`
-	Wiki WikiConfig `yaml:"wiki"`
+	AI     AIConfig     `yaml:"ai"`
+	Resend ResendConfig `yaml:"resend"`
+	Wiki   WikiConfig   `yaml:"wiki"`
+}
+
+// ResendConfig is optional mail settings for wiki compact (token only from env).
+type ResendConfig struct {
+	FromName string   `default:"wiki compact" yaml:"fromName"`
+	MailTo   []string `yaml:"mailTo"`
 }
 
 // WikiConfig contains wiki-specific workflow settings.

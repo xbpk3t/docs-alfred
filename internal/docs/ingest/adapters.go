@@ -1,37 +1,38 @@
 package wikiingest
 
 import (
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
+	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 )
 
 type serviceWriter struct{}
 
-func (serviceWriter) WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.WriteOptions) (string, error) {
-	return wikisvc.WriteSummary(item, opts)
+func (serviceWriter) WriteSummary(item *wikitypes.ClassifyItem, opts *wikiwrite.WriteOptions) (string, error) {
+	return wikiwrite.WriteSummary(item, opts)
 }
 
 func (serviceWriter) WriteFailureEntry(
-	item *wikisvc.ClassifyItem,
-	failureType wikisvc.FailureKind,
+	item *wikitypes.ClassifyItem,
+	failureType wikitypes.FailureKind,
 	extraInfo string,
-	opts *wikisvc.WriteOptions,
+	opts *wikiwrite.WriteOptions,
 ) (string, error) {
-	return wikisvc.WriteFailureEntry(item, failureType, extraInfo, opts)
+	return wikiwrite.WriteFailureEntry(item, failureType, extraInfo, opts)
 }
 
 func (serviceWriter) WriteManualReviewEntry(
-	item *wikisvc.ClassifyItem,
-	opts *wikisvc.WriteOptions,
+	item *wikitypes.ClassifyItem,
+	opts *wikiwrite.WriteOptions,
 ) (string, error) {
-	return wikisvc.WriteManualReviewEntry(item, opts)
+	return wikiwrite.WriteManualReviewEntry(item, opts)
 }
 
 type serviceInboxStore struct{}
 
-func (serviceInboxStore) ParseInbox(filePath string) ([]wikisvc.InboxEntry, error) {
-	return wikisvc.ParseInbox(filePath)
+func (serviceInboxStore) ParseInbox(filePath string) ([]wikiwrite.InboxEntry, error) {
+	return wikiwrite.ParseInbox(filePath)
 }
 
 func (serviceInboxStore) FlushInbox(filePath string, handledURLsByLine map[int][]string) error {
-	return wikisvc.FlushInbox(filePath, handledURLsByLine)
+	return wikiwrite.FlushInbox(filePath, handledURLsByLine)
 }
