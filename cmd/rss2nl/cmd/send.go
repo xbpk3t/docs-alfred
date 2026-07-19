@@ -15,7 +15,6 @@ import (
 
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/mmcdole/gofeed"
-	resend "github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 	"github.com/spf13/cobra"
@@ -24,6 +23,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/rss/feed"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/xbpk3t/docs-alfred/pkg/mail"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"golang.org/x/sync/errgroup"
 )
@@ -37,13 +37,6 @@ func newHTMLMinifier() *minify.M {
 	})
 
 	return m
-}
-
-// EmailConfig 邮件配置.
-type EmailConfig struct {
-	From  string
-	Token string
-	To    []string
 }
 
 // NewsletterItem represents a rich feed item with additional fields.
@@ -808,30 +801,13 @@ func (s *NewsletterService) handleOutput(contents []EmailContent) error {
 
 // SendNewsletter 发送邮件.
 func (s *NewsletterService) SendNewsletter(content, subject string) error {
-	emailCfg := EmailConfig{
-		From:  "Acme <onboarding@resend.dev>",
-		To:    s.config.ResendConfig.MailTo,
-		Token: s.config.ResendConfig.Token,
-	}
-
-	ctx := context.Background()
-	client := resend.NewClient(emailCfg.Token)
-
-	params := &resend.SendEmailRequest{
-		From:    emailCfg.From,
-		To:      emailCfg.To,
+	return mail.SendHTML(context.Background(), &mail.SendOptions{
+		Token:   s.config.ResendConfig.Token,
+		To:      s.config.ResendConfig.MailTo,
+		From:    "Acme <onboarding@resend.dev>",
 		Subject: subject,
-		Html:    content,
-	}
-
-	sent, err := client.Emails.SendWithContext(ctx, params)
-	if err != nil {
-		return fmt.Errorf("failed to send email: %w", err)
-	}
-
-	slog.Info("邮件发送成功", "id", sent.Id)
-
-	return nil
+		HTML:    content,
+	})
 }
 
 func (s *NewsletterService) generateEmailSubject(tplType TemplateType) string {

@@ -8,7 +8,11 @@ import (
 	"os"
 	"path/filepath"
 
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikiaudit "github.com/xbpk3t/docs-alfred/internal/docs/wiki/audit"
+	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
+	wikifetch "github.com/xbpk3t/docs-alfred/internal/docs/wiki/fetch"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
+	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
@@ -26,29 +30,29 @@ type dependencies struct {
 }
 
 type fetcher interface {
-	FetchContent(ctx context.Context, urlStr, contentType string) *wikisvc.ContentFetchResult
+	FetchContent(ctx context.Context, urlStr, contentType string) *wikitypes.ContentFetchResult
 }
 
 type classifier interface {
-	ClassifyURL(ctx context.Context, urlStr, title, content string) *wikisvc.ClassifyResult
+	ClassifyURL(ctx context.Context, urlStr, title, content string) *wikitypes.ClassifyResult
 }
 
 type writer interface {
-	WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.WriteOptions) (string, error)
+	WriteSummary(item *wikitypes.ClassifyItem, opts *wikiwrite.WriteOptions) (string, error)
 	WriteFailureEntry(
-		item *wikisvc.ClassifyItem,
-		failureType wikisvc.FailureKind,
+		item *wikitypes.ClassifyItem,
+		failureType wikitypes.FailureKind,
 		extraInfo string,
-		opts *wikisvc.WriteOptions,
+		opts *wikiwrite.WriteOptions,
 	) (string, error)
 	WriteManualReviewEntry(
-		item *wikisvc.ClassifyItem,
-		opts *wikisvc.WriteOptions,
+		item *wikitypes.ClassifyItem,
+		opts *wikiwrite.WriteOptions,
 	) (string, error)
 }
 
 type inboxStore interface {
-	ParseInbox(filePath string) ([]wikisvc.InboxEntry, error)
+	ParseInbox(filePath string) ([]wikiwrite.InboxEntry, error)
 	FlushInbox(filePath string, handledURLsByLine map[int][]string) error
 }
 
@@ -155,9 +159,9 @@ func RunAudit(ctx context.Context, input AuditInput) (*AuditResult, error) {
 	var issues []checkutil.Issue
 	var err error
 	if len(auditPaths) > 0 || input.ChangedOnly {
-		issues, err = wikisvc.AuditWikiPaths(wikiRoot, auditPaths)
+		issues, err = wikiaudit.AuditWikiPaths(wikiRoot, auditPaths)
 	} else {
-		issues, err = wikisvc.AuditWiki(wikiRoot)
+		issues, err = wikiaudit.AuditWiki(wikiRoot)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("audit wiki: %w", err)
@@ -227,28 +231,28 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		if driverName == "" {
 			driverName = "opencli"
 		}
-		driver, err := wikisvc.NewDriver(driverName, wikisvc.DriverOptions{
+		driver, err := wikifetch.NewDriver(driverName, wikifetch.DriverOptions{
 			MaxBodySize:  cfg.Wiki.MaxContentSize,
 			MediaEnabled: cfg.Wiki.Media.Enabled,
 		})
 		if err != nil {
 			slog.Warn("Unknown driver, falling back to opencli", "driver", driverName, "error", err)
-			driver, _ = wikisvc.NewDriver("opencli", wikisvc.DriverOptions{
+			driver, _ = wikifetch.NewDriver("opencli", wikifetch.DriverOptions{
 				MaxBodySize:  cfg.Wiki.MaxContentSize,
 				MediaEnabled: cfg.Wiki.Media.Enabled,
 			})
 		}
-		deps.fetcher = wikisvc.NewFetcher(
-			wikisvc.WithDriver(driver),
-			wikisvc.WithMediaEnabled(cfg.Wiki.Media.Enabled),
+		deps.fetcher = wikifetch.NewFetcher(
+			wikifetch.WithDriver(driver),
+			wikifetch.WithMediaEnabled(cfg.Wiki.Media.Enabled),
 		)
 	}
 	if deps.classifier == nil {
-		deps.classifier = wikisvc.NewClassifier(
+		deps.classifier = wikiclassify.NewClassifier(
 			newAIConfig(cfg),
 			resolveWikiRoot(cfg),
 			"",
-			wikisvc.WithMaxContentSize(cfg.Wiki.MaxContentSize),
+			wikiclassify.WithMaxContentSize(cfg.Wiki.MaxContentSize),
 		)
 	}
 	if deps.writer == nil {
@@ -258,7 +262,7 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		deps.inbox = serviceInboxStore{}
 	}
 	if deps.validTopicPaths == nil {
-		deps.validTopicPaths = wikisvc.LoadValidTopicPaths()
+		deps.validTopicPaths = wikiwrite.LoadValidTopicPaths()
 	}
 
 	return deps

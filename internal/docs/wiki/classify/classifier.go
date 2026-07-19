@@ -1,12 +1,13 @@
-package wiki
+package classify
 
 import (
-	"bytes"
 	"context"
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/fetch"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/prompt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"text/template"
 	"time"
 
 	"github.com/avast/retry-go/v4"
@@ -26,69 +26,13 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
-//go:embed prompts/*.txt
-var promptFS embed.FS
-
-// Content type constants.
-const (
-	ContentVideo = "video"
-	ContentAudio = "audio"
-	ContentText  = "text"
-)
-
 const noneVal = "none"
-
-// RouteReason values explain why an item went to uncat.md (or related routes).
-const (
-	RouteReasonNeedsManualReview = "needs_manual_review"
-	RouteReasonNoTopicMatch      = "no_topic_match"
-	RouteReasonInvalidTopicPath  = "invalid_topic_path"
-	RouteReasonAIUnavailable     = "ai_classify_unavailable"
-)
 
 // minContentForVideo is the minimum content length (in runes) for video content
 // to be classified. Below this threshold the fetched content is likely just
 // metadata (title, stats, description) without a transcript, making classification
 // unreliable.
 const minContentForVideo = 600
-
-// ClassifyType represents the wiki entry type.
-type ClassifyType string
-
-const (
-	TypeRepoEval ClassifyType = "review"
-	TypeDeepDive ClassifyType = "research"
-	TypeInbox    ClassifyType = "inbox"
-)
-
-// ClassifyItem holds the full classification result for a URL.
-type ClassifyItem struct {
-	URL               string             `json:"url"`
-	Title             string             `json:"title"`
-	ContentType       string             `json:"contentType"`
-	TopicPath         string             `json:"topicPath"`
-	Type              ClassifyType       `json:"type"`
-	Summary           *StructuredSummary `json:"summary"`
-	MetadataBlock     string             `json:"metadataBlock,omitempty"`
-	SuggestedTopic    string             `json:"suggestedTopic,omitempty"`
-	RouteReason       string             `json:"routeReason,omitempty"`
-	Confidence        float64            `json:"confidence,omitempty"`
-	NeedsManualReview bool               `json:"needsManualReview,omitempty"`
-}
-
-// ClassifyResult is the structured output from classifyItem.
-type ClassifyResult struct {
-	TopicPath         string             `json:"topicPath"`
-	WikiType          ClassifyType       `json:"wikiType"`
-	ContentType       string             `json:"contentType"`
-	Summary           *StructuredSummary `json:"summary"`
-	MetadataBlock     string             `json:"metadataBlock,omitempty"`
-	RejectReason      string             `json:"rejectReason,omitempty"`
-	SuggestedTopic    string             `json:"suggestedTopic,omitempty"`
-	RouteReason       string             `json:"routeReason,omitempty"`
-	Confidence        float64            `json:"confidence,omitempty"`
-	NeedsManualReview bool               `json:"needsManualReview,omitempty"`
-}
 
 // Classifier handles AI-powered classification of URLs.
 type Classifier struct {
@@ -155,25 +99,11 @@ func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string, opts ..
 }
 
 // DetectContentType determines the content type from a URL.
-func DetectContentType(urlLower string) string {
-	urlLower = strings.ToLower(strings.TrimSpace(urlLower))
-	if isVideoURL(urlLower) {
-		return ContentVideo
-	}
-	if strings.Contains(urlLower, "xiaoyuzhou") ||
-		strings.Contains(urlLower, "podcast") ||
-		strings.Contains(urlLower, "libsyn.com") {
-		return ContentAudio
-	}
-
-	return ContentText
-}
-
 // ClassifyURL performs full classification on a URL with fetched title + content.
 // Uses a two-step pipeline: classify (topic+type+metadata) then summarize (detailed summary).
 // Returns nil if classification is unavailable (graceful degradation).
-func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content string) *ClassifyResult {
-	contentType := DetectContentType(strings.ToLower(urlStr))
+func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content string) *types.ClassifyResult {
+	contentType := fetch.DetectContentType(strings.ToLower(urlStr))
 	if strings.TrimSpace(content) == "" {
 		slog.Warn("Classification skipped for empty content", "url", urlStr)
 
@@ -184,7 +114,7 @@ func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content str
 	// (e.g., 492 bytes of bilibili metadata without subtitles) can't produce
 	// meaningful summaries; treat as extraction failure instead of routing to
 	// uncategorized.
-	if contentType == ContentVideo && len([]rune(content)) < minContentForVideo {
+	if contentType == types.ContentVideo && len([]rune(content)) < minContentForVideo {
 		slog.Warn("Video content too short (likely no transcript)", "url", urlStr, "len", len(content))
 
 		return nil
@@ -217,13 +147,13 @@ func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content str
 	return c.buildClassifyResult(classified, contentType, candidates, urlStr)
 }
 
-// buildClassifyResult processes the AI classification result and builds a ClassifyResult.
+// buildClassifyResult processes the AI classification result and builds a types.ClassifyResult.
 // It handles manual review, rejection, validation, metadata building, and empty summary checks.
 //
 // Recall-oriented routing: when the AI marks needsManualReview but still provides a
 // candidate-valid topicPath with confidence >= MinConfidence and a non-empty overview,
 // the item is treated as a normal topic write (NMR is cleared).
-func (c *Classifier) buildClassifyResult(classified *aiClassification, contentType string, candidates []ghindex.TopicCandidate, urlStr string) *ClassifyResult {
+func (c *Classifier) buildClassifyResult(classified *aiClassification, contentType string, candidates []ghindex.TopicCandidate, urlStr string) *types.ClassifyResult {
 	if classified == nil {
 		return nil
 	}
@@ -251,7 +181,7 @@ func (c *Classifier) buildClassifyResult(classified *aiClassification, contentTy
 	if validationErr := c.validateAIClassificationBasics(classified); validationErr != nil {
 		// Low confidence with good summary → uncat (not hard reject), keep suggested topic.
 		if classified.Confidence < c.MinConfidence {
-			return c.manualReviewRouteResult(classified, contentType, suggested, RouteReasonNeedsManualReview)
+			return c.manualReviewRouteResult(classified, contentType, suggested, types.RouteReasonNeedsManualReview)
 		}
 		slog.Warn("AI classification rejected", "url", urlStr, "error", validationErr)
 
@@ -260,10 +190,10 @@ func (c *Classifier) buildClassifyResult(classified *aiClassification, contentTy
 
 	topicPath, topicOK := c.resolveWritableTopicPath(classified.TopicPath, candidates)
 	if !topicOK {
-		reason := RouteReasonNoTopicMatch
+		reason := types.RouteReasonNoTopicMatch
 		raw := strings.TrimSpace(classified.TopicPath)
 		if raw != "" && raw != noneVal && raw != "inbox" {
-			reason = RouteReasonInvalidTopicPath
+			reason = types.RouteReasonInvalidTopicPath
 		}
 
 		return c.manualReviewRouteResult(classified, contentType, suggested, reason)
@@ -271,7 +201,7 @@ func (c *Classifier) buildClassifyResult(classified *aiClassification, contentTy
 
 	metaBlock := buildMetaBlock(classified)
 
-	return &ClassifyResult{
+	return &types.ClassifyResult{
 		TopicPath:         topicPath,
 		WikiType:          classified.WikiType,
 		ContentType:       contentType,
@@ -289,16 +219,16 @@ func (c *Classifier) routeManualReviewWithGoodContent(
 	contentType string,
 	candidates []ghindex.TopicCandidate,
 	suggested string,
-) *ClassifyResult {
+) *types.ClassifyResult {
 	topicPath, topicOK := c.resolveWritableTopicPath(classified.TopicPath, candidates)
 	if topicOK && classified.Confidence >= c.MinConfidence {
 		metaBlock := buildMetaBlock(classified)
 		wikiType := classified.WikiType
-		if !isValidClassifyType(wikiType) || wikiType == TypeInbox {
-			wikiType = TypeDeepDive
+		if !isValidClassifyType(wikiType) || wikiType == types.TypeInbox {
+			wikiType = types.TypeDeepDive
 		}
 
-		return &ClassifyResult{
+		return &types.ClassifyResult{
 			TopicPath:         topicPath,
 			WikiType:          wikiType,
 			ContentType:       contentType,
@@ -310,13 +240,13 @@ func (c *Classifier) routeManualReviewWithGoodContent(
 		}
 	}
 
-	reason := RouteReasonNeedsManualReview
+	reason := types.RouteReasonNeedsManualReview
 	if !topicOK {
 		raw := strings.TrimSpace(classified.TopicPath)
 		if raw == "" || raw == noneVal || raw == "inbox" {
-			reason = RouteReasonNoTopicMatch
+			reason = types.RouteReasonNoTopicMatch
 		} else {
-			reason = RouteReasonInvalidTopicPath
+			reason = types.RouteReasonInvalidTopicPath
 		}
 	}
 
@@ -329,13 +259,13 @@ func (c *Classifier) manualReviewRouteResult(
 	contentType string,
 	suggested string,
 	reason string,
-) *ClassifyResult {
+) *types.ClassifyResult {
 	wikiType := classified.WikiType
 	if !isValidClassifyType(wikiType) {
-		wikiType = TypeInbox
+		wikiType = types.TypeInbox
 	}
 
-	return &ClassifyResult{
+	return &types.ClassifyResult{
 		TopicPath:         "",
 		WikiType:          wikiType,
 		ContentType:       contentType,
@@ -373,7 +303,7 @@ func (c *Classifier) resolveWritableTopicPath(topicPath string, candidates []ghi
 
 		return "", false
 	}
-	if validateTopicPathDepth(topicPath) {
+	if ValidateTopicPathDepth(topicPath) {
 		if len(candidates) == 0 || candidatePathSet(candidates)[topicPath] {
 			return topicPath, true
 		}
@@ -572,14 +502,14 @@ func ResolveTopicPathAmong(topicPath string, valid map[string]bool) (string, boo
 
 // classifyOnlyResult holds the parsed JSON from the classify-only AI call.
 type classifyOnlyResult struct {
-	Summary           *StructuredSummary `json:"summary"`
-	Metadata          *EntryMetadata     `json:"metadata"`
-	TopicPath         string             `json:"topicPath"`
-	WikiType          ClassifyType       `json:"wikiType"`
-	ContentType       string             `json:"contentType"`
-	RejectReason      string             `json:"rejectReason,omitempty"`
-	Confidence        float64            `json:"confidence"`
-	NeedsManualReview bool               `json:"needsManualReview"`
+	Summary           *types.StructuredSummary `json:"summary"`
+	Metadata          *types.EntryMetadata     `json:"metadata"`
+	TopicPath         string                   `json:"topicPath"`
+	WikiType          types.ClassifyType       `json:"wikiType"`
+	ContentType       string                   `json:"contentType"`
+	RejectReason      string                   `json:"rejectReason,omitempty"`
+	Confidence        float64                  `json:"confidence"`
+	NeedsManualReview bool                     `json:"needsManualReview"`
 }
 
 // classifyOnly runs the AI classification call with retry.
@@ -590,7 +520,7 @@ func (c *Classifier) classifyOnly(
 	candidates []ghindex.TopicCandidate,
 	maxLen int,
 ) (*aiClassification, error) {
-	prompt, err := renderPrompt("classify-json.txt", &promptData{
+	promptText, err := prompt.Render("classify-json.txt", &promptData{
 		CandidateTree: FormatTopicCandidatesGrouped(candidates),
 		Title:         truncate(title, 200),
 		URL:           urlStr,
@@ -604,7 +534,7 @@ func (c *Classifier) classifyOnly(
 	var result *aiClassification
 	err = retry.Do(
 		func() error {
-			r, e := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: prompt}})
+			r, e := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: promptText}})
 			if e != nil {
 				return fmt.Errorf("AI classify call: %w", e)
 			}
@@ -685,22 +615,6 @@ type promptData struct {
 	WikiType      string
 }
 
-func renderPrompt(name string, data *promptData) (string, error) {
-	tmpl, err := template.New(name).
-		Option("missingkey=error").
-		ParseFS(promptFS, "prompts/"+name)
-	if err != nil {
-		return "", fmt.Errorf("parse prompt %s: %w", name, err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("render prompt %s: %w", name, err)
-	}
-
-	return buf.String(), nil
-}
-
 func (c *Classifier) classificationCandidates(
 	_ context.Context,
 	_,
@@ -746,20 +660,6 @@ func (c *Classifier) defaultGHTopicsLoader() ([]ghindex.TopicCandidate, error) {
 	return ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
 }
 
-func scanWikiCandidates(wikiRoot string) []ghindex.TopicCandidate {
-	entries, err := os.ReadDir(wikiRoot)
-	if err != nil {
-		return nil
-	}
-
-	var candidates []ghindex.TopicCandidate
-	for _, top := range entries {
-		candidates = scanTopLevelCandidates(wikiRoot, top, candidates)
-	}
-
-	return candidates
-}
-
 func scanTopLevelCandidates(
 	wikiRoot string,
 	top os.DirEntry,
@@ -769,11 +669,11 @@ func scanTopLevelCandidates(
 		return candidates
 	}
 	topPath := filepath.Join(wikiRoot, top.Name())
-	types, err := os.ReadDir(topPath)
+	typeEntries, err := os.ReadDir(topPath)
 	if err != nil {
 		return candidates
 	}
-	for _, typ := range types {
+	for _, typ := range typeEntries {
 		candidates = scanTypeCandidates(topPath, top.Name(), typ, candidates)
 	}
 
@@ -917,53 +817,21 @@ func formatTopicCandidates(candidates []ghindex.TopicCandidate) string {
 	return strings.Join(lines, "\n")
 }
 
-// StructuredSummary holds the AI-generated summary broken into sections.
-type StructuredSummary struct {
-	Overview         string   `json:"overview"                   validate:"required"`
-	Detail           string   `json:"detail,omitempty"`
-	KeyQuotes        []string `json:"keyQuotes,omitempty"`
-	WorthNoting      string   `json:"worthNoting,omitempty"`
-	CriticalThinking string   `json:"criticalThinking,omitempty"`
-	KeyPoints        []string `json:"keyPoints"                  validate:"required|min_len:1"`
-	ActionableAdvice []string `json:"actionableAdvice,omitempty"`
-}
-
-// EntryMetadata holds additional metadata fields from AI classification.
-type EntryMetadata struct {
-	ContentType       string   `json:"contentType"                 validate:"required|in:text,media,repo"`
-	Quality           string   `json:"quality,omitempty"           validate:"quality"`
-	Author            string   `json:"author,omitempty"`
-	Uncertainties     string   `json:"uncertainties,omitempty"`
-	Duration          string   `json:"duration,omitempty"          validate:"duration"`
-	TranscriptQuality string   `json:"transcriptQuality,omitempty" validate:"in:good,fair,poor"`
-	Verdict           string   `json:"verdict,omitempty"           validate:"in:watch,skip,try"`
-	Language          string   `json:"language,omitempty"`
-	Tags              []string `json:"tags,omitempty"              validate:"required|min_len:3|max_len:8"`
-	Stars             int      `json:"stars,omitempty"`
-}
-
-// ContentTypeDisplay maps content types to display-friendly labels.
-const (
-	DisplayTypeText  = "text"
-	DisplayTypeMedia = "media"
-	DisplayTypeRepo  = "repo"
-)
-
 type aiClassification struct {
-	Summary           *StructuredSummary `json:"summary"`
-	Metadata          *EntryMetadata     `json:"metadata"`
-	TopicPath         string             `json:"topicPath"`
-	WikiType          ClassifyType       `json:"wikiType"`
-	ContentType       string             `json:"contentType"`
-	RejectReason      string             `json:"rejectReason,omitempty"`
-	Confidence        float64            `json:"confidence"`
-	NeedsManualReview bool               `json:"needsManualReview"`
+	Summary           *types.StructuredSummary `json:"summary"`
+	Metadata          *types.EntryMetadata     `json:"metadata"`
+	TopicPath         string                   `json:"topicPath"`
+	WikiType          types.ClassifyType       `json:"wikiType"`
+	ContentType       string                   `json:"contentType"`
+	RejectReason      string                   `json:"rejectReason,omitempty"`
+	Confidence        float64                  `json:"confidence"`
+	NeedsManualReview bool                     `json:"needsManualReview"`
 }
 
-// RenderStructuredSummary converts a StructuredSummary to markdown sections.
+// RenderStructuredSummary converts a types.StructuredSummary to markdown sections.
 // Iterates struct fields in order, using JSON tags as headings.
-// Add/remove fields in StructuredSummary — rendering adapts automatically.
-func RenderStructuredSummary(s *StructuredSummary) string {
+// Add/remove fields in types.StructuredSummary — rendering adapts automatically.
+func RenderStructuredSummary(s *types.StructuredSummary) string {
 	if s == nil {
 		return ""
 	}
@@ -1035,7 +903,7 @@ func buildMetaBlock(result *aiClassification) string {
 
 	return ""
 }
-func metadataToMap(m *EntryMetadata) map[string]string {
+func metadataToMap(m *types.EntryMetadata) map[string]string {
 	if m == nil {
 		return nil
 	}
@@ -1077,7 +945,7 @@ func (c *Classifier) validateAIClassification(
 	result *aiClassification,
 	candidates []ghindex.TopicCandidate,
 	detectedContentType string,
-) (*ClassifyResult, error) {
+) (*types.ClassifyResult, error) {
 	// Shared path with ClassifyURL: recall-oriented NMR + no fake uncategorized path.
 	out := c.buildClassifyResult(result, detectedContentType, candidates, "")
 	if out == nil {
@@ -1088,14 +956,6 @@ func (c *Classifier) validateAIClassification(
 	}
 
 	return out, nil
-}
-
-// isManualReviewWithGoodContent returns true when the AI explicitly marked
-// NeedsManualReview but still produced a valid summary — content is salvageable
-// for topic write or uncat triage (not a hard classify reject).
-func (c *Classifier) isManualReviewWithGoodContent(result *aiClassification) bool {
-	return result != nil && result.NeedsManualReview &&
-		result.Summary != nil && strings.TrimSpace(result.Summary.Overview) != ""
 }
 
 func (c *Classifier) validateAIClassificationBasics(result *aiClassification) error {
@@ -1132,7 +992,7 @@ func (c *Classifier) validateAIClassificationTopic(
 }
 
 // validateTopicPathDepth ensures topicPath has exactly 3 segments (folder/type/topic).
-func validateTopicPathDepth(topicPath string) bool {
+func ValidateTopicPathDepth(topicPath string) bool {
 	return strings.Count(topicPath, "/") == 2
 }
 
@@ -1142,7 +1002,7 @@ func fallbackUncategorized(_ string, _ []ghindex.TopicCandidate) string {
 	return ""
 }
 
-func validateAIClassificationSummary(result *aiClassification) (*StructuredSummary, error) {
+func validateAIClassificationSummary(result *aiClassification) (*types.StructuredSummary, error) {
 	if result.Summary == nil {
 		return nil, errors.New("empty summary")
 	}
@@ -1153,7 +1013,7 @@ func validateAIClassificationSummary(result *aiClassification) (*StructuredSumma
 	return result.Summary, nil
 }
 
-func rejectedClassifyResult(result *aiClassification, detectedContentType string, rejectErr error) *ClassifyResult {
+func rejectedClassifyResult(result *aiClassification, detectedContentType string, rejectErr error) *types.ClassifyResult {
 	if result == nil {
 		return nil
 	}
@@ -1166,7 +1026,7 @@ func rejectedClassifyResult(result *aiClassification, detectedContentType string
 		contentType = result.ContentType
 	}
 
-	return &ClassifyResult{
+	return &types.ClassifyResult{
 		TopicPath:         strings.TrimSpace(result.TopicPath),
 		WikiType:          result.WikiType,
 		ContentType:       contentType,
@@ -1184,9 +1044,9 @@ func candidatePathSet(candidates []ghindex.TopicCandidate) map[string]bool {
 	})
 }
 
-func isValidClassifyType(typ ClassifyType) bool {
+func isValidClassifyType(typ types.ClassifyType) bool {
 	switch typ {
-	case TypeRepoEval, TypeDeepDive, TypeInbox:
+	case types.TypeRepoEval, types.TypeDeepDive, types.TypeInbox:
 		return true
 	default:
 		return false
@@ -1195,7 +1055,7 @@ func isValidClassifyType(typ ClassifyType) bool {
 
 func isValidContentType(contentType string) bool {
 	switch contentType {
-	case ContentText, ContentVideo, ContentAudio:
+	case types.ContentText, types.ContentVideo, types.ContentAudio:
 		return true
 	default:
 		return false
@@ -1333,14 +1193,14 @@ func FormatTopicCandidatesGrouped(candidates []ghindex.TopicCandidate) string {
 	var lines []string
 	for _, tag := range tagOrder {
 		lines = append(lines, fmt.Sprintf("### %s", tag))
-		types := groups[tag]
+		byType := groups[tag]
 		var typeOrder []string
-		for typ := range types {
+		for typ := range byType {
 			typeOrder = append(typeOrder, typ)
 		}
 		sort.Strings(typeOrder)
 		for _, typ := range typeOrder {
-			topics := types[typ]
+			topics := byType[typ]
 			lines = append(lines, fmt.Sprintf("  %s: %s", typ, strings.Join(topics, ", ")))
 		}
 		lines = append(lines, "")

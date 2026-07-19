@@ -1,8 +1,9 @@
-package wiki
+package fetch
 
 import (
 	"context"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 )
 
 // ContentDriver abstracts content fetching for different environments.
@@ -11,7 +12,7 @@ type ContentDriver interface {
 	// Name returns the driver name.
 	Name() string
 	// FetchContent retrieves content for a URL.
-	FetchContent(ctx context.Context, urlStr string, contentType string) *ContentFetchResult
+	FetchContent(ctx context.Context, urlStr string, contentType string) *types.ContentFetchResult
 }
 
 // Compile-time interface assertions.

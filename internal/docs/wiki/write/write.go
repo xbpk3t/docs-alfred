@@ -1,8 +1,10 @@
-package wiki
+package write
 
 import (
 	"errors"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -30,21 +32,6 @@ type SummaryFrontmatter struct {
 	Succeeded int    `yaml:"succeeded"`
 	Failed    int    `yaml:"failed"`
 }
-
-// FailureKind classifies wiki ingestion failures.
-type FailureKind string
-
-// Failure type constants for WriteFailureEntry.
-const (
-	FailureFetch    FailureKind = "fetch"
-	FailureResolve  FailureKind = "resolve"
-	FailureExtract  FailureKind = "extract"
-	FailureClassify FailureKind = "classify"
-	FailureAI       FailureKind = "ai"
-)
-
-// String returns the stable wire value for the failure kind.
-func (k FailureKind) String() string { return string(k) }
 
 // WriteOptions contains options for writing wiki entries.
 type WriteOptions struct {
@@ -88,11 +75,11 @@ func lockPath(path string) func() {
 
 // routeInvalidTopicPath fuzzy-resolves or reroutes invalid topic paths to uncat.
 // Returns routed=true when the caller should return immediately.
-func routeInvalidTopicPath(item *ClassifyItem, opts *WriteOptions) (bool, string, error) {
+func routeInvalidTopicPath(item *types.ClassifyItem, opts *WriteOptions) (bool, string, error) {
 	if opts == nil || opts.ValidTopicPaths == nil || opts.ValidTopicPaths[item.TopicPath] {
 		return false, "", nil
 	}
-	if resolved, ok := ResolveTopicPathAmong(item.TopicPath, opts.ValidTopicPaths); ok {
+	if resolved, ok := classify.ResolveTopicPathAmong(item.TopicPath, opts.ValidTopicPaths); ok {
 		slog.Info("Resolved topic path via fuzzy match",
 			"from", item.TopicPath, "to", resolved, "url", item.URL)
 		if item.SuggestedTopic == "" {
@@ -104,14 +91,14 @@ func routeInvalidTopicPath(item *ClassifyItem, opts *WriteOptions) (bool, string
 	}
 
 	slog.Warn("Topic path not in gh.yml, routing to uncat.md",
-		"topic", item.TopicPath, "url", item.URL, "reason", RouteReasonInvalidTopicPath)
+		"topic", item.TopicPath, "url", item.URL, "reason", types.RouteReasonInvalidTopicPath)
 	reviewItem := *item
 	reviewItem.NeedsManualReview = true
-	reviewItem.Type = TypeInbox
+	reviewItem.Type = types.TypeInbox
 	if reviewItem.SuggestedTopic == "" {
 		reviewItem.SuggestedTopic = item.TopicPath
 	}
-	reviewItem.RouteReason = RouteReasonInvalidTopicPath
+	reviewItem.RouteReason = types.RouteReasonInvalidTopicPath
 	reviewItem.TopicPath = ""
 	out, err := WriteManualReviewEntry(&reviewItem, opts)
 
@@ -120,10 +107,10 @@ func routeInvalidTopicPath(item *ClassifyItem, opts *WriteOptions) (bool, string
 
 // WriteSummary writes a structured summary.md entry with YAML frontmatter.
 // Follows TS writer.ts: appendToSummaryFile.
-func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
+func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) {
 	if item.TopicPath == "" {
 		// Empty TopicPath would write to wiki root — route to classify rejection.
-		_, err := WriteFailureEntry(item, FailureClassify, "empty topic path", opts)
+		_, err := WriteFailureEntry(item, types.FailureClassify, "empty topic path", opts)
 
 		return "", err
 	}
@@ -183,7 +170,7 @@ func WriteSummary(item *ClassifyItem, opts *WriteOptions) (string, error) {
 	return summaryPath, nil
 }
 
-func resolveTopicDir(item *ClassifyItem, opts *WriteOptions) string {
+func resolveTopicDir(item *types.ClassifyItem, opts *WriteOptions) string {
 	return filepath.Join(opts.WikiRoot, item.TopicPath)
 }
 
@@ -199,7 +186,7 @@ func LoadValidTopicPaths() map[string]bool {
 
 	valid := make(map[string]bool, len(remote))
 	for _, c := range remote {
-		if validateTopicPathDepth(c.Path) {
+		if classify.ValidateTopicPathDepth(c.Path) {
 			valid[c.Path] = true
 		}
 	}
@@ -207,7 +194,7 @@ func LoadValidTopicPaths() map[string]bool {
 	return valid
 }
 
-func buildEntry(item *ClassifyItem) string {
+func buildEntry(item *types.ClassifyItem) string {
 	title := item.Title
 	if title == "" {
 		title = item.URL
@@ -222,11 +209,11 @@ func buildEntry(item *ClassifyItem) string {
 		metaBlock += fmt.Sprintf("Type: %s", item.Type)
 	}
 
-	return fmt.Sprintf("### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, RenderStructuredSummary(item.Summary))
+	return fmt.Sprintf("### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, classify.RenderStructuredSummary(item.Summary))
 }
 
 //nolint:nonamedreturns
-func loadFrontmatter(summaryPath string, item *ClassifyItem, today, batchID string) (fm *SummaryFrontmatter, body string) {
+func loadFrontmatter(summaryPath string, item *types.ClassifyItem, today, batchID string) (fm *SummaryFrontmatter, body string) {
 	fm = &SummaryFrontmatter{
 		Title:     filepath.Base(item.TopicPath),
 		Date:      today,
@@ -302,23 +289,23 @@ func renderContent(fm *SummaryFrontmatter, body string) string {
 //   - classify:  content fetched but AI couldn't assign a topic
 //
 // The legacy MD file format is replaced by JSONL for machine-parseable diagnostics.
-func WriteFailureEntry(item *ClassifyItem, failureType FailureKind, extraInfo string, opts *WriteOptions) (string, error) {
+func WriteFailureEntry(item *types.ClassifyItem, failureType types.FailureKind, extraInfo string, opts *WriteOptions) (string, error) {
 	if opts == nil {
 		return "", errors.New("write options required for failure entry")
 	}
 
-	entry := DigestEntry{
+	entry := types.DigestEntry{
 		URL:            itemURL(item),
 		Stage:          digestStageForFailure(failureType),
-		Status:         DigestFailure,
+		Status:         types.DigestFailure,
 		FailureKind:    string(failureType),
 		Error:          extraInfo,
 		TopicPath:      item.TopicPath,
 		SuggestedTopic: item.SuggestedTopic,
 		Reason:         item.RouteReason,
 	}
-	if entry.Reason == "" && failureType == FailureAI {
-		entry.Reason = RouteReasonAIUnavailable
+	if entry.Reason == "" && failureType == types.FailureAI {
+		entry.Reason = types.RouteReasonAIUnavailable
 	}
 
 	path, err := LogDigestEntry(&entry, opts)
@@ -332,15 +319,15 @@ func WriteFailureEntry(item *ClassifyItem, failureType FailureKind, extraInfo st
 }
 
 // LogSuccessEntry logs a successful pipeline outcome to digest-success.jsonl.
-func LogSuccessEntry(item *ClassifyItem, outputPath string, opts *WriteOptions) (string, error) {
+func LogSuccessEntry(item *types.ClassifyItem, outputPath string, opts *WriteOptions) (string, error) {
 	if opts == nil {
 		return "", nil
 	}
 
-	entry := DigestEntry{
+	entry := types.DigestEntry{
 		URL:            itemURL(item),
-		Stage:          StageWrite,
-		Status:         DigestSuccess,
+		Stage:          types.StageWrite,
+		Status:         types.DigestSuccess,
 		TopicPath:      item.TopicPath,
 		SuggestedTopic: item.SuggestedTopic,
 		Reason:         item.RouteReason,
@@ -352,13 +339,13 @@ func LogSuccessEntry(item *ClassifyItem, outputPath string, opts *WriteOptions) 
 
 // WriteManualReviewEntry appends a human-readable entry to wiki/uncat.md
 // for items with NeedsManualReview=true that have good AI-generated summaries.
-func WriteManualReviewEntry(item *ClassifyItem, opts *WriteOptions) (string, error) {
+func WriteManualReviewEntry(item *types.ClassifyItem, opts *WriteOptions) (string, error) {
 	if opts == nil || item == nil {
 		return "", nil
 	}
 
 	if item.RouteReason == "" {
-		item.RouteReason = RouteReasonNeedsManualReview
+		item.RouteReason = types.RouteReasonNeedsManualReview
 	}
 
 	path := filepath.Join(opts.WikiRoot, "uncat.md")
@@ -375,7 +362,7 @@ func WriteManualReviewEntry(item *ClassifyItem, opts *WriteOptions) (string, err
 	dateHeading := "## " + today
 
 	title, metaBlock := buildReviewEntryMeta(item)
-	entry := fmt.Sprintf("\n### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, RenderStructuredSummary(item.Summary))
+	entry := fmt.Sprintf("\n### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, classify.RenderStructuredSummary(item.Summary))
 
 	if err := appendToDateSectionAndWrite(path, dateHeading, entry); err != nil {
 		return "", fmt.Errorf("write uncat.md: %w", err)
@@ -395,7 +382,7 @@ func WriteManualReviewEntry(item *ClassifyItem, opts *WriteOptions) (string, err
 // buildReviewEntryMeta builds the title and metadata block for a manual review entry.
 //
 //nolint:nonamedreturns
-func buildReviewEntryMeta(item *ClassifyItem) (title, metaBlock string) {
+func buildReviewEntryMeta(item *types.ClassifyItem) (title, metaBlock string) {
 	title = item.Title
 	if title == "" {
 		title = item.URL
@@ -443,7 +430,7 @@ func appendToDateSectionAndWrite(path, dateHeading, entry string) error {
 	return fileutil.AtomicWriteFile(path, []byte(newContent), fileutil.FilePermPrivate)
 }
 
-func itemURL(item *ClassifyItem) string {
+func itemURL(item *types.ClassifyItem) string {
 	if item == nil {
 		return ""
 	}
@@ -451,26 +438,26 @@ func itemURL(item *ClassifyItem) string {
 	return item.URL
 }
 
-func digestStageForFailure(failureType FailureKind) DigestStage {
+func digestStageForFailure(failureType types.FailureKind) types.DigestStage {
 	switch failureType {
-	case FailureFetch, FailureResolve:
-		return StageFetch
-	case FailureExtract:
-		return StageExtract
-	case FailureClassify:
-		return StageClassify
+	case types.FailureFetch, types.FailureResolve:
+		return types.StageFetch
+	case types.FailureExtract:
+		return types.StageExtract
+	case types.FailureClassify:
+		return types.StageClassify
 	default:
-		return StageClassify
+		return types.StageClassify
 	}
 }
 
-func buildFailureEntry(item *ClassifyItem, extraInfo string) string {
+func buildFailureEntry(item *types.ClassifyItem, extraInfo string) string {
 	title := item.Title
 	if title == "" {
 		title = item.URL
 	}
 
-	bodySnippet := RenderStructuredSummary(item.Summary)
+	bodySnippet := classify.RenderStructuredSummary(item.Summary)
 	if bodySnippet == "" {
 		bodySnippet = "(无内容)"
 	}

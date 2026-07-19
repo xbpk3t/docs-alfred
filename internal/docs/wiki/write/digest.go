@@ -1,8 +1,9 @@
-package wiki
+package write
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -11,39 +12,6 @@ import (
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
-
-// DigestStage identifies which pipeline stage generated the entry.
-type DigestStage string
-
-const (
-	StageFetch    DigestStage = "fetch"
-	StageExtract  DigestStage = "extract"
-	StageClassify DigestStage = "classify"
-	StageWrite    DigestStage = "write"
-)
-
-// DigestStatus indicates success or failure.
-type DigestStatus string
-
-const (
-	DigestSuccess DigestStatus = "success"
-	DigestFailure DigestStatus = "failure"
-)
-
-// DigestEntry records a single pipeline outcome for one URL.
-type DigestEntry struct {
-	Timestamp      string       `json:"timestamp"`
-	URL            string       `json:"url"`
-	BatchID        string       `json:"batchId,omitempty"`
-	Stage          DigestStage  `json:"stage"`
-	Status         DigestStatus `json:"status"`
-	FailureKind    string       `json:"failureKind,omitempty"`
-	Error          string       `json:"error,omitempty"`
-	TopicPath      string       `json:"topicPath,omitempty"`
-	SuggestedTopic string       `json:"suggestedTopic,omitempty"`
-	Reason         string       `json:"reason,omitempty"`
-	OutputPath     string       `json:"outputPath,omitempty"`
-}
 
 // digestFilenames maps outcomes to log files.
 const (
@@ -55,18 +23,18 @@ const (
 )
 
 // digestFilename returns the JSONL filename for the given entry.
-func digestFilename(entry *DigestEntry) string {
-	if entry.Status == DigestSuccess {
+func digestFilename(entry *types.DigestEntry) string {
+	if entry.Status == types.DigestSuccess {
 		return digestFilenameSuccess
 	}
 	switch entry.FailureKind {
-	case string(FailureFetch), string(FailureResolve):
+	case string(types.FailureFetch), string(types.FailureResolve):
 		return digestFilenameFetchError
-	case string(FailureExtract):
+	case string(types.FailureExtract):
 		return digestFilenameExtractError
-	case string(FailureClassify):
+	case string(types.FailureClassify):
 		return digestFilenameClassifyReject
-	case string(FailureAI):
+	case string(types.FailureAI):
 		return digestFilenameAIError
 	default:
 		// Unexpected failures.
@@ -77,7 +45,7 @@ func digestFilename(entry *DigestEntry) string {
 // LogDigestEntry appends a JSON line to the appropriate digest log file.
 // The log file is created under opts.WikiRoot.
 // This function is thread-safe (uses per-file locking via lockPath).
-func LogDigestEntry(entry *DigestEntry, opts *WriteOptions) (string, error) {
+func LogDigestEntry(entry *types.DigestEntry, opts *WriteOptions) (string, error) {
 	if opts == nil || opts.WikiRoot == "" {
 		// Nothing to log — skip silently.
 		return "", nil

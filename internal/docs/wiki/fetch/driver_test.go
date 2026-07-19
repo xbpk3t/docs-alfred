@@ -1,8 +1,9 @@
-package wiki
+package fetch
 
 import (
 	"context"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -36,146 +37,6 @@ func TestNewDriverRejectsUnknownName(t *testing.T) {
 	assert.Nil(t, d)
 	assert.Contains(t, err.Error(), "unknown driver")
 	assert.Contains(t, err.Error(), "nonexistent")
-}
-
-// --- digestFilename ---
-
-func TestDigestFilenameSuccessEntry(t *testing.T) {
-	assert.Equal(t, "digest-success.jsonl", digestFilename(&DigestEntry{Status: DigestSuccess}))
-}
-
-func TestDigestFilenameFetchFailure(t *testing.T) {
-	assert.Equal(t, "digest-fetch-error.jsonl",
-		digestFilename(&DigestEntry{Status: DigestFailure, FailureKind: string(FailureFetch)}))
-}
-
-func TestDigestFilenameResolveFailure(t *testing.T) {
-	assert.Equal(t, "digest-fetch-error.jsonl",
-		digestFilename(&DigestEntry{Status: DigestFailure, FailureKind: string(FailureResolve)}))
-}
-
-func TestDigestFilenameExtractFailure(t *testing.T) {
-	assert.Equal(t, "digest-extract-error.jsonl",
-		digestFilename(&DigestEntry{Status: DigestFailure, FailureKind: string(FailureExtract)}))
-}
-
-func TestDigestFilenameClassifyFailure(t *testing.T) {
-	assert.Equal(t, "digest-classify-rejected.jsonl",
-		digestFilename(&DigestEntry{Status: DigestFailure, FailureKind: string(FailureClassify)}))
-}
-
-func TestDigestFilenameAIFailure(t *testing.T) {
-	assert.Equal(t, "digest-ai-error.jsonl",
-		digestFilename(&DigestEntry{Status: DigestFailure, FailureKind: string(FailureAI)}))
-}
-
-func TestDigestFilenameUnknownFailureDefaultsToAI(t *testing.T) {
-	assert.Equal(t, "digest-ai-error.jsonl",
-		digestFilename(&DigestEntry{Status: DigestFailure, FailureKind: "something-else"}))
-}
-
-// --- LogDigestEntry ---
-
-func TestLogDigestEntryWithNilOptsReturnsEmpty(t *testing.T) {
-	path, err := LogDigestEntry(&DigestEntry{URL: "https://example.com"}, nil)
-	assert.NoError(t, err)
-	assert.Empty(t, path)
-}
-
-func TestLogDigestEntryDryRunReturnsPath(t *testing.T) {
-	root := t.TempDir()
-	entry := &DigestEntry{
-		URL:    "https://example.com",
-		Status: DigestSuccess,
-	}
-
-	path, err := LogDigestEntry(entry, &WriteOptions{WikiRoot: root, DryRun: true})
-
-	require.NoError(t, err)
-	assert.NotEmpty(t, path)
-	assert.Equal(t, root+"/digest-success.jsonl", path)
-}
-
-func TestLogDigestEntryDryRunDoesNotWriteFile(t *testing.T) {
-	root := t.TempDir()
-	entry := &DigestEntry{
-		URL:    "https://example.com",
-		Status: DigestSuccess,
-	}
-
-	_, err := LogDigestEntry(entry, &WriteOptions{WikiRoot: root, DryRun: true})
-	require.NoError(t, err)
-
-	// File should not exist after a dry run.
-	_, readErr := os.ReadFile(root + "/digest-success.jsonl")
-	assert.True(t, os.IsNotExist(readErr))
-}
-
-func TestLogDigestEntryEmptyTimestampIsPopulated(t *testing.T) {
-	root := t.TempDir()
-	entry := &DigestEntry{
-		URL:    "https://example.com",
-		Status: DigestSuccess,
-		// Timestamp intentionally left empty.
-	}
-
-	_, err := LogDigestEntry(entry, &WriteOptions{WikiRoot: root})
-	require.NoError(t, err)
-
-	// The entry should have been given a timestamp.
-	assert.NotEmpty(t, entry.Timestamp, "Timestamp should be populated when empty")
-}
-
-func TestLogDigestEntryPreservesExistingTimestamp(t *testing.T) {
-	root := t.TempDir()
-	entry := &DigestEntry{
-		URL:       "https://example.com",
-		Status:    DigestSuccess,
-		Timestamp: "2026-01-01T00:00:00Z",
-	}
-
-	_, err := LogDigestEntry(entry, &WriteOptions{WikiRoot: root})
-	require.NoError(t, err)
-
-	assert.Equal(t, "2026-01-01T00:00:00Z", entry.Timestamp)
-}
-
-// --- LogDigestEntry with batchID set ---
-
-func TestLogDigestEntryWithBatchIDSet(t *testing.T) {
-	root := t.TempDir()
-	entry := &DigestEntry{
-		URL:     "https://example.com",
-		Status:  DigestSuccess,
-		BatchID: "custom-batch",
-	}
-
-	path, err := LogDigestEntry(entry, &WriteOptions{WikiRoot: root, BatchID: "opts-batch"})
-	require.NoError(t, err)
-
-	// Entry's own BatchID should be preserved (not overwritten by opts.BatchID)
-	assert.Equal(t, "custom-batch", entry.BatchID)
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "custom-batch")
-}
-
-func TestLogDigestEntryUsesOptsBatchIDWhenEmpty(t *testing.T) {
-	root := t.TempDir()
-	entry := &DigestEntry{
-		URL:    "https://example.com",
-		Status: DigestSuccess,
-	}
-
-	path, err := LogDigestEntry(entry, &WriteOptions{WikiRoot: root, BatchID: "opts-batch"})
-	require.NoError(t, err)
-
-	assert.Equal(t, "opts-batch", entry.BatchID)
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "opts-batch")
 }
 
 // --- newHTTPDriver ---
@@ -233,7 +94,7 @@ func TestEnsureContentQualityNilResult(t *testing.T) {
 
 func TestEnsureContentQualityWithError(t *testing.T) {
 	d := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
-	input := &ContentFetchResult{Error: "existing error", SourceURL: "https://example.com"}
+	input := &types.ContentFetchResult{Error: "existing error", SourceURL: "https://example.com"}
 	result := d.ensureContentQuality(context.Background(), input)
 	assert.Equal(t, "existing error", result.Error)
 }
@@ -241,14 +102,14 @@ func TestEnsureContentQualityWithError(t *testing.T) {
 func TestEnsureContentQualityGoodContent(t *testing.T) {
 	d := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
 	body := strings.Repeat("This is good content with enough length to pass quality checks. ", 10)
-	input := &ContentFetchResult{Title: "Good", Body: body, SourceURL: "https://example.com/article"}
+	input := &types.ContentFetchResult{Title: "Good", Body: body, SourceURL: "https://example.com/article"}
 	result := d.ensureContentQuality(context.Background(), input)
 	assert.Empty(t, result.Error)
 }
 
 func TestEnsureContentQualityLowQuality(t *testing.T) {
 	d := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
-	input := &ContentFetchResult{Title: "Bad", Body: "this page requires javascript", SourceURL: "https://example.com"}
+	input := &types.ContentFetchResult{Title: "Bad", Body: "this page requires javascript", SourceURL: "https://example.com"}
 	result := d.ensureContentQuality(context.Background(), input)
 	assert.NotEmpty(t, result.Error)
 	assert.Contains(t, result.Error, "extract:")
@@ -264,11 +125,11 @@ func TestHTTPDriverFetchContentBlockError(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	driver := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), server.URL, ContentText)
+	result := driver.FetchContent(context.Background(), server.URL, types.ContentText)
 
 	require.NotNil(t, result)
 	require.NotEmpty(t, result.Error)
-	assert.Equal(t, FailureResolve, result.FailureKind)
+	assert.Equal(t, types.FailureResolve, result.FailureKind)
 }
 
 // --- HTTP driver handlePageData ---
@@ -298,7 +159,7 @@ func TestHTTPDriverHandlePageDataFallbackToMarkdown(t *testing.T) {
 
 func TestOpenCLIDriverFetchContentVideoMediaDisabled(t *testing.T) {
 	driver := newOpenCLIDriver(DriverOptions{MediaEnabled: false})
-	result := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", ContentVideo)
+	result := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", types.ContentVideo)
 	require.NotNil(t, result)
 	assert.Contains(t, result.Error, "media extraction disabled")
 }
@@ -321,7 +182,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), "https://example.com/article", ContentText)
+	result := driver.FetchContent(context.Background(), "https://example.com/article", types.ContentText)
 	require.NotNil(t, result)
 }
 
@@ -360,7 +221,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", ContentVideo)
+	result := driver.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", types.ContentVideo)
 	require.NotNil(t, result)
 }
 
@@ -394,7 +255,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", ContentVideo)
+	result := driver.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", types.ContentVideo)
 	require.NotNil(t, result)
 }
 
@@ -429,7 +290,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", ContentVideo)
+	result := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", types.ContentVideo)
 	require.NotNil(t, result)
 }
 
@@ -463,7 +324,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", ContentVideo)
+	result := driver.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", types.ContentVideo)
 	require.NotNil(t, result)
 }
 
@@ -494,7 +355,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", ContentVideo)
+	result := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", types.ContentVideo)
 	require.NotNil(t, result)
 }
 
@@ -527,7 +388,7 @@ printf 'B站 official AI summary that is long enough to pass the minimum thresho
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := &ContentFetchResult{Title: "Test", Body: "original body", SourceURL: "https://www.bilibili.com/video/BV1xx"}
+	result := &types.ContentFetchResult{Title: "Test", Body: "original body", SourceURL: "https://www.bilibili.com/video/BV1xx"}
 	driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
 	assert.Contains(t, result.Body, "AI 总结")
 }
@@ -542,7 +403,7 @@ printf 'short\n'
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := &ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
 	driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
 	assert.Equal(t, "original", result.Body)
 }
@@ -557,7 +418,7 @@ exit 1
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := &ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
 	driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
 	assert.Equal(t, "original", result.Body)
 }
@@ -574,7 +435,7 @@ printf 'short\n'
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := &ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.youtube.com/watch?v=abc"}
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.youtube.com/watch?v=abc"}
 	driver.appendYoutubeTranscript(context.Background(), result, "https://www.youtube.com/watch?v=abc")
 	assert.Equal(t, "original", result.Body)
 }
@@ -589,7 +450,7 @@ exit 1
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := &ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.youtube.com/watch?v=abc"}
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.youtube.com/watch?v=abc"}
 	driver.appendYoutubeTranscript(context.Background(), result, "https://www.youtube.com/watch?v=abc")
 	assert.Equal(t, "original", result.Body)
 }
@@ -616,7 +477,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := &ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
 	driver.appendBilibiliTranscript(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
 	assert.Equal(t, "original", result.Body)
 }
@@ -782,7 +643,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), "https://x.com/user/status/123", ContentText)
+	result := driver.FetchContent(context.Background(), "https://x.com/user/status/123", types.ContentText)
 	require.NotNil(t, result)
 }
 
@@ -809,7 +670,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), "https://mp.weixin.qq.com/s/abc", ContentText)
+	result := driver.FetchContent(context.Background(), "https://mp.weixin.qq.com/s/abc", types.ContentText)
 	require.NotNil(t, result)
 }
 
@@ -825,7 +686,7 @@ printf '# Zhihu Content\n\nSome content from zhihu.\n'
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := driver.FetchContent(context.Background(), "https://zhihu.com/question/123", ContentText)
+	result := driver.FetchContent(context.Background(), "https://zhihu.com/question/123", types.ContentText)
 	require.NotNil(t, result)
 }
 
@@ -851,7 +712,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := &ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
 	driver.appendBilibiliTranscript(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
 	// Short transcript content (< 100 runes total) should not be appended
 	assert.Equal(t, "original", result.Body)
@@ -883,7 +744,7 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := &ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
 	driver.appendBilibiliTranscript(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
 	// Should have appended transcript
 	if result.Body != "original" {
@@ -911,7 +772,7 @@ printf '%s' '` + transcript + `'
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
-	result := &ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.youtube.com/watch?v=abc"}
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.youtube.com/watch?v=abc"}
 	driver.appendYoutubeTranscript(context.Background(), result, "https://www.youtube.com/watch?v=abc")
 	// Check if transcript was appended (depends on md.ExtractTranscriptLines parsing)
 	if result.Body != "original" {
@@ -953,6 +814,6 @@ esac
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000, MediaEnabled: true})
-	result := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", ContentVideo)
+	result := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", types.ContentVideo)
 	require.NotNil(t, result)
 }

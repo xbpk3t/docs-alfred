@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
+	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 )
 
@@ -33,12 +34,12 @@ func TestLoadConfigAppliesWikiRootOverride(t *testing.T) {
 
 func TestRunAddURLsWritesSummary(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
-	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results["https://example.com/a"] = &wikitypes.ClassifyResult{
 		TopicPath:   "topic/path",
-		WikiType:    wikisvc.TypeDeepDive,
-		ContentType: wikisvc.ContentText,
-		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentText,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 
 	result, err := RunAddURLs(context.Background(), AddInput{
@@ -57,12 +58,12 @@ func TestRunAddURLsWritesSummary(t *testing.T) {
 
 func TestRunAddURLsWritesClassifyFailure(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
-	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results["https://example.com/a"] = &wikitypes.ClassifyResult{
 		TopicPath:   "none",
-		WikiType:    wikisvc.TypeInbox,
-		ContentType: wikisvc.ContentText,
-		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
+		WikiType:    wikitypes.TypeInbox,
+		ContentType: wikitypes.ContentText,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 
 	result, err := RunAddURLs(context.Background(), AddInput{
@@ -81,12 +82,12 @@ func TestRunAddURLsWritesClassifyFailure(t *testing.T) {
 
 func TestRunAddURLsTreatsInboxWikiTypeAsClassifyFailure(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
-	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results["https://example.com/a"] = &wikitypes.ClassifyResult{
 		TopicPath:         "topic/path",
-		WikiType:          wikisvc.TypeInbox,
-		ContentType:       wikisvc.ContentText,
-		Summary:           &wikisvc.StructuredSummary{Overview: "needs review summary"},
+		WikiType:          wikitypes.TypeInbox,
+		ContentType:       wikitypes.ContentText,
+		Summary:           &wikitypes.StructuredSummary{Overview: "needs review summary"},
 		Confidence:        0.88,
 		NeedsManualReview: true,
 		RejectReason:      "AI marked result for manual review",
@@ -110,9 +111,9 @@ func TestRunAddURLsTreatsInboxWikiTypeAsClassifyFailure(t *testing.T) {
 
 func TestRunAddURLsWritesFetchFailure(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Error:       "resolve: HTTP 403",
-		FailureKind: wikisvc.FailureResolve,
+		FailureKind: wikitypes.FailureResolve,
 	}
 
 	result, err := RunAddURLs(context.Background(), AddInput{
@@ -124,15 +125,15 @@ func TestRunAddURLsWritesFetchFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.OK())
 	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
-	require.Equal(t, wikisvc.FailureResolve, result.URLResults[0].FailureType)
+	require.Equal(t, wikitypes.FailureResolve, result.URLResults[0].FailureType)
 	require.Len(t, deps.writer.failures, 1)
 }
 
 func TestRunAddURLsWritesExtractFailure(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Error:       "extract: low quality HTTP content",
-		FailureKind: wikisvc.FailureExtract,
+		FailureKind: wikitypes.FailureExtract,
 	}
 
 	result, err := RunAddURLs(context.Background(), AddInput{
@@ -144,15 +145,15 @@ func TestRunAddURLsWritesExtractFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.OK())
 	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
-	require.Equal(t, wikisvc.FailureExtract, result.URLResults[0].FailureType)
+	require.Equal(t, wikitypes.FailureExtract, result.URLResults[0].FailureType)
 	require.Len(t, deps.writer.failures, 1)
 }
 
 func TestRunAddURLsUsesTypedFetchFailureKind(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
 		Error:       "low quality HTTP content",
-		FailureKind: wikisvc.FailureExtract,
+		FailureKind: wikitypes.FailureExtract,
 	}
 
 	result, err := RunAddURLs(context.Background(), AddInput{
@@ -164,19 +165,19 @@ func TestRunAddURLsUsesTypedFetchFailureKind(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.OK())
 	require.Equal(t, StatusFailureWritten, result.URLResults[0].Status)
-	require.Equal(t, wikisvc.FailureExtract, result.URLResults[0].FailureType)
+	require.Equal(t, wikitypes.FailureExtract, result.URLResults[0].FailureType)
 	require.Len(t, deps.writer.failures, 1)
-	require.Equal(t, wikisvc.FailureExtract, deps.writer.failures[0].failureType)
+	require.Equal(t, wikitypes.FailureExtract, deps.writer.failures[0].failureType)
 }
 
 func TestRunAddURLsWriterFailureIsUnhandled(t *testing.T) {
 	deps := newFakeDeps()
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
-	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results["https://example.com/a"] = &wikitypes.ClassifyResult{
 		TopicPath:   "topic/path",
-		WikiType:    wikisvc.TypeDeepDive,
-		ContentType: wikisvc.ContentText,
-		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentText,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 	deps.writer.summaryErr = errors.New("disk full")
 
@@ -194,13 +195,13 @@ func TestRunAddURLsWriterFailureIsUnhandled(t *testing.T) {
 
 func TestRunDigestFlushesHandledLines(t *testing.T) {
 	deps := newFakeDeps()
-	deps.inbox.entries = []wikisvc.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
-	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results["https://example.com/a"] = &wikitypes.ClassifyResult{
 		TopicPath:   "topic/path",
-		WikiType:    wikisvc.TypeDeepDive,
-		ContentType: wikisvc.ContentText,
-		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentText,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 	cfg := testConfig(t)
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/a\n"), 0o600))
@@ -226,18 +227,18 @@ func TestRunDigestWritesSameTopicInInboxOrderAfterReverseCompletion(t *testing.T
 		urls[0]: make(chan struct{}),
 		urls[1]: make(chan struct{}),
 	}
-	fetcher := &fakeFetcher{results: map[string]*wikisvc.ContentFetchResult{}, blocks: blocks, started: started}
-	classifier := &fakeClassifier{results: map[string]*wikisvc.ClassifyResult{}}
-	entries := make([]wikisvc.InboxEntry, 0, len(urls))
+	fetcher := &fakeFetcher{results: map[string]*wikitypes.ContentFetchResult{}, blocks: blocks, started: started}
+	classifier := &fakeClassifier{results: map[string]*wikitypes.ClassifyResult{}}
+	entries := make([]wikiwrite.InboxEntry, 0, len(urls))
 	for i, url := range urls {
-		fetcher.results[url] = &wikisvc.ContentFetchResult{Title: "Title " + string(rune('A'+i)), Body: "body"}
-		classifier.results[url] = &wikisvc.ClassifyResult{
+		fetcher.results[url] = &wikitypes.ContentFetchResult{Title: "Title " + string(rune('A'+i)), Body: "body"}
+		classifier.results[url] = &wikitypes.ClassifyResult{
 			TopicPath:   "topic/path",
-			WikiType:    wikisvc.TypeDeepDive,
-			ContentType: wikisvc.ContentText,
-			Summary:     &wikisvc.StructuredSummary{Overview: "summary " + url},
+			WikiType:    wikitypes.TypeDeepDive,
+			ContentType: wikitypes.ContentText,
+			Summary:     &wikitypes.StructuredSummary{Overview: "summary " + url},
 		}
-		entries = append(entries, wikisvc.InboxEntry{URL: url, LineIndex: i})
+		entries = append(entries, wikiwrite.InboxEntry{URL: url, LineIndex: i})
 	}
 
 	cfg := testConfig(t)
@@ -281,13 +282,13 @@ func TestRunDigestWritesSameTopicInInboxOrderAfterReverseCompletion(t *testing.T
 
 func TestRunDigestDryRunDoesNotWriteOrFlush(t *testing.T) {
 	deps := newFakeDeps()
-	deps.inbox.entries = []wikisvc.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
-	deps.fetcher.results["https://example.com/a"] = &wikisvc.ContentFetchResult{Title: "A", Body: "body"}
-	deps.classifier.results["https://example.com/a"] = &wikisvc.ClassifyResult{
+	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results["https://example.com/a"] = &wikitypes.ClassifyResult{
 		TopicPath:   "topic/path",
-		WikiType:    wikisvc.TypeDeepDive,
-		ContentType: wikisvc.ContentText,
-		Summary:     &wikisvc.StructuredSummary{Overview: "summary"},
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentText,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 	cfg := testConfig(t)
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/a\n"), 0o600))
@@ -434,8 +435,8 @@ type fakeDeps struct {
 
 func newFakeDeps() *fakeDeps {
 	return &fakeDeps{
-		fetcher:    &fakeFetcher{results: map[string]*wikisvc.ContentFetchResult{}},
-		classifier: &fakeClassifier{results: map[string]*wikisvc.ClassifyResult{}},
+		fetcher:    &fakeFetcher{results: map[string]*wikitypes.ContentFetchResult{}},
+		classifier: &fakeClassifier{results: map[string]*wikitypes.ClassifyResult{}},
 		writer:     &fakeWriter{},
 		inbox:      &fakeInbox{},
 	}
@@ -451,13 +452,13 @@ func (f *fakeDeps) dependencies() *dependencies {
 }
 
 type fakeFetcher struct {
-	results   map[string]*wikisvc.ContentFetchResult
+	results   map[string]*wikitypes.ContentFetchResult
 	blocks    map[string]chan struct{}
 	started   map[string]chan struct{}
 	returnNil bool
 }
 
-func (f *fakeFetcher) FetchContent(_ context.Context, urlStr, _ string) *wikisvc.ContentFetchResult {
+func (f *fakeFetcher) FetchContent(_ context.Context, urlStr, _ string) *wikitypes.ContentFetchResult {
 	if ch, ok := f.started[urlStr]; ok {
 		close(ch)
 	}
@@ -471,14 +472,14 @@ func (f *fakeFetcher) FetchContent(_ context.Context, urlStr, _ string) *wikisvc
 		return result
 	}
 
-	return &wikisvc.ContentFetchResult{Title: urlStr, Body: "body"}
+	return &wikitypes.ContentFetchResult{Title: urlStr, Body: "body"}
 }
 
 type fakeClassifier struct {
-	results map[string]*wikisvc.ClassifyResult
+	results map[string]*wikitypes.ClassifyResult
 }
 
-func (f *fakeClassifier) ClassifyURL(_ context.Context, urlStr, _, _ string) *wikisvc.ClassifyResult {
+func (f *fakeClassifier) ClassifyURL(_ context.Context, urlStr, _, _ string) *wikitypes.ClassifyResult {
 	return f.results[urlStr]
 }
 
@@ -496,12 +497,12 @@ type writeCall struct {
 
 type failureCall struct {
 	url         string
-	failureType wikisvc.FailureKind
+	failureType wikitypes.FailureKind
 	extraInfo   string
 	dryRun      bool
 }
 
-func (f *fakeWriter) WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.WriteOptions) (string, error) {
+func (f *fakeWriter) WriteSummary(item *wikitypes.ClassifyItem, opts *wikiwrite.WriteOptions) (string, error) {
 	if f.summaryErr != nil {
 		return "", f.summaryErr
 	}
@@ -511,10 +512,10 @@ func (f *fakeWriter) WriteSummary(item *wikisvc.ClassifyItem, opts *wikisvc.Writ
 }
 
 func (f *fakeWriter) WriteFailureEntry(
-	item *wikisvc.ClassifyItem,
-	failureType wikisvc.FailureKind,
+	item *wikitypes.ClassifyItem,
+	failureType wikitypes.FailureKind,
 	extraInfo string,
-	opts *wikisvc.WriteOptions,
+	opts *wikiwrite.WriteOptions,
 ) (string, error) {
 	if f.failureErr != nil {
 		return "", f.failureErr
@@ -524,7 +525,7 @@ func (f *fakeWriter) WriteFailureEntry(
 	return filepath.Join(opts.WikiRoot, failureType.String()+"-failed.md"), nil
 }
 
-func (f *fakeWriter) WriteManualReviewEntry(item *wikisvc.ClassifyItem, opts *wikisvc.WriteOptions) (string, error) {
+func (f *fakeWriter) WriteManualReviewEntry(item *wikitypes.ClassifyItem, opts *wikiwrite.WriteOptions) (string, error) {
 	if f.failureErr != nil {
 		return "", f.failureErr
 	}
@@ -536,10 +537,10 @@ type fakeInbox struct {
 	parseErr error
 	flushErr error
 	flushed  map[int][]string
-	entries  []wikisvc.InboxEntry
+	entries  []wikiwrite.InboxEntry
 }
 
-func (f *fakeInbox) ParseInbox(string) ([]wikisvc.InboxEntry, error) {
+func (f *fakeInbox) ParseInbox(string) ([]wikiwrite.InboxEntry, error) {
 	if f.parseErr != nil {
 		return nil, f.parseErr
 	}

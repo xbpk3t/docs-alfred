@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 )
 
 // --- RunDigestLocal ---
@@ -45,11 +45,11 @@ func TestRunDigestLocalEmptyFromDir(t *testing.T) {
 func TestRunDigestLocalWithTranscriptFiles(t *testing.T) {
 	cfg := testConfig(t)
 	deps := newFakeDeps()
-	deps.classifier.results["https://www.bilibili.com/video/BV1abc123/"] = &wikisvc.ClassifyResult{
+	deps.classifier.results["https://www.bilibili.com/video/BV1abc123/"] = &wikitypes.ClassifyResult{
 		TopicPath:   "tech/ai",
-		WikiType:    wikisvc.TypeDeepDive,
-		ContentType: wikisvc.ContentVideo,
-		Summary:     &wikisvc.StructuredSummary{Overview: "great video summary"},
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentVideo,
+		Summary:     &wikitypes.StructuredSummary{Overview: "great video summary"},
 	}
 
 	fromDir := t.TempDir()
@@ -145,11 +145,11 @@ func TestReadLocalInputsSuccess(t *testing.T) {
 func TestProcessLocalDirValidInputs(t *testing.T) {
 	deps := newFakeDeps()
 	url := "https://www.bilibili.com/video/BV1abc123/"
-	deps.classifier.results[url] = &wikisvc.ClassifyResult{
+	deps.classifier.results[url] = &wikitypes.ClassifyResult{
 		TopicPath:   "tech/ai",
-		WikiType:    wikisvc.TypeDeepDive,
-		ContentType: wikisvc.ContentVideo,
-		Summary:     &wikisvc.StructuredSummary{Overview: "great summary"},
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentVideo,
+		Summary:     &wikitypes.StructuredSummary{Overview: "great summary"},
 	}
 
 	dir := t.TempDir()
@@ -192,18 +192,18 @@ func TestProcessLocalDirClassifierNilEmptyContent(t *testing.T) {
 
 	result := processLocalDir(context.Background(), deps.dependencies(), wikiRoot, dir)
 	assert.Equal(t, StatusFailureWritten, result.Status)
-	assert.Equal(t, wikisvc.FailureExtract, result.FailureType)
+	assert.Equal(t, wikitypes.FailureExtract, result.FailureType)
 	assert.True(t, result.Handled)
 }
 
 func TestProcessLocalDirClassifyFailure(t *testing.T) {
 	deps := newFakeDeps()
 	url := "https://www.bilibili.com/video/BV1abc123/"
-	deps.classifier.results[url] = &wikisvc.ClassifyResult{
-		TopicPath:    "none",
-		WikiType:     wikisvc.TypeInbox,
-		ContentType:  wikisvc.ContentVideo,
-		Summary:      &wikisvc.StructuredSummary{Overview: "something"},
+	deps.classifier.results[url] = &wikitypes.ClassifyResult{
+		TopicPath:   "none",
+		WikiType:    wikitypes.TypeInbox,
+		ContentType: wikitypes.ContentVideo,
+		Summary:     &wikitypes.StructuredSummary{Overview: "something"},
 	}
 
 	dir := t.TempDir()
@@ -230,7 +230,7 @@ func TestProcessLocalDirVideoTooShort(t *testing.T) {
 
 	result := processLocalDir(context.Background(), deps.dependencies(), wikiRoot, dir)
 	assert.Equal(t, StatusFailureWritten, result.Status)
-	assert.Equal(t, wikisvc.FailureExtract, result.FailureType)
+	assert.Equal(t, wikitypes.FailureExtract, result.FailureType)
 	assert.True(t, result.Handled)
 }
 

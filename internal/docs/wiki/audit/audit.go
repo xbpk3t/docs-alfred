@@ -1,8 +1,9 @@
-package wiki
+package audit
 
 import (
 	"errors"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/fetch"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -217,11 +218,11 @@ func pathWithinRoot(absRoot, absPath string) (bool, error) {
 func auditSummaryFile(file string, lines []string) []checkutil.Issue {
 	issues := auditMalformedURLLines(file, lines)
 	lowerAll := strings.ToLower(strings.Join(lines, "\n"))
-	if matches := lowQualityMatcher.Match([]byte(lowerAll)); len(matches) > 0 {
+	if matches := fetch.LowQualityMatcher.Match([]byte(lowerAll)); len(matches) > 0 {
 		issues = append(issues, checkutil.Issue{
 			File:     file,
 			Severity: checkutil.SeverityError,
-			Message:  "successful summary contains low-quality extraction marker: " + lowQualityPatternsList[matches[0]],
+			Message:  "successful summary contains low-quality extraction marker: " + fetch.LowQualityPatternsList[matches[0]],
 		})
 	}
 	issues = append(issues, auditCanonicalHeadings(file, lines)...)

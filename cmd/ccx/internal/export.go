@@ -13,7 +13,7 @@ import (
 	"text/template"
 	"time"
 
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	session "github.com/xbpk3t/docs-alfred/pkg/ai/session"
@@ -35,14 +35,14 @@ const (
 
 // ExportInput contains inputs for session export.
 type ExportInput struct {
-	AIConfig  *ai.ClientConfig
-	Agent     Agent `validate:"required|in:cc,codex"`
-	WikiRoot  string
-	OutputDir string
+	AIConfig   *ai.ClientConfig
+	Agent      Agent `validate:"required|in:cc,codex"`
+	WikiRoot   string
+	OutputDir  string
 	ProjectDir string // Resolved project directory; set once by CLI layer.
-	SessionID string // Explicit session/thread ID; defaults to the selected agent env var.
-	DryRun    bool
-	Verbose   bool
+	SessionID  string // Explicit session/thread ID; defaults to the selected agent env var.
+	DryRun     bool
+	Verbose    bool
 }
 
 // ExportResult contains the result of session export.
@@ -244,7 +244,7 @@ func normalizeTopicPath(wikiRoot, topicPath string, candidates []ghindex.TopicCa
 	if topicPath == "" || topicPath == "none" || topicPath == "inbox" {
 		return "", fmt.Errorf("AI returned unresolvable topic path %q", topicPath)
 	}
-	if err := wikisvc.ValidateRelativeWikiPath(wikiRoot, topicPath); err != nil {
+	if err := wikiclassify.ValidateRelativeWikiPath(wikiRoot, topicPath); err != nil {
 		return "", fmt.Errorf("AI topic path is unsafe: %w", err)
 	}
 	if !hasTopicCandidate(candidates, topicPath) {
@@ -270,7 +270,7 @@ func hasTopicCandidate(candidates []ghindex.TopicCandidate, topicPath string) bo
 // renderClassifyTitlePrompt renders the classify-title.txt prompt template.
 // Returns the rendered prompt and topic candidates for validation.
 func renderClassifyTitlePrompt(messages []session.Message) (string, []ghindex.TopicCandidate, error) {
-	candidates := wikisvc.LoadClassificationCandidates("")
+	candidates := wikiclassify.LoadClassificationCandidates("")
 	if len(candidates) == 0 {
 		return "", nil, errors.New("no topic candidates available")
 	}
@@ -289,7 +289,7 @@ func renderClassifyTitlePrompt(messages []session.Message) (string, []ghindex.To
 	}
 
 	data := map[string]string{
-		"CandidateTree": wikisvc.FormatTopicCandidatesGrouped(candidates),
+		"CandidateTree": wikiclassify.FormatTopicCandidatesGrouped(candidates),
 		"Content":       content,
 	}
 

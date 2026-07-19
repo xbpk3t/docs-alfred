@@ -4,14 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
 	wikiuc "github.com/xbpk3t/docs-alfred/internal/docs/ingest"
+	wikicompact "github.com/xbpk3t/docs-alfred/internal/docs/wiki/compact"
+	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
+	"github.com/xbpk3t/docs-alfred/pkg/mail"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
@@ -26,10 +31,11 @@ type wikiFlags struct {
 }
 
 const (
-	wikiCommandName       = "wiki"
-	wikiDigestCommandName = "digest"
-	wikiAuditCommandName  = "audit"
-	wikiCheckCommandName  = "check"
+	wikiCommandName        = "wiki"
+	wikiDigestCommandName  = "digest"
+	wikiAuditCommandName   = "audit"
+	wikiCheckCommandName   = "check"
+	wikiCompactCommandName = "compact"
 )
 
 func newWikiCmd() *cobra.Command {
@@ -54,6 +60,7 @@ and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 	cmd.AddCommand(newWikiDigestLocalCmd())
 	cmd.AddCommand(newWikiAuditCmd())
 	cmd.AddCommand(newWikiCheckCmd())
+	cmd.AddCommand(newWikiCompactCmd())
 
 	return cmd
 }
@@ -231,6 +238,153 @@ func newWikiCheckCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "wiki", "wiki path")
 
 	return cmd
+}
+
+type wikiCompactFlags struct {
+	config           string
+	wikiRoot         string
+	since            string
+	model            string
+	topHot           int
+	topNotice        int
+	bulkLogThreshold int
+	minDeltaChars    int
+	minDeltaLines    int
+	sendMail         bool
+	dryRun           bool
+	skipAI           bool
+}
+
+func newWikiCompactCmd() *cobra.Command {
+	var flags wikiCompactFlags
+	cmd := &cobra.Command{
+		Use:   wikiCompactCommandName,
+		Short: "Monthly compact notice: hot log topics → AI → optional Resend mail",
+		Long: `Identify hot wiki topics (substantive committed log.md edits in the previous calendar month by default),
+ask AI whether a type:blog compact is warranted, and optionally email Top5 notices via Resend.
+
+Default window is last-month (natural previous month, Asia/Shanghai). Use --since 7d / 30d for rolling windows.
+
+This command never writes blog or log.md. Compact still means you write type:blog manually.
+
+Default is dry print (no mail). Pass --send-mail to deliver via Resend (RESEND_TOKEN + mailTo).`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runWikiCompact(cmd, &flags)
+		},
+	}
+	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path (wiki.yml)")
+	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
+	cmd.Flags().StringVar(&flags.since, "since", "last-month", "Window: last-month (default), or rolling 7d/30d/168h")
+	cmd.Flags().IntVar(&flags.topHot, "top-hot", 10, "Max hot topics to send to AI")
+	cmd.Flags().IntVar(&flags.topNotice, "top-notice", 5, "Max yes notices in email")
+	cmd.Flags().IntVar(&flags.bulkLogThreshold, "bulk-log-threshold", 10, "Ignore commits touching this many log.md paths")
+	cmd.Flags().IntVar(&flags.minDeltaChars, "min-delta-chars", 40, "Min non-whitespace char delta for substantive edit")
+	cmd.Flags().IntVar(&flags.minDeltaLines, "min-delta-lines", 2, "Min non-empty line ± for substantive edit")
+	cmd.Flags().BoolVar(&flags.sendMail, "send-mail", false, "Send Resend email")
+	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Print result; do not send mail even with --send-mail")
+	cmd.Flags().BoolVar(&flags.skipAI, "skip-ai", false, "Skip AI (hot list only; for offline debug)")
+	cmd.Flags().StringVar(&flags.model, "model", "", "AI model override")
+
+	return cmd
+}
+
+func runWikiCompact(cmd *cobra.Command, flags *wikiCompactFlags) error {
+	cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	resolveWikiAPIKey(cfg)
+	if flags.model != "" {
+		cfg.AI.Model = flags.model
+	}
+
+	win, err := wikicompact.ParseWindow(flags.since, time.Now())
+	if err != nil {
+		return err
+	}
+
+	token, fromName, mailTo, err := resolveCompactMail(cfg)
+	if err != nil {
+		return err
+	}
+	if flags.sendMail && !flags.dryRun {
+		if token == "" {
+			return errors.New("RESEND_TOKEN is required with --send-mail")
+		}
+		if len(mailTo) == 0 {
+			return errors.New("resend mailTo is required (wiki.yml resend.mailTo or RESEND_MAIL_TO)")
+		}
+	}
+
+	aiCfg := ai.ConfigWithOverrides(cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Model)
+	if cfg.AI.Temperature > 0 {
+		aiCfg.Temperature = cfg.AI.Temperature
+	}
+
+	result, err := wikicompact.RunCompact(context.Background(), &wikicompact.CompactOptions{
+		WikiRoot:         cfg.Wiki.WikiRoot,
+		Window:           win,
+		TopHot:           flags.topHot,
+		TopNotice:        flags.topNotice,
+		BulkLogThreshold: flags.bulkLogThreshold,
+		MinDeltaChars:    flags.minDeltaChars,
+		MinDeltaLines:    flags.minDeltaLines,
+		SendMail:         flags.sendMail,
+		DryRun:           flags.dryRun,
+		SkipAI:           flags.skipAI,
+		AI:               aiCfg,
+		Mail: wikicompact.MailConfig{
+			Token:    token,
+			MailTo:   mailTo,
+			FromName: fromName,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := printCompactResult(cmd.OutOrStdout(), result, flags); err != nil {
+		return err
+	}
+	if result.SoftError != nil {
+		return result.SoftError
+	}
+	return nil
+}
+
+func resolveCompactMail(cfg *wikiuc.Config) (token, fromName string, mailTo []string, err error) {
+	mailTo = cfg.Resend.MailTo
+	if envTo := os.Getenv("RESEND_MAIL_TO"); envTo != "" {
+		mailTo = mail.ParseAddresses(envTo)
+	}
+	token = os.Getenv("RESEND_TOKEN")
+	fromName = cfg.Resend.FromName
+	if fromName == "" {
+		fromName = "wiki compact"
+	}
+	return token, fromName, mailTo, nil
+}
+
+func printCompactResult(w io.Writer, result *wikicompact.CompactResult, flags *wikiCompactFlags) error {
+	if _, err := fmt.Fprint(w, result.TextBody); err != nil {
+		return err
+	}
+	switch {
+	case result.MailSent:
+		if _, err := fmt.Fprintln(w, "mail: sent"); err != nil {
+			return err
+		}
+	case flags.sendMail && flags.dryRun:
+		if _, err := fmt.Fprintln(w, "mail: dry-run (not sent)"); err != nil {
+			return err
+		}
+	case !flags.sendMail:
+		if _, err := fmt.Fprintln(w, "mail: skipped (pass --send-mail to deliver)"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // resolveWikiAPIKey populates cfg.AI.APIKey from environment variables when unset.

@@ -3,11 +3,11 @@ package wikiingest
 import (
 	"strings"
 
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 )
 
 type fetchFailureError struct {
-	failureType wikisvc.FailureKind
+	failureType wikitypes.FailureKind
 	message     string
 }
 
@@ -25,26 +25,26 @@ func (e *classifyRetryError) Error() string {
 	return e.message
 }
 
-func failureKindForFetchResult(result *wikisvc.ContentFetchResult) wikisvc.FailureKind {
+func failureKindForFetchResult(result *wikitypes.ContentFetchResult) wikitypes.FailureKind {
 	if result != nil && result.FailureKind != "" {
 		return result.FailureKind
 	}
 	if result == nil {
-		return wikisvc.FailureFetch
+		return wikitypes.FailureFetch
 	}
 
 	return legacyFailureKindFromMessage(result.Error)
 }
 
-func legacyFailureKindFromMessage(message string) wikisvc.FailureKind {
+func legacyFailureKindFromMessage(message string) wikitypes.FailureKind {
 	// Compatibility for test doubles or older fetcher implementations that only
 	// return the pre-typed error string. Real fetchers should set FailureKind.
 	if strings.Contains(message, "extract:") {
-		return wikisvc.FailureExtract
+		return wikitypes.FailureExtract
 	}
 	if strings.Contains(message, "resolve:") {
-		return wikisvc.FailureResolve
+		return wikitypes.FailureResolve
 	}
 
-	return wikisvc.FailureFetch
+	return wikitypes.FailureFetch
 }

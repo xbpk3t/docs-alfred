@@ -6,13 +6,13 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/resend/resend-go/v2"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/cmd/linear2nl/internal"
 	"github.com/xbpk3t/docs-alfred/internal/linear"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/mail"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
 	"github.com/xbpk3t/docs-alfred/pkg/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
@@ -122,29 +122,17 @@ func priorityLabel(p float64) string {
 }
 
 func sendEmail(cfg *internal.Config, subject, htmlBody string) error {
-	client := resend.NewClient(cfg.Resend.Token)
-
 	fromName := cfg.Resend.FromName
 	if fromName == "" {
 		fromName = "Linear Bot"
 	}
-
-	params := &resend.SendEmailRequest{
-		From:    fromName + " <onboarding@resend.dev>",
+	return mail.SendHTML(context.Background(), &mail.SendOptions{
+		Token:   cfg.Resend.Token,
 		To:      cfg.Resend.MailTo,
+		From:    mail.DefaultFrom(fromName),
 		Subject: subject,
-		Html:    htmlBody,
-	}
-
-	slog.Info("sending email", "to", cfg.Resend.MailTo, "subject", subject)
-	sent, err := client.Emails.SendWithContext(context.Background(), params)
-	if err != nil {
-		return fmt.Errorf("send email: %w", err)
-	}
-
-	slog.Info("email sent", "id", sent.Id)
-
-	return nil
+		HTML:    htmlBody,
+	})
 }
 
 func writeOutput(data []byte, filename string) error {

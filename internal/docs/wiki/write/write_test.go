@@ -1,7 +1,8 @@
-package wiki
+package write
 
 import (
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,12 +68,12 @@ title: demo
 
 func TestWriteSummaryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
 	root := t.TempDir()
-	item := &ClassifyItem{
+	item := &types.ClassifyItem{
 		URL:       "https://example.com/a",
 		Title:     "A",
 		TopicPath: "topic/path",
-		Type:      TypeDeepDive,
-		Summary:   &StructuredSummary{Overview: "summary"},
+		Type:      types.TypeDeepDive,
+		Summary:   &types.StructuredSummary{Overview: "summary"},
 	}
 
 	path, err := WriteSummary(item, &WriteOptions{WikiRoot: root, DryRun: true})
@@ -85,12 +86,12 @@ func TestWriteSummaryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
 
 func TestWriteFailureEntryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
 	root := t.TempDir()
-	item := &ClassifyItem{
+	item := &types.ClassifyItem{
 		URL:   "https://example.com/a",
 		Title: "A",
 	}
 
-	path, err := WriteFailureEntry(item, FailureFetch, "fetch failed", &WriteOptions{WikiRoot: root, DryRun: true})
+	path, err := WriteFailureEntry(item, types.FailureFetch, "fetch failed", &WriteOptions{WikiRoot: root, DryRun: true})
 
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(root, "digest-fetch-error.jsonl"), path)
@@ -106,12 +107,12 @@ func TestWriteSummaryConcurrentSameTopicDoesNotLoseEntries(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, err := WriteSummary(&ClassifyItem{
+			_, err := WriteSummary(&types.ClassifyItem{
 				URL:       fmt.Sprintf("https://example.com/%02d", i),
 				Title:     fmt.Sprintf("Item %02d", i),
 				TopicPath: "topic/path",
-				Type:      TypeDeepDive,
-				Summary:   &StructuredSummary{Overview: "summary"},
+				Type:      types.TypeDeepDive,
+				Summary:   &types.StructuredSummary{Overview: "summary"},
 			}, &WriteOptions{WikiRoot: root})
 			require.NoError(t, err)
 		}(i)
@@ -224,10 +225,10 @@ func TestFlushInboxKeepsUnhandledMarkdownLinkURL(t *testing.T) {
 }
 
 func TestBuildFailureEntryTruncatesUTF8Safely(t *testing.T) {
-	entry := buildFailureEntry(&ClassifyItem{
+	entry := buildFailureEntry(&types.ClassifyItem{
 		URL:     "https://example.com/a",
 		Title:   "A",
-		Summary: &StructuredSummary{Overview: strings.Repeat("你好", 400)},
+		Summary: &types.StructuredSummary{Overview: strings.Repeat("你好", 400)},
 	}, "failed")
 
 	assert.True(t, utf8.ValidString(entry))
@@ -260,7 +261,7 @@ func TestLoadFrontmatterNonFrontmatterContent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "summary.md")
 	require.NoError(t, os.WriteFile(path, []byte("just plain content without frontmatter"), 0o600))
 
-	item := &ClassifyItem{TopicPath: "topic/path"}
+	item := &types.ClassifyItem{TopicPath: "topic/path"}
 	fm, body := loadFrontmatter(path, item, "2026-06-20", "batch-1")
 
 	assert.Equal(t, "path", fm.Title)
@@ -282,7 +283,7 @@ succeeded: 3
 existing body
 `), 0o600))
 
-	item := &ClassifyItem{TopicPath: "topic/path"}
+	item := &types.ClassifyItem{TopicPath: "topic/path"}
 	fm, body := loadFrontmatter(path, item, "2026-06-20", "batch-1")
 
 	assert.Equal(t, "existing", fm.Title)
@@ -293,7 +294,7 @@ existing body
 
 func TestLoadFrontmatterNewFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nonexistent.md")
-	item := &ClassifyItem{TopicPath: "topic/path"}
+	item := &types.ClassifyItem{TopicPath: "topic/path"}
 	fm, body := loadFrontmatter(path, item, "2026-06-20", "batch-1")
 
 	assert.Equal(t, "path", fm.Title)
@@ -372,16 +373,16 @@ func TestItemURLNil(t *testing.T) {
 }
 
 func TestItemURLNotNil(t *testing.T) {
-	assert.Equal(t, "https://example.com", itemURL(&ClassifyItem{URL: "https://example.com"}))
+	assert.Equal(t, "https://example.com", itemURL(&types.ClassifyItem{URL: "https://example.com"}))
 }
 
 // --- buildFailureEntry ---
 
 func TestBuildFailureEntryWithSummary(t *testing.T) {
-	entry := buildFailureEntry(&ClassifyItem{
+	entry := buildFailureEntry(&types.ClassifyItem{
 		URL:     "https://example.com",
 		Title:   "Test",
-		Summary: &StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
+		Summary: &types.StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
 	}, "reason")
 	assert.Contains(t, entry, "Test")
 	assert.Contains(t, entry, "https://example.com")
@@ -390,15 +391,15 @@ func TestBuildFailureEntryWithSummary(t *testing.T) {
 }
 
 func TestBuildFailureEntryEmptyTitle(t *testing.T) {
-	entry := buildFailureEntry(&ClassifyItem{
+	entry := buildFailureEntry(&types.ClassifyItem{
 		URL:     "https://example.com",
-		Summary: &StructuredSummary{Overview: "overview"},
+		Summary: &types.StructuredSummary{Overview: "overview"},
 	}, "reason")
 	assert.Contains(t, entry, "https://example.com")
 }
 
 func TestBuildFailureEntryNoSummary(t *testing.T) {
-	entry := buildFailureEntry(&ClassifyItem{
+	entry := buildFailureEntry(&types.ClassifyItem{
 		URL:   "https://example.com",
 		Title: "Test",
 	}, "reason")
@@ -476,11 +477,11 @@ func TestNormalizedURLSet(t *testing.T) {
 
 func TestWriteManualReviewEntryWithMetadataBlock(t *testing.T) {
 	root := t.TempDir()
-	path, err := WriteManualReviewEntry(&ClassifyItem{
+	path, err := WriteManualReviewEntry(&types.ClassifyItem{
 		URL:           "https://example.com",
 		Title:         "Test Item",
 		MetadataBlock: "Type: text\nauthor: Alice",
-		Summary:       &StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
+		Summary:       &types.StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
 	}, &WriteOptions{WikiRoot: root})
 	require.NoError(t, err)
 
@@ -494,13 +495,13 @@ func TestWriteManualReviewEntryWithMetadataBlock(t *testing.T) {
 
 func TestWriteSummaryWithMetadataBlock(t *testing.T) {
 	root := t.TempDir()
-	path, err := WriteSummary(&ClassifyItem{
+	path, err := WriteSummary(&types.ClassifyItem{
 		URL:           "https://example.com",
 		Title:         "Test",
 		TopicPath:     "topic/path",
-		Type:          TypeDeepDive,
+		Type:          types.TypeDeepDive,
 		MetadataBlock: "Type: text\nquality: high",
-		Summary:       &StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
+		Summary:       &types.StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
 	}, &WriteOptions{WikiRoot: root})
 	require.NoError(t, err)
 
@@ -535,14 +536,14 @@ func TestAppendToFileCreatesNew(t *testing.T) {
 	assert.Equal(t, "new content", string(data))
 }
 
-// --- FailureKind String ---
+// --- types.FailureKind String ---
 
 func TestFailureKindString(t *testing.T) {
-	assert.Equal(t, "fetch", FailureFetch.String())
-	assert.Equal(t, "resolve", FailureResolve.String())
-	assert.Equal(t, "extract", FailureExtract.String())
-	assert.Equal(t, "classify", FailureClassify.String())
-	assert.Equal(t, "ai", FailureAI.String())
+	assert.Equal(t, "fetch", types.FailureFetch.String())
+	assert.Equal(t, "resolve", types.FailureResolve.String())
+	assert.Equal(t, "extract", types.FailureExtract.String())
+	assert.Equal(t, "classify", types.FailureClassify.String())
+	assert.Equal(t, "ai", types.FailureAI.String())
 }
 
 // --- renderContent with YAML marshal error ---
@@ -563,13 +564,13 @@ func TestRenderContentFallbackOnMarshalError(t *testing.T) {
 
 func TestWriteSummaryFullMetadata(t *testing.T) {
 	root := t.TempDir()
-	path, err := WriteSummary(&ClassifyItem{
+	path, err := WriteSummary(&types.ClassifyItem{
 		URL:           "https://example.com",
 		Title:         "Full Test",
 		TopicPath:     "tech/research/go",
-		Type:          TypeDeepDive,
+		Type:          types.TypeDeepDive,
 		MetadataBlock: "Type: text\nquality: high\nauthor: Alice\ntags: go, cli, tool",
-		Summary: &StructuredSummary{
+		Summary: &types.StructuredSummary{
 			Overview:    "This is a comprehensive overview",
 			WorthNoting: "Something noteworthy",
 			KeyPoints:   []string{"Point 1", "Point 2"},
@@ -594,12 +595,12 @@ func TestWriteSummaryFullMetadata(t *testing.T) {
 
 func TestWriteFailureEntryRealWrite(t *testing.T) {
 	root := t.TempDir()
-	item := &ClassifyItem{
+	item := &types.ClassifyItem{
 		URL:   "https://example.com",
 		Title: "Failed Item",
 	}
 
-	path, err := WriteFailureEntry(item, FailureExtract, "extraction failed", &WriteOptions{WikiRoot: root})
+	path, err := WriteFailureEntry(item, types.FailureExtract, "extraction failed", &WriteOptions{WikiRoot: root})
 	require.NoError(t, err)
 	assert.NotEmpty(t, path)
 
@@ -704,12 +705,12 @@ func TestParseSummaryFrontmatterInvalidYAML(t *testing.T) {
 
 func TestWriteManualReviewEntryFull(t *testing.T) {
 	root := t.TempDir()
-	path, err := WriteManualReviewEntry(&ClassifyItem{
+	path, err := WriteManualReviewEntry(&types.ClassifyItem{
 		URL:           "https://example.com/article",
 		Title:         "Review Item",
-		Type:          TypeDeepDive,
+		Type:          types.TypeDeepDive,
 		MetadataBlock: "Type: text\nquality: medium",
-		Summary: &StructuredSummary{
+		Summary: &types.StructuredSummary{
 			Overview:    "Overview text",
 			KeyPoints:   []string{"key1", "key2"},
 			WorthNoting: "note",

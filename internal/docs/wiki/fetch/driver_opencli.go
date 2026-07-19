@@ -1,8 +1,9 @@
-package wiki
+package fetch
 
 import (
 	"context"
 	"fmt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
 	"os"
 	"strings"
@@ -36,7 +37,7 @@ func newOpenCLIDriver(opts DriverOptions) *openCLIDriver {
 
 func (d *openCLIDriver) Name() string { return "opencli" }
 
-func (d *openCLIDriver) FetchContent(ctx context.Context, urlStr, contentType string) *ContentFetchResult {
+func (d *openCLIDriver) FetchContent(ctx context.Context, urlStr, contentType string) *types.ContentFetchResult {
 	u := strings.ToLower(urlStr)
 
 	if isVideoURL(u) && !d.mediaEnabled {
@@ -58,7 +59,7 @@ func (d *openCLIDriver) FetchContent(ctx context.Context, urlStr, contentType st
 	return d.fetchWebRead(ctx, urlStr)
 }
 
-func (d *openCLIDriver) fetchWithAdapter(ctx context.Context, rawURL string) *ContentFetchResult {
+func (d *openCLIDriver) fetchWithAdapter(ctx context.Context, rawURL string) *types.ContentFetchResult {
 	subcommand, extraArgs := opencli.CommandForURL(rawURL)
 
 	// weixin download saves article content to a local file (not stdout),
@@ -88,7 +89,7 @@ func (d *openCLIDriver) fetchWithAdapter(ctx context.Context, rawURL string) *Co
 // bilibili URL and merges any transcript content into the fetch result body.
 // When no subtitles are available, falls back to `bilibili summary <bvid>` for
 // B站's official AI-generated summary (with section outlines and timestamps).
-func (d *openCLIDriver) appendBilibiliTranscript(ctx context.Context, result *ContentFetchResult, rawURL string) {
+func (d *openCLIDriver) appendBilibiliTranscript(ctx context.Context, result *types.ContentFetchResult, rawURL string) {
 	subResult := d.runOpenCLI(ctx, "bilibili", []string{"subtitle", rawURL, "--format", "md"})
 	if subResult.Error != "" || subResult.Body == "" {
 		// Fallback: try B站官方 AI summary when no subtitles are available.
@@ -152,7 +153,7 @@ func (d *openCLIDriver) resolveTcoURL(ctx context.Context, rawURL string) string
 // appendBilibiliSummary runs `opencli bilibili summary <bvid>` and appends
 // B站's official AI-generated summary to the result body. Used as a fallback
 // when a video has no subtitles/transcript available.
-func (d *openCLIDriver) appendBilibiliSummary(ctx context.Context, result *ContentFetchResult, rawURL string) {
+func (d *openCLIDriver) appendBilibiliSummary(ctx context.Context, result *types.ContentFetchResult, rawURL string) {
 	summaryResult := d.runOpenCLI(ctx, "bilibili", []string{"summary", rawURL, "--format", "md"})
 	if summaryResult.Error != "" || summaryResult.Body == "" {
 		return
@@ -168,7 +169,7 @@ func (d *openCLIDriver) appendBilibiliSummary(ctx context.Context, result *Conte
 		"url", rawURL, "len", len([]rune(summary)))
 }
 
-func (d *openCLIDriver) fetchWebRead(ctx context.Context, rawURL string) *ContentFetchResult {
+func (d *openCLIDriver) fetchWebRead(ctx context.Context, rawURL string) *types.ContentFetchResult {
 	r := d.runOpenCLI(ctx, "web", []string{"read", "--url", rawURL, "--stdout"})
 	r.SourceURL = rawURL
 
@@ -180,14 +181,14 @@ func (d *openCLIDriver) fetchWebRead(ctx context.Context, rawURL string) *Conten
 // under /tmp and outputs metadata + the saved file path on stdout.
 // We parse the saved path, read the markdown file, and return it as
 // the fetch result body.
-func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *ContentFetchResult {
+func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *types.ContentFetchResult {
 	// Create a temp directory for weixin downloads.
 	tmpDir, err := os.MkdirTemp("", "weixin-*")
 	if err != nil {
-		return &ContentFetchResult{
+		return &types.ContentFetchResult{
 			Error:       fmt.Sprintf("weixin: create temp dir: %v", err),
 			SourceURL:   rawURL,
-			FailureKind: FailureExtract,
+			FailureKind: types.FailureExtract,
 		}
 	}
 	defer func() {
@@ -202,10 +203,10 @@ func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *
 	slog.Info("weixin: downloading article", "url", rawURL)
 	stdout, stderr, runErr := cmdutil.RunSeparate(ctx, "opencli", args...)
 	if runErr != nil {
-		return &ContentFetchResult{
+		return &types.ContentFetchResult{
 			Error:       fmt.Sprintf("weixin: %v (stderr: %s)", runErr, strings.TrimSpace(string(stderr))),
 			SourceURL:   rawURL,
-			FailureKind: FailureFetch,
+			FailureKind: types.FailureFetch,
 		}
 	}
 
@@ -216,20 +217,20 @@ func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *
 	//     saved: /tmp/weixin-xxx/红筹退潮.../红筹退潮....md
 	savedPath := extractWeixinSavedPath(string(stdout))
 	if savedPath == "" {
-		return &ContentFetchResult{
+		return &types.ContentFetchResult{
 			Error:       "weixin: could not find saved file path in output",
 			SourceURL:   rawURL,
-			FailureKind: FailureExtract,
+			FailureKind: types.FailureExtract,
 		}
 	}
 
 	// Read the saved markdown file content.
 	content, err := os.ReadFile(savedPath)
 	if err != nil {
-		return &ContentFetchResult{
+		return &types.ContentFetchResult{
 			Error:       fmt.Sprintf("weixin: read saved file: %v", err),
 			SourceURL:   rawURL,
-			FailureKind: FailureExtract,
+			FailureKind: types.FailureExtract,
 		}
 	}
 
@@ -240,7 +241,7 @@ func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *
 	slog.Info("weixin: article fetched successfully",
 		"url", rawURL, "title", title, "size", len(body))
 
-	return &ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
+	return &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 }
 
 // extractWeixinSavedPath parses the YAML output from `weixin download -f yaml`
@@ -276,18 +277,18 @@ func firstSavedPath(entries []weixinDownloadEntry) string {
 	return ""
 }
 
-func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extraArgs []string) *ContentFetchResult {
+func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extraArgs []string) *types.ContentFetchResult {
 	args := append([]string{subcommand}, extraArgs...)
 	stdout, stderr, err := cmdutil.RunSeparate(ctx, "opencli", args...)
 	if err != nil {
-		return &ContentFetchResult{
+		return &types.ContentFetchResult{
 			Error: fmt.Sprintf("opencli: %v (stderr: %s)", err, strings.TrimSpace(string(stderr))),
 		}
 	}
 
 	body := string(stdout)
 	if body == "" {
-		return &ContentFetchResult{Error: "opencli returned empty content"}
+		return &types.ContentFetchResult{Error: "opencli returned empty content"}
 	}
 
 	body = textutil.TruncateUTF8(body, d.maxBodySize*3)
@@ -295,12 +296,12 @@ func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extra
 
 	slog.Info("opencli fetch succeeded", "subcommand", subcommand, "bodyLen", len(body))
 
-	return &ContentFetchResult{Title: title, Body: body}
+	return &types.ContentFetchResult{Title: title, Body: body}
 }
 
 // appendYoutubeTranscript runs `opencli youtube transcript <url>` and merges
 // transcript text into the fetch result body.
-func (d *openCLIDriver) appendYoutubeTranscript(ctx context.Context, result *ContentFetchResult, rawURL string) {
+func (d *openCLIDriver) appendYoutubeTranscript(ctx context.Context, result *types.ContentFetchResult, rawURL string) {
 	subResult := d.runOpenCLI(ctx, "youtube", []string{"transcript", rawURL, "--format", "md"})
 	if subResult.Error != "" || subResult.Body == "" {
 		return

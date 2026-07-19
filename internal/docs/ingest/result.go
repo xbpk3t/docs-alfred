@@ -3,7 +3,7 @@ package wikiingest
 import (
 	"fmt"
 
-	wikisvc "github.com/xbpk3t/docs-alfred/internal/docs/wiki"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
@@ -73,16 +73,16 @@ type Result struct {
 
 // URLResult records the outcome for one URL.
 type URLResult struct {
-	URL         string              `json:"url"`
-	Status      string              `json:"status"`
-	OutputPath  string              `json:"outputPath,omitempty"`
-	TopicPath   string              `json:"topicPath,omitempty"`
-	WikiType    string              `json:"wikiType,omitempty"`
-	ContentType string              `json:"contentType,omitempty"`
-	FailureType wikisvc.FailureKind `json:"failureType,omitempty"`
-	Error       string              `json:"error,omitempty"`
-	LineIndex   int                 `json:"lineIndex,omitempty"`
-	Handled     bool                `json:"handled"`
+	URL         string                `json:"url"`
+	Status      string                `json:"status"`
+	OutputPath  string                `json:"outputPath,omitempty"`
+	TopicPath   string                `json:"topicPath,omitempty"`
+	WikiType    string                `json:"wikiType,omitempty"`
+	ContentType string                `json:"contentType,omitempty"`
+	FailureType wikitypes.FailureKind `json:"failureType,omitempty"`
+	Error       string                `json:"error,omitempty"`
+	LineIndex   int                   `json:"lineIndex,omitempty"`
+	Handled     bool                  `json:"handled"`
 }
 
 // Summary returns count-oriented command details for structured output.
