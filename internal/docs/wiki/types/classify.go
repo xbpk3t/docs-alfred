@@ -67,6 +67,9 @@ type EntryMetadata struct {
 	TranscriptQuality string   `json:"transcriptQuality,omitempty" validate:"in:good,fair,poor"`
 	Verdict           string   `json:"verdict,omitempty"           validate:"in:watch,skip,try"`
 	Language          string   `json:"language,omitempty"`
-	Tags              []string `json:"tags,omitempty"              validate:"required|min_len:3|max_len:8"`
+	// [2026-07-21] Drop max_len:8 on tags: AI often returns >8 keywords; hard-failing
+	// classification for that alone forced full retries and sank digest success rate.
+	// Soft upper bound still lives in classify-json.txt prompt (3-8); only enforce min.
+	Tags              []string `json:"tags,omitempty"              validate:"required|min_len:3"`
 	Stars             int      `json:"stars,omitempty"`
 }
