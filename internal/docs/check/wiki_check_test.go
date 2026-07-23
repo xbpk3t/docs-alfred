@@ -33,6 +33,84 @@ body
 			wantIssues: 0,
 		},
 		{
+			name: "optional session and model fields allowed",
+			rel:  "folder/type/topic/with-session.md",
+			content: `---
+title: T
+date: 2026-06-17
+source: claude-code
+type: research
+session: fbeb823d-4f1f-4213-8c67-e480e089a1a0
+model: grok-4.5
+---
+body
+`,
+			wantIssues: 0,
+		},
+		{
+			name: "optional session without model allowed",
+			rel:  "folder/type/topic/session-only.md",
+			content: `---
+title: T
+date: 2026-06-17
+source: codex
+type: research
+session: 019f26c6-d9e4-7760-854d-ee8fcf8ed03b
+---
+body
+`,
+			wantIssues: 0,
+		},
+		{
+			name: "optional issue field allowed",
+			rel:  "folder/type/topic/with-issue.md",
+			content: `---
+title: T
+date: 2026-06-17
+source: claude-code
+type: research
+session: e0ebe705-e20e-4130-a6a7-9a2e719b6841
+model: grok-4.5
+issue: https://linear.app/luckzzz/issue/LUC-284/x
+---
+body
+`,
+			wantIssues: 0,
+		},
+		{
+			name: "optional score field allowed",
+			rel:  "folder/type/topic/with-score.md",
+			content: `---
+title: T
+date: 2026-06-17
+source: claude-code
+type: research
+session: e0ebe705-e20e-4130-a6a7-9a2e719b6841
+model: grok-4.5
+score: 0
+---
+body
+`,
+			wantIssues: 0,
+		},
+		{
+			name: "optional issue and project fields allowed",
+			rel:  "folder/type/topic/with-issue.md",
+			content: `---
+title: T
+date: 2026-06-17
+source: claude-code
+type: research
+session: abc
+model: grok-4.5
+issue: https://linear.app/luckzzz/issue/LUC-279
+project: docs
+---
+body
+`,
+			wantIssues: 0,
+		},
+		{
 			name: "no frontmatter at all",
 			rel:  "folder/type/topic/plain.md",
 			content: `hello world

@@ -30,6 +30,9 @@ ccx session export --agent cc --wiki-root /path/to/wiki
 
 # 指定输出目录（覆盖 wiki-root）
 ccx session export --agent codex --output-dir /tmp/output
+
+# 可选：关联 issue URL（写入 frontmatter issue）
+ccx session export --agent cc --issue 'https://linear.app/luckzzz/issue/LUC-284/x'
 ```
 
 **关键 flag：**
@@ -38,6 +41,7 @@ ccx session export --agent codex --output-dir /tmp/output
 |------|------|
 | `--agent` | 必填，支持 `cc` 或 `codex` |
 | `--session` | 可选；`cc` 对应 Claude session ID，`codex` 对应 Codex thread ID |
+| `--issue` | 可选 issue URL（Linear/GitHub/...）；写入 frontmatter `issue`，空则 omit |
 | `--wiki-root` | wiki 根目录，支持绝对/相对路径 |
 | `--output-dir` | 输出目录，覆盖 `--wiki-root` |
 | `--dry-run` | 预览模式，不创建文件 |
@@ -55,6 +59,10 @@ type: research
 title: session-title
 date: "2026-06-19"
 source: claude-code # 或 codex
+session: <session-or-thread-id>
+model: grok-4.5 # optional; omitted when not found
+issue: https://linear.app/... # optional via --issue
+score: 0 # always written; manual quality rating
 ---
 ```
 

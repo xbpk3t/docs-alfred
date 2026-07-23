@@ -18,10 +18,33 @@ func TestTrimTitle_TruncatesRunes(t *testing.T) {
 }
 
 func TestGenerateFrontmatter_UsesSource(t *testing.T) {
-	frontmatter, err := generateFrontmatter("Test Title", SourceCodex)
+	frontmatter, err := generateFrontmatter("Test Title", SourceCodex, "thread-123", "gpt-5.5", "https://linear.app/x/issue/LUC-1")
 
 	require.NoError(t, err)
 	require.Contains(t, frontmatter, "source: codex")
+	require.Contains(t, frontmatter, "session: thread-123")
+	require.Contains(t, frontmatter, "model: gpt-5.5")
+	require.Contains(t, frontmatter, "issue: https://linear.app/x/issue/LUC-1")
+	require.Contains(t, frontmatter, "score: 0")
+}
+
+func TestGenerateFrontmatter_OmitsEmptyModel(t *testing.T) {
+	frontmatter, err := generateFrontmatter("Test Title", SourceClaudeCode, "sess-abc", "", "")
+
+	require.NoError(t, err)
+	require.Contains(t, frontmatter, "session: sess-abc")
+	require.NotContains(t, frontmatter, "model:")
+	require.NotContains(t, frontmatter, "issue:")
+	require.Contains(t, frontmatter, "score: 0")
+}
+
+func TestGenerateFrontmatter_OmitsEmptyIssue(t *testing.T) {
+	frontmatter, err := generateFrontmatter("Test Title", SourceClaudeCode, "sess-abc", "grok-4.5", "")
+
+	require.NoError(t, err)
+	require.Contains(t, frontmatter, "model: grok-4.5")
+	require.NotContains(t, frontmatter, "issue:")
+	require.Contains(t, frontmatter, "score: 0")
 }
 
 func TestNormalizeTopicPath(t *testing.T) {

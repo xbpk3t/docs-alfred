@@ -94,7 +94,7 @@ func TestWriteLines_MultipleFields(t *testing.T) {
 
 func TestNewSessionExportCmd_RunE_Flags(t *testing.T) {
 	cmd := newSessionExportCmd()
-	for _, name := range []string{"agent", "config", "dry-run", "verbose", "wiki-root", "output-dir", "session"} {
+	for _, name := range []string{"agent", "config", "dry-run", "verbose", "wiki-root", "output-dir", "session", "issue"} {
 		require.NotNil(t, cmd.Flags().Lookup(name), "--%s flag should exist", name)
 	}
 }

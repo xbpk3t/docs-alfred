@@ -41,6 +41,7 @@ type ExportInput struct {
 	OutputDir  string
 	ProjectDir string // Resolved project directory; set once by CLI layer.
 	SessionID  string // Explicit session/thread ID; defaults to the selected agent env var.
+	Issue      string // Optional issue URL (Linear/GitHub/...); omitted from frontmatter when empty.
 	DryRun     bool
 	Verbose    bool
 }
@@ -56,10 +57,16 @@ type ExportResult struct {
 
 // Frontmatter represents the YAML frontmatter for wiki files.
 type Frontmatter struct {
-	Type   string `yaml:"type"`
-	Title  string `yaml:"title"`
-	Date   string `yaml:"date"`
-	Source string `yaml:"source"`
+	Type    string `yaml:"type"`
+	Title   string `yaml:"title"`
+	Date    string `yaml:"date"`
+	Source  string `yaml:"source"`
+	Session string `yaml:"session"`
+	Model   string `yaml:"model,omitempty"`
+	Issue   string `yaml:"issue,omitempty"`
+	// Score is a manual quality rating; always written (default 0).
+	// No omitempty — zero must appear as score: 0.
+	Score int `yaml:"score"`
 }
 
 // classifyTitleResult is the JSON response from the merged classify+title AI call.
@@ -94,6 +101,16 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 		return nil, errors.New("no messages found after parsing and filtering")
 	}
 
+	// Extract model before the AI call so a rare IO/scan failure fails fast
+	// without spending classify/title tokens. Missing model is not an error.
+	model, err := extractPrimaryModel(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("extract model: %w", err)
+	}
+	if input.Verbose && model != "" {
+		fmt.Fprintf(os.Stderr, "Primary model: %s\n", model)
+	}
+
 	topicPath, title, engTitle, err := classifyAndGenerateTitle(messages, input)
 	if err != nil {
 		return nil, fmt.Errorf("classify: %w", err)
@@ -116,7 +133,8 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 		}, nil
 	}
 
-	if err := writeExportFile(outputPath, title, resolved.Source, messages); err != nil {
+	issue := strings.TrimSpace(input.Issue)
+	if err := writeExportFile(outputPath, title, resolved.Source, resolved.SessionID, model, issue, messages); err != nil {
 		return nil, err
 	}
 
@@ -369,9 +387,22 @@ func trimEngTitle(engTitle string) string {
 	return truncateRunes(engTitle, 50)
 }
 
+// extractPrimaryModel returns the last real model used in the transcript.
+// Missing model is not an error (returns "").
+func extractPrimaryModel(resolved SessionRef) (string, error) {
+	switch resolved.Agent {
+	case AgentCC:
+		return session.ExtractPrimaryModelCC(resolved.TranscriptPath)
+	case AgentCodex:
+		return session.ExtractPrimaryModelCodex(resolved.TranscriptPath)
+	default:
+		return "", fmt.Errorf("unsupported agent %q", resolved.Agent)
+	}
+}
+
 // writeExportFile writes the final markdown file with Turn-structured formatting.
-func writeExportFile(outputPath, title, source string, messages []session.Message) error {
-	frontmatter, err := generateFrontmatter(title, source)
+func writeExportFile(outputPath, title, source, sessionID, model, issue string, messages []session.Message) error {
+	frontmatter, err := generateFrontmatter(title, source, sessionID, model, issue)
 	if err != nil {
 		return err
 	}
@@ -390,12 +421,18 @@ func writeExportFile(outputPath, title, source string, messages []session.Messag
 }
 
 // generateFrontmatter generates YAML frontmatter for the wiki file.
-func generateFrontmatter(title, source string) (string, error) {
+// model and issue may be empty; empty values are omitted via yaml omitempty.
+// score is always written and defaults to 0.
+func generateFrontmatter(title, source, sessionID, model, issue string) (string, error) {
 	fm := Frontmatter{
-		Type:   "research",
-		Title:  title,
-		Date:   time.Now().Format("2006-01-02"),
-		Source: source,
+		Type:    "research",
+		Title:   title,
+		Date:    time.Now().Format("2006-01-02"),
+		Source:  source,
+		Session: sessionID,
+		Model:   model,
+		Issue:   issue,
+		Score:   0,
 	}
 
 	data, err := yaml.Marshal(fm)

@@ -16,6 +16,7 @@ func newSessionExportCmd() *cobra.Command {
 		wikiRoot  string
 		outputDir string
 		session   string
+		issue     string
 		dryRun    bool
 		verbose   bool
 	}
@@ -58,14 +59,15 @@ This command:
 			}
 
 			input := internal.ExportInput{
-				Agent:     agent,
-				SessionID: sessionID,
-				DryRun:    flags.dryRun,
-				Verbose:   flags.verbose,
-				WikiRoot:  cfg.WikiRoot,
-				OutputDir: flags.outputDir,
+				Agent:      agent,
+				SessionID:  sessionID,
+				Issue:      flags.issue,
+				DryRun:     flags.dryRun,
+				Verbose:    flags.verbose,
+				WikiRoot:   cfg.WikiRoot,
+				OutputDir:  flags.outputDir,
 				ProjectDir: projectDir,
-				AIConfig:  buildAIConfig(cfg),
+				AIConfig:   buildAIConfig(cfg),
 			}
 
 			result, err := internal.ExportSession(&input)
@@ -84,6 +86,7 @@ This command:
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory")
 	cmd.Flags().StringVar(&flags.outputDir, "output-dir", "", "Output directory (overrides wiki-root)")
 	cmd.Flags().StringVar(&flags.session, "session", "", "Session/thread ID to export (defaults to agent env var)")
+	cmd.Flags().StringVar(&flags.issue, "issue", "", "Optional issue URL (Linear/GitHub/...) for provenance; omitted from frontmatter when empty")
 
 	return cmd
 }

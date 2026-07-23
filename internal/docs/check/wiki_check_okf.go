@@ -12,11 +12,17 @@ import (
 )
 
 // wikiFrontmatter represents the OKF v0.1 frontmatter fields expected in wiki .md files.
+// Session, Model, Issue, and Score are optional fields written by ccx session export
+// (or edited manually); they are parsed for forward-compat but are never required.
 type wikiFrontmatter struct {
-	Title  string `yaml:"title"`
-	Date   string `yaml:"date"`
-	Source string `yaml:"source"`
-	Type   string `yaml:"type"`
+	Title   string `yaml:"title"`
+	Date    string `yaml:"date"`
+	Source  string `yaml:"source"`
+	Type    string `yaml:"type"`
+	Session string `yaml:"session"`
+	Model   string `yaml:"model"`
+	Issue   string `yaml:"issue"`
+	Score   int    `yaml:"score"`
 }
 
 // validOKFTypes is the OKF v0.1 valid type set.
@@ -25,7 +31,8 @@ var validOKFTypes = map[string]bool{
 	"review":     true,
 	"blog":       true,
 	"blog-draft": true,
-	"log":        true,	"digest":     true,
+	"log":        true,
+	"digest":     true,
 	"reference":  true,
 	"research":   true,
 	"transcript": true,
@@ -103,7 +110,7 @@ func checkFile(path, rel string) []checkutil.Issue {
 	}
 
 	var issues []checkutil.Issue
-	issues = append(issues, checkRequiredFields(fm, rel)...)
+	issues = append(issues, checkRequiredFields(&fm, rel)...)
 	issues = append(issues, checkDateFormat(fm.Date, rel)...)
 	issues = append(issues, checkTypeValidity(fm.Type, rel)...)
 
@@ -111,7 +118,7 @@ func checkFile(path, rel string) []checkutil.Issue {
 }
 
 // checkRequiredFields checks that title, date, source, and type are all non-empty.
-func checkRequiredFields(fm wikiFrontmatter, rel string) []checkutil.Issue {
+func checkRequiredFields(fm *wikiFrontmatter, rel string) []checkutil.Issue {
 	var issues []checkutil.Issue
 	if strings.TrimSpace(fm.Title) == "" {
 		issues = append(issues, checkutil.Issue{

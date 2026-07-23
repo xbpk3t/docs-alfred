@@ -60,7 +60,7 @@ func TestNewSessionExportCmd_Flags(t *testing.T) {
 
 	require.True(t, cmd.Flags().HasFlags(), "export command should have flags")
 
-	for _, name := range []string{"agent", "config", "dry-run", "verbose", "wiki-root", "output-dir", "session"} {
+	for _, name := range []string{"agent", "config", "dry-run", "verbose", "wiki-root", "output-dir", "session", "issue"} {
 		require.NotNil(t, cmd.Flags().Lookup(name), "--%s flag should exist", name)
 	}
 }
