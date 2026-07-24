@@ -29,22 +29,14 @@ func writeGhFiles(t *testing.T, files map[string]string) string {
 }
 
 // validGhYAML is minimal gh-format YAML that passes check validation.
+// kind tools does not require mdscc; section must have at least one topic.
 const validGhYAML = `- type: tool
+  topics:
+    - topic: overview
+      kind: tools
   repo:
     - url: https://github.com/acme/tool
       des: a tool
-  record: []
-`
-
-// invalidDateGhYAML has a repo-level record with a malformed date.
-// Section-level records are not date-validated; repo-level records are.
-const invalidDateGhYAML = `- type: tool
-  repo:
-    - url: https://github.com/acme/tool
-      des: a tool
-      record:
-        - date: not-a-date
-          des: invalid date
   record: []
 `
 
@@ -140,22 +132,27 @@ func TestNewCheckCmdRunEGhValidData(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"check", "gh", "--path", ghDir})
-	_ = cmd.Execute()
+	require.NoError(t, cmd.Execute())
 }
 
 func TestNewCheckCmdRunEGhInvalidData(t *testing.T) {
-	ghDir := writeGhFiles(t, map[string]string{"tool.yml": invalidDateGhYAML})
+	// Missing kind is the check gh gate (date shape is out of scope).
+	ghDir := writeGhFiles(t, map[string]string{"tool.yml": `- type: tool
+  topics:
+    - topic: overview
+`})
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"check", "gh", "--path", ghDir})
-	_ = cmd.Execute()
+	err := cmd.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "data check gh failed")
 }
 
 func TestNewCheckCmdRunEGhNonexistentPath(t *testing.T) {
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"check", "gh", "--path", "/tmp/__no_such_gh_dir__"})
 	err := cmd.Execute()
-	// gh check no longer performs path validation
-	require.NoError(t, err)
+	require.Error(t, err)
 }
 
 func TestNewCheckCmdRunEWithMaxLines(t *testing.T) {
@@ -170,25 +167,29 @@ func TestNewCheckCmdRunEWithMaxLines(t *testing.T) {
 func TestRunDomainCheckGhValidData(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
 	err := runDomainCheck(data.DomainGH, ghDir, "")
-	_ = err
+	require.NoError(t, err)
 }
 
-func TestRunDomainCheckGhInvalidDate(t *testing.T) {
-	ghDir := writeGhFiles(t, map[string]string{"tool.yml": invalidDateGhYAML})
+func TestRunDomainCheckGhInvalidKind(t *testing.T) {
+	ghDir := writeGhFiles(t, map[string]string{"tool.yml": `- type: tool
+  topics:
+    - topic: overview
+      kind: unset
+`})
 	err := runDomainCheck(data.DomainGH, ghDir, "")
-	_ = err
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "data check gh failed")
 }
 
 func TestRunDomainCheckGhNonexistentPath(t *testing.T) {
 	err := runDomainCheck(data.DomainGH, "/tmp/__gh_no_such__", "")
-	// gh check no longer has path validation — returns success
-	require.NoError(t, err)
+	require.Error(t, err)
 }
 
 func TestRunDomainCheckGhWithRuleScope(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
 	err := runDomainCheck(data.DomainGH, ghDir, "auto")
-	_ = err
+	require.NoError(t, err)
 }
 
 // ---------------------------------------------------------------------------

@@ -22,9 +22,20 @@ type Repo struct {
 
 type Repos []*Repo
 
+// Mdscc is the structured note block on a topic (meta/derive/sol/cost/case).
+type Mdscc struct {
+	Meta   string `json:"meta,omitempty"   yaml:"meta,omitempty"`
+	Derive string `json:"derive,omitempty" yaml:"derive,omitempty"`
+	Sol    string `json:"sol,omitempty"    yaml:"sol,omitempty"`
+	Cost   string `json:"cost,omitempty"   yaml:"cost,omitempty"`
+	Case   string `json:"case,omitempty"   yaml:"case,omitempty"`
+}
+
 // Topic defines a reusable content topic structure shared by multiple domains.
 type Topic struct {
 	Topic string                   `json:"topic"           yaml:"topic"`
+	Kind  string                   `json:"kind,omitempty"  yaml:"kind,omitempty"`
+	Mdscc *Mdscc                   `json:"mdscc,omitempty" yaml:"mdscc,omitempty"`
 	What  []string                 `json:"what,omitempty"  yaml:"what,omitempty"`
 	HTO   []string                 `json:"hto,omitempty"   yaml:"hto,omitempty"`
 	Repos Repos                    `json:"repos,omitempty" yaml:"repo,omitempty"`
