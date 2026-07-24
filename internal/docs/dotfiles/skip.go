@@ -17,7 +17,7 @@ var nixLibFuncs = map[string]bool{
 	"packages": true, "overlays": true, "overrides": true, "nixpkgs": true,
 	"default": true, "example": true, "description": true, "type": true,
 	"apply": true, "merge": true,
-	"formats": true, "toml": true,
+	"formats": true, "toml": true, "ini": true,
 }
 
 var nixSkip = map[string]bool{
