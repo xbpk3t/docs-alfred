@@ -30,7 +30,9 @@ type repoFields struct {
 }
 
 type topicFields struct {
-	Topic string `yaml:"topic"`
+	Mdscc *content.Mdscc `yaml:"mdscc"`
+	Topic string         `yaml:"topic"`
+	Kind  string         `yaml:"kind"`
 }
 
 func sectionFromMap(m map[string]any) Section {
@@ -83,7 +85,7 @@ func topicFromMap(m map[string]any) content.Topic {
 	var fields topicFields
 	decodeYAMLMap(m, &fields)
 
-	topic := content.Topic{Topic: fields.Topic}
+	topic := content.Topic{Topic: fields.Topic, Kind: fields.Kind, Mdscc: fields.Mdscc}
 
 	// 解析 topic 内嵌的 repos
 	if repos, ok := m["repo"].([]any); ok {

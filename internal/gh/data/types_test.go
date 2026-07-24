@@ -62,9 +62,24 @@ func TestRepoFromMap(t *testing.T) {
 func TestTopicFromMap(t *testing.T) {
 	m := map[string]any{
 		"topic": "main",
+		"kind":  "tools",
+		"mdscc": map[string]any{
+			"meta":   "m",
+			"derive": "d",
+			"sol":    "s",
+			"cost":   "c",
+			"case":   "k",
+		},
 	}
 	topic := topicFromMap(m)
 	assert.Equal(t, "main", topic.Topic)
+	assert.Equal(t, "tools", topic.Kind)
+	require.NotNil(t, topic.Mdscc)
+	assert.Equal(t, "m", topic.Mdscc.Meta)
+	assert.Equal(t, "d", topic.Mdscc.Derive)
+	assert.Equal(t, "s", topic.Mdscc.Sol)
+	assert.Equal(t, "c", topic.Mdscc.Cost)
+	assert.Equal(t, "k", topic.Mdscc.Case)
 }
 
 func TestTopic_DirName(t *testing.T) {

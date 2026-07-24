@@ -26,7 +26,7 @@ func TestRunWikiCheckOKF(t *testing.T) {
 title: T
 date: 2026-06-17
 source: src
-type: session
+type: research
 ---
 body
 `,
@@ -162,7 +162,7 @@ type: foobar
 title: ""
 date: 2026-06-17
 source: src
-type: session
+type: research
 ---
 `,
 			wantIssues: 1,
@@ -174,7 +174,7 @@ type: session
 			content: `---
 title: T
 source: src
-type: session
+type: research
 ---
 `,
 			wantIssues: 1,
@@ -187,7 +187,7 @@ type: session
 title: T
 date: "2026/03/30"
 source: src
-type: session
+type: research
 ---
 `,
 			wantIssues: 1,
@@ -200,7 +200,7 @@ type: session
 title: T
 date: 2026-06-17
 source: ""
-type: session
+type: research
 ---
 `,
 			wantIssues: 1,
@@ -213,7 +213,7 @@ type: session
 title: T
 date: 2026-06-17
 source:
-type: session
+type: research
 ---
 `,
 			wantIssues: 1,
@@ -226,7 +226,7 @@ type: session
 title: T
 date: 2026-06-17
 source: src
-type: session
+type: research
 ---
 body
 `,
@@ -239,7 +239,7 @@ body
 title: T
 date: 2026-06-17
 source: src
-type: session
+type: research
 ---
 body
 `,
@@ -261,7 +261,7 @@ body
 title: T
 date: 2026-06-17
 source: src
-type: session
+type: research
 ---
 body
 `,
@@ -275,7 +275,7 @@ body
 title: T
 date: 2026-06-17
 source: src
-type: session
+type: research
 ---
 `,
 			wantIssues: 1,
@@ -283,20 +283,16 @@ type: session
 		},
 	}
 
-	// Build the set of all OKF valid types for the "all 9 types" test.
+	// Build the set of all OKF valid types for the "all allowed types" test.
 	allTypeCases := []struct {
 		name string
 		typ  string
 	}{
-		{"type session", "session"},
-		{"type review", "review"},
 		{"type blog", "blog"},
+		{"type blog-draft", "blog-draft"},
 		{"type log", "log"},
 		{"type digest", "digest"},
-		{"type reference", "reference"},
 		{"type research", "research"},
-		{"type transcript", "transcript"},
-		{"type queue", "queue"},
 	}
 
 	for _, tt := range tests {
@@ -320,8 +316,8 @@ type: session
 		})
 	}
 
-	// Test all 9 valid types produce 0 issues each.
-	t.Run("valid all 9 types", func(t *testing.T) {
+	// Test all allowed valid types produce 0 issues each.
+	t.Run("valid all allowed types", func(t *testing.T) {
 		root := t.TempDir()
 		for _, tc := range allTypeCases {
 			content := "---\ntitle: T\ndate: 2026-06-17\nsource: src\ntype: " + tc.typ + "\n---\nbody\n"
@@ -329,7 +325,21 @@ type: session
 		}
 		issues, err := RunWikiCheckOKF(root)
 		require.NoError(t, err)
-		require.Empty(t, issues, "all 9 valid types should produce 0 issues, got: %+v", issues)
+		require.Empty(t, issues, "all allowed types should produce 0 issues, got: %+v", issues)
+	})
+
+	t.Run("rejected former OKF types", func(t *testing.T) {
+		for _, typ := range []string{"session", "review", "reference", "transcript", "queue"} {
+			t.Run(typ, func(t *testing.T) {
+				root := t.TempDir()
+				content := "---\ntitle: T\ndate: 2026-06-17\nsource: src\ntype: " + typ + "\n---\nbody\n"
+				writeTestFile(t, root, "folder/type/topic/"+typ+".md", content)
+				issues, err := RunWikiCheckOKF(root)
+				require.NoError(t, err)
+				require.Len(t, issues, 1)
+				assertIssueContains(t, issues, "invalid OKF type: "+typ)
+			})
+		}
 	})
 }
 
