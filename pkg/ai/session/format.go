@@ -97,6 +97,12 @@ func mergeSameRole(messages []Message) []Message {
 
 	for i := 1; i < len(messages); i++ {
 		if messages[i].Role == current.Role {
+			// Skip exact-duplicate consecutive content (e.g. plain user text
+			// immediately followed by the same text re-injected via /skill args).
+			if strings.TrimSpace(messages[i].Content) == strings.TrimSpace(current.Content) {
+				current.Timestamp = messages[i].Timestamp
+				continue
+			}
 			// Merge: concatenate content, keep the later timestamp
 			current.Content = current.Content + "\n\n" + messages[i].Content
 			current.Timestamp = messages[i].Timestamp
@@ -127,13 +133,39 @@ func writeTurnHeader(sb *strings.Builder, num int, timestamp, lastDate string) {
 }
 
 // writeUserContent wraps user content in a markdown code block.
+// Outer fence length is max(3, longest backtick run in content + 1) so nested
+// ``` fences inside the user message do not close the outer block early.
 func writeUserContent(sb *strings.Builder, content string) {
-	sb.WriteString("```markdown\n")
+	fence := contentFence(content)
+	sb.WriteString(fence)
+	sb.WriteString("markdown\n")
 	sb.WriteString(content)
 	if !strings.HasSuffix(content, "\n") {
 		sb.WriteString("\n")
 	}
-	sb.WriteString("```")
+	sb.WriteString(fence)
+}
+
+// contentFence returns a backtick run long enough to wrap content safely.
+func contentFence(content string) string {
+	maxRun := 0
+	run := 0
+	for i := 0; i < len(content); i++ {
+		if content[i] == '`' {
+			run++
+			if run > maxRun {
+				maxRun = run
+			}
+			continue
+		}
+		run = 0
+	}
+	n := maxRun + 1
+	if n < 3 {
+		n = 3
+	}
+
+	return strings.Repeat("`", n)
 }
 
 // --- date helpers ------------------------------------------------------------

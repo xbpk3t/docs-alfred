@@ -246,8 +246,17 @@ func mergedClassifyAndTitle(messages []session.Message, input *ExportInput) (str
 
 	title := trimTitle(result.Title)
 	engTitle := trimEngTitle(result.EngTitle)
-	if title == "" || engTitle == "" {
-		return "", "", "", errors.New("empty title from AI")
+	if title == "" {
+		title = fallbackTitleFromMessages(messages)
+	}
+	if engTitle == "" {
+		engTitle = trimEngTitle(title)
+	}
+	if engTitle == "" || engTitle == "untitled" {
+		engTitle = "session-export"
+	}
+	if title == "" {
+		title = engTitle
 	}
 	topicPath, err := normalizeTopicPath(input.WikiRoot, result.TopicPath, candidates)
 	if err != nil {
@@ -255,6 +264,21 @@ func mergedClassifyAndTitle(messages []session.Message, input *ExportInput) (str
 	}
 
 	return topicPath, title, engTitle, nil
+}
+
+// fallbackTitleFromMessages builds a title from the first substantive user message
+// when the AI returns an empty title.
+func fallbackTitleFromMessages(messages []session.Message) string {
+	for _, msg := range messages {
+		if msg.Role != roleUser {
+			continue
+		}
+		if t := textutil.FirstLineTitle(msg.Content, 50); t != "" {
+			return trimTitle(t)
+		}
+	}
+
+	return ""
 }
 
 func normalizeTopicPath(wikiRoot, topicPath string, candidates []ghindex.TopicCandidate) (string, error) {

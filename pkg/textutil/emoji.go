@@ -40,9 +40,12 @@ func RemoveEmoji(s string) string {
 }
 
 // SanitizeContent removes emoji and embedded section headers from message content,
-// and collapses multiple consecutive spaces.
+// decodes HTML entities, redacts sensitive paths, and collapses spaces.
 func SanitizeContent(content string) string {
 	content = RemoveEmoji(content)
+	// Unescape before path redact so entity-encoded paths still match.
+	content = DecodeCommonHTMLEntities(content)
+	content = RedactSensitivePaths(content)
 
 	// Strip embedded section headers (## ...) that come from assistant's markdown.
 	// These would conflict with ## User / ## Claude headers in the old format.

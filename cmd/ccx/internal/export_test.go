@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
+	session "github.com/xbpk3t/docs-alfred/pkg/ai/session"
 )
 
 func TestTrimTitle_TruncatesRunes(t *testing.T) {
@@ -15,6 +16,19 @@ func TestTrimTitle_TruncatesRunes(t *testing.T) {
 
 	require.Len(t, []rune(got), 50)
 	require.NotContains(t, got, "�")
+}
+
+func TestFallbackTitleFromMessages(t *testing.T) {
+	msgs := []session.Message{
+		{Role: "assistant", Content: "ignore me"},
+		{Role: "user", Content: "## 日志分析与判断\n\n详细内容"},
+	}
+	got := fallbackTitleFromMessages(msgs)
+	require.Equal(t, "日志分析与判断", got)
+}
+
+func TestFallbackTitleFromMessages_Empty(t *testing.T) {
+	require.Empty(t, fallbackTitleFromMessages(nil))
 }
 
 func TestGenerateFrontmatter_UsesSource(t *testing.T) {
