@@ -93,6 +93,55 @@ func TestFormatMessages_EmptyInput(t *testing.T) {
 	assert.Empty(t, result)
 }
 
+func TestFormatMessages_NestedCodeFence(t *testing.T) {
+	// User content with an inner ```yaml fence must not close the outer wrapper early.
+	user := "请按下面 schema 处理\n\n```yaml\n- topic: MVCC\n- topic: isolation\n```\n\n这么处理"
+	messages := []Message{
+		{Role: "user", Content: user, Timestamp: "2026-06-21T10:00:00Z"},
+		{Role: "assistant", Content: "好的", Timestamp: "2026-06-21T10:00:10Z"},
+	}
+
+	result := FormatMessages(messages)
+
+	// Outer fence must be longer than 3 backticks
+	assert.Contains(t, result, "````markdown\n")
+	assert.Contains(t, result, "```yaml")
+	assert.Contains(t, result, "- topic: MVCC")
+	// Closing outer fence
+	assert.Contains(t, result, "\n````\n")
+	// Assistant still after the user block
+	assert.Contains(t, result, "好的")
+	// Ensure we did not leave a bare triple-fence-only wrapper that would break
+	// (the first fence line should be 4 backticks)
+	lines := strings.Split(result, "\n")
+	var fenceLine string
+	for _, line := range lines {
+		if strings.HasSuffix(line, "markdown") && strings.HasPrefix(line, "`") {
+			fenceLine = line
+			break
+		}
+	}
+	require.NotEmpty(t, fenceLine)
+	assert.True(t, strings.HasPrefix(fenceLine, "````"), "expected 4+ backtick fence, got %q", fenceLine)
+}
+
+func TestContentFence_Length(t *testing.T) {
+	assert.Equal(t, "```", contentFence("plain"))
+	assert.Equal(t, "````", contentFence("has ``` inside"))
+	assert.Equal(t, "`````", contentFence("has ```` four"))
+}
+
+func TestMergeSameRole_DropsExactDuplicate(t *testing.T) {
+	messages := []Message{
+		{Role: "user", Content: "同一段需求", Timestamp: "2026-06-21T10:00:00Z"},
+		{Role: "user", Content: "同一段需求", Timestamp: "2026-06-21T10:00:01Z"},
+		{Role: "assistant", Content: "收到", Timestamp: "2026-06-21T10:00:02Z"},
+	}
+	result := FormatMessages(messages)
+	assert.Equal(t, 1, strings.Count(result, "同一段需求"))
+	assert.Contains(t, result, "收到")
+}
+
 func TestFormatMessages_FromMultiEventJSONL(t *testing.T) {
 	// End-to-end: parse → filter (all pass) → format
 	messages, err := Parse("testdata/multi-event.jsonl")
