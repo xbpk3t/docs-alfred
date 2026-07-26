@@ -3,6 +3,7 @@ package rss //nolint:revive
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/creasty/defaults"
 
@@ -13,13 +14,13 @@ import (
 // Config 主配置结构.
 type Config struct {
 	WikiConfig       WikiConfig       `yaml:"wiki,omitempty"`
+	FeedConfig       FeedConfig       `yaml:"feed"`
 	ResendConfig     ResendConfig     `yaml:"resend"`
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
 	RSS              []FeedsDetail    `yaml:"rss"`
 	TrnsConfig       TrnsConfig       `yaml:"trns,omitempty"`
 	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
 	HuntConfig       HuntConfig       `yaml:"hunt,omitempty"`
-	FeedConfig       FeedConfig       `yaml:"feed"`
 	EnvConfig        EnvConfig        `yaml:"env"`
 }
 
@@ -37,9 +38,21 @@ type NewsletterConfig struct {
 
 // FeedConfig Feed相关配置.
 type FeedConfig struct {
-	Timeout   int `default:"30" validate:"gte:0" yaml:"timeout"`   // HTTP请求超时时间（秒）
-	MaxTries  int `default:"3"  validate:"gte:0" yaml:"maxTries"`  // 最大重试次数
-	FeedLimit int `default:"30" validate:"gte:0" yaml:"feedLimit"` // Feed数量限制
+	Hosts                  []FeedHostRule `yaml:"hosts,omitempty"`
+	Timeout                int            `default:"30" validate:"gte:0" yaml:"timeout"`
+	MaxTries               int            `default:"3"  validate:"gte:0" yaml:"maxTries"`
+	FeedLimit              int            `default:"30" validate:"gte:0" yaml:"feedLimit"`
+	Concurrency            int            `default:"10" validate:"gte:0" yaml:"concurrency"`
+	HostDefaultConcurrency int            `default:"4"  validate:"gte:0" yaml:"hostDefaultConcurrency"`
+}
+
+// FeedHostRule is a per-hostname fetch policy (concurrency, spacing, circuit).
+// match is compared case-insensitively to url.Hostname() (exact match).
+type FeedHostRule struct {
+	CircuitOn5xx  *bool  `yaml:"circuitOn5xx,omitempty"`
+	Match         string `yaml:"match"`
+	Concurrency   int    `yaml:"concurrency"`
+	MinIntervalMs int    `yaml:"minIntervalMs,omitempty"`
 }
 
 type DashboardConfig struct {
@@ -217,6 +230,31 @@ func (c *Config) applyDefaults() {
 func (c *Config) Validate() error {
 	if err := validator.Struct(c); err != nil {
 		return err
+	}
+	if err := c.FeedConfig.validateHosts(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (f FeedConfig) validateHosts() error {
+	seen := make(map[string]struct{}, len(f.Hosts))
+	for i, rule := range f.Hosts {
+		match := strings.ToLower(strings.TrimSpace(rule.Match))
+		if match == "" {
+			return fmt.Errorf("feed.hosts[%d].match is required", i)
+		}
+		if rule.Concurrency < 0 {
+			return fmt.Errorf("feed.hosts[%d].concurrency must be >= 0", i)
+		}
+		if rule.MinIntervalMs < 0 {
+			return fmt.Errorf("feed.hosts[%d].minIntervalMs must be >= 0", i)
+		}
+		if _, ok := seen[match]; ok {
+			return fmt.Errorf("feed.hosts duplicate match %q", match)
+		}
+		seen[match] = struct{}{}
 	}
 
 	return nil

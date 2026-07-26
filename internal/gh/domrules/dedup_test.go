@@ -3,6 +3,7 @@ package domrules
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -113,6 +114,41 @@ func TestRunGHDuplicateCheck_WithDuplicates(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, report)
 	assert.Len(t, report.URLDuplicates, 1, "should find duplicate URL")
+}
+
+func TestRunGHDuplicateCheck_TopicAndSectionRepos(t *testing.T) {
+	// section.repo in one file + topics[].repo in another must both be collected.
+	dir := t.TempDir()
+	tagDir := filepath.Join(dir, "AI")
+	require.NoError(t, os.MkdirAll(tagDir, 0755))
+
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "LLM.yml"), []byte(`
+- type: LLM
+  repo:
+    - url: https://github.com/BerriAI/litellm
+`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "agent.yml"), []byte(`
+- type: agent
+  topics:
+    - topic: agent-deploy
+      kind: mech
+      repo:
+        - url: https://github.com/BerriAI/litellm
+`), 0644))
+
+	report, err := RunGHDuplicateCheck(dir)
+	require.NoError(t, err)
+	require.Len(t, report.URLDuplicates, 1)
+	assert.Equal(t, "https://github.com/BerriAI/litellm", report.URLDuplicates[0].URL)
+	assert.Len(t, report.URLDuplicates[0].Entries, 2)
+
+	locs := []string{
+		report.URLDuplicates[0].Entries[0].File,
+		report.URLDuplicates[0].Entries[1].File,
+	}
+	assert.True(t, strings.Contains(locs[0], "LLM.yml") || strings.Contains(locs[1], "LLM.yml"))
+	assert.True(t, strings.Contains(locs[0], "agent.yml") || strings.Contains(locs[1], "agent.yml"))
+	assert.True(t, strings.Contains(locs[0], "topic:agent-deploy") || strings.Contains(locs[1], "topic:agent-deploy"))
 }
 
 func TestFormatDuplicateReport(t *testing.T) {
