@@ -2,6 +2,14 @@ feed:
   timeout: 30 # HTTP timeout per request (seconds). With 5 retries: 5+10+20+40+80+160 ≈ 315s total
   maxTries: 5  # Max retry attempts per feed
   feedLimit: 30 # Max items per feed
+  concurrency: 10 # global in-flight per category group
+  hostDefaultConcurrency: 4 # per-host default when not listed under hosts
+  hosts:
+    # Bilibili via CF Worker: gRPC -352 when bursted; keep serial + spacing.
+    - match: rss-worker.xxx.workers.dev
+      concurrency: 1
+      minIntervalMs: 1500
+      # circuitOn5xx defaults true for explicit host rules
 
 resend:
   token: sk   # Resend API key

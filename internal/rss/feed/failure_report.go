@@ -184,7 +184,6 @@ func BuildFeedFailureReport(
 
 // classifyFeedFailure returns stable grouping metadata for a feed error.
 func classifyFeedFailure(feedErr *FeedError) feedFailureStateItem {
-	message := strings.ToLower(feedFailureMessage(feedErr))
 	if feedErr == nil {
 		return feedFailureStateItem{Kind: FeedFailureKindUnknown}
 	}
@@ -194,97 +193,23 @@ func classifyFeedFailure(feedErr *FeedError) feedFailureStateItem {
 			Transient: feedErr.Transient,
 		}
 	}
+	message := strings.ToLower(feedFailureMessage(feedErr))
 	if strings.TrimSpace(feedErr.URL) == "" || strings.Contains(message, "empty url") {
 		return feedFailureStateItem{Kind: FeedFailureKindInvalidURL}
 	}
-	if item, ok := classifyTransientInfrastructureFailure(message); ok {
-		return item
-	}
-	if item, ok := classifyHTTPStatusFailure(message); ok {
-		return item
-	}
-	if item, ok := classifyContentFailure(message); ok {
-		return item
+
+	// Prefer typed classification from the underlying error when present.
+	if feedErr.Err != nil {
+		info := inspectFetchError(feedErr.Err)
+		if info.Kind != FeedFailureKindUnknown {
+			return feedFailureStateItem{Kind: info.Kind, Transient: info.Transient}
+		}
 	}
 
-	return feedFailureStateItem{Kind: FeedFailureKindUnknown}
-}
+	// Message-only FeedError (no Err) or unclassified typed error: string fallback.
+	info := classifyFromMessage(message)
 
-func classifyTransientInfrastructureFailure(message string) (feedFailureStateItem, bool) {
-	if containsAny(message, "context canceled", "context canceled") {
-		return feedFailureStateItem{Kind: FeedFailureKindContextCancelled, Transient: true}, true
-	}
-	if containsAny(message,
-		"context deadline exceeded",
-		"client.timeout exceeded",
-		"i/o timeout",
-		"timeout",
-		"deadline exceeded",
-	) {
-		return feedFailureStateItem{Kind: FeedFailureKindTimeout, Transient: true}, true
-	}
-	if containsAny(message,
-		"no such host",
-		"temporary failure in name resolution",
-		"server misbehaving",
-		"lookup ",
-	) {
-		return feedFailureStateItem{Kind: FeedFailureKindDNS, Transient: true}, true
-	}
-	if containsAny(message,
-		"tls",
-		"ssl routines",
-		"certificate",
-		"handshake",
-	) {
-		return feedFailureStateItem{Kind: FeedFailureKindTLS, Transient: true}, true
-	}
-
-	return feedFailureStateItem{}, false
-}
-
-func classifyHTTPStatusFailure(message string) (feedFailureStateItem, bool) {
-	if containsAny(message,
-		"status code",
-		"status:",
-		"429",
-		"500",
-		"502",
-		"503",
-		"504",
-		"404",
-		"410",
-	) {
-		return feedFailureStateItem{
-			Kind:      FeedFailureKindHTTPStatus,
-			Transient: isTransientHTTPStatus(message),
-		}, true
-	}
-
-	return feedFailureStateItem{}, false
-}
-
-func classifyContentFailure(message string) (feedFailureStateItem, bool) {
-	if containsAny(message,
-		"xml syntax error",
-		"not a valid feed",
-		"not a feed",
-		"failed to detect feed type",
-		"invalid feed",
-	) {
-		return feedFailureStateItem{Kind: FeedFailureKindParse}, true
-	}
-	if containsAny(message,
-		"unexpected eof",
-		"connection reset",
-		"connection refused",
-		"network is unreachable",
-		"eof",
-	) {
-		return feedFailureStateItem{Kind: FeedFailureKindNetwork, Transient: true}, true
-	}
-
-	return feedFailureStateItem{}, false
+	return feedFailureStateItem{Kind: info.Kind, Transient: info.Transient}
 }
 
 func effectiveFeedFailureReportConfig(cfg FeedFailureReportConfig) FeedFailureReportConfig {
@@ -477,18 +402,17 @@ func feedFailureHost(feedURL string) string {
 }
 
 func isTransientHTTPStatus(message string) bool {
-	for _, status := range []int{429, 500, 502, 503, 504} {
-		if strings.Contains(message, strconv.Itoa(status)) {
+	message = strings.ToLower(message)
+	if code, ok := extractHTTPStatusCode(message); ok {
+		switch code {
+		case 429, 500, 502, 503, 504:
 			return true
+		default:
+			return code >= 500 && code <= 599
 		}
 	}
-
-	return false
-}
-
-func containsAny(s string, needles ...string) bool {
-	for _, needle := range needles {
-		if strings.Contains(s, needle) {
+	for _, status := range []int{429, 500, 502, 503, 504} {
+		if strings.Contains(message, strconv.Itoa(status)) {
 			return true
 		}
 	}

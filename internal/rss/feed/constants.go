@@ -18,6 +18,8 @@ const (
 	DefaultFeedLimit = 10
 	// DefaultFeedFetchConcurrency controls concurrent feed fetches per group.
 	DefaultFeedFetchConcurrency = 10
+	// DefaultHostFetchConcurrency is per-host in-flight when no hosts[] rule matches.
+	DefaultHostFetchConcurrency = 4
 )
 
 // 日志字段常量.

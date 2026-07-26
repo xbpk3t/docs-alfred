@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	yaml "github.com/goccy/go-yaml"
 	"github.com/samber/lo"
+	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
@@ -132,6 +132,8 @@ type ghEntry struct {
 }
 
 // RunGHDuplicateCheck detects duplicate URLs in data/gh YAML files.
+// It reuses ghindex.ConfigRepo + ToRepos() so section.repo, topics[].repo,
+// and related repos are collected with the same schema as render/export.
 func RunGHDuplicateCheck(targetDir string) (*DuplicateReport, error) {
 	repoEntries, err := collectGhRepoEntries(targetDir)
 	if err != nil {
@@ -164,6 +166,7 @@ func collectGhRepoEntries(targetDir string) ([]ghEntry, error) {
 		for _, yf := range yamlFiles {
 			fileEntries, err := parseGhYAMLEntries(yf, targetDir)
 			if err != nil {
+				// Skip unreadable/invalid files; other files still participate.
 				continue
 			}
 
@@ -174,42 +177,57 @@ func collectGhRepoEntries(targetDir string) ([]ghEntry, error) {
 	return repoEntries, nil
 }
 
-// parseGhYAMLEntries extracts repo URL entries from a single gh YAML file.
+// parseGhYAMLEntries extracts repo URL entries from a single gh YAML file using
+// the shared ConfigRepo model (section.repo + topics[].repo + rel).
 func parseGhYAMLEntries(yf, targetDir string) ([]ghEntry, error) {
 	data, err := os.ReadFile(yf)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read %s: %w", yf, err)
 	}
 
-	var items []ghYAMLItem
-	if err := yaml.Unmarshal(data, &items); err != nil {
-		return nil, err
+	configs, err := parser.NewParser[ghindex.ConfigRepo](data).WithFileName(yf).ParseFlatten()
+	if err != nil {
+		return nil, fmt.Errorf("parse gh yaml %s: %w", yf, err)
 	}
 
-	relFile, _ := filepath.Rel(targetDir, yf)
+	relFile, err := filepath.Rel(targetDir, yf)
+	if err != nil {
+		relFile = yf
+	}
 
 	var entries []ghEntry
-	for _, item := range items {
-		if item.Type == "" {
+	for i := range configs {
+		cfg := configs[i]
+		if cfg.Type == "" {
 			continue
 		}
-		for _, repo := range item.Repos {
-			if repo.URL != "" {
-				entries = append(entries, ghEntry{file: relFile, typeName: item.Type, relation: "repo", url: repo.URL})
+
+		// Flatten with the same path as render/export (includes topics and rel).
+		for _, repo := range (ghindex.ConfigRepos{&cfg}).ToRepos() {
+			if repo == nil || repo.URL == "" {
+				continue
 			}
+			entries = append(entries, ghEntry{
+				file:     relFile,
+				typeName: repo.Type,
+				relation: ghRepoRelation(repo),
+				url:      repo.URL,
+			})
 		}
 	}
 
 	return entries, nil
 }
 
-type ghYAMLItem struct {
-	Type  string       `yaml:"type"`
-	Repos []ghYAMLRepo `yaml:"repo"`
-}
+func ghRepoRelation(repo *ghindex.Repository) string {
+	if repo.IsRelatedRepo {
+		return "rel"
+	}
+	if repo.TopicName != "" {
+		return "topic:" + repo.TopicName
+	}
 
-type ghYAMLRepo struct {
-	URL string `yaml:"url"`
+	return "repo"
 }
 
 // groupURLDuplicates groups gh entries by URL and returns a report of duplicates.
