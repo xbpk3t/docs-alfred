@@ -3,6 +3,7 @@ package dotfiles
 import (
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -44,7 +45,7 @@ func FormatDedupText(dups map[string][]string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "found %d duplicate package references:\n", len(dups))
 	for _, cats := range dups {
-		sort.Strings(cats)
+		slices.Sort(cats)
 	}
 	// Build sorted issues for consistent output
 	type entry struct {
@@ -76,7 +77,7 @@ func FormatDedupJSON(dups map[string][]string) map[string]any {
 	}
 	var issues []checkutil.Issue
 	for pkg, cats := range dups {
-		sort.Strings(cats)
+		slices.Sort(cats)
 		issues = append(issues, checkutil.Issue{
 			File:     pkg,
 			Severity: checkutil.SeverityWarn,

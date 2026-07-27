@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -99,9 +100,9 @@ func DiffCategories(ghCats, dfCats []string) CatDiff {
 		}
 	}
 
-	sort.Strings(diff.Shared)
-	sort.Strings(diff.DfOnly)
-	sort.Strings(diff.GhOnly)
+	slices.Sort(diff.Shared)
+	slices.Sort(diff.DfOnly)
+	slices.Sort(diff.GhOnly)
 	sort.Slice(diff.Issues, func(i, j int) bool {
 		return diff.Issues[i].Message < diff.Issues[j].Message
 	})
@@ -161,14 +162,14 @@ func MergeResult(cat *CatDiff, nix NixDiff) *DiffResult {
 	})
 
 	summary := map[string]any{
-		"shared":             len(cat.Shared),
-		"dfOnly":             len(cat.DfOnly),
-		"ghOnly":             len(cat.GhOnly),
-		"nixGhOnly":          len(nix.GhOnly),
-		"nixDfOnly":          len(nix.DfOnly),
-		"nixCrossCat":        len(nix.CrossCategory),
+		"shared":              len(cat.Shared),
+		"dfOnly":              len(cat.DfOnly),
+		"ghOnly":              len(cat.GhOnly),
+		"nixGhOnly":           len(nix.GhOnly),
+		"nixDfOnly":           len(nix.DfOnly),
+		"nixCrossCat":         len(nix.CrossCategory),
 		"nixFalsePkgConflict": len(nix.FalsePkgConflict),
-		"nixShared":          nix.Shared,
+		"nixShared":           nix.Shared,
 	}
 
 	return &DiffResult{
@@ -204,8 +205,8 @@ func classify(pkgState map[string]*pkgPresence, dotfilesFalsePkgs map[string]boo
 	}
 
 	for pkg, p := range pkgState {
-		sort.Strings(p.GHCats)
-		sort.Strings(p.DFCats)
+		slices.Sort(p.GHCats)
+		slices.Sort(p.DFCats)
 
 		switch {
 		case len(p.GHCats) > 0 && len(p.DFCats) == 0:
@@ -301,7 +302,7 @@ func FilterGhOnlyCategories(diff *CatDiff, ghDir string) (*CatDiff, error) {
 		filtered.Issues = append(filtered.Issues, iss)
 	}
 
-	sort.Strings(filtered.GhOnly)
+	slices.Sort(filtered.GhOnly)
 	sort.Slice(filtered.Issues, func(i, j int) bool {
 		return filtered.Issues[i].Message < filtered.Issues[j].Message
 	})

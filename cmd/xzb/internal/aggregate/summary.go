@@ -1,6 +1,7 @@
 package aggregate
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/samber/lo"
@@ -41,7 +42,7 @@ func Build(transactions []model.Transaction) Summary {
 
 	groups := lo.GroupBy(transactions, func(t model.Transaction) string { return t.Month })
 	monthNames := lo.Keys(groups)
-	sort.Strings(monthNames)
+	slices.Sort(monthNames)
 
 	for _, monthKey := range monthNames {
 		txns := groups[monthKey]

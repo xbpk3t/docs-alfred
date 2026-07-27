@@ -262,7 +262,7 @@ func TestAuditPathCandidateEmptyPath(t *testing.T) {
 // --- auditCanonicalHeadings ---
 
 func TestAuditCanonicalHeadingsValid(t *testing.T) {
-	lines := []string{"#### overview", "#### detail", "#### keyPoints", "#### keyQuotes", "#### actionableAdvice", "#### worthNoting", "#### criticalThinking"}
+	lines := []string{"#### overview", "#### detail", "#### keyPoints", "#### keyQuotes", "#### actionableAdvice", "#### worthNoting", "#### verify"}
 	issues := auditCanonicalHeadings("test.md", lines)
 	assert.Empty(t, issues)
 }
