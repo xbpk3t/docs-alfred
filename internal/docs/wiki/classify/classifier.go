@@ -34,10 +34,14 @@ const noneVal = "none"
 // unreliable.
 const minContentForVideo = 600
 
+// chatFn is the AI chat entrypoint; tests may inject a fake.
+type chatFn func(ctx context.Context, cfg *ai.ClientConfig, messages []ai.Message) (string, error)
+
 // Classifier handles AI-powered classification of URLs.
 type Classifier struct {
 	catalogErr        error
 	AIConfig          *ai.ClientConfig
+	chat              chatFn
 	loadGHTopics      func() ([]ghindex.TopicCandidate, error)
 	WikiRoot          string
 	GhTopicsURL       string
@@ -74,10 +78,16 @@ func WithMaxContentSize(n int) ClassifierOption {
 	return func(c *Classifier) { c.MaxContentSize = n }
 }
 
+// WithChatFn injects a chat implementation (tests).
+func WithChatFn(fn chatFn) ClassifierOption {
+	return func(c *Classifier) { c.chat = fn }
+}
+
 // NewClassifier creates a new Classifier.
 func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string, opts ...ClassifierOption) *Classifier {
 	c := &Classifier{
 		AIConfig:       aiCfg,
+		chat:           ai.ChatContext,
 		WikiRoot:       wikiRoot,
 		GhTopicsURL:    ghTopicsURL,
 		GhTopicsMaxAge: ghindex.DefaultMaxAge,
@@ -94,13 +104,17 @@ func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string, opts ..
 	if c.MinConfidence <= 0 {
 		c.MinConfidence = 0.45
 	}
+	if c.chat == nil {
+		c.chat = ai.ChatContext
+	}
 
 	return c
 }
 
 // DetectContentType determines the content type from a URL.
 // ClassifyURL performs full classification on a URL with fetched title + content.
-// Uses a two-step pipeline: classify (topic+type+metadata) then summarize (detailed summary).
+// Pipeline: classify-json (topic+summary) then optional light verify pass
+// (text/media only; repo skips — reserved for vs pathway).
 // Returns nil if classification is unavailable (graceful degradation).
 func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content string) *types.ClassifyResult {
 	contentType := fetch.DetectContentType(strings.ToLower(urlStr))
@@ -143,6 +157,9 @@ func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content str
 
 		return nil
 	}
+
+	// Light verify pass: never blocks digest success.
+	c.maybeVerify(ctx, classified, urlStr, title, contentType, content, maxLen)
 
 	return c.buildClassifyResult(classified, contentType, candidates, urlStr)
 }
@@ -534,7 +551,7 @@ func (c *Classifier) classifyOnly(
 	var result *aiClassification
 	err = retry.Do(
 		func() error {
-			r, e := ai.ChatContext(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: promptText}})
+			r, e := c.chat(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: promptText}})
 			if e != nil {
 				return fmt.Errorf("AI classify call: %w", e)
 			}
@@ -568,6 +585,151 @@ func (c *Classifier) classifyOnly(
 		return nil, err
 	}
 	return result, nil
+}
+
+type verifyPromptData struct {
+	URL         string
+	Title       string
+	ContentType string
+	Overview    string
+	Content     string
+	KeyPoints   []string
+}
+
+// shouldSkipVerify reports whether the light verify pass should be skipped.
+// Repo reviews are reserved for the vs pathway (zzz/repo/vs); digest verify
+// targets text/media technical content.
+func shouldSkipVerify(classified *aiClassification) bool {
+	if classified == nil {
+		return true
+	}
+	if classified.Metadata != nil && classified.Metadata.ContentType == types.DisplayTypeRepo {
+		return true
+	}
+	// Fallback: review wikiType without explicit metadata still skips.
+	if classified.WikiType == types.TypeRepoEval {
+		return true
+	}
+	return false
+}
+
+// maybeVerify runs a best-effort second AI pass and fills summary.verify.
+// Failures are logged and never fail classification.
+func (c *Classifier) maybeVerify(
+	ctx context.Context,
+	classified *aiClassification,
+	urlStr, title, contentType, content string,
+	maxLen int,
+) {
+	if shouldSkipVerify(classified) {
+		slog.Debug("verify pass skipped", "url", urlStr, "reason", "repo_or_review")
+		return
+	}
+	if classified.Summary == nil {
+		return
+	}
+	if ctx.Err() != nil {
+		slog.Warn("verify pass skipped: context done", "url", urlStr, "error", ctx.Err())
+		return
+	}
+
+	verifyText, err := c.runVerify(ctx, urlStr, title, contentType, content, classified.Summary, maxLen)
+	if err != nil {
+		slog.Warn("verify pass failed; continuing without verify section", "url", urlStr, "error", err)
+		return
+	}
+	classified.Summary.Verify = verifyText
+}
+
+func (c *Classifier) runVerify(
+	ctx context.Context,
+	urlStr, title, contentType, content string,
+	summary *types.StructuredSummary,
+	maxLen int,
+) (string, error) {
+	overview := ""
+	var keyPoints []string
+	if summary != nil {
+		overview = summary.Overview
+		keyPoints = summary.KeyPoints
+	}
+	// Keep verify prompt smaller than classify; assertions need less raw body.
+	verifyMax := maxLen
+	if verifyMax > 12000 {
+		verifyMax = 12000
+	}
+	promptText, err := prompt.Render("verify-simple.txt", &verifyPromptData{
+		URL:         urlStr,
+		Title:       truncate(title, 200),
+		ContentType: contentType,
+		Overview:    truncate(overview, 1500),
+		KeyPoints:   keyPoints,
+		Content:     truncate(content, verifyMax),
+	})
+	if err != nil {
+		return "", fmt.Errorf("render verify prompt: %w", err)
+	}
+
+	var out string
+	err = retry.Do(
+		func() error {
+			r, e := c.chat(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: promptText}})
+			if e != nil {
+				return fmt.Errorf("AI verify call: %w", e)
+			}
+			parsed := parseVerifyOutput(r)
+			if parsed == "" {
+				return errors.New("empty verify output")
+			}
+			out = parsed
+			return nil
+		},
+		retry.Attempts(2),
+		retry.Delay(500*time.Millisecond),
+		retry.DelayType(retry.BackOffDelay),
+		retry.Context(ctx),
+	)
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+// parseVerifyOutput accepts plain markdown or a thin JSON wrapper {"verify":"..."}.
+func parseVerifyOutput(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	raw = stripMarkdownFences(raw)
+	// Thin JSON wrapper {"verify":"..."}.
+	if strings.HasPrefix(raw, "{") {
+		var wrap struct {
+			Verify string `json:"verify"`
+		}
+		if err := json.Unmarshal([]byte(raw), &wrap); err == nil && strings.TrimSpace(wrap.Verify) != "" {
+			return strings.TrimSpace(wrap.Verify)
+		}
+	}
+	return raw
+}
+
+// stripMarkdownFences strips outer ```lang ... ``` fences when present.
+func stripMarkdownFences(s string) string {
+	if !strings.HasPrefix(s, "```") {
+		return s
+	}
+	s = strings.TrimPrefix(s, "```")
+	if nl := strings.IndexByte(s, '\n'); nl >= 0 {
+		first := strings.TrimSpace(s[:nl])
+		if first == "" || first == "markdown" || first == "md" || first == "json" {
+			s = s[nl+1:]
+		}
+	}
+	if idx := strings.LastIndex(s, "```"); idx >= 0 {
+		s = s[:idx]
+	}
+	return strings.TrimSpace(s)
 }
 
 func parseClassifyOnlyResult(raw string) (*classifyOnlyResult, error) {

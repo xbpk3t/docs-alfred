@@ -3,9 +3,6 @@ package classify
 import (
 	"context"
 	"errors"
-	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/fetch"
-	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/prompt"
-	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,7 +12,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/fetch"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/prompt"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
+	"github.com/xbpk3t/docs-alfred/pkg/ai"
 )
 
 func TestRenderPrompt(t *testing.T) {
@@ -1058,4 +1059,129 @@ func TestScoreTopicCandidateNoMatch(t *testing.T) {
 	candidate := ghindex.TopicCandidate{Path: "xx/yy/zz", Display: "zz"}
 	score := scoreTopicCandidate(candidate, "completely different query")
 	assert.Equal(t, 0, score)
+}
+
+// --- verify pass (LUC-302) ---
+
+func TestRenderStructuredSummaryWithVerify(t *testing.T) {
+	s := &types.StructuredSummary{
+		Overview:  "overview",
+		KeyPoints: []string{"point"},
+		Verify:    "- **assertions**\n  - [Fact] default is 15s | risk=med | self-consistent",
+	}
+	rendered := RenderStructuredSummary(s)
+	assert.Contains(t, rendered, "#### verify")
+	assert.Contains(t, rendered, "assertions")
+	assert.NotContains(t, rendered, "criticalThinking")
+}
+
+func TestShouldSkipVerifyRepoMetadata(t *testing.T) {
+	assert.True(t, shouldSkipVerify(&aiClassification{
+		WikiType: types.TypeDeepDive,
+		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeRepo},
+	}))
+}
+
+func TestShouldSkipVerifyReviewWikiType(t *testing.T) {
+	assert.True(t, shouldSkipVerify(&aiClassification{
+		WikiType: types.TypeRepoEval,
+		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeText},
+	}))
+}
+
+func TestShouldSkipVerifyTextResearch(t *testing.T) {
+	assert.False(t, shouldSkipVerify(&aiClassification{
+		WikiType: types.TypeDeepDive,
+		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeText},
+	}))
+}
+
+func TestParseVerifyOutputPlainMarkdown(t *testing.T) {
+	in := "- **assertions**\n  - [Fact] x | risk=low | ok"
+	assert.Equal(t, in, parseVerifyOutput(in))
+}
+
+func TestParseVerifyOutputJSONWrapper(t *testing.T) {
+	in := `{"verify":"- **assertions**\n  - [Claim] y | risk=high | check"}`
+	got := parseVerifyOutput(in)
+	assert.Contains(t, got, "assertions")
+	assert.Contains(t, got, "Claim")
+}
+
+func TestParseVerifyOutputFencedMarkdown(t *testing.T) {
+	in := "```markdown\n- **gaps**\n  - none\n```"
+	got := parseVerifyOutput(in)
+	assert.Contains(t, got, "gaps")
+	assert.NotContains(t, got, "```")
+}
+
+func TestMaybeVerifyFillsSummary(t *testing.T) {
+	calls := 0
+	c := NewClassifier(nil, t.TempDir(), "", WithChatFn(func(ctx context.Context, cfg *ai.ClientConfig, messages []ai.Message) (string, error) {
+		calls++
+		return "- **assertions**\n  - [Fact] port is 8443 | risk=med | from body\n- **issues**\n  - none\n- **gaps**\n  - none", nil
+	}))
+	classified := &aiClassification{
+		WikiType: types.TypeDeepDive,
+		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeText},
+		Summary: &types.StructuredSummary{
+			Overview:  "overview about ports",
+			KeyPoints: []string{"uses 8443"},
+		},
+	}
+	c.maybeVerify(context.Background(), classified, "https://example.com/a", "Title", types.ContentText, "default port is 8443", 2000)
+	require.NotNil(t, classified.Summary)
+	assert.Contains(t, classified.Summary.Verify, "assertions")
+	assert.Equal(t, 1, calls)
+}
+
+func TestMaybeVerifySkipsRepo(t *testing.T) {
+	calls := 0
+	c := NewClassifier(nil, t.TempDir(), "", WithChatFn(func(ctx context.Context, cfg *ai.ClientConfig, messages []ai.Message) (string, error) {
+		calls++
+		return "should not run", nil
+	}))
+	classified := &aiClassification{
+		WikiType: types.TypeRepoEval,
+		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeRepo},
+		Summary: &types.StructuredSummary{
+			Overview:  "repo review",
+			KeyPoints: []string{"stars"},
+		},
+	}
+	c.maybeVerify(context.Background(), classified, "https://github.com/o/r", "repo", types.ContentText, "readme", 2000)
+	assert.Empty(t, classified.Summary.Verify)
+	assert.Equal(t, 0, calls)
+}
+
+func TestMaybeVerifyFailureDoesNotBreak(t *testing.T) {
+	c := NewClassifier(nil, t.TempDir(), "", WithChatFn(func(ctx context.Context, cfg *ai.ClientConfig, messages []ai.Message) (string, error) {
+		return "", errors.New("boom")
+	}))
+	classified := &aiClassification{
+		WikiType: types.TypeDeepDive,
+		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeText},
+		Summary: &types.StructuredSummary{
+			Overview:  "overview",
+			KeyPoints: []string{"point"},
+		},
+	}
+	c.maybeVerify(context.Background(), classified, "https://example.com/b", "Title", types.ContentText, "body", 2000)
+	assert.Empty(t, classified.Summary.Verify)
+	assert.Equal(t, "overview", classified.Summary.Overview)
+}
+
+func TestPromptRenderVerifySimple(t *testing.T) {
+	out, err := prompt.Render("verify-simple.txt", &verifyPromptData{
+		URL:         "https://example.com",
+		Title:       "t",
+		ContentType: "text",
+		Overview:    "ov",
+		KeyPoints:   []string{"k1"},
+		Content:     "body",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, out, "https://example.com")
+	assert.Contains(t, out, "assertions")
+	assert.Contains(t, out, "body")
 }

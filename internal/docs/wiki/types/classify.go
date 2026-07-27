@@ -47,29 +47,30 @@ type ClassifyResult struct {
 }
 
 // StructuredSummary holds the AI-generated summary broken into sections.
+// Field order controls #### heading order in RenderStructuredSummary.
 type StructuredSummary struct {
 	Overview         string   `json:"overview"                   validate:"required"`
 	Detail           string   `json:"detail,omitempty"`
-	KeyQuotes        []string `json:"keyQuotes,omitempty"`
 	WorthNoting      string   `json:"worthNoting,omitempty"`
-	CriticalThinking string   `json:"criticalThinking,omitempty"`
+	Verify           string   `json:"verify,omitempty"`
+	KeyQuotes        []string `json:"keyQuotes,omitempty"`
 	KeyPoints        []string `json:"keyPoints"                  validate:"required|min_len:1"`
 	ActionableAdvice []string `json:"actionableAdvice,omitempty"`
 }
 
 // EntryMetadata holds additional metadata fields from AI classification.
 type EntryMetadata struct {
-	ContentType       string   `json:"contentType"                 validate:"required|in:text,media,repo"`
-	Quality           string   `json:"quality,omitempty"           validate:"quality"`
-	Author            string   `json:"author,omitempty"`
-	Uncertainties     string   `json:"uncertainties,omitempty"`
-	Duration          string   `json:"duration,omitempty"          validate:"duration"`
-	TranscriptQuality string   `json:"transcriptQuality,omitempty" validate:"in:good,fair,poor"`
-	Verdict           string   `json:"verdict,omitempty"           validate:"in:watch,skip,try"`
-	Language          string   `json:"language,omitempty"`
+	ContentType       string `json:"contentType"                 validate:"required|in:text,media,repo"`
+	Quality           string `json:"quality,omitempty"           validate:"quality"`
+	Author            string `json:"author,omitempty"`
+	Uncertainties     string `json:"uncertainties,omitempty"`
+	Duration          string `json:"duration,omitempty"          validate:"duration"`
+	TranscriptQuality string `json:"transcriptQuality,omitempty" validate:"in:good,fair,poor"`
+	Verdict           string `json:"verdict,omitempty"           validate:"in:watch,skip,try"`
+	Language          string `json:"language,omitempty"`
 	// [2026-07-21] Drop max_len:8 on tags: AI often returns >8 keywords; hard-failing
 	// classification for that alone forced full retries and sank digest success rate.
 	// Soft upper bound still lives in classify-json.txt prompt (3-8); only enforce min.
-	Tags              []string `json:"tags,omitempty"              validate:"required|min_len:3"`
-	Stars             int      `json:"stars,omitempty"`
+	Tags  []string `json:"tags,omitempty"              validate:"required|min_len:3"`
+	Stars int      `json:"stars,omitempty"`
 }

@@ -23,7 +23,7 @@ var canonicalSectionHeadings = map[string]bool{
 	"keyQuotes":        true,
 	"actionableAdvice": true,
 	"worthNoting":      true,
-	"criticalThinking": true,
+	"verify":           true,
 }
 
 // validCodeblockFields are the allowed fields in summary codeblocks.
@@ -244,7 +244,7 @@ func auditCanonicalHeadings(file string, lines []string) []checkutil.Issue {
 				File:     file,
 				Line:     i + 1,
 				Severity: checkutil.SeverityWarn,
-				Message:  fmt.Sprintf("non-canonical section heading: #### %s (allowed: overview, detail, keyPoints, keyQuotes, actionableAdvice, worthNoting, criticalThinking)", heading),
+				Message:  fmt.Sprintf("non-canonical section heading: #### %s (allowed: overview, detail, keyPoints, keyQuotes, actionableAdvice, worthNoting, verify)", heading),
 			})
 		}
 	}

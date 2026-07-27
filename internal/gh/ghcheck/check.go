@@ -4,7 +4,7 @@ package ghcheck
 import (
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -232,7 +232,7 @@ func sortedKeys(m validate.MS) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	return keys
 }
