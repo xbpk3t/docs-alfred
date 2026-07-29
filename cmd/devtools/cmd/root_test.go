@@ -14,75 +14,126 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
 )
 
-func TestListToolTypes_ChainContract(t *testing.T) {
-	items := listToolTypes()
+func TestParseQuery_Stages(t *testing.T) {
+	tests := []struct {
+		q            string
+		stage        queryStage
+		tool         string
+		action       string
+		input        string
+		toolFilter   string
+		actionFilter string
+	}{
+		{q: "", stage: stageTools},
+		{q: "   ", stage: stageTools},
+		{q: "b", stage: stageTools, toolFilter: "b"},
+		{q: "base64", stage: stageActions, tool: "base64"},
+		{q: "base64 ", stage: stageActions, tool: "base64"},
+		{q: "base64 en", stage: stageActions, tool: "base64", actionFilter: "en"},
+		{q: "base64 encode", stage: stageInput, tool: "base64", action: "encode"},
+		{q: "base64 encode ", stage: stageInput, tool: "base64", action: "encode"},
+		{q: "base64 encode hello", stage: stageRun, tool: "base64", action: "encode", input: "hello"},
+		{q: "base64 encode hello world", stage: stageRun, tool: "base64", action: "encode", input: "hello world"},
+		{q: "base64 e hi", stage: stageRun, tool: "base64", action: "encode", input: "hi"},
+		{q: "base64 decode aGVsbG8=", stage: stageRun, tool: "base64", action: "decode", input: "aGVsbG8="},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.q, func(t *testing.T) {
+			p := parseQuery(tt.q)
+			assert.Equal(t, tt.stage, p.Stage)
+			assert.Equal(t, tt.toolFilter, p.ToolFilter)
+			assert.Equal(t, tt.actionFilter, p.ActionFilter)
+			assert.Equal(t, tt.input, p.Input)
+			if tt.tool == "" {
+				assert.Nil(t, p.Tool)
+			} else {
+				require.NotNil(t, p.Tool)
+				assert.Equal(t, tt.tool, p.Tool.Type)
+			}
+			if tt.action == "" {
+				assert.Nil(t, p.Action)
+			} else {
+				require.NotNil(t, p.Action)
+				assert.Equal(t, tt.action, p.Action.Name)
+			}
+		})
+	}
+}
+
+func TestHandleQuery_ToolsLevel_AutocompleteContract(t *testing.T) {
+	items := handleQuery("")
 	require.NotEmpty(t, items)
 
 	base64 := findItemByTitle(items, "base64")
 	require.NotNil(t, base64)
-	// Level 1 must leave SF via valid+arg (NOT autocomplete fill-back).
-	assert.True(t, base64.Valid)
-	assert.Equal(t, "base64", base64.Arg)
-	assert.Empty(t, base64.Autocomplete)
+	// Single-SF drill: valid false + autocomplete path (NOT chain arg hop).
+	assert.False(t, base64.Valid)
+	assert.Empty(t, base64.Arg)
+	assert.Equal(t, "base64 ", base64.Autocomplete)
 }
 
-func TestListActions_ShortTitleChainArg(t *testing.T) {
-	items := listActionsForType("base64")
+func TestHandleQuery_ToolsFilter(t *testing.T) {
+	items := handleQuery("base")
+	require.Len(t, items, 1)
+	assert.Equal(t, "base64", items[0].Title)
+	assert.False(t, items[0].Valid)
+
+	unknown := handleQuery("nope")
+	require.Len(t, unknown, 1)
+	assert.Contains(t, unknown[0].Title, "未知工具")
+	assert.False(t, unknown[0].Valid)
+}
+
+func TestHandleQuery_ActionsLevel_CleanTitles(t *testing.T) {
+	items := handleQuery("base64")
 	require.Len(t, items, 2)
 
 	enc := findItemByTitle(items, "encode")
 	require.NotNil(t, enc)
-	assert.True(t, enc.Valid)
-	assert.Equal(t, "encode", enc.Arg, "action hop arg is only the action name")
-	assert.Empty(t, enc.Autocomplete)
+	assert.False(t, enc.Valid)
+	assert.Empty(t, enc.Arg)
+	assert.Equal(t, "base64 encode ", enc.Autocomplete)
 	assert.NotContains(t, enc.Title, "base64")
+	assert.NotContains(t, enc.Title, "dd")
 
 	dec := findItemByTitle(items, "decode")
 	require.NotNil(t, dec)
-	assert.Equal(t, "decode", dec.Arg)
+	assert.Equal(t, "base64 decode ", dec.Autocomplete)
 }
 
-func TestListActions_UnknownTool(t *testing.T) {
-	items := listActionsForType("nope")
+func TestHandleQuery_ActionsFilter(t *testing.T) {
+	items := handleQuery("base64 en")
 	require.Len(t, items, 1)
-	assert.False(t, items[0].Valid)
-	assert.Contains(t, items[0].Title, "未知工具")
+	assert.Equal(t, "encode", items[0].Title)
 }
 
-func TestExecute_PromptThenResult(t *testing.T) {
-	prompt := executeAction("base64", "encode", "")
+func TestHandleQuery_PromptThenResult(t *testing.T) {
+	prompt := handleQuery("base64 encode")
 	require.Len(t, prompt, 1)
 	assert.False(t, prompt[0].Valid)
 	assert.Empty(t, prompt[0].Arg)
+	assert.Contains(t, prompt[0].Title, "encode")
 
-	result := executeAction("base64", "encode", "hello")
+	result := handleQuery("base64 encode hello")
 	require.Len(t, result, 1)
 	assert.True(t, result[0].Valid)
 	assert.Equal(t, "aGVsbG8=", result[0].Arg)
 	assert.Equal(t, "aGVsbG8=", result[0].Title)
 }
 
-func TestExecute_Decode(t *testing.T) {
-	items := executeAction("base64", "decode", "aGVsbG8=")
-	require.Len(t, items, 1)
-	assert.Equal(t, "hello", items[0].Arg)
+func TestHandleQuery_DecodeAndMultiWord(t *testing.T) {
+	dec := handleQuery("base64 decode aGVsbG8=")
+	require.Len(t, dec, 1)
+	assert.Equal(t, "hello", dec[0].Arg)
+
+	multi := handleQuery("base64 encode hello world")
+	require.Len(t, multi, 1)
+	assert.Equal(t, "aGVsbG8gd29ybGQ=", multi[0].Arg)
 }
 
-func TestExecute_MultiWordInput(t *testing.T) {
-	items := executeAction("base64", "encode", "hello world")
-	require.Len(t, items, 1)
-	assert.Equal(t, "aGVsbG8gd29ybGQ=", items[0].Arg)
-}
-
-func TestExecute_UnknownTool(t *testing.T) {
-	items := executeAction("nope", "encode", "x")
-	require.Len(t, items, 1)
-	assert.False(t, items[0].Valid)
-	assert.Contains(t, items[0].Title, "不支持的工具")
-}
-
-func TestExecute_UnknownAction(t *testing.T) {
-	items := executeAction("base64", "nope", "x")
+func TestHandleQuery_UnknownAction(t *testing.T) {
+	items := handleQuery("base64 nope")
 	require.Len(t, items, 1)
 	assert.False(t, items[0].Valid)
 	assert.Contains(t, items[0].Title, "未知操作")
@@ -102,19 +153,20 @@ func TestRegistry_EveryToolHasRunnerAndActions(t *testing.T) {
 	}
 }
 
-func TestFullChain_AlfredJSONStages(t *testing.T) {
+func TestFullChain_SingleSFJSONStages(t *testing.T) {
 	f := &wf.AlfredFormatter{}
 
-	raw, err := f.Format(listToolTypes())
+	// L1 tools
+	raw, err := f.Format(handleQuery(""))
 	require.NoError(t, err)
 	var l1 wf.AlfredOutput
 	require.NoError(t, json.Unmarshal([]byte(raw), &l1))
 	require.NotEmpty(t, l1.Items)
-	assert.True(t, l1.Items[0].Valid)
-	assert.Equal(t, "base64", l1.Items[0].Arg)
-	assert.Empty(t, l1.Items[0].Autocomplete)
+	assert.False(t, l1.Items[0].Valid)
+	assert.Equal(t, "base64 ", l1.Items[0].Autocomplete)
 
-	raw, err = f.Format(listActionsForType(l1.Items[0].Arg))
+	// Simulate autocomplete expand → query "base64"
+	raw, err = f.Format(handleQuery(strings.TrimSpace(l1.Items[0].Autocomplete)))
 	require.NoError(t, err)
 	var l2 wf.AlfredOutput
 	require.NoError(t, json.Unmarshal([]byte(raw), &l2))
@@ -122,21 +174,29 @@ func TestFullChain_AlfredJSONStages(t *testing.T) {
 	titles := []string{l2.Items[0].Title, l2.Items[1].Title}
 	assert.ElementsMatch(t, []string{"encode", "decode"}, titles)
 	for _, it := range l2.Items {
-		assert.True(t, it.Valid)
-		assert.NotEmpty(t, it.Arg)
-		assert.NotContains(t, it.Title, "dv")
-		assert.NotEqual(t, "base64 encode", it.Title)
+		assert.False(t, it.Valid)
+		assert.True(t, strings.HasPrefix(it.Autocomplete, "base64 "))
+		assert.NotContains(t, it.Title, "base64")
 	}
 
-	action := l2.Items[0].Arg
-	raw, err = f.Format(executeAction("base64", action, ""))
+	// Pick encode via autocomplete
+	var encAuto string
+	for _, it := range l2.Items {
+		if it.Title == "encode" {
+			encAuto = it.Autocomplete
+			break
+		}
+	}
+	require.Equal(t, "base64 encode ", encAuto)
+
+	raw, err = f.Format(handleQuery(strings.TrimSpace(encAuto)))
 	require.NoError(t, err)
 	var l3p wf.AlfredOutput
 	require.NoError(t, json.Unmarshal([]byte(raw), &l3p))
 	require.Len(t, l3p.Items, 1)
 	assert.False(t, l3p.Items[0].Valid)
 
-	raw, err = f.Format(executeAction("base64", action, "hello"))
+	raw, err = f.Format(handleQuery("base64 encode hello"))
 	require.NoError(t, err)
 	var l3r wf.AlfredOutput
 	require.NoError(t, json.Unmarshal([]byte(raw), &l3r))
@@ -145,22 +205,22 @@ func TestFullChain_AlfredJSONStages(t *testing.T) {
 	assert.Equal(t, "aGVsbG8=", l3r.Items[0].Arg)
 }
 
-func TestCobraWiring(t *testing.T) {
+func TestCobraWiring_SingleEntry(t *testing.T) {
 	root := newRootCmd()
-	names := map[string]bool{}
+	// No tools/actions/run subcommands — single SF entry.
 	for _, c := range root.Commands() {
-		if !c.Hidden {
-			names[c.Name()] = true
+		if c.Hidden {
+			continue
 		}
+		assert.NotEqual(t, "tools", c.Name())
+		assert.NotEqual(t, "actions", c.Name())
+		assert.NotEqual(t, "run", c.Name())
 	}
-	assert.True(t, names["tools"])
-	assert.True(t, names["actions"])
-	assert.True(t, names["run"])
 }
 
-// TestWorkflowPlist_ChainScripts guards the Alfred regression where
-// script bodies used "{var:tool}" (literal) instead of env "$tool".
-func TestWorkflowPlist_ChainScripts(t *testing.T) {
+// TestWorkflowPlist_SingleSF guards the R1 architecture:
+// one Script Filter → Clipboard; script is ./devtools "$1"; no Arg/Vars chain.
+func TestWorkflowPlist_SingleSF(t *testing.T) {
 	_, thisFile, _, ok := runtime.Caller(0)
 	require.True(t, ok)
 	plistPath := filepath.Join(filepath.Dir(thisFile), "..", ".workflow", "info.plist")
@@ -168,53 +228,55 @@ func TestWorkflowPlist_ChainScripts(t *testing.T) {
 	require.NoError(t, err, "read %s", plistPath)
 	content := string(raw)
 
-	assert.Contains(t, content, `./devtools tools`)
-	assert.Contains(t, content, `./devtools actions "$tool"`)
-	assert.Contains(t, content, `./devtools run "$tool" "$action" "$1"`)
+	assert.Contains(t, content, `./devtools "$1"`)
+	// Old multi-SF chain must be gone.
+	assert.NotContains(t, content, `./devtools tools`)
+	assert.NotContains(t, content, `./devtools actions`)
+	assert.NotContains(t, content, `SF-ACTIONS`)
+	assert.NotContains(t, content, `AV-TOOL`)
+	assert.NotContains(t, content, `{var:tool}`)
 
-	// Script body must not pass literal Alfred placeholders as CLI args.
-	assert.NotContains(t, content, `actions "{var:tool}"`)
-	assert.NotContains(t, content, `actions '{var:tool}'`)
-	assert.NotContains(t, content, `run "{var:tool}"`)
-	assert.NotContains(t, content, `run '{var:tool}'`)
-
-	require.Contains(t, content, `SF-RUN`)
-
-	// Parse with plutil on macOS for structured checks.
-	if runtime.GOOS == "darwin" {
-		out, err := exec.Command("plutil", "-convert", "json", "-o", "-", plistPath).Output()
-		require.NoError(t, err)
-		var data map[string]any
-		require.NoError(t, json.Unmarshal(out, &data))
-		objects, _ := data["objects"].([]any)
-		require.NotEmpty(t, objects)
-
-		var sawRun, sawClip bool
-		for _, rawObj := range objects {
-			obj, _ := rawObj.(map[string]any)
-			uid, _ := obj["uid"].(string)
-			cfg, _ := obj["config"].(map[string]any)
-			typ, _ := obj["type"].(string)
-			switch {
-			case uid == "SF-RUN":
-				sawRun = true
-				// Optional argument so empty query still runs and shows prompt.
-				assert.EqualValues(t, 1, cfg["argumenttype"], "SF-RUN must be Optional")
-				assert.Equal(t, false, cfg["alfredfiltersresults"])
-				assert.Equal(t, `./devtools run "$tool" "$action" "$1"`, cfg["script"])
-			case uid == "SF-ACTIONS":
-				assert.Equal(t, `./devtools actions "$tool"`, cfg["script"])
-			case uid == "SF-TOOLS":
-				assert.Equal(t, `./devtools tools`, cfg["script"])
-			case strings.Contains(typ, "clipboard"):
-				sawClip = true
-				assert.Equal(t, false, cfg["autopaste"], "copy only, no force-paste")
-				assert.Equal(t, true, cfg["transient"], "do not pollute clipboard history")
-			}
-		}
-		assert.True(t, sawRun)
-		assert.True(t, sawClip)
+	if runtime.GOOS != "darwin" {
+		return
 	}
+	out, err := exec.Command("plutil", "-convert", "json", "-o", "-", plistPath).Output()
+	require.NoError(t, err)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(out, &data))
+	objects, _ := data["objects"].([]any)
+	require.NotEmpty(t, objects)
+
+	var sawSF, sawClip bool
+	sfCount := 0
+	for _, rawObj := range objects {
+		obj, _ := rawObj.(map[string]any)
+		uid, _ := obj["uid"].(string)
+		cfg, _ := obj["config"].(map[string]any)
+		typ, _ := obj["type"].(string)
+		switch {
+		case strings.Contains(typ, "scriptfilter"):
+			sfCount++
+			sawSF = true
+			assert.Equal(t, `./devtools "$1"`, cfg["script"])
+			assert.Equal(t, false, cfg["alfredfiltersresults"], "query state machine filters in-script")
+			assert.EqualValues(t, 1, cfg["argumenttype"], "Optional so empty query lists tools")
+			assert.Equal(t, true, cfg["withspace"])
+		case strings.Contains(typ, "clipboard") || uid == "CLIPBOARD":
+			sawClip = true
+			assert.Equal(t, false, cfg["autopaste"], "copy only, no force-paste")
+			assert.Equal(t, true, cfg["transient"], "do not pollute clipboard history")
+		case strings.Contains(typ, "argument"):
+			t.Fatalf("Arg/Vars utility must not exist in single-SF design, got uid=%s", uid)
+		}
+	}
+	assert.True(t, sawSF)
+	assert.True(t, sawClip)
+	assert.Equal(t, 1, sfCount, "exactly one Script Filter")
+
+	// connections: only SF → Clipboard
+	conns, _ := data["connections"].(map[string]any)
+	require.NotEmpty(t, conns)
+	assert.Len(t, conns, 1)
 }
 
 func findItemByTitle(items []wf.AlfredItem, title string) *wf.AlfredItem {
