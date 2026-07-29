@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
+	"io"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +20,9 @@ func TestParseHuntProviders(t *testing.T) {
 	assert.Nil(t, parseHuntProviders("unknown"))
 	assert.Equal(t, []huntProvider{providerExa}, parseHuntProviders("exa"))
 	assert.Equal(t, []huntProvider{providerTavily}, parseHuntProviders("tavily"))
+	assert.Equal(t, []huntProvider{providerKeenable}, parseHuntProviders("keenable"))
 	assert.Equal(t, []huntProvider{providerExa, providerTavily}, parseHuntProviders("exa,tavily"))
+	assert.Equal(t, []huntProvider{providerExa, providerTavily, providerKeenable}, parseHuntProviders("exa,tavily,keenable"))
 	assert.Equal(t, []huntProvider{providerExa}, parseHuntProviders(" exa , unknown "))
 }
 
@@ -589,4 +595,78 @@ func TestIsBlockedSubdomain(t *testing.T) {
 	blocked := map[string]bool{"facebook.com": true}
 	assert.True(t, isBlocked("m.facebook.com", blocked))
 	assert.True(t, isBlocked("www.facebook.com", blocked))
+}
+
+func TestDiscoverKeenableNoAPIKey(t *testing.T) {
+	got := discoverKeenable(&huntCategoryContext{
+		categoryType: "AI",
+		seedURLs:     []string{"https://simonwillison.net/"},
+	}, "")
+	assert.Nil(t, got)
+}
+
+func TestDiscoverKeenableMapsResults(t *testing.T) {
+	var gotKey string
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotKey = r.Header.Get("X-API-Key")
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.Equal(t, http.MethodPost, r.Method)
+		require.NoError(t, json.Unmarshal(body, &gotPayload))
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"query": "ignored",
+			"mode":  "pro",
+			"results": []map[string]any{
+				{
+					"title":   "Example Eng Blog",
+					"url":     "https://example-eng.blog/",
+					"snippet": "Original engineering writing",
+				},
+				{
+					"title":       "Fallback Desc Source",
+					"url":         "https://desc-only.example/",
+					"description": "only description present",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	oldURL := keenableSearchURL
+	keenableSearchURL = server.URL
+	defer func() { keenableSearchURL = oldURL }()
+
+	got := discoverKeenable(&huntCategoryContext{
+		categoryType: "AI",
+		seedURLs:     []string{"https://simonwillison.net/", "https://www.latent.space/"},
+		seedDescs:    []string{"simon", "latent"},
+		providerMax:  10,
+	}, "keen_test_key")
+
+	require.Len(t, got, 2)
+	assert.Equal(t, "keen_test_key", gotKey)
+	assert.Equal(t, "pro", gotPayload["mode"])
+	assert.Equal(t, float64(800), gotPayload["snippet_max_length"])
+	assert.Contains(t, gotPayload["query"], "AI")
+
+	assert.Equal(t, providerKeenable, got[0].Provider)
+	assert.Equal(t, "https://example-eng.blog/", got[0].URL)
+	assert.Equal(t, "Example Eng Blog", got[0].Title)
+	assert.InDelta(t, 0.65, got[0].Confidence, 0.001)
+	assert.Contains(t, got[0].Reason, "Keenable")
+	assert.Contains(t, got[0].Reason, "Original engineering writing")
+
+	assert.Equal(t, "https://desc-only.example/", got[1].URL)
+	assert.Contains(t, got[1].Reason, "only description present")
+
+	// Equal-weight keenable scoring
+	hc := &huntRunConfig{
+		providerWeights: map[string]float64{"exa": 1.0, "tavily": 1.0, "keenable": 1.0},
+		typeWeights:     map[string]float64{"source": 1.0},
+	}
+	c := &huntCandidate{Provider: providerKeenable, CandidateType: candSource, Confidence: 0.65}
+	assert.InDelta(t, 0.65, computeCandidateScore(c, hc), 0.01)
 }

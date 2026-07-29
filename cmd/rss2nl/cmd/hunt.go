@@ -27,8 +27,9 @@ import (
 type huntProvider string
 
 const (
-	providerExa    huntProvider = "exa"
-	providerTavily huntProvider = "tavily"
+	providerExa      huntProvider = "exa"
+	providerTavily   huntProvider = "tavily"
+	providerKeenable huntProvider = "keenable"
 )
 
 type candidateType string
@@ -173,16 +174,22 @@ func newHuntCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hunt",
 		Short: "Discover high-quality source URLs",
-		Long:  "Discover high-quality source URLs via Exa/Tavily providers and generate review reports.",
+		Long:  "Discover high-quality source URLs via Exa/Tavily/Keenable providers and generate review reports.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runHunt(&opts, os.Getenv("EXA_API_KEY"), os.Getenv("TAVILY_API_KEY"), output.GetFormat(cmd))
+			return runHunt(
+				&opts,
+				os.Getenv("EXA_API_KEY"),
+				os.Getenv("TAVILY_API_KEY"),
+				os.Getenv("KEENABLE_API_KEY"),
+				output.GetFormat(cmd),
+			)
 		},
 	}
 
 	cmd.Flags().StringVarP(&opts.config, "config", "c", "rss2nl.yml", "Config file path")
 	cmd.Flags().StringVar(&opts.state, "state", fileutil.CachePath("rss2nl/hunt/feeds-hunt-state.json"), "State file path")
 	cmd.Flags().StringArrayVar(&opts.category, "category", nil, "Category to scan")
-	cmd.Flags().StringVar(&opts.providers, "providers", "", "Providers: exa,tavily")
+	cmd.Flags().StringVar(&opts.providers, "providers", "", "Providers: exa,tavily,keenable")
 	cmd.Flags().IntVar(&opts.max, "max", 0, "Global candidate cap")
 	cmd.Flags().IntVar(&opts.perCat, "per-category", 0, "Candidate cap per category")
 	cmd.Flags().IntVar(&opts.providerMax, "provider-max", 0, "Raw candidates per provider per category")
@@ -205,7 +212,7 @@ func initHuntRun(opts *struct {
 	max, providerMax, seedLimit, perCat                        int
 	newOnly, dryRun, sendMail                                  bool
 },
-	exaAPIKey, tavilyAPIKey string,
+	exaAPIKey, tavilyAPIKey, keenableAPIKey string,
 ) (*huntRunConfig, error) {
 	cfg, err := rss.NewConfig(opts.config)
 	if err != nil {
@@ -226,6 +233,10 @@ func initHuntRun(opts *struct {
 	}
 	if len(providerNames) == 0 {
 		providerNames = []huntProvider{providerExa, providerTavily}
+		// Only enable Keenable by default when an API key is present.
+		if keenableAPIKey != "" {
+			providerNames = append(providerNames, providerKeenable)
+		}
 	}
 
 	// Apply categories.except filter
@@ -235,10 +246,12 @@ func initHuntRun(opts *struct {
 	// Build blocked set
 	blockedSet := buildBlockedSet(defaultBlockedDomains, cfg.HuntConfig.BlockedDomains, opts.blocked)
 
-	// Provider weights
+	// Provider weights (equal by default; typeWeights + confidence still differentiate).
 	providerWeights := cfg.HuntConfig.ProviderWeights
 	if providerWeights == nil {
-		providerWeights = map[string]float64{"exa": 1.0, "tavily": 0.9}
+		providerWeights = map[string]float64{
+			"exa": 1.0, "tavily": 1.0, "keenable": 1.0,
+		}
 	}
 	typeWeights := cfg.HuntConfig.TypeWeights
 	if typeWeights == nil {
@@ -250,8 +263,9 @@ func initHuntRun(opts *struct {
 	}
 
 	apiKeys := map[huntProvider]string{
-		providerExa:    exaAPIKey,
-		providerTavily: tavilyAPIKey,
+		providerExa:      exaAPIKey,
+		providerTavily:   tavilyAPIKey,
+		providerKeenable: keenableAPIKey,
 	}
 
 	// Apply config defaults when CLI flags are not set (0 = unset).
@@ -294,10 +308,10 @@ func runHunt(opts *struct {
 	max, providerMax, seedLimit, perCat                        int
 	newOnly, dryRun, sendMail                                  bool
 },
-	exaAPIKey, tavilyAPIKey string,
+	exaAPIKey, tavilyAPIKey, keenableAPIKey string,
 	format string,
 ) error {
-	hc, err := initHuntRun(opts, exaAPIKey, tavilyAPIKey)
+	hc, err := initHuntRun(opts, exaAPIKey, tavilyAPIKey, keenableAPIKey)
 	if err != nil {
 		return err
 	}
@@ -616,6 +630,9 @@ func discoverWithProvider(provider huntProvider, catCtx *huntCategoryContext, ap
 	case providerTavily:
 
 		return discoverTavily(catCtx, apiKey)
+	case providerKeenable:
+
+		return discoverKeenable(catCtx, apiKey)
 	}
 
 	return nil
@@ -722,6 +739,66 @@ func discoverTavily(catCtx *huntCategoryContext, apiKey string) []huntCandidate 
 			Reason:        buildReason(catCtx.categoryType, catCtx.seedDescs, "Tavily", r.Content),
 			EvidenceURLs:  catCtx.seedURLs[:min(3, len(catCtx.seedURLs))],
 			Confidence:    normalizeConfidence(r.Score, 0.62),
+		})
+	}
+
+	return candidates
+}
+
+// keenableSearchURL is overridable in tests.
+var keenableSearchURL = "https://api.keenable.ai/v1/search"
+
+func discoverKeenable(catCtx *huntCategoryContext, apiKey string) []huntCandidate {
+	if apiKey == "" {
+		return nil
+	}
+
+	// Reuse the Exa-style discovery query for minimal integration cost.
+	// Keenable tends to return listicles/articles; existing classify/blocklist/newOnly filter noise.
+	query := buildDiscoveryQuery(catCtx.categoryType, catCtx.seedURLs, catCtx.seedDescs, catCtx.recentTopics)
+
+	payload := map[string]any{
+		"query":              query,
+		"mode":               "pro",
+		"snippet_max_length": 800,
+	}
+
+	var result struct {
+		Results []struct {
+			URL         string `json:"url"`
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			Snippet     string `json:"snippet"`
+		} `json:"results"`
+	}
+	if _, err := httputil.PostJSONWithResult(
+		context.Background(),
+		keenableSearchURL,
+		payload,
+		&result,
+		httputil.RequestOptions{
+			Headers: map[string]string{"X-API-Key": apiKey},
+		},
+	); err != nil || len(result.Results) == 0 {
+		return nil
+	}
+
+	var candidates []huntCandidate
+	for _, r := range result.Results {
+		summary := r.Snippet
+		if summary == "" {
+			summary = r.Description
+		}
+		candidates = append(candidates, huntCandidate{
+			URL:           r.URL,
+			Title:         r.Title,
+			Category:      catCtx.categoryType,
+			CandidateType: classifyCandidate(r.URL, r.Title),
+			Provider:      providerKeenable,
+			Reason:        buildReason(catCtx.categoryType, catCtx.seedDescs, "Keenable", summary),
+			EvidenceURLs:  catCtx.seedURLs[:min(3, len(catCtx.seedURLs))],
+			// Keenable search results have no relevance score; use a mid fallback.
+			Confidence: normalizeConfidence(0, 0.65),
 		})
 	}
 
@@ -1072,7 +1149,7 @@ func parseHuntProviders(value string) []huntProvider {
 	for p := range strings.SplitSeq(value, ",") {
 		p = strings.TrimSpace(p)
 		switch huntProvider(p) {
-		case providerExa, providerTavily:
+		case providerExa, providerTavily, providerKeenable:
 			providers = append(providers, huntProvider(p))
 		}
 	}

@@ -58,7 +58,8 @@ hunt:
   # Provider weights for scoring
   providerWeights:
     exa: 1.0
-    tavily: 0.9
+    tavily: 1.0
+    keenable: 1.0
   # Candidate type weights
   typeWeights:
     source: 1.0
