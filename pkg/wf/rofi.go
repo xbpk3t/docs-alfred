@@ -17,9 +17,9 @@ func (f *RofiFormatter) Format(data any) (string, error) {
 		return strings.Join(v, "\n"), nil
 	case []AlfredItem:
 		// Convert Alfred items to Rofi format
-		var lines []string
-		for _, item := range v {
-			lines = append(lines, item.Title)
+		lines := make([]string, 0, len(v))
+		for i := range v {
+			lines = append(lines, v[i].Title)
 		}
 
 		return strings.Join(lines, "\n"), nil

@@ -14,8 +14,10 @@ type AlfredItem struct {
 	Subtitle     string                `json:"subtitle,omitempty"`
 	Arg          string                `json:"arg,omitempty"`
 	Autocomplete string                `json:"autocomplete,omitempty"`
-	QuicklookURL string                `json:"quicklookurl,omitempty"`
-	Valid        bool                  `json:"valid"`
+	// Match is used by Alfred when alfredfiltersresults is on (current-level fuzzy).
+	Match        string `json:"match,omitempty"`
+	QuicklookURL string `json:"quicklookurl,omitempty"`
+	Valid        bool   `json:"valid"`
 }
 
 // AlfredIcon represents an Alfred item icon.
