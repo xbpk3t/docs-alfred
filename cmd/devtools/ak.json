@@ -9,7 +9,7 @@
         "bundle_id": "com.devtools.lucas",
         "created_by": "",
         "web_address": "https://github.com/xbpk3t/docs-alfred",
-        "version": "0.2.0"
+        "version": "0.3.0"
     },
     "update": {
         "github_repo": "github.com/xbpk3t/docs-alfred"

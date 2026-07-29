@@ -21,7 +21,7 @@ type toolAction struct {
 type toolRunner func(action, input string) (string, error)
 
 // toolDef is the single registration for list + run.
-// Adding a tool: append here only — L1/L2/L3 all read this table.
+// Adding a tool: append here only — all stages read this table.
 type toolDef struct {
 	Run     toolRunner
 	Type    string
@@ -40,6 +40,27 @@ var toolsIndex = []toolDef{
 	},
 }
 
+// queryStage is the nested if depth implied by the current query.
+type queryStage int
+
+const (
+	stageTools queryStage = iota
+	stageActions
+	stageInput
+	stageRun
+)
+
+// parsedQuery is the single-SF state machine input.
+// Tokens: [tool] [action] [input...]; input keeps internal spaces.
+type parsedQuery struct {
+	Tool         *toolDef
+	Action       *toolAction
+	ToolFilter   string
+	ActionFilter string
+	Input        string
+	Stage        queryStage
+}
+
 // Execute creates and runs the root command.
 func Execute() {
 	err := newRootCmd().Execute()
@@ -51,59 +72,26 @@ func Execute() {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "devtools",
-		Short: "开发者工具箱（Alfred 链式 Script Filter）",
-		Long: `Alfred 链式多级选择：
+		Use:   "devtools [query...]",
+		Short: "开发者工具箱（单 Script Filter + query 状态机）",
+		Long: `Alfred 单 Script Filter：用 query 做 if → if → execute。
 
-  tools              第一级：列出 tool（选中后进入下一级 SF）
-  actions <tool>     第二级：列出 encode/decode
-  run <tool> <act> [input...]  第三级：提示输入或输出结果
+  (空)                         列出 tool（valid:false + autocomplete）
+  base64                       列出 encode/decode
+  base64 encode                提示输入
+  base64 encode hello world    执行并 valid:true 输出结果（交给 Clipboard）
 
-业务仍是嵌套：tool → action → input → 执行。
-Alfred 图：SF → Arg/Vars → SF → Arg/Vars → SF → Clipboard。
-Script 正文必须用环境变量 $tool / $action（不要写 {var:tool}）。`,
+中间层 valid:false：回车/Tab 把 autocomplete 写回同一 SF 的 query。
+最终层 valid:true：arg=结果，连到 Clipboard（只复制、不粘贴）。`,
 		SilenceUsage: true,
+		Args:         cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return printItems(handleQuery(strings.Join(args, " ")))
+		},
 	}
 
-	root.AddCommand(newToolsCmd())
-	root.AddCommand(newActionsCmd())
-	root.AddCommand(newRunCmd())
 	root.SetHelpCommand(&cobra.Command{Hidden: true})
-
 	return root
-}
-
-func newToolsCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "tools",
-		Short: "List tool types for Alfred level 1",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return printItems(listToolTypes())
-		},
-	}
-}
-
-func newActionsCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "actions <tool>",
-		Short: "List actions for a tool (Alfred level 2)",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return printItems(listActionsForType(args[0]))
-		},
-	}
-}
-
-func newRunCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "run <tool> <action> [input...]",
-		Short: "Prompt for input or execute (Alfred level 3)",
-		Args:  cobra.MinimumNArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			input := strings.Join(args[2:], " ")
-			return printItems(executeAction(args[0], args[1], input))
-		},
-	}
 }
 
 func printItems(items []wf.AlfredItem) error {
@@ -115,86 +103,241 @@ func printItems(items []wf.AlfredItem) error {
 	return err
 }
 
-// listToolTypes is Alfred level 1.
-// valid=true + arg=tool so selection leaves this SF and chains to the next.
-func listToolTypes() []wf.AlfredItem {
-	items := make([]wf.AlfredItem, 0, len(toolsIndex))
-	for _, t := range toolsIndex {
-		items = append(items, wf.AlfredItem{
-			Title:    t.Type,
-			Subtitle: "选择工具类型",
-			Arg:      t.Type,
-			Match:    t.Type,
-			Valid:    true,
-		})
+// handleQuery is the single-SF router (tool → action → input → run).
+func handleQuery(query string) []wf.AlfredItem {
+	p := parseQuery(query)
+	switch p.Stage {
+	case stageTools:
+		return listTools(p.ToolFilter)
+	case stageActions:
+		return listActions(p.Tool, p.ActionFilter)
+	case stageInput:
+		return promptInput(p.Tool, p.Action)
+	case stageRun:
+		return runTool(p.Tool, p.Action, p.Input)
+	default:
+		return listTools("")
 	}
-	return items
 }
 
-// listActionsForType is Alfred level 2 (after Arg/Vars stored tool).
-// Title is short; arg is only the action name for the next hop.
-func listActionsForType(typeName string) []wf.AlfredItem {
-	tool := findTool(typeName)
-	if tool == nil {
+// parseQuery implements:
+//
+//	""              → tools
+//	"b" / "base"    → tools (filter)
+//	"base64"        → actions
+//	"base64 en"     → actions (filter)
+//	"base64 encode" → input prompt
+//	"base64 encode hello world" → run (input keeps spaces)
+func parseQuery(query string) parsedQuery {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return parsedQuery{Stage: stageTools}
+	}
+
+	toolToken, rest := cutFirst(q)
+	tool, exactTool := matchTool(toolToken)
+	if tool == nil || !exactTool {
+		return parsedQuery{ToolFilter: toolToken, Stage: stageTools}
+	}
+
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		return parsedQuery{Tool: tool, Stage: stageActions}
+	}
+
+	actionToken, rest2 := cutFirst(rest)
+	action, exactAction := matchAction(tool, actionToken)
+	if action == nil || !exactAction {
+		return parsedQuery{
+			Tool:         tool,
+			ActionFilter: actionToken,
+			Stage:        stageActions,
+		}
+	}
+
+	input := strings.TrimSpace(rest2)
+	if input == "" {
+		return parsedQuery{Tool: tool, Action: action, Stage: stageInput}
+	}
+	return parsedQuery{Tool: tool, Action: action, Input: input, Stage: stageRun}
+}
+
+func cutFirst(s string) (first, rest string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", ""
+	}
+	i := strings.IndexByte(s, ' ')
+	if i < 0 {
+		return s, ""
+	}
+	return s[:i], strings.TrimSpace(s[i+1:])
+}
+
+func matchTool(token string) (*toolDef, bool) {
+	token = strings.ToLower(strings.TrimSpace(token))
+	if token == "" {
+		return nil, false
+	}
+	var prefix *toolDef
+	prefixCount := 0
+	for i := range toolsIndex {
+		t := &toolsIndex[i]
+		name := strings.ToLower(t.Type)
+		if name == token {
+			return t, true
+		}
+		if strings.HasPrefix(name, token) {
+			prefix = t
+			prefixCount++
+		}
+	}
+	// Unique prefix is not "exact" — stay on tools stage and filter.
+	if prefixCount == 1 {
+		return prefix, false
+	}
+	return nil, false
+}
+
+func matchAction(tool *toolDef, token string) (*toolAction, bool) {
+	token = strings.ToLower(strings.TrimSpace(token))
+	if tool == nil || token == "" {
+		return nil, false
+	}
+	var prefix *toolAction
+	prefixCount := 0
+	for i := range tool.Actions {
+		a := &tool.Actions[i]
+		name := strings.ToLower(a.Name)
+		title := strings.ToLower(a.Title)
+		if name == token || title == token {
+			return a, true
+		}
+		// base64 shorthands
+		if tool.Type == "base64" {
+			if token == "e" && name == "encode" {
+				return a, true
+			}
+			if token == "d" && name == "decode" {
+				return a, true
+			}
+		}
+		if strings.HasPrefix(name, token) || strings.HasPrefix(title, token) {
+			prefix = a
+			prefixCount++
+		}
+	}
+	if prefixCount == 1 {
+		return prefix, false
+	}
+	return nil, false
+}
+
+func listTools(filter string) []wf.AlfredItem {
+	filter = strings.ToLower(strings.TrimSpace(filter))
+	items := make([]wf.AlfredItem, 0, len(toolsIndex))
+	for _, t := range toolsIndex {
+		if filter != "" && !strings.Contains(strings.ToLower(t.Type), filter) {
+			continue
+		}
+		// valid:false + autocomplete → 回车把 query 扩成 "base64 "，仍在同一 SF。
+		items = append(items, wf.AlfredItem{
+			Title:        t.Type,
+			Subtitle:     "选择工具类型",
+			Autocomplete: t.Type + " ",
+			Match:        t.Type,
+			Valid:        false,
+		})
+	}
+	if len(items) == 0 {
 		return []wf.AlfredItem{{
-			Title:    fmt.Sprintf("未知工具: %s", typeName),
+			Title:    fmt.Sprintf("未知工具: %s", filter),
 			Subtitle: "可选: " + knownToolTypes(),
 			Valid:    false,
 		}}
 	}
+	return items
+}
 
+func listActions(tool *toolDef, filter string) []wf.AlfredItem {
+	if tool == nil {
+		return []wf.AlfredItem{{
+			Title:    "未知工具",
+			Subtitle: "可选: " + knownToolTypes(),
+			Valid:    false,
+		}}
+	}
+	filter = strings.ToLower(strings.TrimSpace(filter))
 	items := make([]wf.AlfredItem, 0, len(tool.Actions))
 	for _, a := range tool.Actions {
+		hay := strings.ToLower(a.Name + " " + a.Title + " " + a.Subtitle)
+		if filter != "" && !strings.Contains(hay, filter) && !strings.HasPrefix(strings.ToLower(a.Name), filter) {
+			continue
+		}
+		// Title 只有 encode/decode（列表干净）；路径在 autocomplete。
 		items = append(items, wf.AlfredItem{
-			Title:    a.Title,
-			Subtitle: a.Subtitle,
-			Arg:      a.Name,
-			Match:    a.Name + " " + a.Title + " " + a.Subtitle,
-			Valid:    true,
+			Title:        a.Title,
+			Subtitle:     a.Subtitle,
+			Autocomplete: tool.Type + " " + a.Name + " ",
+			Match:        a.Name + " " + a.Title + " " + a.Subtitle,
+			Valid:        false,
 		})
+	}
+	if len(items) == 0 {
+		return []wf.AlfredItem{{
+			Title:    fmt.Sprintf("未知操作: %s", filter),
+			Subtitle: fmt.Sprintf("%s · 可选 action 见上一级", tool.Type),
+			Valid:    false,
+		}}
 	}
 	return items
 }
 
-// executeAction is Alfred level 3 — always via toolDef.Run from the registry.
-func executeAction(typeName, actionName, input string) []wf.AlfredItem {
-	tool := findTool(typeName)
+func promptInput(tool *toolDef, action *toolAction) []wf.AlfredItem {
+	actionName := ""
+	if action != nil {
+		actionName = action.Name
+	}
+	typeName := ""
+	if tool != nil {
+		typeName = tool.Type
+	}
+	return []wf.AlfredItem{{
+		Title:    fmt.Sprintf("输入要 %s 的内容...", actionName),
+		Subtitle: fmt.Sprintf("%s · %s", typeName, actionName),
+		// Keep query at "tool action " so further typing appends input.
+		Autocomplete: typeName + " " + actionName + " ",
+		Valid:        false,
+	}}
+}
+
+func runTool(tool *toolDef, action *toolAction, input string) []wf.AlfredItem {
 	if tool == nil {
 		return []wf.AlfredItem{{
-			Title: fmt.Sprintf("不支持的工具: %s", typeName),
+			Title: "不支持的工具",
 			Valid: false,
 		}}
 	}
 	if tool.Run == nil {
 		return []wf.AlfredItem{{
-			Title: fmt.Sprintf("工具未注册执行器: %s", typeName),
+			Title: fmt.Sprintf("工具未注册执行器: %s", tool.Type),
+			Valid: false,
+		}}
+	}
+	if action == nil {
+		return []wf.AlfredItem{{
+			Title: "未知操作",
 			Valid: false,
 		}}
 	}
 
-	if input == "" {
-		return []wf.AlfredItem{{
-			Title:    fmt.Sprintf("输入要 %s 的内容...", actionName),
-			Subtitle: fmt.Sprintf("%s · %s", typeName, actionName),
-			Valid:    false,
-		}}
-	}
-
-	if !actionAllowed(tool, actionName) {
-		return []wf.AlfredItem{{
-			Title: fmt.Sprintf("未知操作: %s", actionName),
-			Valid: false,
-		}}
-	}
-
-	result, err := tool.Run(actionName, input)
+	result, err := tool.Run(action.Name, input)
 	if err != nil {
 		return []wf.AlfredItem{{
 			Title: fmt.Sprintf("❌ %v", err),
 			Valid: false,
 		}}
 	}
-
 	return []wf.AlfredItem{{
 		Title:    result,
 		Subtitle: "⏎ 复制结果",
@@ -212,31 +355,6 @@ func runBase64(action, input string) (string, error) {
 	default:
 		return "", fmt.Errorf("未知操作: %s (可用: encode, decode)", action)
 	}
-}
-
-func actionAllowed(tool *toolDef, name string) bool {
-	if tool == nil {
-		return false
-	}
-	for _, a := range tool.Actions {
-		if a.Name == name || a.Title == name {
-			return true
-		}
-	}
-	// base64 shorthands accepted by runBase64
-	if tool.Type == "base64" && (name == "e" || name == "d") {
-		return true
-	}
-	return false
-}
-
-func findTool(name string) *toolDef {
-	for i := range toolsIndex {
-		if toolsIndex[i].Type == name {
-			return &toolsIndex[i]
-		}
-	}
-	return nil
 }
 
 func knownToolTypes() string {
