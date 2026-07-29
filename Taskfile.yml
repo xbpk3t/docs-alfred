@@ -14,6 +14,11 @@ includes:
     dir: cmd/pwgen
     vars:
       BINARY_NAME: pwgen
+  devtools:
+    taskfile: .github/taskfile/Taskfile.alfred.yml
+    dir: cmd/devtools
+    vars:
+      BINARY_NAME: devtools
 
 tasks:
   lint:
