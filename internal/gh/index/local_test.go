@@ -9,75 +9,74 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const validGHYML = `- type: tool
-  tag: kernel
+const validSplitSection = `- type: tool
   topics:
     - topic: devops
+      kind: type
   repo:
     - url: https://github.com/acme/tool
       des: Tool repository
 `
 
-func TestLoadLocalGHYML_FileExists(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "gh.yml")
-	require.NoError(t, os.WriteFile(path, []byte(validGHYML), 0o600))
+func writeSplitGH(t *testing.T, root, tag, file, content string) {
+	t.Helper()
+	dir := filepath.Join(root, tag)
+	require.NoError(t, os.MkdirAll(dir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, file), []byte(content), 0o600))
+}
 
-	configRepos, err := LoadLocalGHYML(LocalGHConfig{Path: path})
+func TestLocalTopicCatalog_FromSourceDir(t *testing.T) {
+	src := t.TempDir()
+	writeSplitGH(t, src, "kernel", "tool.yml", validSplitSection)
+
+	candidates, err := LocalTopicCatalog(LocalGHConfig{SourceDir: src})
 	require.NoError(t, err)
-	require.Len(t, configRepos, 1)
-	assert.Equal(t, "kernel", configRepos[0].Tag)
+	require.NotEmpty(t, candidates)
+	assert.Equal(t, "kernel/tool/devops", candidates[0].Path)
 }
 
-func TestLoadLocalGHYML_LazyGenerate(t *testing.T) {
-	srcDir := t.TempDir()
-	tagDir := filepath.Join(srcDir, "kernel")
-	require.NoError(t, os.MkdirAll(tagDir, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "tool.yml"), []byte(`- type: tool
-  repo:
-    - url: https://github.com/acme/tool
-      des: Tool repository
-`), 0o600))
+func TestLocalTopicCatalog_ExcludesTemp(t *testing.T) {
+	src := t.TempDir()
+	writeSplitGH(t, src, "kernel", "mem.yml", `- type: mem
+  topics:
+    - topic: futex
+      kind: type
+    - topic: draft
+      kind: temp
+`)
 
-	outDir := t.TempDir()
-	outPath := filepath.Join(outDir, "sub", "gh.yml")
-
-	configRepos, err := LoadLocalGHYML(LocalGHConfig{Path: outPath, SourceDir: srcDir})
+	candidates, err := LocalTopicCatalog(LocalGHConfig{SourceDir: src})
 	require.NoError(t, err)
-	require.Len(t, configRepos, 1)
-	assert.Equal(t, "kernel", configRepos[0].Tag)
-
-	// Verify file was written
-	_, err = os.Stat(outPath)
-	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	assert.Equal(t, "kernel/mem/futex", candidates[0].Path)
 }
 
-func TestLoadLocalGHYML_NoFileNoSourceDir(t *testing.T) {
-	_, err := LoadLocalGHYML(LocalGHConfig{
-		Path:      filepath.Join(t.TempDir(), "nonexistent", "gh.yml"),
-		SourceDir: filepath.Join(t.TempDir(), "nonexistent-src"),
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "run `task data` to generate")
-}
-
-func TestLoadLocalGHYML_DefaultPath(t *testing.T) {
-	// Verify default path constant is set
-	assert.Equal(t, "/tmp/gh.yml", LocalGHYMLPath)
-}
-
-func TestLocalTopicCatalog_FileExists(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "gh.yml")
-	require.NoError(t, os.WriteFile(path, []byte(validGHYML), 0o600))
-
-	candidates, err := LocalTopicCatalog(LocalGHConfig{Path: path})
-	require.NoError(t, err)
-	assert.NotEmpty(t, candidates)
-}
-
-func TestLocalTopicCatalog_NoFile(t *testing.T) {
+func TestLocalTopicCatalog_MissingSourceDir(t *testing.T) {
 	_, err := LocalTopicCatalog(LocalGHConfig{
-		Path:      filepath.Join(t.TempDir(), "nonexistent", "gh.yml"),
 		SourceDir: filepath.Join(t.TempDir(), "nonexistent-src"),
 	})
 	require.Error(t, err)
+}
+
+func TestDefaultSourceDir(t *testing.T) {
+	assert.Equal(t, "data/gh", DefaultSourceDir)
+}
+
+func TestSourceDirFromWikiRoot(t *testing.T) {
+	assert.Equal(t, DefaultSourceDir, SourceDirFromWikiRoot(""))
+	assert.Equal(t, filepath.Join("/docs", DefaultSourceDir), SourceDirFromWikiRoot("/docs/wiki"))
+	assert.Equal(t, filepath.Join("/docs", DefaultSourceDir), SourceDirFromWikiRoot("/docs/wiki/"))
+}
+
+func TestLocalTopicCatalog_FromWikiRoot(t *testing.T) {
+	root := t.TempDir()
+	wiki := filepath.Join(root, "wiki")
+	src := filepath.Join(root, "data", "gh")
+	require.NoError(t, os.MkdirAll(wiki, 0o750))
+	writeSplitGH(t, src, "kernel", "tool.yml", validSplitSection)
+
+	candidates, err := LocalTopicCatalog(LocalGHConfig{WikiRoot: wiki})
+	require.NoError(t, err)
+	require.NotEmpty(t, candidates)
+	assert.Equal(t, "kernel/tool/devops", candidates[0].Path)
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
-	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
+	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 )
 
 const multiKindGhYAML = `- type: kernel
@@ -70,12 +70,12 @@ func TestParseDumpKinds(t *testing.T) {
 		t.Parallel()
 		set, err := parseDumpKinds("")
 		require.NoError(t, err)
-		require.Len(t, set, len(defaultDumpKinds))
-		for _, k := range defaultDumpKinds {
+		require.Len(t, set, len(ghindex.DefaultTopicKinds))
+		for _, k := range ghindex.DefaultTopicKinds {
 			_, ok := set[k]
 			assert.True(t, ok, k)
 		}
-		_, hasTemp := set[ghcheck.KindTemp]
+		_, hasTemp := set["temp"]
 		assert.False(t, hasTemp)
 	})
 

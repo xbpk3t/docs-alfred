@@ -819,7 +819,7 @@ func (c *Classifier) ghTopicCatalog() ([]ghindex.TopicCandidate, error) {
 }
 
 func (c *Classifier) defaultGHTopicsLoader() ([]ghindex.TopicCandidate, error) {
-	return ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
+	return ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{WikiRoot: c.WikiRoot})
 }
 
 func scanTopLevelCandidates(
@@ -1287,11 +1287,11 @@ func truncate(s string, maxLen int) string {
 
 // ClassifyContent classifies content to determine topic path.
 // This is a shared function that can be used by both wiki and ccx.
-// Topic candidates are loaded from the local gh.yml (/tmp/gh.yml).
+// Topic candidates are loaded from data/gh (sibling of wiki root).
 func ClassifyContent(content, wikiRoot string, aiConfig *ai.ClientConfig) (string, error) {
 	classifier := NewClassifier(aiConfig, wikiRoot, "")
 	classifier.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
-		return ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
+		return ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{WikiRoot: wikiRoot})
 	}
 
 	// Truncate content for classification (use first 2000 chars for speed)
@@ -1371,10 +1371,10 @@ func FormatTopicCandidatesGrouped(candidates []ghindex.TopicCandidate) string {
 	return strings.Join(lines, "\n")
 }
 
-// LoadClassificationCandidates loads topic candidates from gh.yml.
+// LoadClassificationCandidates loads topic candidates from data/gh beside wikiRoot.
 // Used by ccx session export for topic path validation.
 func LoadClassificationCandidates(wikiRoot string) []ghindex.TopicCandidate {
-	remote, err := ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{})
+	remote, err := ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{WikiRoot: wikiRoot})
 	if err != nil {
 		slog.Warn("Local topic catalog unavailable", "error", err)
 

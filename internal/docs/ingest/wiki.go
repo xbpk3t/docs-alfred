@@ -262,7 +262,7 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		deps.inbox = serviceInboxStore{}
 	}
 	if deps.validTopicPaths == nil {
-		deps.validTopicPaths = wikiwrite.LoadValidTopicPaths()
+		deps.validTopicPaths = wikiwrite.LoadValidTopicPaths(resolveWikiRoot(cfg))
 	}
 
 	return deps

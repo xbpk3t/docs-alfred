@@ -7,18 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
-	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
-
-// defaultDumpKinds is the formal topic map for dump (temp excluded).
-var defaultDumpKinds = []string{
-	ghcheck.KindMechanism,
-	ghcheck.KindType,
-	ghcheck.KindRepo,
-	ghcheck.KindTools,
-}
 
 type (
 	dumpType struct {
@@ -39,8 +30,8 @@ func newDumpCmd(dataPath *string) *cobra.Command {
 		Short: "Dump data metadata as JSON to stdout",
 		Long: `Load data from a domain's YAML files and output type-level metadata (type, tag, topics) as JSON.
 
-For domain gh, topics are filtered by topic.kind.
-Default: mech,type,repo,tools. Override with --kinds (comma-separated, e.g. mech,temp).`,
+For domain gh, topics use the same kind filter as TopicCatalog
+(default: mech,type,repo,tools). Override with --kinds.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			domain, err := parseDataDomainArg(args[0])
@@ -91,7 +82,7 @@ func runDomainDump(domain data.DataDomain, dataPath, kindsFlag string) error {
 
 		topics := make([]string, 0, len(r.Topics))
 		for i := range r.Topics {
-			if _, ok := kinds[strings.TrimSpace(r.Topics[i].Kind)]; !ok {
+			if !ghindex.KindAllowed(r.Topics[i].Kind, kinds) {
 				continue
 			}
 			topics = append(topics, r.Topics[i].Topic)
@@ -106,7 +97,7 @@ func runDomainDump(domain data.DataDomain, dataPath, kindsFlag string) error {
 }
 
 func parseDumpKinds(flag string) (map[string]struct{}, error) {
-	list := defaultDumpKinds
+	list := ghindex.DefaultTopicKinds
 	if raw := strings.TrimSpace(flag); raw != "" {
 		list = nil
 		for _, p := range strings.Split(raw, ",") {
@@ -118,17 +109,12 @@ func parseDumpKinds(flag string) (map[string]struct{}, error) {
 		}
 	}
 
-	set := make(map[string]struct{}, len(list))
-	for _, k := range list {
-		set[k] = struct{}{}
-	}
-
-	return set, nil
+	return ghindex.KindSet(list), nil
 }
 
 func kindsFlagOrDefault(flag string) string {
 	if strings.TrimSpace(flag) == "" {
-		return strings.Join(defaultDumpKinds, ",")
+		return strings.Join(ghindex.DefaultTopicKinds, ",")
 	}
 
 	return strings.TrimSpace(flag)
