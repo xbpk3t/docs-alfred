@@ -2,36 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>name</key>
-	<string>devtools</string>
-	<key>version</key>
-	<string>0.3.0</string>
 	<key>bundleid</key>
 	<string>com.devtools.lucas</string>
 	<key>category</key>
 	<string>Tools</string>
-	<key>createdby</key>
-	<string>lucas</string>
-	<key>description</key>
-	<string>开发者工具箱（单 Script Filter + query 状态机）</string>
-	<key>disabled</key>
-	<false/>
-	<key>readme</key>
-	<string>devtools — 单 Script Filter
-
-交互:
-  dd            → 列出 tool（base64）
-  选 base64     → query 变为 base64 （valid:false + autocomplete）
-  选 encode     → query 变为 base64 encode
-  输入内容      → 结果 ⏎ 复制（不粘贴；transient）
-
-Script: ./devtools "$1"
-路由全在 Go；中间层 valid:false，最终层 valid:true → Clipboard。
-
-alfredfiltersresults=false（脚本内按层 filter，避免整段 query 误滤）。
-</string>
-	<key>webaddress</key>
-	<string>https://github.com/xbpk3t/docs-alfred</string>
 	<key>connections</key>
 	<dict>
 		<key>SF-MAIN</key>
@@ -48,15 +22,17 @@ alfredfiltersresults=false（脚本内按层 filter，避免整段 query 误滤�
 			</dict>
 		</array>
 	</dict>
+	<key>createdby</key>
+	<string>lucas</string>
+	<key>description</key>
+	<string>开发者工具箱（单 Script Filter + query 状态机）</string>
+	<key>disabled</key>
+	<false/>
+	<key>name</key>
+	<string>devtools</string>
 	<key>objects</key>
 	<array>
 		<dict>
-			<key>uid</key>
-			<string>CLIPBOARD</string>
-			<key>type</key>
-			<string>alfred.workflow.output.clipboard</string>
-			<key>version</key>
-			<integer>3</integer>
 			<key>config</key>
 			<dict>
 				<key>autopaste</key>
@@ -68,14 +44,14 @@ alfredfiltersresults=false（脚本内按层 filter，避免整段 query 误滤�
 				<key>transient</key>
 				<true/>
 			</dict>
-		</dict>
-		<dict>
-			<key>uid</key>
-			<string>SF-MAIN</string>
 			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
+			<string>alfred.workflow.output.clipboard</string>
+			<key>uid</key>
+			<string>CLIPBOARD</string>
 			<key>version</key>
 			<integer>3</integer>
+		</dict>
+		<dict>
 			<key>config</key>
 			<dict>
 				<key>alfredfiltersresults</key>
@@ -117,8 +93,28 @@ alfredfiltersresults=false（脚本内按层 filter，避免整段 query 误滤�
 				<key>withspace</key>
 				<true/>
 			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>SF-MAIN</string>
+			<key>version</key>
+			<integer>3</integer>
 		</dict>
 	</array>
+	<key>readme</key>
+	<string>devtools — 单 Script Filter
+
+交互:
+  dd            → 列出 tool（base64）
+  选 base64     → query 变为 base64 （valid:false + autocomplete）
+  选 encode     → query 变为 base64 encode
+  输入内容      → 结果 ⏎ 复制（不粘贴；transient）
+
+Script: ./devtools "$1"
+路由全在 Go；中间层 valid:false，最终层 valid:true → Clipboard。
+
+alfredfiltersresults=false（脚本内按层 filter，避免整段 query 误滤）。
+</string>
 	<key>uidata</key>
 	<dict>
 		<key>CLIPBOARD</key>
@@ -160,5 +156,9 @@ alfredfiltersresults=false（脚本内按层 filter，避免整段 query 误滤�
 			<string>keyword</string>
 		</dict>
 	</array>
+	<key>version</key>
+	<string>0.3.0</string>
+	<key>webaddress</key>
+	<string>https://github.com/xbpk3t/docs-alfred</string>
 </dict>
 </plist>

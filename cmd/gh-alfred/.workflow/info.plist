@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>bundleid</key>
-	<string>com.91go.docs</string>
+	<string>com.gh-alfred.lucas</string>
 	<key>connections</key>
 	<dict>
 		<key>526CF41F-8FC3-49B8-85F8-BDE912B219B5</key>
@@ -77,13 +77,13 @@
 		</array>
 	</dict>
 	<key>createdby</key>
-	<string></string>
+	<string>lucas</string>
 	<key>description</key>
 	<string></string>
 	<key>disabled</key>
 	<false/>
 	<key>name</key>
-	<string>docs-alfred</string>
+	<string>gh-alfred</string>
 	<key>objects</key>
 	<array>
 		<dict>
@@ -277,53 +277,53 @@
 		<key>064939EF-FE9A-49CA-9041-4DCD57DC2561</key>
 		<dict>
 			<key>xpos</key>
-			<real>1145</real>
+			<real>1145.0</real>
 			<key>ypos</key>
-			<real>365</real>
+			<real>365.0</real>
 		</dict>
 		<key>18D6F575-4589-45B7-827B-B182C18E240A</key>
 		<dict>
 			<key>xpos</key>
-			<real>730</real>
+			<real>730.0</real>
 			<key>ypos</key>
-			<real>720</real>
+			<real>720.0</real>
 		</dict>
 		<key>526CF41F-8FC3-49B8-85F8-BDE912B219B5</key>
 		<dict>
 			<key>xpos</key>
-			<real>30</real>
+			<real>30.0</real>
 			<key>ypos</key>
-			<real>120</real>
+			<real>120.0</real>
 		</dict>
 		<key>84A29E68-2913-4FA2-B81F-C58B12823687</key>
 		<dict>
 			<key>xpos</key>
-			<real>90</real>
+			<real>90.0</real>
 			<key>ypos</key>
-			<real>355</real>
+			<real>355.0</real>
 		</dict>
 		<key>9B0707BD-6307-4CFB-AE42-098705A508C0</key>
 		<dict>
 			<key>xpos</key>
-			<real>1080</real>
+			<real>1080.0</real>
 			<key>ypos</key>
-			<real>135</real>
+			<real>135.0</real>
 		</dict>
 		<key>B53BF6E6-F247-47F7-976E-2AB8E78A683E</key>
 		<dict>
 			<key>xpos</key>
-			<real>1075</real>
+			<real>1075.0</real>
 			<key>ypos</key>
-			<real>745</real>
+			<real>745.0</real>
 		</dict>
 		<key>E90320D8-B030-405D-A597-184E2218A0BA</key>
 		<dict>
 			<key>note</key>
 			<string>github.com</string>
 			<key>xpos</key>
-			<real>270</real>
+			<real>270.0</real>
 			<key>ypos</key>
-			<real>115</real>
+			<real>115.0</real>
 		</dict>
 	</dict>
 	<key>userconfigurationconfig</key>
@@ -395,6 +395,6 @@
 	<key>version</key>
 	<string>2.0.0</string>
 	<key>webaddress</key>
-	<string>https://github.com/91go/docs-alfred</string>
+	<string>https://github.com/xbpk3t/docs-alfred</string>
 </dict>
 </plist>

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>bundleid</key>
-	<string>com.pwgen-alfred.lucas</string>
+	<string>com.pwgen.lucas</string>
 	<key>connections</key>
 	<dict>
 		<key>58DCDFD6-3D4C-4206-9FBC-776576E48604</key>
@@ -106,16 +106,16 @@
 		<key>58DCDFD6-3D4C-4206-9FBC-776576E48604</key>
 		<dict>
 			<key>xpos</key>
-			<real>290</real>
+			<real>290.0</real>
 			<key>ypos</key>
-			<real>190</real>
+			<real>190.0</real>
 		</dict>
 		<key>80DA6C7E-022A-4644-85BE-9F158FB36990</key>
 		<dict>
 			<key>xpos</key>
-			<real>685</real>
+			<real>685.0</real>
 			<key>ypos</key>
-			<real>155</real>
+			<real>155.0</real>
 		</dict>
 	</dict>
 	<key>userconfigurationconfig</key>
@@ -250,6 +250,6 @@
 	<key>version</key>
 	<string>0.1.0</string>
 	<key>webaddress</key>
-	<string>https://github.com/lucas/pwgen-alfred</string>
+	<string>https://github.com/xbpk3t/docs-alfred</string>
 </dict>
 </plist>

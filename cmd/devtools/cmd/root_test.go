@@ -218,6 +218,42 @@ func TestCobraWiring_SingleEntry(t *testing.T) {
 	}
 }
 
+// TestWorkflowPlist_Metadata locks Alfred gallery fields to the shared
+// docs-alfred convention (author/website) and per-workflow name/bundleid.
+func TestWorkflowPlist_Metadata(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("plutil only on darwin")
+	}
+	_, thisFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	plistPath := filepath.Join(filepath.Dir(thisFile), "..", ".workflow", "info.plist")
+	out, err := exec.Command("plutil", "-convert", "json", "-o", "-", plistPath).Output()
+	require.NoError(t, err)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(out, &data))
+
+	assert.Equal(t, "devtools", data["name"])
+	assert.Equal(t, "lucas", data["createdby"])
+	assert.Equal(t, "com.devtools.lucas", data["bundleid"])
+	assert.Equal(t, "https://github.com/xbpk3t/docs-alfred", data["webaddress"])
+}
+
+func TestAkJSON_Metadata(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "..", "ak.json"))
+	require.NoError(t, err)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(raw, &data))
+	wf, _ := data["workflow"].(map[string]any)
+	require.NotNil(t, wf)
+	assert.Equal(t, "devtools", wf["name"])
+	assert.Equal(t, "lucas", wf["created_by"])
+	assert.Equal(t, "com.devtools.lucas", wf["bundle_id"])
+	assert.Equal(t, "https://github.com/xbpk3t/docs-alfred", wf["web_address"])
+	assert.Equal(t, "github.com/xbpk3t/docs-alfred", data["go_mod_package"])
+}
+
 // TestWorkflowPlist_SingleSF guards the R1 architecture:
 // one Script Filter → Clipboard; script is ./devtools "$1"; no Arg/Vars chain.
 func TestWorkflowPlist_SingleSF(t *testing.T) {
