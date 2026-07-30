@@ -170,7 +170,7 @@ func TestRunWikiCheckMatchingStructure(t *testing.T) {
 
 	// Create matching structure
 	require.NoError(t, os.MkdirAll(filepath.Join(ghRoot, "algo"), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(ghRoot, "algo", "go.yml"), []byte("- type: go\n  topics:\n    - topic: test\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(ghRoot, "algo", "go.yml"), []byte("- type: go\n  topics:\n    - topic: test\n      kind: type\n"), 0o600))
 	require.NoError(t, os.MkdirAll(filepath.Join(wikiRoot, "algo", "go", "test"), 0o700))
 
 	result, err := RunWikiCheck(WikiCheckInput{GhRoot: ghRoot, WikiRoot: wikiRoot})
@@ -188,7 +188,7 @@ func TestRunWikiCheckTopicMismatch(t *testing.T) {
 
 	// YAML defines topic "terminal"
 	require.NoError(t, os.MkdirAll(filepath.Join(ghRoot, "desktop"), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(ghRoot, "desktop", "GUI.yml"), []byte("- type: GUI\n  topics:\n    - topic: terminal\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(ghRoot, "desktop", "GUI.yml"), []byte("- type: GUI\n  topics:\n    - topic: terminal\n      kind: type\n"), 0o600))
 	// Wiki has "terminal-zzz" instead of "terminal"
 	require.NoError(t, os.MkdirAll(filepath.Join(wikiRoot, "desktop", "GUI", "terminal-zzz"), 0o700))
 
@@ -211,7 +211,7 @@ func TestRunWikiCheckTopicMatch(t *testing.T) {
 
 	// YAML defines topic "terminal"
 	require.NoError(t, os.MkdirAll(filepath.Join(ghRoot, "desktop"), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(ghRoot, "desktop", "GUI.yml"), []byte("- type: GUI\n  topics:\n    - topic: terminal\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(ghRoot, "desktop", "GUI.yml"), []byte("- type: GUI\n  topics:\n    - topic: terminal\n      kind: type\n"), 0o600))
 	// Wiki has matching "terminal"
 	require.NoError(t, os.MkdirAll(filepath.Join(wikiRoot, "desktop", "GUI", "terminal"), 0o700))
 

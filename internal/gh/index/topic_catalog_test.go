@@ -12,7 +12,7 @@ func TestTopicCatalogIncludesConfigRepoTopics(t *testing.T) {
 		{
 			Tag:    "kernel",
 			Type:   "tool",
-			Topics: content.Topics{{Topic: "Config Topic"}},
+			Topics: content.Topics{{Topic: "Config Topic", Kind: "type"}},
 			Repos: Repos{
 				{
 					URL:            "https://github.com/acme/main-repo",
@@ -126,6 +126,29 @@ func TestAppendRepoTopicCandidates_NilRepo(t *testing.T) {
 	seen := make(map[string]bool)
 	repos := Repos{nil}
 	// Should not panic
-	appendRepoTopicCandidates(&candidates, seen, repos, "tag", "type")
+	appendRepoTopicCandidates(&candidates, seen, repos, "tag", "type", KindSet(DefaultTopicKinds))
 	assert.Empty(t, candidates)
+}
+
+func TestTopicCatalogExcludesTemp(t *testing.T) {
+	repos := ConfigRepos{
+		{
+			Tag:  "kernel",
+			Type: "mem",
+			Topics: content.Topics{
+				{Topic: "futex", Kind: "type"},
+				{Topic: "draft", Kind: "temp"},
+				{Topic: "bpf", Kind: "tools"},
+			},
+		},
+	}
+
+	catalog := repos.TopicCatalog()
+	assert.Len(t, catalog, 2)
+	assertCatalogHas(t, catalog, "kernel/mem/futex", "gh:config")
+	assertCatalogHas(t, catalog, "kernel/mem/bpf", "gh:config")
+
+	all := repos.TopicCatalogWithKinds(append(append([]string{}, DefaultTopicKinds...), "temp"))
+	assert.Len(t, all, 3)
+	assertCatalogHas(t, all, "kernel/mem/draft", "gh:config")
 }

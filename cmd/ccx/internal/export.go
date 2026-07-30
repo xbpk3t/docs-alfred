@@ -224,7 +224,7 @@ func classifyAndGenerateTitle(messages []session.Message, input *ExportInput) (s
 
 // mergedClassifyAndTitle makes a single AI call to determine topicPath, title, and engTitle.
 func mergedClassifyAndTitle(messages []session.Message, input *ExportInput) (string, string, string, error) {
-	prompt, candidates, err := renderClassifyTitlePrompt(messages)
+	prompt, candidates, err := renderClassifyTitlePrompt(messages, input.WikiRoot)
 	if err != nil {
 		return "", "", "", fmt.Errorf("render prompt: %w", err)
 	}
@@ -311,8 +311,8 @@ func hasTopicCandidate(candidates []ghindex.TopicCandidate, topicPath string) bo
 
 // renderClassifyTitlePrompt renders the classify-title.txt prompt template.
 // Returns the rendered prompt and topic candidates for validation.
-func renderClassifyTitlePrompt(messages []session.Message) (string, []ghindex.TopicCandidate, error) {
-	candidates := wikiclassify.LoadClassificationCandidates("")
+func renderClassifyTitlePrompt(messages []session.Message, wikiRoot string) (string, []ghindex.TopicCandidate, error) {
+	candidates := wikiclassify.LoadClassificationCandidates(wikiRoot)
 	if len(candidates) == 0 {
 		return "", nil, errors.New("no topic candidates available")
 	}

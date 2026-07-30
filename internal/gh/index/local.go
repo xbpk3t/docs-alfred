@@ -2,87 +2,57 @@ package ghindex
 
 import (
 	"fmt"
-	"log/slog"
-	"os"
-
-	yaml "github.com/goccy/go-yaml"
-	"github.com/samber/lo"
+	"path/filepath"
+	"strings"
 )
 
-const (
-	// LocalGHYMLPath is the default local path for gh.yml.
-	LocalGHYMLPath = "/tmp/gh.yml"
+// DefaultSourceDir is the split data/gh tree used as the sole source for local topic catalogs.
+const DefaultSourceDir = "data/gh"
 
-	localSourceDir = "data/gh"
-)
-
-// LocalGHConfig configures local gh.yml loading.
+// LocalGHConfig configures loading topics from the split data/gh directory.
 type LocalGHConfig struct {
-	// Path is the local gh.yml file path. Defaults to LocalGHYMLPath.
-	Path string
-	// SourceDir is the source data directory for lazy generation.
-	// Defaults to "data/gh" (relative to working directory).
+	// SourceDir is an explicit data/gh root. When empty, derived from WikiRoot or DefaultSourceDir.
 	SourceDir string
+	// WikiRoot is the wiki directory (…/docs/wiki). Used to resolve sibling …/docs/data/gh
+	// when SourceDir is empty.
+	WikiRoot string
 }
 
-// LoadLocalGHYML loads ConfigRepos from a local gh.yml file.
-// If the file does not exist and SourceDir is provided, it attempts
-// lazy generation from the source directory.
-func LoadLocalGHYML(cfg LocalGHConfig) (ConfigRepos, error) {
-	path := lo.Ternary(cfg.Path != "", cfg.Path, LocalGHYMLPath)
-
-	data, err := os.ReadFile(path)
+// SourceDirFromWikiRoot returns <parent-of-wiki>/data/gh.
+// Empty wikiRoot falls back to DefaultSourceDir (cwd-relative).
+func SourceDirFromWikiRoot(wikiRoot string) string {
+	wikiRoot = strings.TrimSpace(wikiRoot)
+	if wikiRoot == "" {
+		return DefaultSourceDir
+	}
+	abs, err := filepath.Abs(wikiRoot)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return lazyGenerate(cfg, path)
-		}
-
-		return nil, err
+		abs = wikiRoot
 	}
 
-	return unmarshalConfig(data, path)
+	return filepath.Join(filepath.Dir(abs), DefaultSourceDir)
 }
 
-func lazyGenerate(cfg LocalGHConfig, outPath string) (ConfigRepos, error) {
-	srcDir := lo.Ternary(cfg.SourceDir != "", cfg.SourceDir, localSourceDir)
-
-	if _, err := os.Stat(srcDir); os.IsNotExist(err) {
-		return nil, fmt.Errorf("local gh.yml not found at %s and source dir %s does not exist; run `task data` to generate", outPath, srcDir)
+func resolveSourceDir(cfg LocalGHConfig) string {
+	if src := strings.TrimSpace(cfg.SourceDir); src != "" {
+		return src
+	}
+	if wiki := strings.TrimSpace(cfg.WikiRoot); wiki != "" {
+		return SourceDirFromWikiRoot(wiki)
 	}
 
-	slog.Info("local gh.yml not found, generating from source", "src", srcDir, "out", outPath)
-
-	if _, err := WriteConfigYAMLFromDir(srcDir, outPath); err != nil {
-		return nil, fmt.Errorf("lazy generate gh.yml from %s: %w", srcDir, err)
-	}
-
-	data, err := os.ReadFile(outPath)
-	if err != nil {
-		return nil, fmt.Errorf("read generated gh.yml %s: %w", outPath, err)
-	}
-
-	return unmarshalConfig(data, outPath)
+	return DefaultSourceDir
 }
 
-func unmarshalConfig(data []byte, path string) (ConfigRepos, error) {
-	if err := ValidateConfigYAML(data); err != nil {
-		return nil, fmt.Errorf("invalid local gh.yml %s: %w", path, err)
-	}
-
-	var configRepos ConfigRepos
-	if err := yaml.Unmarshal(data, &configRepos); err != nil {
-		return nil, fmt.Errorf("parse local gh.yml %s: %w", path, err)
-	}
-
-	return configRepos, nil
-}
-
-// LocalTopicCatalog loads topic candidates from a local gh.yml file.
+// LocalTopicCatalog loads formal topic candidates via LoadConfigReposFromDir + TopicCatalog.
+// It always reads the split YAML tree; there is no /tmp/gh.yml cache path.
 func LocalTopicCatalog(cfg LocalGHConfig) ([]TopicCandidate, error) {
-	configRepos, err := LoadLocalGHYML(cfg)
+	src := resolveSourceDir(cfg)
+
+	repos, err := LoadConfigReposFromDir(src)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load gh topics from %s: %w", src, err)
 	}
 
-	return configRepos.TopicCatalog(), nil
+	return repos.TopicCatalog(), nil
 }
