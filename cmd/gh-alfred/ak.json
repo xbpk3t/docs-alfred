@@ -2,14 +2,14 @@
     "go_mod_package": "github.com/xbpk3t/docs-alfred",
     "workflow": {
         "folder": ".workflow",
-        "name": "pwgen",
+        "name": "gh-alfred",
         "description": "",
         "category_comment": "category: Tools, Internet, Productivity, Uncategorised",
         "category": "",
-        "bundle_id": "com.pwgen.lucas",
+        "bundle_id": "com.gh-alfred.lucas",
         "created_by": "lucas",
         "web_address": "https://github.com/xbpk3t/docs-alfred",
-        "version": "0.1.0"
+        "version": "2.0.0"
     },
     "update": {
         "github_repo": "github.com/xbpk3t/docs-alfred"
