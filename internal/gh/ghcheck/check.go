@@ -19,7 +19,6 @@ const (
 	KindType      = "type"
 	KindRepo      = "repo"
 	KindTools     = "tools"
-	KindHowto     = "howto"
 	KindTemp      = "temp"
 
 	// MaxTopicsPerSection is the max topics allowed under one section type.
@@ -27,7 +26,7 @@ const (
 )
 
 // AllowedKindsCSV is the allowed set shown in error messages.
-const AllowedKindsCSV = "mech|type|repo|tools|howto|temp"
+const AllowedKindsCSV = "mech|type|repo|tools|temp"
 
 // CheckResult holds gh validation issues.
 type CheckResult struct {
@@ -64,7 +63,7 @@ type sectionRules struct {
 
 type topicRules struct {
 	Topic string `validate:"required" filter:"trim" message:"required:topic is required"`
-	Kind  string `validate:"required|in:mech,type,repo,tools,howto,temp" filter:"trim" message:"required:kind is required"`
+	Kind  string `validate:"required|in:mech,type,repo,tools,temp" filter:"trim" message:"required:kind is required"`
 }
 
 type mdsccRules struct {

@@ -267,11 +267,25 @@ func TestRunCheck_RecursiveNested(t *testing.T) {
 	writeYAML(t, dir, "infra/tunnel.yml", `- type: tunnel
   topics:
     - topic: x
-      kind: howto
+      kind: tools
 `)
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.Empty(t, result.Issues)
+}
+
+func TestRunCheck_KindHowtoRejected(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, dir, "howto.yml", `- type: tunnel
+  topics:
+    - topic: x
+      kind: howto
+`)
+	result, err := RunCheck(dir)
+	require.NoError(t, err)
+	require.Len(t, result.Issues, 1)
+	assert.Contains(t, result.Issues[0].Message, `invalid kind "howto"`)
+	assert.Contains(t, result.Issues[0].Message, AllowedKindsCSV)
 }
 
 func TestRunCheck_KindTrimmed(t *testing.T) {
