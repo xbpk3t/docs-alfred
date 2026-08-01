@@ -24,6 +24,43 @@ func TestLoadConfigPreservesDefaultsWithPartialFile(t *testing.T) {
 	require.Equal(t, "wiki", cfg.Wiki.WikiRoot)
 	require.True(t, cfg.Wiki.Media.Enabled)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
+	require.Equal(t, "wiki compact", cfg.Compact.Title)
+	require.Equal(t, "LUC", cfg.Compact.Send.Linear.TeamKey)
+}
+
+func TestLoadConfigCompactSendBlock(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "wiki.yml")
+	content := `
+compact:
+  title: "my compact"
+  send:
+    resend:
+      mailTo: [a@example.com]
+    linear:
+      teamKey: ENG
+      stateName: Todo
+      priority: 1
+      assignee: none
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o600))
+
+	cfg, err := LoadConfig(configPath, "")
+	require.NoError(t, err)
+	require.Equal(t, "my compact", cfg.Compact.Title)
+	require.Equal(t, []string{"a@example.com"}, cfg.Compact.Send.Resend.MailTo)
+	require.Equal(t, "ENG", cfg.Compact.Send.Linear.TeamKey)
+	require.Equal(t, "Todo", cfg.Compact.Send.Linear.StateName)
+	require.Equal(t, 1, cfg.Compact.Send.Linear.Priority)
+	require.Equal(t, "none", cfg.Compact.Send.Linear.Assignee)
+}
+
+func TestLoadConfigCompactLinearDefaults(t *testing.T) {
+	cfg, err := LoadConfig("", "")
+	require.NoError(t, err)
+	require.Equal(t, "LUC", cfg.Compact.Send.Linear.TeamKey)
+	require.Equal(t, "In Review", cfg.Compact.Send.Linear.StateName)
+	require.Equal(t, 2, cfg.Compact.Send.Linear.Priority)
+	require.Equal(t, "viewer", cfg.Compact.Send.Linear.Assignee)
 }
 
 func TestLoadConfigAppliesWikiRootOverride(t *testing.T) {

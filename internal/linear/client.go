@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
@@ -291,6 +292,117 @@ func mapAssignedIssues(nodes []AssignedIssuesViewerUserAssignedIssuesIssueConnec
 	return issues
 }
 
+// CreateIssueInput is the payload for issueCreate.
+type CreateIssueInput struct {
+	TeamID      string
+	Title       string
+	Description string
+	// StateID sets workflow state (e.g. In Review). Empty leaves team default.
+	StateID string
+	// AssigneeID assigns the issue. Empty leaves unassigned.
+	AssigneeID string
+	// Priority is Linear priority: 0 none, 1 urgent, 2 high, 3 medium, 4 low.
+	// Negative means omit (API default).
+	Priority int
+}
+
+// CreateIssue creates a new Linear issue via issueCreate.
+// Always creates; callers that need dedup must implement it themselves.
+func (c *Client) CreateIssue(ctx context.Context, in *CreateIssueInput) (*Issue, error) {
+	if in == nil {
+		return nil, fmt.Errorf("create issue: input is required")
+	}
+	if strings.TrimSpace(in.TeamID) == "" {
+		return nil, fmt.Errorf("create issue: teamId is required")
+	}
+	if strings.TrimSpace(in.Title) == "" {
+		return nil, fmt.Errorf("create issue: title is required")
+	}
+
+	resp, err := issueCreateMutation(ctx, c.graphQLClient(), in)
+	if err != nil {
+		return nil, fmt.Errorf("create issue: %w", err)
+	}
+	if !resp.IssueCreate.Success || resp.IssueCreate.Issue.Id == "" {
+		return nil, fmt.Errorf("create issue: mutation reported success=%v id=%q",
+			resp.IssueCreate.Success, resp.IssueCreate.Issue.Id)
+	}
+
+	n := resp.IssueCreate.Issue
+	return &Issue{
+		ID:         n.Id,
+		Title:      n.Title,
+		Identifier: n.Identifier,
+		URL:        n.Url,
+		TeamName:   n.Team.Name,
+		TeamKey:    n.Team.Key,
+		Priority:   n.Priority,
+		StateName:  n.State.Name,
+		StateType:  n.State.Type,
+	}, nil
+}
+
+// ViewerID returns the user id for the authenticated API key.
+func (c *Client) ViewerID(ctx context.Context) (string, error) {
+	resp, err := viewerIDQuery(ctx, c.graphQLClient())
+	if err != nil {
+		return "", fmt.Errorf("query viewer id: %w", err)
+	}
+	id := strings.TrimSpace(resp.Viewer.Id)
+	if id == "" {
+		return "", fmt.Errorf("query viewer id: empty id")
+	}
+	return id, nil
+}
+
+// ResolveStateID finds a workflow state id on a team by exact name (case-sensitive).
+func (c *Client) ResolveStateID(ctx context.Context, teamID, stateName string) (string, error) {
+	teamID = strings.TrimSpace(teamID)
+	stateName = strings.TrimSpace(stateName)
+	if teamID == "" {
+		return "", fmt.Errorf("resolve state id: teamId is required")
+	}
+	if stateName == "" {
+		return "", fmt.Errorf("resolve state id: stateName is required")
+	}
+
+	resp, err := teamStatesQuery(ctx, c.graphQLClient(), teamID)
+	if err != nil {
+		return "", fmt.Errorf("resolve state id %q: %w", stateName, err)
+	}
+	for _, n := range resp.Team.States.Nodes {
+		if n.Name == stateName {
+			if n.Id == "" {
+				return "", fmt.Errorf("resolve state id %q: empty id", stateName)
+			}
+			return n.Id, nil
+		}
+	}
+	return "", fmt.Errorf("resolve state id %q: not found on team", stateName)
+}
+
+// ResolveTeamID looks up a team UUID by its key (e.g. "LUC").
+func (c *Client) ResolveTeamID(ctx context.Context, teamKey string) (string, error) {
+	teamKey = strings.TrimSpace(teamKey)
+	if teamKey == "" {
+		return "", fmt.Errorf("resolve team id: teamKey is required")
+	}
+
+	resp, err := teamsByKeyQuery(ctx, c.graphQLClient(), teamKey)
+	if err != nil {
+		return "", fmt.Errorf("resolve team id %s: %w", teamKey, err)
+	}
+	nodes := resp.Teams.Nodes
+	if len(nodes) == 0 {
+		return "", fmt.Errorf("resolve team id %s: not found", teamKey)
+	}
+	id := nodes[0].Id
+	if id == "" {
+		return "", fmt.Errorf("resolve team id %s: empty id", teamKey)
+	}
+	return id, nil
+}
+
 // GetIssueByIdentifier fetches a single issue by its identifier (e.g. "LUC-153")
 // including description and comments. Uses the issue(id:) query which accepts
 // both UUIDs and identifiers like "LUC-153".
@@ -438,6 +550,224 @@ query IssueByID ($id: String!, $commentsFirst: Int) {
 type issueByIDInput struct {
 	ID            string `json:"id"`
 	CommentsFirst int    `json:"commentsFirst"`
+}
+
+// --- issueCreate (hand-written, same style as IssueByIDQuery) ---
+
+type issueCreateResponse struct {
+	IssueCreate issueCreatePayload `json:"issueCreate"`
+}
+
+type issueCreatePayload struct {
+	Issue   issueCreateIssue `json:"issue"`
+	Success bool             `json:"success"`
+}
+
+type issueCreateIssue struct {
+	Team       issueCreateTeam  `json:"team"`
+	State      issueCreateState `json:"state"`
+	Id         string           `json:"id"`
+	Identifier string           `json:"identifier"`
+	Title      string           `json:"title"`
+	Url        string           `json:"url"`
+	Priority   float64          `json:"priority"`
+}
+
+type issueCreateTeam struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
+type issueCreateState struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type issueCreateVars struct {
+	Input map[string]any `json:"input"`
+}
+
+func issueCreateMutation(
+	ctx context.Context,
+	c graphql.Client,
+	in *CreateIssueInput,
+) (*issueCreateResponse, error) {
+	input := map[string]any{
+		"teamId": in.TeamID,
+		"title":  in.Title,
+	}
+	if strings.TrimSpace(in.Description) != "" {
+		input["description"] = in.Description
+	}
+	if strings.TrimSpace(in.StateID) != "" {
+		input["stateId"] = in.StateID
+	}
+	if strings.TrimSpace(in.AssigneeID) != "" {
+		input["assigneeId"] = in.AssigneeID
+	}
+	if in.Priority >= 0 {
+		input["priority"] = in.Priority
+	}
+
+	req := &graphql.Request{
+		OpName: "IssueCreate",
+		Query: `
+mutation IssueCreate ($input: IssueCreateInput!) {
+	issueCreate(input: $input) {
+		success
+		issue {
+			id
+			identifier
+			title
+			url
+			priority
+			state {
+				name
+				type
+			}
+			team {
+				name
+				key
+			}
+		}
+	}
+}
+`,
+		Variables: &issueCreateVars{Input: input},
+	}
+
+	data := &issueCreateResponse{}
+	resp := &graphql.Response{Data: data}
+	err := c.MakeRequest(ctx, req, resp)
+	return data, err
+}
+
+// --- viewer id ---
+
+type viewerIDResponse struct {
+	Viewer viewerIDNode `json:"viewer"`
+}
+
+type viewerIDNode struct {
+	Id string `json:"id"`
+}
+
+func viewerIDQuery(ctx context.Context, c graphql.Client) (*viewerIDResponse, error) {
+	req := &graphql.Request{
+		OpName: "ViewerID",
+		Query: `
+query ViewerID {
+	viewer {
+		id
+	}
+}
+`,
+	}
+	data := &viewerIDResponse{}
+	resp := &graphql.Response{Data: data}
+	err := c.MakeRequest(ctx, req, resp)
+	return data, err
+}
+
+// --- team workflow states ---
+
+type teamStatesResponse struct {
+	Team teamStatesTeam `json:"team"`
+}
+
+type teamStatesTeam struct {
+	Id     string               `json:"id"`
+	States teamStatesConnection `json:"states"`
+}
+
+type teamStatesConnection struct {
+	Nodes []teamStateNode `json:"nodes"`
+}
+
+type teamStateNode struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type teamStatesVars struct {
+	ID string `json:"id"`
+}
+
+func teamStatesQuery(ctx context.Context, c graphql.Client, teamID string) (*teamStatesResponse, error) {
+	req := &graphql.Request{
+		OpName: "TeamStates",
+		Query: `
+query TeamStates ($id: String!) {
+	team(id: $id) {
+		id
+		states {
+			nodes {
+				id
+				name
+				type
+			}
+		}
+	}
+}
+`,
+		Variables: &teamStatesVars{ID: teamID},
+	}
+	data := &teamStatesResponse{}
+	resp := &graphql.Response{Data: data}
+	err := c.MakeRequest(ctx, req, resp)
+	return data, err
+}
+
+// --- teams by key ---
+
+type teamsByKeyResponse struct {
+	Teams teamsByKeyConnection `json:"teams"`
+}
+
+type teamsByKeyConnection struct {
+	Nodes []teamsByKeyNode `json:"nodes"`
+}
+
+type teamsByKeyNode struct {
+	Id   string `json:"id"`
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+type teamsByKeyVars struct {
+	Filter map[string]any `json:"filter"`
+}
+
+func teamsByKeyQuery(
+	ctx context.Context,
+	c graphql.Client,
+	teamKey string,
+) (*teamsByKeyResponse, error) {
+	req := &graphql.Request{
+		OpName: "TeamsByKey",
+		Query: `
+query TeamsByKey ($filter: TeamFilter) {
+	teams(filter: $filter) {
+		nodes {
+			id
+			key
+			name
+		}
+	}
+}
+`,
+		Variables: &teamsByKeyVars{
+			Filter: map[string]any{
+				"key": map[string]any{"eq": teamKey},
+			},
+		},
+	}
+
+	data := &teamsByKeyResponse{}
+	resp := &graphql.Response{Data: data}
+	err := c.MakeRequest(ctx, req, resp)
+	return data, err
 }
 
 //go:generate go run github.com/Khan/genqlient genqlient.yaml

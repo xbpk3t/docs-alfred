@@ -23,17 +23,44 @@ const (
 	StatusDryRunFailure  = "dry_run_failure"
 )
 
-// Config holds wiki workflow configuration.
+// Config holds wiki workflow configuration shared by wiki subcommands.
 type Config struct {
-	AI     AIConfig     `yaml:"ai"`
-	Resend ResendConfig `yaml:"resend"`
-	Wiki   WikiConfig   `yaml:"wiki"`
+	Compact CompactConfig `yaml:"compact"`
+	AI      AIConfig      `yaml:"ai"`
+	Wiki    WikiConfig    `yaml:"wiki"`
 }
 
-// ResendConfig is optional mail settings for wiki compact (token only from env).
-type ResendConfig struct {
-	FromName string   `default:"wiki compact" yaml:"fromName"`
-	MailTo   []string `yaml:"mailTo"`
+// CompactConfig is wiki compact–only settings (delivery + brand).
+// Secrets stay in env: RESEND_TOKEN, LINEAR_API_KEY.
+type CompactConfig struct {
+	Title string            `default:"wiki compact" yaml:"title"`
+	Send  CompactSendConfig `yaml:"send"`
+}
+
+// CompactSendConfig groups dual-delivery channel parameters.
+type CompactSendConfig struct {
+	Resend CompactResendConfig `yaml:"resend"`
+	Linear CompactLinearConfig `yaml:"linear"`
+}
+
+// CompactResendConfig is Resend delivery for compact (token only from env).
+type CompactResendConfig struct {
+	MailTo []string `yaml:"mailTo"`
+}
+
+// CompactLinearConfig is Linear create-issue settings for compact
+// (API key only from env LINEAR_API_KEY).
+//
+// Defaults (overridable): teamKey=LUC, stateName=In Review, priority=2 (High),
+// assignee=viewer (current API key user). Set assignee to "none" to leave
+// unassigned, or a user UUID to pin someone else.
+type CompactLinearConfig struct {
+	TeamKey   string `default:"LUC"       yaml:"teamKey"`
+	StateName string `default:"In Review" yaml:"stateName"`
+	// Assignee: "viewer" | "me" | "none" | user UUID.
+	Assignee string `default:"viewer"    yaml:"assignee"`
+	// Priority: 0 none, 1 urgent, 2 high, 3 medium, 4 low.
+	Priority int `default:"2"         yaml:"priority" validate:"gte:0|lte:4"`
 }
 
 // WikiConfig contains wiki-specific workflow settings.

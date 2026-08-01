@@ -55,18 +55,23 @@ func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
 	assert.Equal(t, filepath.Join(cacheDir, "gh-d1-n0-s0.svg"), items[0].Icon.Path)
 	require.NotNil(t, items[0].Text)
 	assert.Equal(t, "https://github.com/acme/tool", items[0].Text.Copy)
-	require.Contains(t, items[0].Mods, "alt")
-	assert.Equal(t, "https://github.com/acme/tool", items[0].Mods["alt"].Arg)
+	// cmd: copy repo URL
 	require.Contains(t, items[0].Mods, "cmd")
-	assert.Equal(t, "https://docs.lucc.dev/#/data/gh/tool", items[0].Mods["cmd"].Arg)
+	assert.Equal(t, "https://github.com/acme/tool", items[0].Mods["cmd"].Arg)
+	assert.Equal(t, "复制URL: https://github.com/acme/tool", items[0].Mods["cmd"].Subtitle)
+	// shift: open docs
 	require.Contains(t, items[0].Mods, "shift")
 	assert.Equal(t, "https://docs.lucc.dev/#/data/gh/tool", items[0].Mods["shift"].Arg)
 	assert.Equal(t, "打开文档: https://docs.lucc.dev/#/data/gh/tool", items[0].Mods["shift"].Subtitle)
+	// no nix → no alt; ctrl removed
+	assert.NotContains(t, items[0].Mods, "alt")
+	assert.NotContains(t, items[0].Mods, "ctrl")
 
-	require.Contains(t, items[1].Mods, "alt")
-	assert.Equal(t, "https://github.com/acme/external-doc", items[1].Mods["alt"].Arg)
 	require.Contains(t, items[1].Mods, "cmd")
-	assert.Equal(t, "https://example.com/external-doc", items[1].Mods["cmd"].Arg)
+	assert.Equal(t, "https://github.com/acme/external-doc", items[1].Mods["cmd"].Arg)
+	require.Contains(t, items[1].Mods, "shift")
+	assert.Equal(t, "https://example.com/external-doc", items[1].Mods["shift"].Arg)
+	assert.NotContains(t, items[1].Mods, "alt")
 }
 
 func TestFormatAlfredItemsAddsGitHubSearchFallbackForQueries(t *testing.T) {

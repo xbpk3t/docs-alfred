@@ -63,8 +63,11 @@ func TestFormatAlfredItemsNoDocNoNixNoQuery(t *testing.T) {
 	require.Len(t, items, 1)
 
 	assert.Equal(t, "acme/tool", items[0].Title)
-	assert.NotContains(t, items[0].Mods, "cmd")
+	// cmd always copies repo URL
+	require.Contains(t, items[0].Mods, "cmd")
+	assert.Equal(t, "https://github.com/acme/tool", items[0].Mods["cmd"].Arg)
 	assert.NotContains(t, items[0].Mods, "shift")
+	assert.NotContains(t, items[0].Mods, "alt")
 	assert.NotContains(t, items[0].Mods, "ctrl")
 }
 
@@ -79,8 +82,9 @@ func TestFormatAlfredItemsWithNixURL(t *testing.T) {
 
 	items := FormatAlfredItems(repos, "https://docs.lucc.dev/", "")
 	require.Len(t, items, 1)
-	require.Contains(t, items[0].Mods, "ctrl")
-	assert.Equal(t, "github:acme/tool#tool", items[0].Mods["ctrl"].Arg)
+	require.Contains(t, items[0].Mods, "alt")
+	assert.Equal(t, "github:acme/tool#tool", items[0].Mods["alt"].Arg)
+	assert.NotContains(t, items[0].Mods, "ctrl")
 }
 
 func TestFormatAlfredItemsRelatedRepo(t *testing.T) {

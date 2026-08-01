@@ -251,6 +251,7 @@ type wikiCompactFlags struct {
 	minDeltaChars    int
 	minDeltaLines    int
 	sendMail         bool
+	createIssue      bool
 	dryRun           bool
 	skipAI           bool
 }
@@ -259,15 +260,16 @@ func newWikiCompactCmd() *cobra.Command {
 	var flags wikiCompactFlags
 	cmd := &cobra.Command{
 		Use:   wikiCompactCommandName,
-		Short: "Monthly compact notice: hot log topics → AI → optional Resend mail",
+		Short: "Monthly compact notice: hot log topics → AI → optional Resend + Linear",
 		Long: `Identify hot wiki topics (substantive committed log.md edits in the previous calendar month by default),
-ask AI whether a type:blog compact is warranted, and optionally email Top5 notices via Resend.
+ask AI whether a type:blog compact is warranted, and optionally deliver Top5 notices via Resend and/or a new Linear issue.
 
 Default window is last-month (natural previous month, Asia/Shanghai). Use --since 7d / 30d for rolling windows.
 
 This command never writes blog or log.md. Compact still means you write type:blog manually.
 
-Default is dry print (no mail). Pass --send-mail to deliver via Resend (RESEND_TOKEN + mailTo).`,
+Default is dry print (no side effects). Pass --send-mail (RESEND_TOKEN + compact.send.resend.mailTo) and/or --create-issue (LINEAR_API_KEY + compact.send.linear.teamKey).
+Brand from compact.title (From, mail subject prefix, issue title). Each run always creates a new Linear issue ({title} [YYYY-MM-DD]); no dedup against open issues.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWikiCompact(cmd, &flags)
@@ -282,7 +284,8 @@ Default is dry print (no mail). Pass --send-mail to deliver via Resend (RESEND_T
 	cmd.Flags().IntVar(&flags.minDeltaChars, "min-delta-chars", 40, "Min non-whitespace char delta for substantive edit")
 	cmd.Flags().IntVar(&flags.minDeltaLines, "min-delta-lines", 2, "Min non-empty line ± for substantive edit")
 	cmd.Flags().BoolVar(&flags.sendMail, "send-mail", false, "Send Resend email")
-	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Print result; do not send mail even with --send-mail")
+	cmd.Flags().BoolVar(&flags.createIssue, "create-issue", false, "Create a new Linear issue with the compact report")
+	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Print result; do not send mail or create issue")
 	cmd.Flags().BoolVar(&flags.skipAI, "skip-ai", false, "Skip AI (hot list only; for offline debug)")
 	cmd.Flags().StringVar(&flags.model, "model", "", "AI model override")
 
@@ -304,17 +307,37 @@ func runWikiCompact(cmd *cobra.Command, flags *wikiCompactFlags) error {
 		return err
 	}
 
-	token, fromName, mailTo, err := resolveCompactMail(cfg)
+	opts, err := buildCompactOptions(cfg, flags, win)
 	if err != nil {
 		return err
 	}
-	if flags.sendMail && !flags.dryRun {
-		if token == "" {
-			return errors.New("RESEND_TOKEN is required with --send-mail")
+
+	result, err := wikicompact.RunCompact(context.Background(), opts)
+	// Always print bodies/status even when delivery partially failed.
+	if printErr := printCompactResult(cmd.OutOrStdout(), result, flags); printErr != nil {
+		if err != nil {
+			return errors.Join(err, printErr)
 		}
-		if len(mailTo) == 0 {
-			return errors.New("resend mailTo is required (wiki.yml resend.mailTo or RESEND_MAIL_TO)")
-		}
+		return printErr
+	}
+	if err != nil {
+		return err
+	}
+	if result != nil && result.SoftError != nil {
+		return result.SoftError
+	}
+	return nil
+}
+
+func buildCompactOptions(cfg *wikiuc.Config, flags *wikiCompactFlags, win wikicompact.Window) (*wikicompact.CompactOptions, error) {
+	token, mailTo := resolveCompactMail(cfg)
+	if err := validateCompactMailFlags(flags, token, mailTo); err != nil {
+		return nil, err
+	}
+
+	linearCfg := resolveCompactLinear(cfg)
+	if err := validateCompactLinearFlags(flags, &linearCfg); err != nil {
+		return nil, err
 	}
 
 	aiCfg := ai.ConfigWithOverrides(cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Model)
@@ -322,7 +345,7 @@ func runWikiCompact(cmd *cobra.Command, flags *wikiCompactFlags) error {
 		aiCfg.Temperature = cfg.AI.Temperature
 	}
 
-	result, err := wikicompact.RunCompact(context.Background(), &wikicompact.CompactOptions{
+	return &wikicompact.CompactOptions{
 		WikiRoot:         cfg.Wiki.WikiRoot,
 		Window:           win,
 		TopHot:           flags.topHot,
@@ -331,60 +354,118 @@ func runWikiCompact(cmd *cobra.Command, flags *wikiCompactFlags) error {
 		MinDeltaChars:    flags.minDeltaChars,
 		MinDeltaLines:    flags.minDeltaLines,
 		SendMail:         flags.sendMail,
+		CreateIssue:      flags.createIssue,
 		DryRun:           flags.dryRun,
 		SkipAI:           flags.skipAI,
+		Title:            wikicompact.CompactBrand(cfg.Compact.Title),
 		AI:               aiCfg,
 		Mail: wikicompact.MailConfig{
-			Token:    token,
-			MailTo:   mailTo,
-			FromName: fromName,
+			Token:  token,
+			MailTo: mailTo,
 		},
-	})
-	if err != nil {
-		return err
-	}
+		Linear: linearCfg,
+	}, nil
+}
 
-	if err := printCompactResult(cmd.OutOrStdout(), result, flags); err != nil {
-		return err
+func validateCompactMailFlags(flags *wikiCompactFlags, token string, mailTo []string) error {
+	if !flags.sendMail || flags.dryRun {
+		return nil
 	}
-	if result.SoftError != nil {
-		return result.SoftError
+	if token == "" {
+		return errors.New("RESEND_TOKEN is required with --send-mail")
+	}
+	if len(mailTo) == 0 {
+		return errors.New("resend mailTo is required (wiki.yml compact.send.resend.mailTo or RESEND_MAIL_TO)")
 	}
 	return nil
 }
 
-func resolveCompactMail(cfg *wikiuc.Config) (token, fromName string, mailTo []string, err error) {
-	mailTo = cfg.Resend.MailTo
+func validateCompactLinearFlags(flags *wikiCompactFlags, linearCfg *wikicompact.LinearConfig) error {
+	if !flags.createIssue || flags.dryRun {
+		return nil
+	}
+	if linearCfg == nil || linearCfg.APIKey == "" {
+		return errors.New("LINEAR_API_KEY is required with --create-issue")
+	}
+	if linearCfg.TeamKey == "" {
+		return errors.New("linear teamKey is required (wiki.yml compact.send.linear.teamKey, default LUC)")
+	}
+	return nil
+}
+
+func resolveCompactMail(cfg *wikiuc.Config) (token string, mailTo []string) {
+	mailTo = cfg.Compact.Send.Resend.MailTo
 	if envTo := os.Getenv("RESEND_MAIL_TO"); envTo != "" {
 		mailTo = mail.ParseAddresses(envTo)
 	}
-	token = os.Getenv("RESEND_TOKEN")
-	fromName = cfg.Resend.FromName
-	if fromName == "" {
-		fromName = "wiki compact"
+	return os.Getenv("RESEND_TOKEN"), mailTo
+}
+
+// resolveCompactLinear maps yaml/env into LinearConfig raw fields, then applies
+// product defaults once via NormalizeLinearConfig (single source of defaults).
+func resolveCompactLinear(cfg *wikiuc.Config) wikicompact.LinearConfig {
+	lc := cfg.Compact.Send.Linear
+	out := wikicompact.LinearConfig{
+		APIKey:    os.Getenv("LINEAR_API_KEY"),
+		TeamKey:   lc.TeamKey,
+		StateName: lc.StateName,
+		Assignee:  lc.Assignee,
+		Priority:  lc.Priority,
 	}
-	return token, fromName, mailTo, nil
+	wikicompact.NormalizeLinearConfig(&out)
+	return out
 }
 
 func printCompactResult(w io.Writer, result *wikicompact.CompactResult, flags *wikiCompactFlags) error {
+	if result == nil {
+		return nil
+	}
 	if _, err := fmt.Fprint(w, result.TextBody); err != nil {
 		return err
 	}
-	switch {
-	case result.MailSent:
-		if _, err := fmt.Fprintln(w, "mail: sent"); err != nil {
-			return err
-		}
-	case flags.sendMail && flags.dryRun:
-		if _, err := fmt.Fprintln(w, "mail: dry-run (not sent)"); err != nil {
-			return err
-		}
-	case !flags.sendMail:
-		if _, err := fmt.Fprintln(w, "mail: skipped (pass --send-mail to deliver)"); err != nil {
+	for _, line := range compactDeliveryStatusLines(result, flags) {
+		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func compactDeliveryStatusLines(result *wikicompact.CompactResult, flags *wikiCompactFlags) []string {
+	var lines []string
+
+	switch {
+	case result.MailSent:
+		lines = append(lines, "mail: sent")
+	case flags.sendMail && flags.dryRun:
+		lines = append(lines, "mail: dry-run (not sent)")
+	case !flags.sendMail:
+		lines = append(lines, "mail: skipped (pass --send-mail to deliver)")
+	}
+
+	switch {
+	case result.IssueCreated:
+		line := "linear: created"
+		if result.IssueIdentifier != "" {
+			line += " " + result.IssueIdentifier
+		}
+		if result.IssueURL != "" {
+			line += " " + result.IssueURL
+		}
+		lines = append(lines, line)
+	case flags.createIssue && flags.dryRun:
+		line := "linear: dry-run (not created)"
+		if result.IssueTitle != "" {
+			line += " title=" + result.IssueTitle
+		}
+		lines = append(lines, line)
+	case flags.createIssue:
+		lines = append(lines, "linear: not created (see error)")
+	default:
+		lines = append(lines, "linear: skipped (pass --create-issue to deliver)")
+	}
+
+	return lines
 }
 
 // resolveWikiAPIKey populates cfg.AI.APIKey from environment variables when unset.
