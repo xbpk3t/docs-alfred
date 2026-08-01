@@ -27,39 +27,47 @@ type Window struct {
 
 // CompactOptions controls docs-cli wiki compact.
 type CompactOptions struct {
-	Now              func() time.Time
-	AI               *ai.ClientConfig
-	Window           Window
-	RepoRoot         string
-	WikiRoot         string
+	Now      func() time.Time
+	AI       *ai.ClientConfig
+	Window   Window
+	RepoRoot string
+	WikiRoot string
+	// Title is compact brand (From / subject / issue title); empty → DefaultBrand.
+	Title            string
 	Mail             MailConfig
+	Linear           LinearConfig
 	MinDeltaChars    int
 	MinDeltaLines    int
 	BulkLogThreshold int
 	TopNotice        int
 	TopHot           int
 	SendMail         bool
+	CreateIssue      bool
 	DryRun           bool
 	SkipAI           bool
 }
 
 // CompactResult is the pipeline outcome.
 type CompactResult struct {
-	Since      time.Time
-	Until      time.Time
-	SoftError  error
-	Subject    string
-	TextBody   string
-	HTMLBody   string
-	HotTopics  []HotTopic
-	Judged     []CompactRecommend
-	Notices    []CompactRecommend
-	AIFailures int
-	AISkipped  bool
-	MailSent   bool
+	Since           time.Time
+	Until           time.Time
+	SoftError       error
+	Subject         string
+	TextBody        string
+	HTMLBody        string
+	IssueTitle      string
+	IssueIdentifier string
+	IssueURL        string
+	HotTopics       []HotTopic
+	Judged          []CompactRecommend
+	Notices         []CompactRecommend
+	AIFailures      int
+	AISkipped       bool
+	MailSent        bool
+	IssueCreated    bool
 }
 
-// RunCompact executes hot detect → AI → optional Resend.
+// RunCompact executes hot detect → AI → optional Resend and/or Linear issue create.
 func RunCompact(ctx context.Context, opts *CompactOptions) (*CompactResult, error) {
 	if opts == nil {
 		opts = &CompactOptions{}
@@ -120,14 +128,48 @@ func RunCompact(ctx context.Context, opts *CompactOptions) (*CompactResult, erro
 		result.SoftError = fmt.Errorf("AI unavailable; hot list prepared")
 	}
 
-	if opts.SendMail && !opts.DryRun {
-		if err := SendCompactEmail(ctx, opts.Mail, result.Subject, result.HTMLBody); err != nil {
-			return result, fmt.Errorf("send mail: %w", err)
-		}
-		result.MailSent = true
+	if err := deliverCompact(ctx, opts, result, now); err != nil {
+		return result, err
 	}
 
 	return result, nil
+}
+
+// deliverCompact sends optional Resend mail and/or creates a Linear issue.
+// Channels are independent: one failure does not roll back the other.
+func deliverCompact(ctx context.Context, opts *CompactOptions, result *CompactResult, now time.Time) error {
+	var deliverErr error
+
+	if opts.SendMail && !opts.DryRun {
+		if err := SendCompactEmail(ctx, &opts.Mail, opts.Title, result.Subject, result.HTMLBody); err != nil {
+			deliverErr = fmt.Errorf("send mail: %w", err)
+		} else {
+			result.MailSent = true
+		}
+	}
+
+	if !opts.CreateIssue {
+		return deliverErr
+	}
+
+	result.IssueTitle = RenderCompactIssueTitle(opts.Title, now)
+	if opts.DryRun {
+		return deliverErr
+	}
+
+	issue, err := CreateCompactIssue(ctx, &opts.Linear, result.IssueTitle, result.TextBody)
+	if err != nil {
+		if deliverErr != nil {
+			return fmt.Errorf("%w; create linear issue: %w", deliverErr, err)
+		}
+		return fmt.Errorf("create linear issue: %w", err)
+	}
+	if issue != nil {
+		result.IssueCreated = true
+		result.IssueIdentifier = issue.Identifier
+		result.IssueURL = issue.URL
+	}
+	return deliverErr
 }
 
 func resolveRepoAndWiki(opts *CompactOptions) (repoRoot, wikiRel string, err error) {
@@ -245,6 +287,7 @@ func fillMailBodies(
 		Until:      win.End,
 		Notices:    result.Notices,
 		HotTopics:  hot,
+		Title:      opts.Title,
 		AISkipped:  aiSkipped,
 		SkipAI:     opts.SkipAI,
 		AIFailures: aiFailures,

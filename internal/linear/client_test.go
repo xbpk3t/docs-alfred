@@ -463,6 +463,152 @@ func TestGetUpdatedIssuesWithDetails_Error(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestCreateIssue_Validation(t *testing.T) {
+	c := NewClient("key", nil)
+	_, err := c.CreateIssue(context.Background(), &CreateIssueInput{Title: "x"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "teamId")
+
+	_, err = c.CreateIssue(context.Background(), &CreateIssueInput{TeamID: "tid"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "title")
+}
+
+func TestCreateIssue_WithMockServer(t *testing.T) {
+	server := mockLinearServer(t, func(r *http.Request) any {
+		return map[string]any{
+			"issueCreate": map[string]any{
+				"success": true,
+				"issue": map[string]any{
+					"id":         "iss-1",
+					"identifier": "LUC-999",
+					"title":      "wiki compact [2026-08-01]",
+					"url":        "https://linear.app/luckzzz/issue/LUC-999",
+					"priority":   2,
+					"state":      map[string]any{"name": "In Review", "type": "started"},
+					"team":       map[string]any{"name": "Luck", "key": "LUC"},
+				},
+			},
+		}
+	})
+	defer server.Close()
+
+	c := NewClientWithHTTP("test-key", nil, server.URL, server.Client())
+	issue, err := c.CreateIssue(context.Background(), &CreateIssueInput{
+		TeamID:      "team-uuid",
+		Title:       "wiki compact [2026-08-01]",
+		Description: "body",
+		StateID:     "state-review",
+		AssigneeID:  "user-1",
+		Priority:    2,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, issue)
+	assert.Equal(t, "iss-1", issue.ID)
+	assert.Equal(t, "LUC-999", issue.Identifier)
+	assert.Equal(t, "wiki compact [2026-08-01]", issue.Title)
+	assert.Equal(t, "https://linear.app/luckzzz/issue/LUC-999", issue.URL)
+	assert.Equal(t, "LUC", issue.TeamKey)
+	assert.Equal(t, "In Review", issue.StateName)
+	assert.Equal(t, float64(2), issue.Priority)
+}
+
+func TestViewerID_WithMockServer(t *testing.T) {
+	server := mockLinearServer(t, func(r *http.Request) any {
+		return map[string]any{"viewer": map[string]any{"id": "user-viewer"}}
+	})
+	defer server.Close()
+
+	c := NewClientWithHTTP("test-key", nil, server.URL, server.Client())
+	id, err := c.ViewerID(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "user-viewer", id)
+}
+
+func TestResolveStateID_WithMockServer(t *testing.T) {
+	server := mockLinearServer(t, func(r *http.Request) any {
+		return map[string]any{
+			"team": map[string]any{
+				"id": "team-1",
+				"states": map[string]any{
+					"nodes": []any{
+						map[string]any{"id": "s-todo", "name": "Todo", "type": "unstarted"},
+						map[string]any{"id": "s-review", "name": "In Review", "type": "started"},
+					},
+				},
+			},
+		}
+	})
+	defer server.Close()
+
+	c := NewClientWithHTTP("test-key", nil, server.URL, server.Client())
+	id, err := c.ResolveStateID(context.Background(), "team-1", "In Review")
+	require.NoError(t, err)
+	assert.Equal(t, "s-review", id)
+
+	_, err = c.ResolveStateID(context.Background(), "team-1", "Missing")
+	require.Error(t, err)
+}
+
+func TestCreateIssue_MutationFailure(t *testing.T) {
+	server := mockLinearServer(t, func(r *http.Request) any {
+		return map[string]any{
+			"issueCreate": map[string]any{
+				"success": false,
+				"issue":   map[string]any{"id": "", "identifier": "", "title": "", "url": "", "team": map[string]any{}},
+			},
+		}
+	})
+	defer server.Close()
+
+	c := NewClientWithHTTP("test-key", nil, server.URL, server.Client())
+	_, err := c.CreateIssue(context.Background(), &CreateIssueInput{
+		TeamID: "team-uuid",
+		Title:  "x",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "success=false")
+}
+
+func TestResolveTeamID_WithMockServer(t *testing.T) {
+	server := mockLinearServer(t, func(r *http.Request) any {
+		return map[string]any{
+			"teams": map[string]any{
+				"nodes": []any{
+					map[string]any{"id": "team-uuid-luc", "key": "LUC", "name": "Luck"},
+				},
+			},
+		}
+	})
+	defer server.Close()
+
+	c := NewClientWithHTTP("test-key", nil, server.URL, server.Client())
+	id, err := c.ResolveTeamID(context.Background(), "LUC")
+	require.NoError(t, err)
+	assert.Equal(t, "team-uuid-luc", id)
+}
+
+func TestResolveTeamID_NotFound(t *testing.T) {
+	server := mockLinearServer(t, func(r *http.Request) any {
+		return map[string]any{
+			"teams": map[string]any{"nodes": []any{}},
+		}
+	})
+	defer server.Close()
+
+	c := NewClientWithHTTP("test-key", nil, server.URL, server.Client())
+	_, err := c.ResolveTeamID(context.Background(), "NOPE")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestResolveTeamID_EmptyKey(t *testing.T) {
+	c := NewClient("key", nil)
+	_, err := c.ResolveTeamID(context.Background(), "  ")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "teamKey is required")
+}
+
 // --- Helper types for mock server ---
 
 type mockRoundTripper struct {

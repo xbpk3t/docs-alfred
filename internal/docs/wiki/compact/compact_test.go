@@ -1,11 +1,15 @@
 package compact
 
 import (
-	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/prompt"
+	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/prompt"
+	"github.com/xbpk3t/docs-alfred/internal/linear"
 	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/gitutil"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
@@ -159,6 +163,107 @@ func TestParseSince(t *testing.T) {
 	require.Equal(t, time.Duration(0), d)
 }
 
+func TestRenderCompactIssueTitle(t *testing.T) {
+	day := time.Date(2026, 8, 1, 5, 0, 0, 0, time.FixedZone("CST", 8*3600))
+	require.Equal(t, "wiki compact [2026-08-01]", RenderCompactIssueTitle("", day))
+	require.Equal(t, "wiki compact [2026-08-01]", RenderCompactIssueTitle("wiki compact", day))
+	require.Equal(t, "my brand [2026-08-01]", RenderCompactIssueTitle("my brand", day))
+}
+
+type fakeLinearCreator struct {
+	teamID   string
+	stateID  string
+	viewerID string
+	last     linear.CreateIssueInput
+	err      error
+}
+
+func (f *fakeLinearCreator) CreateIssue(_ context.Context, in *linear.CreateIssueInput) (*linear.Issue, error) {
+	if in == nil {
+		return nil, fmt.Errorf("nil input")
+	}
+	f.last = *in
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &linear.Issue{
+		ID:         "id-1",
+		Identifier: "LUC-100",
+		Title:      in.Title,
+		URL:        "https://linear.app/luckzzz/issue/LUC-100",
+		Priority:   float64(in.Priority),
+		StateName:  "In Review",
+		StateType:  "started",
+	}, nil
+}
+
+func (f *fakeLinearCreator) ResolveTeamID(_ context.Context, teamKey string) (string, error) {
+	if f.teamID != "" {
+		return f.teamID, nil
+	}
+	return "team-" + teamKey, nil
+}
+
+func (f *fakeLinearCreator) ResolveStateID(_ context.Context, teamID, stateName string) (string, error) {
+	if f.stateID != "" {
+		return f.stateID, nil
+	}
+	return "state-" + stateName, nil
+}
+
+func (f *fakeLinearCreator) ViewerID(_ context.Context) (string, error) {
+	if f.viewerID != "" {
+		return f.viewerID, nil
+	}
+	return "viewer-1", nil
+}
+
+func TestCreateCompactIssue_UsesTextBodyAndTitle(t *testing.T) {
+	fake := &fakeLinearCreator{teamID: "team-luc", stateID: "state-review", viewerID: "user-me"}
+	cfg := &LinearConfig{
+		APIKey:    "k",
+		TeamKey:   "LUC",
+		StateName: "In Review",
+		Priority:  2,
+		Assignee:  "viewer",
+		NewClient: func(apiKey string, teamKeys []string) LinearIssueCreator {
+			return fake
+		},
+	}
+	issue, err := CreateCompactIssue(context.Background(), cfg, "wiki compact [2026-08-01]", "hello body")
+	require.NoError(t, err)
+	require.Equal(t, "LUC-100", issue.Identifier)
+	require.Equal(t, "team-luc", fake.last.TeamID)
+	require.Equal(t, "wiki compact [2026-08-01]", fake.last.Title)
+	require.Equal(t, "hello body", fake.last.Description)
+	require.Equal(t, "state-review", fake.last.StateID)
+	require.Equal(t, "user-me", fake.last.AssigneeID)
+	require.Equal(t, 2, fake.last.Priority)
+}
+
+func TestCreateCompactIssue_AssigneeNone(t *testing.T) {
+	fake := &fakeLinearCreator{teamID: "team-luc", stateID: "state-review"}
+	cfg := &LinearConfig{
+		APIKey:    "k",
+		TeamID:    "team-luc",
+		StateName: "In Review",
+		Priority:  2,
+		Assignee:  "none",
+		NewClient: func(apiKey string, teamKeys []string) LinearIssueCreator {
+			return fake
+		},
+	}
+	_, err := CreateCompactIssue(context.Background(), cfg, "t", "b")
+	require.NoError(t, err)
+	require.Empty(t, fake.last.AssigneeID)
+}
+
+func TestCreateCompactIssue_RequiresAPIKey(t *testing.T) {
+	_, err := CreateCompactIssue(context.Background(), &LinearConfig{}, "t", "b")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "api key")
+}
+
 func TestNormalizeCompactOptsDefaults(t *testing.T) {
 	opts := CompactOptions{}
 	normalizeCompactOpts(&opts)
@@ -178,6 +283,14 @@ func TestRenderCompactSubject(t *testing.T) {
 		Date:    day,
 		Notices: []CompactRecommend{{Recommend: "yes"}, {Recommend: "yes"}},
 	}), "2 notices")
+	require.True(t, strings.HasPrefix(RenderCompactSubject(&CompactMailInput{Date: day}), "[wiki compact]"))
+	require.True(t, strings.HasPrefix(RenderCompactSubject(&CompactMailInput{Date: day, Title: "acme"}), "[acme]"))
+}
+
+func TestCompactBrand(t *testing.T) {
+	require.Equal(t, DefaultBrand, CompactBrand(""))
+	require.Equal(t, DefaultBrand, CompactBrand("  "))
+	require.Equal(t, "acme", CompactBrand(" acme "))
 }
 
 func TestRenderCompactHTMLWithNotices(t *testing.T) {

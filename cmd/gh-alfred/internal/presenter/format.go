@@ -31,20 +31,17 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredIt
 
 		item.Mods = make(map[string]*wf.AlfredMod)
 
-		// alt: copy repo URL (plist alt -> clipboard)
-		item.Mods["alt"] = &wf.AlfredMod{
+		// cmd → Clipboard (plist connects cmd modifier to Copy)
+		repoURL := ghindex.GetURL(repo)
+		item.Mods["cmd"] = &wf.AlfredMod{
 			Valid:    true,
-			Arg:      ghindex.GetURL(repo),
-			Subtitle: "复制URL: " + ghindex.GetURL(repo),
+			Arg:      repoURL,
+			Subtitle: "复制URL: " + repoURL,
 		}
 
+		// shift → Open URL (shared openurl connection; arg from JSON mods)
 		if repo.Doc != "" {
 			docURL := BuildDocURL(docsURL, repo.Doc)
-			item.Mods["cmd"] = &wf.AlfredMod{
-				Valid:    true,
-				Arg:      docURL,
-				Subtitle: "打开文档: " + docURL,
-			}
 			item.Mods["shift"] = &wf.AlfredMod{
 				Valid:    true,
 				Arg:      docURL,
@@ -52,8 +49,9 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredIt
 			}
 		}
 
+		// alt → Open URL (nix flake/attr when present)
 		if ghindex.HasNix(repo) {
-			item.Mods["ctrl"] = &wf.AlfredMod{
+			item.Mods["alt"] = &wf.AlfredMod{
 				Valid:    true,
 				Arg:      repo.NixURL,
 				Subtitle: "nixpkgs: " + repo.NixURL,

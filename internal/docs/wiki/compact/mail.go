@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	carbon "github.com/dromara/carbon/v2"
@@ -11,23 +12,35 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 )
 
+// DefaultBrand is the compact product brand used for From / subject / issue title.
+const DefaultBrand = "wiki compact"
+
 // MailConfig holds Resend send parameters (token from env only).
+// Brand/From comes from CompactOptions.Title via SendCompactEmail's brand arg.
 type MailConfig struct {
-	Token    string
-	FromName string
-	MailTo   []string
+	Token  string
+	MailTo []string
+}
+
+// CompactBrand returns title or DefaultBrand.
+func CompactBrand(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return DefaultBrand
+	}
+	return title
 }
 
 // SendCompactEmail sends HTML via Resend (thin wrapper over pkg/mail).
-func SendCompactEmail(ctx context.Context, cfg MailConfig, subject, htmlBody string) error {
-	fromName := cfg.FromName
-	if fromName == "" {
-		fromName = "wiki compact"
+// brand is CompactOptions.Title (From display name); empty → DefaultBrand.
+func SendCompactEmail(ctx context.Context, cfg *MailConfig, brand, subject, htmlBody string) error {
+	if cfg == nil {
+		return fmt.Errorf("mail config is required")
 	}
 	return mail.SendHTML(ctx, &mail.SendOptions{
 		Token:   cfg.Token,
 		To:      cfg.MailTo,
-		From:    mail.DefaultFrom(fromName),
+		From:    mail.DefaultFrom(CompactBrand(brand)),
 		Subject: subject,
 		HTML:    htmlBody,
 	})
@@ -37,15 +50,14 @@ func SendCompactEmail(ctx context.Context, cfg MailConfig, subject, htmlBody str
 type CompactMailInput struct {
 	Date       time.Time
 	Since      time.Time
-	Until      time.Time // exclusive upper bound; zero = open-ended / now
+	Until      time.Time
+	Title      string
 	Notices    []CompactRecommend
-	HotTopics  []HotTopic // full hot list (for AI-skipped or empty context)
+	HotTopics  []HotTopic
 	Params     CompactParams
 	AIFailures int
 	AISkipped  bool
-	// SkipAI is true when the operator passed --skip-ai (intentional offline).
-	// Distinct from AISkipped due to missing key / transport failure.
-	SkipAI bool
+	SkipAI     bool
 }
 
 // CompactParams are window thresholds shown in empty/footer.
@@ -59,18 +71,22 @@ type CompactParams struct {
 }
 
 func RenderCompactSubject(in *CompactMailInput) string {
+	if in == nil {
+		in = &CompactMailInput{}
+	}
+	brand := CompactBrand(in.Title)
 	day := carbon.CreateFromStdTime(in.Date).ToDateString()
 	if in.AISkipped {
 		if in.SkipAI {
-			return fmt.Sprintf("[wiki compact] %s — hot list (AI skipped via --skip-ai)", day)
+			return fmt.Sprintf("[%s] %s — hot list (AI skipped via --skip-ai)", brand, day)
 		}
-		return fmt.Sprintf("[wiki compact] %s — hot list (AI skipped)", day)
+		return fmt.Sprintf("[%s] %s — hot list (AI skipped)", brand, day)
 	}
 	n := len(in.Notices)
 	if n == 0 {
-		return fmt.Sprintf("[wiki compact] %s — none", day)
+		return fmt.Sprintf("[%s] %s — none", brand, day)
 	}
-	return fmt.Sprintf("[wiki compact] %s — %d notices", day, n)
+	return fmt.Sprintf("[%s] %s — %d notices", brand, day, n)
 }
 
 // RenderCompactHTML builds the email body via pkg/md and converts to HTML.
