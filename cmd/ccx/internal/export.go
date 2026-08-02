@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,14 +213,37 @@ func parseTranscript(resolved SessionRef) ([]session.Message, error) {
 }
 
 // classifyAndGenerateTitle performs a single AI call to classify content and generate titles.
-// Returns an error when the AI call fails or the topic path is invalid.
+// When AI returns an empty or invalid topic path, falls back to wiki root with a user-derived title.
 func classifyAndGenerateTitle(messages []session.Message, input *ExportInput) (string, string, string, error) {
 	topicPath, title, engTitle, err := mergedClassifyAndTitle(messages, input)
 	if err != nil {
-		return "", "", "", fmt.Errorf("classify and title: %w", err)
+		slog.Warn("AI classification failed, falling back to wiki root", "error", err)
+
+		return fallbackToWikiRoot(messages)
+	}
+	if topicPath == "" {
+		slog.Warn("AI returned empty topic path, exporting to wiki root",
+			"title", title, "engTitle", engTitle)
+
+		return "", title, engTitle, nil
 	}
 
 	return topicPath, title, engTitle, nil
+}
+
+// fallbackToWikiRoot derives a title from user messages and returns an empty topic path,
+// which downstream code interprets as "write to wiki root directory".
+func fallbackToWikiRoot(messages []session.Message) (string, string, string, error) {
+	title := fallbackTitleFromMessages(messages)
+	if title == "" {
+		title = "session-export"
+	}
+	engTitle := trimEngTitle(title)
+	if engTitle == "" {
+		engTitle = "session-export"
+	}
+
+	return "", title, engTitle, nil
 }
 
 // mergedClassifyAndTitle makes a single AI call to determine topicPath, title, and engTitle.
@@ -324,11 +348,11 @@ func renderClassifyTitlePrompt(messages []session.Message, wikiRoot string) (str
 		return "", nil, fmt.Errorf("parse prompt: %w", err)
 	}
 
+	// Use all user messages (no truncation) so the classifier has full context
+	// to match against topic candidates. Session-sized prompts are fine for a
+	// single lightweight classification call.
 	userMessages := extractUserMessages(messages)
-	content := strings.Join(selectMessages(userMessages, 3, 1), "\n\n")
-	if len(content) > 2000 {
-		content = content[:2000]
-	}
+	content := strings.Join(userMessages, "\n\n")
 
 	data := map[string]string{
 		"CandidateTree": wikiclassify.FormatTopicCandidatesGrouped(candidates),
@@ -373,26 +397,6 @@ func extractUserMessages(messages []session.Message) []string {
 	}
 
 	return userMessages
-}
-
-// selectMessages selects head messages from the beginning and tail messages from the end.
-// If head+tail exceeds len(messages), returns all messages without duplication.
-func selectMessages(messages []string, head, tail int) []string {
-	if head < 0 {
-		head = 0
-	}
-	if tail < 0 {
-		tail = 0
-	}
-	if len(messages) <= head+tail {
-		return messages
-	}
-
-	result := make([]string, 0, head+tail)
-	result = append(result, messages[:head]...)
-	result = append(result, messages[len(messages)-tail:]...)
-
-	return result
 }
 
 // trimTitle cleans up a semantic title (remove quotes, truncate to 50).
