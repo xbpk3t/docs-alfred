@@ -243,7 +243,6 @@ func newWikiCheckCmd() *cobra.Command {
 type wikiCompactFlags struct {
 	config           string
 	wikiRoot         string
-	since            string
 	model            string
 	topHot           int
 	topNotice        int
@@ -260,11 +259,11 @@ func newWikiCompactCmd() *cobra.Command {
 	var flags wikiCompactFlags
 	cmd := &cobra.Command{
 		Use:   wikiCompactCommandName,
-		Short: "Monthly compact notice: hot log topics → AI → optional Resend + Linear",
-		Long: `Identify hot wiki topics (substantive committed log.md edits in the previous calendar month by default),
+		Short: "Scheduled compact notice: hot log topics → AI → optional Resend + Linear",
+		Long: `Identify hot wiki topics (substantive committed log.md edits in the schedule window),
 ask AI whether a type:blog compact is warranted, and optionally deliver Top5 notices via Resend and/or a new Linear issue.
 
-Default window is last-month (natural previous month, Asia/Shanghai). Use --since 7d / 30d for rolling windows.
+Schedule is week-based, controlled by compact.schedule in the config (default 1 = weekly, 2 = every other week). Runs outside the schedule window are skipped with zero side effects — actions may trigger daily and the CLI decides whether to run.
 
 This command never writes blog or log.md. Compact still means you write type:blog manually.
 
@@ -277,7 +276,6 @@ Brand from compact.title (From, mail subject prefix, issue title). Each run alwa
 	}
 	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path (wiki.yml)")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
-	cmd.Flags().StringVar(&flags.since, "since", "last-month", "Window: last-month (default), or rolling 7d/30d/168h")
 	cmd.Flags().IntVar(&flags.topHot, "top-hot", 10, "Max hot topics to send to AI")
 	cmd.Flags().IntVar(&flags.topNotice, "top-notice", 5, "Max yes notices in email")
 	cmd.Flags().IntVar(&flags.bulkLogThreshold, "bulk-log-threshold", 10, "Ignore commits touching this many log.md paths")
@@ -302,12 +300,7 @@ func runWikiCompact(cmd *cobra.Command, flags *wikiCompactFlags) error {
 		cfg.AI.Model = flags.model
 	}
 
-	win, err := wikicompact.ParseWindow(flags.since, time.Now())
-	if err != nil {
-		return err
-	}
-
-	opts, err := buildCompactOptions(cfg, flags, win)
+	opts, err := buildCompactOptions(cfg, flags)
 	if err != nil {
 		return err
 	}
@@ -329,7 +322,7 @@ func runWikiCompact(cmd *cobra.Command, flags *wikiCompactFlags) error {
 	return nil
 }
 
-func buildCompactOptions(cfg *wikiuc.Config, flags *wikiCompactFlags, win wikicompact.Window) (*wikicompact.CompactOptions, error) {
+func buildCompactOptions(cfg *wikiuc.Config, flags *wikiCompactFlags) (*wikicompact.CompactOptions, error) {
 	token, mailTo := resolveCompactMail(cfg)
 	if err := validateCompactMailFlags(flags, token, mailTo); err != nil {
 		return nil, err
@@ -347,7 +340,9 @@ func buildCompactOptions(cfg *wikiuc.Config, flags *wikiCompactFlags, win wikico
 
 	return &wikicompact.CompactOptions{
 		WikiRoot:         cfg.Wiki.WikiRoot,
-		Window:           win,
+		WindowFn: func(now time.Time) (wikicompact.Window, bool, string) {
+			return wikicompact.ScheduleWindow(cfg.Compact.Schedule, now)
+		},
 		TopHot:           flags.topHot,
 		TopNotice:        flags.topNotice,
 		BulkLogThreshold: flags.bulkLogThreshold,
@@ -419,6 +414,10 @@ func resolveCompactLinear(cfg *wikiuc.Config) wikicompact.LinearConfig {
 func printCompactResult(w io.Writer, result *wikicompact.CompactResult, flags *wikiCompactFlags) error {
 	if result == nil {
 		return nil
+	}
+	if result.Skipped {
+		_, err := fmt.Fprintf(w, "wiki compact skipped: %s\n", result.SkipReason)
+		return err
 	}
 	if _, err := fmt.Fprint(w, result.TextBody); err != nil {
 		return err

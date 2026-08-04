@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/blog"
@@ -17,11 +16,11 @@ import (
 )
 
 // Window is a half-open commit time range [Start, End) used for hot detection.
-// End zero means open-ended (rolling windows use End=now).
+// End zero means open-ended.
 type Window struct {
 	Start time.Time
 	End   time.Time
-	// Label is a human/params token: "last-month", "7d", "30d", …
+	// Label is a human/params token: "2w", "1w", …
 	Label string
 }
 
@@ -29,7 +28,7 @@ type Window struct {
 type CompactOptions struct {
 	Now      func() time.Time
 	AI       *ai.ClientConfig
-	Window   Window
+	WindowFn func(now time.Time) (Window, bool, string)
 	RepoRoot string
 	WikiRoot string
 	// Title is compact brand (From / subject / issue title); empty → DefaultBrand.
@@ -49,19 +48,21 @@ type CompactOptions struct {
 
 // CompactResult is the pipeline outcome.
 type CompactResult struct {
-	Since           time.Time
 	Until           time.Time
+	Since           time.Time
 	SoftError       error
+	IssueTitle      string
+	IssueURL        string
 	Subject         string
 	TextBody        string
 	HTMLBody        string
-	IssueTitle      string
+	SkipReason      string
 	IssueIdentifier string
-	IssueURL        string
 	HotTopics       []HotTopic
 	Judged          []CompactRecommend
 	Notices         []CompactRecommend
 	AIFailures      int
+	Skipped         bool
 	AISkipped       bool
 	MailSent        bool
 	IssueCreated    bool
@@ -77,9 +78,15 @@ func RunCompact(ctx context.Context, opts *CompactOptions) (*CompactResult, erro
 	if opts.Now != nil {
 		now = opts.Now()
 	}
-	win := opts.Window
-	if win.Start.IsZero() {
-		win = LastMonthWindow(now)
+
+	win, inWindow, skipReason := opts.WindowFn(now)
+	if !inWindow {
+		return &CompactResult{
+			Since:      win.Start,
+			Until:      win.End,
+			Skipped:    true,
+			SkipReason: skipReason,
+		}, nil
 	}
 
 	repoRoot, wikiRel, err := resolveRepoAndWiki(opts)
@@ -133,6 +140,74 @@ func RunCompact(ctx context.Context, opts *CompactOptions) (*CompactResult, erro
 	}
 
 	return result, nil
+}
+
+// SkipReasonWindow reports why now falls outside the schedule window.
+// Not used directly by RunCompact (that uses WindowFn); kept for callers
+// that need a reason before constructing options.
+func SkipReasonWindow(schedule int, now time.Time) string {
+	return fmt.Sprintf("outside %dw window (schedule=%d)", schedule, schedule)
+}
+
+// ScheduleWindow returns the current schedule window [start, end) and whether
+// now falls inside it.
+//
+// Weeks start on Monday. Eligibility is by week index (whole weeks), not wall
+// clock: a run at any time during the current week is in the window iff
+// weekIndex(now) % schedule == 0.
+//
+// The window covers `schedule` full weeks ending at the end of the current
+// week: [curStart + 7d - schedule*7d, curStart + 7d). With schedule=1 the
+// window is just the current week (weekly); with schedule=2 it spans the
+// previous and current week (biweekly). actions may trigger daily —
+// out-of-window runs are skipped with zero side effects.
+//
+// Week start is computed from time.Weekday (Monday) in the wall-clock
+// location of now — no carbon global state is touched. Week index is an
+// integer day-count from the Monday anchor 2026-01-05, taken as calendar
+// dates (timezone-independent, DST-free).
+func ScheduleWindow(schedule int, now time.Time) (Window, bool, string) {
+	if schedule <= 0 {
+		schedule = 1
+	}
+	curStart := mondayOf(now)
+	curEnd := curStart.Add(7 * 24 * time.Hour)
+
+	win := Window{
+		Start: curEnd.Add(-time.Duration(schedule) * 7 * 24 * time.Hour),
+		End:   curEnd,
+		Label: strconv.Itoa(schedule) + "w",
+	}
+
+	if weekIndex(curStart)%schedule == 0 {
+		return win, true, ""
+	}
+	return Window{Label: win.Label}, false, SkipReasonWindow(schedule, now)
+}
+
+// mondayAnchor is the Monday 2026-01-05 (calendar date; zone ignored).
+var mondayAnchor = time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+
+// mondayOf returns the Monday 00:00 of now's week, keeping now's location
+// (Asia/Shanghai after carboninit.Setup). Pure weekday arithmetic — does not
+// read or mutate carbon's global week-start setting.
+func mondayOf(t time.Time) time.Time {
+	offset := (int(t.Weekday()) + 6) % 7 // days since Monday
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()).AddDate(0, 0, -offset)
+}
+
+// weekIndex returns the count of whole weeks between the mondayAnchor date and
+// the curStart date, using calendar dates only (zone-free).
+func weekIndex(curStart time.Time) int {
+	aY, aM, aD := mondayAnchor.Date()
+	cY, cM, cD := curStart.Date()
+	anchor := time.Date(aY, aM, aD, 0, 0, 0, 0, time.UTC)
+	cur := time.Date(cY, cM, cD, 0, 0, 0, 0, time.UTC)
+	days := int(cur.Sub(anchor).Hours() / 24)
+	if days < 0 {
+		return days / 7
+	}
+	return days / 7
 }
 
 // deliverCompact sends optional Resend mail and/or creates a Linear issue.
@@ -319,88 +394,4 @@ func normalizeCompactOpts(opts *CompactOptions) {
 	if opts.MinDeltaLines <= 0 {
 		opts.MinDeltaLines = 2
 	}
-}
-
-// LastMonthWindow returns the previous calendar month [start, end) in the
-// configured carbon timezone (Asia/Shanghai after carboninit.Setup).
-// Example: now=2026-07-15 → [2026-06-01 00:00, 2026-07-01 00:00).
-func LastMonthWindow(now time.Time) Window {
-	// carbon travelers mutate the receiver; Copy before SubMonth so end stays this month.
-	end := carbon.CreateFromStdTime(now).StartOfMonth()
-	start := end.Copy().SubMonth().StartOfMonth()
-	return Window{
-		Start: start.StdTime(),
-		End:   end.StdTime(),
-		Label: "last-month",
-	}
-}
-
-// RollingWindow returns [now-d, now) with label from formatDuration.
-func RollingWindow(now time.Time, d time.Duration) Window {
-	if d <= 0 {
-		d = 7 * 24 * time.Hour
-	}
-	return Window{
-		Start: now.Add(-d),
-		End:   now,
-		Label: formatDuration(d),
-	}
-}
-
-func formatDuration(d time.Duration) string {
-	days := int(d.Hours() / 24)
-	if days > 0 && d == time.Duration(days)*24*time.Hour {
-		return strconv.Itoa(days) + "d"
-	}
-	return d.String()
-}
-
-// ParseWindow parses a since token into a Window relative to now.
-//
-// Supported:
-//   - "" / "last-month" / "prev-month" → previous calendar month [start, end)
-//   - "7d", "30d", … → rolling [now-d, now)
-//   - Go duration strings ("168h", …) → rolling
-func ParseWindow(s string, now time.Time) (Window, error) {
-	s = strings.TrimSpace(strings.ToLower(s))
-	if s == "" || s == "last-month" || s == "prev-month" {
-		return LastMonthWindow(now), nil
-	}
-	if strings.HasSuffix(s, "d") {
-		n, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
-		if err != nil {
-			return Window{}, fmt.Errorf("invalid since %q", s)
-		}
-		if n <= 0 {
-			return Window{}, fmt.Errorf("invalid since %q", s)
-		}
-		return RollingWindow(now, time.Duration(n)*24*time.Hour), nil
-	}
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return Window{}, fmt.Errorf("invalid since %q: %w", s, err)
-	}
-	if d <= 0 {
-		return Window{}, fmt.Errorf("invalid since %q", s)
-	}
-	return RollingWindow(now, d), nil
-}
-
-// ParseSince is retained for callers that only need a rolling duration.
-// Prefer ParseWindow for last-month support.
-//
-// Deprecated: use ParseWindow. Empty / last-month returns 0 duration (use Window).
-func ParseSince(s string) (time.Duration, error) {
-	s = strings.TrimSpace(s)
-	if s == "" || strings.EqualFold(s, "last-month") || strings.EqualFold(s, "prev-month") {
-		return 0, nil
-	}
-	if strings.HasSuffix(s, "d") {
-		n, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
-		if err != nil {
-			return 0, fmt.Errorf("invalid since %q", s)
-		}
-		return time.Duration(n) * 24 * time.Hour, nil
-	}
-	return time.ParseDuration(s)
 }

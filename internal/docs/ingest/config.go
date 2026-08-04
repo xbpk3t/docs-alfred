@@ -30,11 +30,15 @@ type Config struct {
 	Wiki    WikiConfig    `yaml:"wiki"`
 }
 
-// CompactConfig is wiki compact–only settings (delivery + brand).
+// CompactConfig is wiki compact–only settings (delivery + brand + schedule).
 // Secrets stay in env: RESEND_TOKEN, LINEAR_API_KEY.
 type CompactConfig struct {
 	Title string            `default:"wiki compact" yaml:"title"`
 	Send  CompactSendConfig `yaml:"send"`
+	// Schedule is the compact cadence in weeks: 1 = weekly, 2 = every other
+	// week, … The CLI skips runs whose current week index is not a multiple
+	// of schedule, so actions may trigger daily — only in-window runs send.
+	Schedule int `default:"1" yaml:"schedule" validate:"gte:1"`
 }
 
 // CompactSendConfig groups dual-delivery channel parameters.

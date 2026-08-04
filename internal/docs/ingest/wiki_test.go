@@ -25,6 +25,7 @@ func TestLoadConfigPreservesDefaultsWithPartialFile(t *testing.T) {
 	require.True(t, cfg.Wiki.Media.Enabled)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
 	require.Equal(t, "wiki compact", cfg.Compact.Title)
+	require.Equal(t, 1, cfg.Compact.Schedule, "schedule defaults to weekly")
 	require.Equal(t, "LUC", cfg.Compact.Send.Linear.TeamKey)
 }
 
@@ -33,6 +34,7 @@ func TestLoadConfigCompactSendBlock(t *testing.T) {
 	content := `
 compact:
   title: "my compact"
+  schedule: 2
   send:
     resend:
       mailTo: [a@example.com]
@@ -47,6 +49,7 @@ compact:
 	cfg, err := LoadConfig(configPath, "")
 	require.NoError(t, err)
 	require.Equal(t, "my compact", cfg.Compact.Title)
+	require.Equal(t, 2, cfg.Compact.Schedule, "explicit schedule parsed")
 	require.Equal(t, []string{"a@example.com"}, cfg.Compact.Send.Resend.MailTo)
 	require.Equal(t, "ENG", cfg.Compact.Send.Linear.TeamKey)
 	require.Equal(t, "Todo", cfg.Compact.Send.Linear.StateName)

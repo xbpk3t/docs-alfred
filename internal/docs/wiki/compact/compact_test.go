@@ -99,68 +99,119 @@ func TestParseCompactJSONValidatesRecommend(t *testing.T) {
 	require.Error(t, err, "missing recommend")
 }
 
-func TestParseWindowLastMonth(t *testing.T) {
+func TestRunCompactSkipsOutsideWindow(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+	// schedule=2, week starting 07-27 (index 29, odd) → out of window.
+	now := time.Date(2026, 7, 29, 10, 0, 0, 0, loc)
+
+	res, err := RunCompact(context.Background(), &CompactOptions{
+		Now: func() time.Time { return now },
+		WindowFn: func(n time.Time) (Window, bool, string) {
+			return ScheduleWindow(2, n)
+		},
+		// RepoRoot points at a non-git temp dir: if the skip guard leaked,
+		// git log collection would error and fail the test.
+		RepoRoot: t.TempDir(),
+		SendMail: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.True(t, res.Skipped)
+	require.Contains(t, res.SkipReason, "outside 2w window")
+	require.False(t, res.MailSent)
+	require.False(t, res.IssueCreated)
+}
+
+func TestScheduleWindowWeekly(t *testing.T) {
 	// Asia/Shanghai after carboninit.Setup; pin wall clock mid-July.
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	require.NoError(t, err)
-	now := time.Date(2026, 7, 15, 12, 0, 0, 0, loc)
 
-	for _, token := range []string{"", "last-month", "prev-month", "LAST-MONTH"} {
-		win, err := ParseWindow(token, now)
-		require.NoError(t, err, token)
-		require.Equal(t, "last-month", win.Label, token)
-		// Start/end should be June 1 00:00 and July 1 00:00 Shanghai.
-		require.Equal(t, time.Date(2026, 6, 1, 0, 0, 0, 0, loc).Unix(), win.Start.Unix(), token)
-		require.Equal(t, time.Date(2026, 7, 1, 0, 0, 0, 0, loc).Unix(), win.End.Unix(), token)
+	cases := []struct {
+		name string
+		now  time.Time
+		in   bool
+		// expected start/end week boundary (Monday 00:00 Shanghai)
+		start, end time.Time
+	}{
+		{
+			name:  "monday",
+			now:   time.Date(2026, 7, 13, 9, 0, 0, 0, loc), // Monday
+			in:    true,
+			start: time.Date(2026, 7, 13, 0, 0, 0, 0, loc), // this Monday
+			end:   time.Date(2026, 7, 20, 0, 0, 0, 0, loc), // next Monday
+		},
+		{
+			name:  "midweek",
+			now:   time.Date(2026, 7, 15, 12, 0, 0, 0, loc), // Wednesday
+			in:    true,
+			start: time.Date(2026, 7, 13, 0, 0, 0, 0, loc),
+			end:   time.Date(2026, 7, 20, 0, 0, 0, 0, loc),
+		},
+		{
+			name:  "sunday",
+			now:   time.Date(2026, 7, 19, 23, 59, 59, 0, loc), // Sunday
+			in:    true,
+			start: time.Date(2026, 7, 13, 0, 0, 0, 0, loc),
+			end:   time.Date(2026, 7, 20, 0, 0, 0, 0, loc),
+		},
+		{
+			name:  "exact boundary",
+			now:   time.Date(2026, 7, 13, 0, 0, 0, 0, loc), // Monday 00:00
+			in:    true,
+			start: time.Date(2026, 7, 13, 0, 0, 0, 0, loc),
+			end:   time.Date(2026, 7, 20, 0, 0, 0, 0, loc),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			win, in, reason := ScheduleWindow(1, tc.now)
+			require.Equal(t, tc.in, in)
+			if in {
+				require.Equal(t, "1w", win.Label)
+				require.Equal(t, tc.start.Unix(), win.Start.Unix())
+				require.Equal(t, tc.end.Unix(), win.End.Unix())
+				require.Empty(t, reason)
+			} else {
+				require.Contains(t, reason, "outside")
+			}
+		})
 	}
 }
 
-func TestParseWindowLastMonthOnFirst(t *testing.T) {
+func TestScheduleWindowBiweekly(t *testing.T) {
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	require.NoError(t, err)
-	// Monthly CI runs ~05:00 on the 1st → still previous calendar month.
-	now := time.Date(2026, 7, 1, 5, 0, 0, 0, loc)
-	win, err := ParseWindow("last-month", now)
-	require.NoError(t, err)
-	require.Equal(t, time.Date(2026, 6, 1, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
-	require.Equal(t, time.Date(2026, 7, 1, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
+
+	// weekIndex anchor: 2026-01-05 (Monday). Weeks are indexed 0,1,2,…
+	//   2026-07-20 → index 28 (even), 2026-07-27 → index 29 (odd),
+	//   2026-08-03 → index 30 (even).
+	// schedule=2 triggers when weekIndex%2==0 → week 2026-07-20 and
+	// 2026-08-03 trigger; week 2026-07-27 skips.
+	inWin := time.Date(2026, 8, 5, 10, 0, 0, 0, loc) // Thu in week starting 08-03 (even, in)
+	win, in, reason := ScheduleWindow(2, inWin)
+	require.True(t, in)
+	require.Empty(t, reason)
+	require.Equal(t, "2w", win.Label)
+	// window = [07-27 00:00, 08-10 00:00) Shanghai (prev + current week).
+	require.Equal(t, time.Date(2026, 7, 27, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
+	require.Equal(t, time.Date(2026, 8, 10, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
+	require.Equal(t, 14*24*time.Hour, win.End.Sub(win.Start))
+
+	outWin := time.Date(2026, 7, 29, 10, 0, 0, 0, loc) // Wed in week starting 07-27 (odd, out)
+	_, in, reason = ScheduleWindow(2, outWin)
+	require.False(t, in)
+	require.Contains(t, reason, "outside 2w window")
 }
 
-func TestParseWindowLastMonthJanuary(t *testing.T) {
-	loc, err := time.LoadLocation("Asia/Shanghai")
-	require.NoError(t, err)
-	now := time.Date(2026, 1, 3, 5, 0, 0, 0, loc)
-	win, err := ParseWindow("last-month", now)
-	require.NoError(t, err)
-	require.Equal(t, time.Date(2025, 12, 1, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
-	require.Equal(t, time.Date(2026, 1, 1, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
-}
-
-func TestParseWindowRolling(t *testing.T) {
+func TestScheduleWindowDefaultsToOne(t *testing.T) {
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
-	win, err := ParseWindow("7d", now)
-	require.NoError(t, err)
-	require.Equal(t, "7d", win.Label)
-	require.Equal(t, now.Add(-7*24*time.Hour), win.Start)
-	require.Equal(t, now, win.End)
-
-	win, err = ParseWindow("30d", now)
-	require.NoError(t, err)
-	require.Equal(t, "30d", win.Label)
-	require.Equal(t, now.Add(-30*24*time.Hour), win.Start)
-
-	win, err = ParseWindow("168h", now)
-	require.NoError(t, err)
-	require.Equal(t, "7d", win.Label)
-}
-
-func TestParseSince(t *testing.T) {
-	d, err := ParseSince("7d")
-	require.NoError(t, err)
-	require.Equal(t, 7*24*time.Hour, d)
-	d, err = ParseSince("last-month")
-	require.NoError(t, err)
-	require.Equal(t, time.Duration(0), d)
+	win, in, _ := ScheduleWindow(0, now)
+	require.True(t, in)
+	require.Equal(t, "1w", win.Label)
+	require.Equal(t, 7*24*time.Hour, win.End.Sub(win.Start))
 }
 
 func TestRenderCompactIssueTitle(t *testing.T) {
@@ -361,7 +412,7 @@ func TestRenderCompactHTMLEmptyWithHotTable(t *testing.T) {
 	html, err := RenderCompactHTML(&in)
 	require.NoError(t, err)
 	require.Contains(t, html, "0 compact notices")
-	require.Contains(t, html, "this month")
+	require.Contains(t, html, "this window")
 	require.Contains(t, html, "topic")
 	require.Contains(t, html, "days")
 	require.Contains(t, html, "commits")
@@ -371,7 +422,7 @@ func TestRenderCompactHTMLEmptyWithHotTable(t *testing.T) {
 	text := RenderCompactText(&in)
 	require.Contains(t, text, "Hot topics · 1")
 	require.Contains(t, text, "infra/proxy")
-	require.Contains(t, text, "this month")
+	require.Contains(t, text, "this window")
 }
 
 func TestRenderCompactHTMLAISkipped(t *testing.T) {
