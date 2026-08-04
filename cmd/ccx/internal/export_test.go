@@ -18,19 +18,6 @@ func TestTrimTitle_TruncatesRunes(t *testing.T) {
 	require.NotContains(t, got, "�")
 }
 
-func TestFallbackTitleFromMessages(t *testing.T) {
-	msgs := []session.Message{
-		{Role: "assistant", Content: "ignore me"},
-		{Role: "user", Content: "## 日志分析与判断\n\n详细内容"},
-	}
-	got := fallbackTitleFromMessages(msgs)
-	require.Equal(t, "日志分析与判断", got)
-}
-
-func TestFallbackTitleFromMessages_Empty(t *testing.T) {
-	require.Empty(t, fallbackTitleFromMessages(nil))
-}
-
 func TestGenerateFrontmatter_UsesSource(t *testing.T) {
 	frontmatter, err := generateFrontmatter("Test Title", SourceCodex, "thread-123", "gpt-5.5", "https://linear.app/x/issue/LUC-1")
 
@@ -64,7 +51,7 @@ func TestGenerateFrontmatter_OmitsEmptyIssue(t *testing.T) {
 func TestNormalizeTopicPath(t *testing.T) {
 	wikiRoot := t.TempDir()
 	candidates := []ghindex.TopicCandidate{
-		{Path: "AI/LLM/claude-code"},
+		{Path: "AI/LLM-use/claude-code"},
 	}
 
 	tests := []struct {
@@ -76,8 +63,8 @@ func TestNormalizeTopicPath(t *testing.T) {
 	}{
 		{
 			name:      "valid candidate path",
-			topicPath: "AI/LLM/claude-code",
-			wantOK:    "AI/LLM/claude-code",
+			topicPath: "AI/LLM-use/claude-code",
+			wantOK:    "AI/LLM-use/claude-code",
 		},
 		{
 			name:      "empty path",

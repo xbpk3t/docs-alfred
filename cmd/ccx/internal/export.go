@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -213,37 +212,10 @@ func parseTranscript(resolved SessionRef) ([]session.Message, error) {
 }
 
 // classifyAndGenerateTitle performs a single AI call to classify content and generate titles.
-// When AI returns an empty or invalid topic path, falls back to wiki root with a user-derived title.
+// Any failure — AI call error, empty/invalid topic path, or missing title — is returned as an
+// error. There is no fallback: a non-expected classify result aborts the export.
 func classifyAndGenerateTitle(messages []session.Message, input *ExportInput) (string, string, string, error) {
-	topicPath, title, engTitle, err := mergedClassifyAndTitle(messages, input)
-	if err != nil {
-		slog.Warn("AI classification failed, falling back to wiki root", "error", err)
-
-		return fallbackToWikiRoot(messages)
-	}
-	if topicPath == "" {
-		slog.Warn("AI returned empty topic path, exporting to wiki root",
-			"title", title, "engTitle", engTitle)
-
-		return "", title, engTitle, nil
-	}
-
-	return topicPath, title, engTitle, nil
-}
-
-// fallbackToWikiRoot derives a title from user messages and returns an empty topic path,
-// which downstream code interprets as "write to wiki root directory".
-func fallbackToWikiRoot(messages []session.Message) (string, string, string, error) {
-	title := fallbackTitleFromMessages(messages)
-	if title == "" {
-		title = "session-export"
-	}
-	engTitle := trimEngTitle(title)
-	if engTitle == "" {
-		engTitle = "session-export"
-	}
-
-	return "", title, engTitle, nil
+	return mergedClassifyAndTitle(messages, input)
 }
 
 // mergedClassifyAndTitle makes a single AI call to determine topicPath, title, and engTitle.
@@ -268,41 +240,21 @@ func mergedClassifyAndTitle(messages []session.Message, input *ExportInput) (str
 		return "", "", "", fmt.Errorf("parse AI response: %w", err)
 	}
 
-	title := trimTitle(result.Title)
-	engTitle := trimEngTitle(result.EngTitle)
-	if title == "" {
-		title = fallbackTitleFromMessages(messages)
-	}
-	if engTitle == "" {
-		engTitle = trimEngTitle(title)
-	}
-	if engTitle == "" || engTitle == "untitled" {
-		engTitle = "session-export"
-	}
-	if title == "" {
-		title = engTitle
-	}
 	topicPath, err := normalizeTopicPath(input.WikiRoot, result.TopicPath, candidates)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	return topicPath, title, engTitle, nil
-}
-
-// fallbackTitleFromMessages builds a title from the first substantive user message
-// when the AI returns an empty title.
-func fallbackTitleFromMessages(messages []session.Message) string {
-	for _, msg := range messages {
-		if msg.Role != roleUser {
-			continue
-		}
-		if t := textutil.FirstLineTitle(msg.Content, 50); t != "" {
-			return trimTitle(t)
-		}
+	title := trimTitle(result.Title)
+	engTitle := trimEngTitle(result.EngTitle)
+	if title == "" {
+		return "", "", "", errors.New("AI returned empty title")
+	}
+	if engTitle == "" || engTitle == "untitled" {
+		return "", "", "", fmt.Errorf("AI returned unusable engTitle %q", result.EngTitle)
 	}
 
-	return ""
+	return topicPath, title, engTitle, nil
 }
 
 func normalizeTopicPath(wikiRoot, topicPath string, candidates []ghindex.TopicCandidate) (string, error) {

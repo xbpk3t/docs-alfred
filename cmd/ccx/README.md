@@ -87,13 +87,11 @@ export 过程中有两个 AI 调用：
 
 ## 已知问题
 
-- **AI 分类 API 间歇性超时**（45 秒），超时时 fallback 到空路径（写入 wiki 根目录）
-- **分类路径未验证** — 返回的 topic path 可能不存在于 wiki 目录中
+- **AI 分类 API 间歇性超时**（45 秒）— 分类/标题结果非预期（AI 调用失败、topic path 无效或为空、title/engTitle 为空）直接报错退出，不写入 wiki
 
 ## 改进方向
 
 - AI 分类增加重试机制
-- 验证分类路径是否存在于 wiki
 - 缓存分类结果
 - 更详细的性能指标日志
 
@@ -111,4 +109,4 @@ ccx/
     └── session_ref.go   # agent session/thread 解析
 ```
 
-设计要点：`cmd/` 处理 CLI 参数和输出，`internal/` 封装核心逻辑，错误处理带 fallback 机制。
+设计要点：`cmd/` 处理 CLI 参数和输出，`internal/` 封装核心逻辑；分类/标题结果非预期时报错退出，无 fallback。
