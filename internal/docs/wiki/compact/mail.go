@@ -115,7 +115,7 @@ func buildCompactDocument(in *CompactMailInput) *md.Document {
 			doc.Add(hotTopicsSection(in.HotTopics))
 		}
 	case len(in.Notices) == 0:
-		doc.Add(md.Paragraph("0 compact notices this month."))
+		doc.Add(md.Paragraph("0 compact notices in this window."))
 		if len(in.HotTopics) > 0 {
 			doc.Add(md.Paragraph(fmt.Sprintf(
 				"%d hot topic(s) after filters; AI recommended none (or all cooled).",
