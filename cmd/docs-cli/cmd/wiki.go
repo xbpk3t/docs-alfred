@@ -263,7 +263,7 @@ func newWikiCompactCmd() *cobra.Command {
 		Long: `Identify hot wiki topics (substantive committed log.md edits in the schedule window),
 ask AI whether a type:blog compact is warranted, and optionally deliver Top5 notices via Resend and/or a new Linear issue.
 
-Schedule is week-based, controlled by compact.schedule in the config (default 1 = weekly, 2 = every other week). Runs outside the schedule window are skipped with zero side effects — actions may trigger daily and the CLI decides whether to run.
+Schedule is week-based, controlled by compact.schedule in the config (default 1 = weekly, 2 = every other week). A run fires only on the schedule day (Saturday) of an eligible week; any other day is skipped with zero side effects — actions may trigger daily and the CLI decides whether to run.
 
 This command never writes blog or log.md. Compact still means you write type:blog manually.
 
