@@ -102,8 +102,9 @@ func TestParseCompactJSONValidatesRecommend(t *testing.T) {
 func TestRunCompactSkipsOutsideWindow(t *testing.T) {
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	require.NoError(t, err)
-	// schedule=2, week starting 07-27 (index 29, odd) → out of window.
-	now := time.Date(2026, 7, 29, 10, 0, 0, 0, loc)
+	// Wednesday in an eligible (even) week: fires only on Saturday →
+	// skipped because today is not the schedule day.
+	now := time.Date(2026, 8, 5, 10, 0, 0, 0, loc) // Wed 08-05, week index 30 (even)
 
 	res, err := RunCompact(context.Background(), &CompactOptions{
 		Now: func() time.Time { return now },
@@ -118,66 +119,34 @@ func TestRunCompactSkipsOutsideWindow(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	require.True(t, res.Skipped)
-	require.Contains(t, res.SkipReason, "outside 2w window")
+	require.Contains(t, res.SkipReason, "not schedule day")
 	require.False(t, res.MailSent)
 	require.False(t, res.IssueCreated)
 }
 
 func TestScheduleWindowWeekly(t *testing.T) {
-	// Asia/Shanghai after carboninit.Setup; pin wall clock mid-July.
+	// Asia/Shanghai after carboninit.Setup.
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	require.NoError(t, err)
 
-	cases := []struct {
-		name string
-		now  time.Time
-		in   bool
-		// expected start/end week boundary (Monday 00:00 Shanghai)
-		start, end time.Time
-	}{
-		{
-			name:  "monday",
-			now:   time.Date(2026, 7, 13, 9, 0, 0, 0, loc), // Monday
-			in:    true,
-			start: time.Date(2026, 7, 13, 0, 0, 0, 0, loc), // this Monday
-			end:   time.Date(2026, 7, 20, 0, 0, 0, 0, loc), // next Monday
-		},
-		{
-			name:  "midweek",
-			now:   time.Date(2026, 7, 15, 12, 0, 0, 0, loc), // Wednesday
-			in:    true,
-			start: time.Date(2026, 7, 13, 0, 0, 0, 0, loc),
-			end:   time.Date(2026, 7, 20, 0, 0, 0, 0, loc),
-		},
-		{
-			name:  "sunday",
-			now:   time.Date(2026, 7, 19, 23, 59, 59, 0, loc), // Sunday
-			in:    true,
-			start: time.Date(2026, 7, 13, 0, 0, 0, 0, loc),
-			end:   time.Date(2026, 7, 20, 0, 0, 0, 0, loc),
-		},
-		{
-			name:  "exact boundary",
-			now:   time.Date(2026, 7, 13, 0, 0, 0, 0, loc), // Monday 00:00
-			in:    true,
-			start: time.Date(2026, 7, 13, 0, 0, 0, 0, loc),
-			end:   time.Date(2026, 7, 20, 0, 0, 0, 0, loc),
-		},
-	}
+	// Every Saturday fires (schedule=1); all other weekdays skip.
+	saturday := time.Date(2026, 7, 18, 9, 0, 0, 0, loc) // Sat 07-18
+	win, in, reason := ScheduleWindow(1, saturday)
+	require.True(t, in)
+	require.Empty(t, reason)
+	require.Equal(t, "1w", win.Label)
+	// window = current week [Mon 07-13, Mon 07-20).
+	require.Equal(t, time.Date(2026, 7, 13, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
+	require.Equal(t, time.Date(2026, 7, 20, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			win, in, reason := ScheduleWindow(1, tc.now)
-			require.Equal(t, tc.in, in)
-			if in {
-				require.Equal(t, "1w", win.Label)
-				require.Equal(t, tc.start.Unix(), win.Start.Unix())
-				require.Equal(t, tc.end.Unix(), win.End.Unix())
-				require.Empty(t, reason)
-			} else {
-				require.Contains(t, reason, "outside")
-			}
-		})
+	for _, day := range []time.Time{
+		time.Date(2026, 7, 13, 9, 0, 0, 0, loc), // Mon
+		time.Date(2026, 7, 15, 12, 0, 0, 0, loc), // Wed
+		time.Date(2026, 7, 19, 23, 59, 59, 0, loc), // Sun
+	} {
+		_, in, reason = ScheduleWindow(1, day)
+		require.False(t, in, day.Weekday().String())
+		require.Contains(t, reason, "not schedule day")
 	}
 }
 
@@ -185,33 +154,45 @@ func TestScheduleWindowBiweekly(t *testing.T) {
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	require.NoError(t, err)
 
-	// weekIndex anchor: 2026-01-05 (Monday). Weeks are indexed 0,1,2,…
-	//   2026-07-20 → index 28 (even), 2026-07-27 → index 29 (odd),
-	//   2026-08-03 → index 30 (even).
-	// schedule=2 triggers when weekIndex%2==0 → week 2026-07-20 and
-	// 2026-08-03 trigger; week 2026-07-27 skips.
-	inWin := time.Date(2026, 8, 5, 10, 0, 0, 0, loc) // Thu in week starting 08-03 (even, in)
-	win, in, reason := ScheduleWindow(2, inWin)
+	// weekIndex anchor: 2026-01-05 (Monday). Weeks indexed 0,1,2,…
+	//   week starting 2026-07-20 → index 28 (even) → its Saturday 07-25 fires.
+	//   week starting 2026-07-27 → index 29 (odd) → its Saturday 08-01 skips.
+	//   week starting 2026-08-03 → index 30 (even) → its Saturday 08-08 fires.
+
+	// Fires: Saturday 07-25 (even week).
+	fire := time.Date(2026, 7, 25, 9, 0, 0, 0, loc) // Sat 07-25
+	win, in, reason := ScheduleWindow(2, fire)
 	require.True(t, in)
 	require.Empty(t, reason)
 	require.Equal(t, "2w", win.Label)
-	// window = [07-27 00:00, 08-10 00:00) Shanghai (prev + current week).
-	require.Equal(t, time.Date(2026, 7, 27, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
-	require.Equal(t, time.Date(2026, 8, 10, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
+	// window = [07-13 00:00, 07-27 00:00) Shanghai (prev + current week).
+	require.Equal(t, time.Date(2026, 7, 13, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
+	require.Equal(t, time.Date(2026, 7, 27, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
 	require.Equal(t, 14*24*time.Hour, win.End.Sub(win.Start))
 
-	outWin := time.Date(2026, 7, 29, 10, 0, 0, 0, loc) // Wed in week starting 07-27 (odd, out)
-	_, in, reason = ScheduleWindow(2, outWin)
+	// Skips: Saturday 08-01 (odd week, eligible-week fails).
+	_, in, reason = ScheduleWindow(2, time.Date(2026, 8, 1, 9, 0, 0, 0, loc))
 	require.False(t, in)
-	require.Contains(t, reason, "outside 2w window")
+	require.Contains(t, reason, "week not eligible")
+
+	// Skips: Wednesday 07-22 (even week but not Saturday).
+	_, in, reason = ScheduleWindow(2, time.Date(2026, 7, 22, 9, 0, 0, 0, loc))
+	require.False(t, in)
+	require.Contains(t, reason, "not schedule day")
 }
 
 func TestScheduleWindowDefaultsToOne(t *testing.T) {
-	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
-	win, in, _ := ScheduleWindow(0, now)
+	// schedule=0 → 1. Saturday 07-18 fires; Wednesday 07-15 skips.
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+
+	win, in, _ := ScheduleWindow(0, time.Date(2026, 7, 18, 9, 0, 0, 0, loc))
 	require.True(t, in)
 	require.Equal(t, "1w", win.Label)
 	require.Equal(t, 7*24*time.Hour, win.End.Sub(win.Start))
+
+	_, in, _ = ScheduleWindow(0, time.Date(2026, 7, 15, 9, 0, 0, 0, loc))
+	require.False(t, in)
 }
 
 func TestRenderCompactIssueTitle(t *testing.T) {

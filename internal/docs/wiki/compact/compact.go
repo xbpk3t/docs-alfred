@@ -146,21 +146,32 @@ func RunCompact(ctx context.Context, opts *CompactOptions) (*CompactResult, erro
 // Not used directly by RunCompact (that uses WindowFn); kept for callers
 // that need a reason before constructing options.
 func SkipReasonWindow(schedule int, now time.Time) string {
-	return fmt.Sprintf("outside %dw window (schedule=%d)", schedule, schedule)
+	day := now.Weekday()
+	if day != DefaultScheduleDay {
+		return fmt.Sprintf("today is %s, not schedule day %s (schedule=%d)", day, DefaultScheduleDay, schedule)
+	}
+	return fmt.Sprintf("week not eligible: weekIndex%%%d != 0 (schedule=%d)", schedule, schedule)
 }
+
+// DefaultScheduleDay is the weekday on which a compact run fires
+// (Saturday). Runs on other days are skipped even in an eligible week.
+const DefaultScheduleDay = time.Saturday
 
 // ScheduleWindow returns the current schedule window [start, end) and whether
 // now falls inside it.
 //
-// Weeks start on Monday. Eligibility is by week index (whole weeks), not wall
-// clock: a run at any time during the current week is in the window iff
-// weekIndex(now) % schedule == 0.
+// A run fires only when BOTH hold:
+//   - today is the schedule day (DefaultScheduleDay = Saturday), and
+//   - the current week is eligible: weekIndex(mondayOf(now)) % schedule == 0.
+//
+// With schedule=1 that is every Saturday (weekly); with schedule=2 every
+// second Saturday (biweekly). actions may trigger daily — any other day is
+// skipped with zero side effects.
 //
 // The window covers `schedule` full weeks ending at the end of the current
 // week: [curStart + 7d - schedule*7d, curStart + 7d). With schedule=1 the
-// window is just the current week (weekly); with schedule=2 it spans the
-// previous and current week (biweekly). actions may trigger daily —
-// out-of-window runs are skipped with zero side effects.
+// window is the current week; with schedule=2 it spans the previous and
+// current week (the two weeks the biweekly run reports on).
 //
 // Week start is computed from time.Weekday (Monday) in the wall-clock
 // location of now — no carbon global state is touched. Week index is an
@@ -179,7 +190,7 @@ func ScheduleWindow(schedule int, now time.Time) (Window, bool, string) {
 		Label: strconv.Itoa(schedule) + "w",
 	}
 
-	if weekIndex(curStart)%schedule == 0 {
+	if now.Weekday() == DefaultScheduleDay && weekIndex(curStart)%schedule == 0 {
 		return win, true, ""
 	}
 	return Window{Label: win.Label}, false, SkipReasonWindow(schedule, now)
