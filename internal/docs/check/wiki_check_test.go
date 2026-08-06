@@ -289,7 +289,6 @@ type: research
 		typ  string
 	}{
 		{"type blog", "blog"},
-		{"type blog-draft", "blog-draft"},
 		{"type log", "log"},
 		{"type digest", "digest"},
 		{"type research", "research"},

@@ -27,11 +27,11 @@ type wikiFrontmatter struct {
 
 // validOKFTypes is the OKF v0.1 valid type set.
 var validOKFTypes = map[string]bool{
-	"blog":       true,
-	"blog-draft": true,
-	"log":        true,
-	"digest":     true,
-	"research":   true,
+	"blog": true,
+	// "blog-draft": true,
+	"log":      true,
+	"digest":   true,
+	"research": true,
 }
 
 // RunWikiCheckOKF validates OKF v0.1 frontmatter compliance on all wiki .md files.
