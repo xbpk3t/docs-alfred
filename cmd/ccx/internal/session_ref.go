@@ -38,6 +38,13 @@ const maxScanDisplayMatches = 10
 // distinguish "not found anywhere" from other scan errors.
 var errSessionNotFound = errors.New("session not found")
 
+// ErrSessionEmpty is returned when a session has no exportable content:
+// either its transcript file does not exist, or it exists but contains no
+// messages after parsing/filtering. Callers (e.g. automation wrappers) can
+// use errors.Is(err, ErrSessionEmpty) to skip export without retrying,
+// as an empty session will never succeed on retry.
+var ErrSessionEmpty = errors.New("session is empty (nothing to export)")
+
 // Agent identifies the coding agent runtime that owns a session transcript.
 type Agent string
 
@@ -115,9 +122,10 @@ func resolveClaudeSession(sessionIDOverride, projectDir string) (SessionRef, err
 		found, scanErr := findSessionByScan(sessionID)
 		if scanErr != nil {
 			if errors.Is(scanErr, errSessionNotFound) {
-				// Session genuinely not found anywhere - original
-				// direct-path error is more informative.
-				return SessionRef{}, fmt.Errorf("cc transcript %q: %w", transcriptPath, err)
+				// Session genuinely not found anywhere - it has no
+				// transcript, hence no exportable content. Wrap in
+				// ErrSessionEmpty so callers can skip without retry.
+				return SessionRef{}, fmt.Errorf("cc transcript %q: %w", transcriptPath, ErrSessionEmpty)
 			}
 			// Multiple matches or structural scan error - surface that.
 			return SessionRef{}, fmt.Errorf("%w", scanErr)
