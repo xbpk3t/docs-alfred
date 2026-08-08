@@ -168,29 +168,29 @@ const DefaultScheduleDay = time.Saturday
 // second Saturday (biweekly). actions may trigger daily — any other day is
 // skipped with zero side effects.
 //
-// The window covers `schedule` full weeks ending at the end of the current
-// week: [curStart + 7d - schedule*7d, curStart + 7d). With schedule=1 the
-// window is the current week; with schedule=2 it spans the previous and
-// current week (the two weeks the biweekly run reports on).
+// The window covers `schedule` full weeks ending at 00:00 of the fire day:
+// [fireDay - schedule*7d, fireDay). With schedule=1 the window is the single
+// week before the fire day; with schedule=2 it spans the previous two weeks.
+// Consecutive fire windows are contiguous and non-overlapping: the next run's
+// Start equals this run's End, so no commits are dropped or double-counted
+// between fire days.
 //
-// Week start is computed from time.Weekday (Monday) in the wall-clock
-// location of now — no carbon global state is touched. Week index is an
-// integer day-count from the Monday anchor 2026-01-05, taken as calendar
-// dates (timezone-independent, DST-free).
+// Week index uses the time.Weekday (Monday) of now's wall-clock location — no
+// carbon global state is touched. It is an integer day-count from the Monday
+// anchor 2026-01-05, taken as calendar dates (timezone-independent, DST-free).
 func ScheduleWindow(schedule int, now time.Time) (Window, bool, string) {
 	if schedule <= 0 {
 		schedule = 1
 	}
-	curStart := mondayOf(now)
-	curEnd := curStart.Add(7 * 24 * time.Hour)
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	win := Window{
-		Start: curEnd.Add(-time.Duration(schedule) * 7 * 24 * time.Hour),
-		End:   curEnd,
+		Start: dayStart.Add(-time.Duration(schedule) * 7 * 24 * time.Hour),
+		End:   dayStart,
 		Label: strconv.Itoa(schedule) + "w",
 	}
 
-	if now.Weekday() == DefaultScheduleDay && weekIndex(curStart)%schedule == 0 {
+	if now.Weekday() == DefaultScheduleDay && weekIndex(mondayOf(now))%schedule == 0 {
 		return win, true, ""
 	}
 	return Window{Label: win.Label}, false, SkipReasonWindow(schedule, now)

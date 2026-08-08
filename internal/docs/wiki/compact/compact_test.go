@@ -129,15 +129,15 @@ func TestScheduleWindowWeekly(t *testing.T) {
 	loc, err := time.LoadLocation("Asia/Shanghai")
 	require.NoError(t, err)
 
-	// Every Saturday fires (schedule=1); all other weekdays skip.
+	// Every Saturday fires (window=1); all other weekdays skip.
 	saturday := time.Date(2026, 7, 18, 9, 0, 0, 0, loc) // Sat 07-18
 	win, in, reason := ScheduleWindow(1, saturday)
 	require.True(t, in)
 	require.Empty(t, reason)
 	require.Equal(t, "1w", win.Label)
-	// window = current week [Mon 07-13, Mon 07-20).
-	require.Equal(t, time.Date(2026, 7, 13, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
-	require.Equal(t, time.Date(2026, 7, 20, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
+	// window = [fireDay-7d, fireDay): [Sat 07-11, Sat 07-18) Shanghai.
+	require.Equal(t, time.Date(2026, 7, 11, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
+	require.Equal(t, time.Date(2026, 7, 18, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
 
 	for _, day := range []time.Time{
 		time.Date(2026, 7, 13, 9, 0, 0, 0, loc), // Mon
@@ -165,9 +165,9 @@ func TestScheduleWindowBiweekly(t *testing.T) {
 	require.True(t, in)
 	require.Empty(t, reason)
 	require.Equal(t, "2w", win.Label)
-	// window = [07-13 00:00, 07-27 00:00) Shanghai (prev + current week).
-	require.Equal(t, time.Date(2026, 7, 13, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
-	require.Equal(t, time.Date(2026, 7, 27, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
+	// window = [fireDay-14d, fireDay): [Sat 07-11, Sat 07-25) Shanghai.
+	require.Equal(t, time.Date(2026, 7, 11, 0, 0, 0, 0, loc).Unix(), win.Start.Unix())
+	require.Equal(t, time.Date(2026, 7, 25, 0, 0, 0, 0, loc).Unix(), win.End.Unix())
 	require.Equal(t, 14*24*time.Hour, win.End.Sub(win.Start))
 
 	// Skips: Saturday 08-01 (odd week, eligible-week fails).
@@ -190,6 +190,9 @@ func TestScheduleWindowDefaultsToOne(t *testing.T) {
 	require.True(t, in)
 	require.Equal(t, "1w", win.Label)
 	require.Equal(t, 7*24*time.Hour, win.End.Sub(win.Start))
+	// Contiguous windows across consecutive fire days (no gap, no overlap).
+	next, _, _ := ScheduleWindow(1, time.Date(2026, 7, 25, 9, 0, 0, 0, loc))
+	require.Equal(t, win.End, next.Start)
 
 	_, in, _ = ScheduleWindow(0, time.Date(2026, 7, 15, 9, 0, 0, 0, loc))
 	require.False(t, in)
