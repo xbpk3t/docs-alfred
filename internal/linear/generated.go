@@ -38,17 +38,17 @@ func (v *AssignedIssuesViewerUserAssignedIssuesIssueConnection) GetNodes() []Ass
 
 // AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssue includes the requested fields of the GraphQL type Issue.
 type AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssue struct {
+	State       AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssueStateWorkflowState `json:"state"`
+	Team        AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssueTeam               `json:"team"`
 	Id          string                                                                            `json:"id"`
 	Title       string                                                                            `json:"title"`
 	Identifier  string                                                                            `json:"identifier"`
-	Priority    float64                                                                           `json:"priority"`
 	Parent      AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue        `json:"parent"`
-	State       AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssueStateWorkflowState `json:"state"`
-	Team        AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssueTeam               `json:"team"`
 	DueDate     string                                                                            `json:"dueDate"`
 	Url         string                                                                            `json:"url"`
 	UpdatedAt   string                                                                            `json:"updatedAt"`
 	CompletedAt string                                                                            `json:"completedAt"`
+	Priority    float64                                                                           `json:"priority"`
 }
 
 // GetId returns AssignedIssuesViewerUserAssignedIssuesIssueConnectionNodesIssue.Id, and is useful for accessing the field via an interface.
@@ -316,18 +316,18 @@ func (v *UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnection) GetNod
 
 // UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssue includes the requested fields of the GraphQL type Issue.
 type UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssue struct {
+	State       UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueStateWorkflowState        `json:"state"`
+	Team        UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueTeam                      `json:"team"`
+	Parent      UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue               `json:"parent"`
 	Id          string                                                                                             `json:"id"`
 	Identifier  string                                                                                             `json:"identifier"`
 	Title       string                                                                                             `json:"title"`
 	Description string                                                                                             `json:"description"`
-	Priority    float64                                                                                            `json:"priority"`
 	Url         string                                                                                             `json:"url"`
 	CompletedAt string                                                                                             `json:"completedAt"`
 	UpdatedAt   string                                                                                             `json:"updatedAt"`
-	State       UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueStateWorkflowState        `json:"state"`
-	Team        UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueTeam                      `json:"team"`
-	Parent      UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueParentIssue               `json:"parent"`
 	Comments    UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssueCommentsCommentConnection `json:"comments"`
+	Priority    float64                                                                                            `json:"priority"`
 }
 
 // GetId returns UpdatedIssuesWithDetailsViewerUserAssignedIssuesIssueConnectionNodesIssue.Id, and is useful for accessing the field via an interface.

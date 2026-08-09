@@ -18,6 +18,49 @@ func TestTrimTitle_TruncatesRunes(t *testing.T) {
 	require.NotContains(t, got, "�")
 }
 
+func TestTitleComponentsFromTitle(t *testing.T) {
+	tests := []struct {
+		name        string
+		sessionName string
+		wantTitle   string
+		wantEng     string
+	}{
+		{
+			name:        "ascii session name",
+			sessionName: "fix export bug",
+			wantTitle:   "fix export bug",
+			wantEng:     "fix-export-bug",
+		},
+		{
+			name:        "chinese session name",
+			sessionName: "修复 wiki compact 窗口日期 bug",
+			wantTitle:   "修复 wiki compact 窗口日期 bug",
+			wantEng:     "xiu-fu-wiki-compact-chuang-kou-ri-qi-bug",
+		},
+		{
+			name:        "quoted session name is trimmed of quotes",
+			sessionName: "\"带引号标题\"",
+			wantTitle:   "带引号标题",
+			wantEng:     "dai-yin-hao-biao-ti",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			title, eng := titleComponentsFromTitle(tt.sessionName)
+			require.Equal(t, tt.wantTitle, title)
+			require.Equal(t, tt.wantEng, eng)
+		})
+	}
+}
+
+func TestClassifyTopicPath_NoAIConfig(t *testing.T) {
+	// Without AI config, classification is skipped and export goes to wiki root.
+	got, err := classifyTopicPath(nil, &ExportInput{AIConfig: nil})
+	require.NoError(t, err)
+	require.Equal(t, "", got)
+}
+
 func TestGenerateFrontmatter_UsesSource(t *testing.T) {
 	frontmatter, err := generateFrontmatter("Test Title", SourceCodex, "thread-123", "gpt-5.5", "https://linear.app/x/issue/LUC-1")
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/samber/mo"
+	session "github.com/xbpk3t/docs-alfred/pkg/ai/session"
 	_ "modernc.org/sqlite"
 )
 
@@ -54,6 +55,9 @@ type SessionRef struct {
 	SessionID      string
 	TranscriptPath string
 	Source         string
+	// Title is the session name: cc's latest ai-title or codex threads.title.
+	// Empty when the transcript/state has no session name yet.
+	Title string
 }
 
 // DetectAgent detects the agent runtime from environment variables.
@@ -133,11 +137,15 @@ func resolveClaudeSession(sessionIDOverride, projectDir string) (SessionRef, err
 		transcriptPath = found
 	}
 
+	// Session name from the transcript (latest ai-title event).
+	title, _ := session.SessionNameFromCC(transcriptPath)
+
 	return SessionRef{
 		Agent:          AgentCC,
 		SessionID:      sessionID,
 		TranscriptPath: transcriptPath,
 		Source:         SourceClaudeCode,
+		Title:          title,
 	}, nil
 }
 
@@ -156,11 +164,15 @@ func resolveCodexSession(sessionIDOverride string) (SessionRef, error) {
 		return SessionRef{}, fmt.Errorf("codex rollout %q: %w", rolloutPath, err)
 	}
 
+	// Session name from threads.title (falls back to first_user_message).
+	title, _ := session.SessionNameFromCodex(statePath, sessionID)
+
 	return SessionRef{
 		Agent:          AgentCodex,
 		SessionID:      sessionID,
 		TranscriptPath: rolloutPath,
 		Source:         SourceCodex,
+		Title:          title,
 	}, nil
 }
 
