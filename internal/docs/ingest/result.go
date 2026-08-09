@@ -87,7 +87,7 @@ type URLResult struct {
 
 // Summary returns count-oriented command details for structured output.
 func (r *Result) Summary() map[string]any {
-	var succeeded, handledFailures, unhandledFailures, written int
+	var succeeded, handledFailures, unhandledFailures, skipped, written int
 	for i := range r.URLResults {
 		item := &r.URLResults[i]
 		switch item.Status {
@@ -97,6 +97,8 @@ func (r *Result) Summary() map[string]any {
 			handledFailures++
 		case StatusUnhandledError:
 			unhandledFailures++
+		case StatusSkipped:
+			skipped++
 		}
 		if item.OutputPath != "" && (item.Status == StatusSummaryWritten || item.Status == StatusFailureWritten) {
 			written++
@@ -108,6 +110,7 @@ func (r *Result) Summary() map[string]any {
 		"succeeded":         succeeded,
 		"handledFailures":   handledFailures,
 		"unhandledFailures": unhandledFailures,
+		"skipped":           skipped,
 		"written":           written,
 		"flushed":           r.Flushed,
 		"wouldFlush":        r.WouldFlush,

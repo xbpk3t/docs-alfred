@@ -540,10 +540,10 @@ func formatWikiTextResult(result *wikiuc.Result) string {
 	}
 	fmt.Fprintf(&out, "%s %s\n", result.Name, status)
 	fmt.Fprintf(&out,
-		"summary: processed=%v succeeded=%v handledFailures=%v unhandledFailures=%v "+
+		"summary: processed=%v succeeded=%v handledFailures=%v unhandledFailures=%v skipped=%v "+
 			"written=%v flushed=%v wouldFlush=%v dryRun=%v\n",
 		summary["processed"], summary["succeeded"], summary["handledFailures"], summary["unhandledFailures"],
-		summary["written"], summary["flushed"], summary["wouldFlush"], summary["dryRun"])
+		summary["skipped"], summary["written"], summary["flushed"], summary["wouldFlush"], summary["dryRun"])
 	for i := range result.URLResults {
 		item := &result.URLResults[i]
 		fmt.Fprintf(&out, "%s %s", item.Status, item.URL)

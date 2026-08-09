@@ -24,6 +24,8 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 		return writeFetchFailure(deps, wikiRoot, pending.URL, pending.FailureType, pending.ExtraInfo, dryRun)
 	case pendingAIError:
 		return writeAIError(deps, wikiRoot, pending.URL, pending.Error, dryRun)
+	case pendingSkip:
+		return URLResult{URL: pending.URL, Status: StatusSkipped, Handled: true}
 	case pendingUnhandled:
 		return URLResult{URL: pending.URL, Status: StatusUnhandledError, Error: pending.Error}
 	default:

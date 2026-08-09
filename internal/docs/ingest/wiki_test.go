@@ -471,6 +471,7 @@ type fakeDeps struct {
 	classifier *fakeClassifier
 	writer     *fakeWriter
 	inbox      *fakeInbox
+	history    *digestHistory
 }
 
 func newFakeDeps() *fakeDeps {
@@ -488,6 +489,7 @@ func (f *fakeDeps) dependencies() *dependencies {
 		classifier: f.classifier,
 		writer:     f.writer,
 		inbox:      f.inbox,
+		history:    f.history,
 	}
 }
 
