@@ -27,6 +27,9 @@ type dependencies struct {
 	writer          writer
 	inbox           inboxStore
 	validTopicPaths map[string]bool // loaded from ghindex for write-layer validation
+	// history holds previously digested URLs (from digest-success.jsonl).
+	// digest skips URLs found here; add does not consult it (re-digest entry).
+	history *digestHistory
 }
 
 type fetcher interface {
@@ -97,6 +100,10 @@ func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 	}
 
 	deps := resolveDependencies(input.Config, input.deps)
+	// Only digest consults history — explicit `wiki add` stays re-digest-capable.
+	if deps.history == nil {
+		deps.history = loadDigestHistory(wikiRoot)
+	}
 	entries, err := deps.inbox.ParseInbox(inboxPath)
 	if err != nil {
 		return nil, fmt.Errorf("parse inbox: %w", err)

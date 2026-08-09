@@ -73,6 +73,15 @@ func prepareInboxEntry(
 	entry wikiwrite.InboxEntry,
 	inboxCfg inboxConfig,
 ) pendingURLWrite {
+	// Skip URLs already digested in a previous run: no fetch, no AI, no write.
+	// Handled stays true downstream so the inbox line is flushed like any other
+	// processed URL.
+	if deps.history != nil && deps.history.alreadyDigested(entry.URL) {
+		slog.Info("wiki digest: skip already digested URL", "url", entry.URL)
+
+		return pendingURLWrite{URL: entry.URL, Kind: pendingSkip}
+	}
+
 	urlCtx, cancel := context.WithTimeout(ctx, inboxCfg.perURLTimeout)
 	defer cancel()
 
@@ -132,6 +141,7 @@ const (
 	pendingFetchFailure    pendingWriteKind = "fetch_failure"
 	pendingAIError         pendingWriteKind = "ai_error"
 	pendingUnhandled       pendingWriteKind = "unhandled"
+	pendingSkip            pendingWriteKind = "skip"
 )
 
 type pendingURLWrite struct {

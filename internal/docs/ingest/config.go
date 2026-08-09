@@ -21,6 +21,7 @@ const (
 	StatusUnhandledError = "unhandled_error"
 	StatusDryRunSummary  = "dry_run_summary"
 	StatusDryRunFailure  = "dry_run_failure"
+	StatusSkipped        = "skipped"
 )
 
 // Config holds wiki workflow configuration shared by wiki subcommands.
