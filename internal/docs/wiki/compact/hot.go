@@ -1,6 +1,7 @@
 package compact
 
 import (
+	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -17,13 +18,19 @@ type HotTopic struct {
 	LogPath      string
 	TopicDir     string
 	TopicPath    string
+	Reasons      []string
 	Diffs        []string
 	CommitHashes []string
 	EditDays     int
 	EditCommits  int
 	DeltaChars   int
 	DeltaLines   int
-	Score        int
+	// H2Added counts markdown heading-2 lines added in the window — the
+	// structural signal separating structured accumulation (many discrete
+	// entries) from one giant paste (large chars, no structure).
+	H2Added    int
+	Score      int
+	GatePassed bool
 }
 
 // AggregateHotTopics merges log edits into topics, scores, and returns all
@@ -40,6 +47,7 @@ func AggregateHotTopics(edits []gitutil.LogEdit, wikiRoot string) []HotTopic {
 		hashList []string
 		chars    int
 		lines    int
+		h2       int
 	}
 	byPath := make(map[string]*acc)
 	for _, e := range edits {
@@ -60,6 +68,7 @@ func AggregateHotTopics(edits []gitutil.LogEdit, wikiRoot string) []HotTopic {
 		}
 		a.chars += e.DeltaChars
 		a.lines += e.DeltaLines
+		a.h2 += e.H2Added
 		if e.When.After(a.last) {
 			a.last = e.When
 		}
@@ -77,12 +86,13 @@ func AggregateHotTopics(edits []gitutil.LogEdit, wikiRoot string) []HotTopic {
 			EditCommits:  len(a.commits),
 			DeltaChars:   a.chars,
 			DeltaLines:   a.lines,
+			H2Added:      a.h2,
 			LastEdit:     a.last,
 			Diffs:        a.diffs,
 			CommitHashes: a.hashList,
 		}
 		ht.TopicPath = topicPathFromLog(a.logPath, wikiRoot)
-		ht.Score = hotScore(ht.EditDays, ht.EditCommits, ht.DeltaChars)
+		ht.Score = hotScore(ht.EditDays, ht.EditCommits, ht.H2Added, ht.DeltaChars)
 		out = append(out, ht)
 	}
 
@@ -104,12 +114,69 @@ func TopNHot(topics []HotTopic, n int) []HotTopic {
 	return lo.Subset(topics, 0, uint(n))
 }
 
-func hotScore(editDays, editCommits, deltaChars int) int {
+// CompactGate is the heat gate that decides whether a hot topic is even worth
+// AI judgement (quality) in this window. Signal-driven and cheap: sustained
+// editing (days ∧ commits) OR one materially large append (chars). The gate
+// must stay far below the AI's bar: it filters "not hot enough", never
+// "not valuable enough" — AI owns quality.
+type CompactGate struct {
+	// DecayDays: how far back a "maybe meaningful" hot topic may still count.
+	DecaySince time.Time
+	// MinEditDays: an admitted topic's log must have been edited on at least
+	// this many distinct calendar days.
+	MinEditDays int
+	// MinEditCommits: an admitted topic's log must have been touched by at
+	// least this many distinct commits.
+	MinEditCommits int
+	// MinDeltaChars: alternative (OR) branch — one edit window of at least
+	// this many non-whitespace chars clears the gate on its own.
+	MinDeltaChars int
+}
+
+// PassesCompactGate applies the heat gate to ht.
+func (g CompactGate) PassesCompactGate(ht *HotTopic) (bool, []string) {
+	var reasons []string
+	pass := false
+	switch {
+	case ht.EditDays >= g.MinEditDays && ht.EditCommits >= g.MinEditCommits:
+		pass = true
+		reasons = append(reasons,
+			fmt.Sprintf("heat: %dd × %d commits ≥ %dd × %d commits", ht.EditDays, ht.EditCommits, g.MinEditDays, g.MinEditCommits))
+	case ht.DeltaChars >= g.MinDeltaChars:
+		pass = true
+		reasons = append(reasons,
+			fmt.Sprintf("heat: Δchars=%d ≥ %d", ht.DeltaChars, g.MinDeltaChars))
+	default:
+		// miss: each un-met criterion is listed so the mail shows WHY.
+		reasons = append(reasons,
+			fmt.Sprintf("heat miss: days=%d(<%d) commits=%d(<%d) Δchars=%d(<%d)",
+				ht.EditDays, g.MinEditDays, ht.EditCommits, g.MinEditCommits, ht.DeltaChars, g.MinDeltaChars))
+	}
+	if !ht.LastEdit.IsZero() && !g.DecaySince.IsZero() && ht.LastEdit.Before(g.DecaySince) {
+		pass = false
+		reasons = append(reasons, "heat: last edit before decay window: "+ht.LastEdit.Format("2006-01-02"))
+	}
+	return pass, reasons
+}
+
+// hotScore is structure-aware: sustained editing days and discrete h2 entries
+// are the primary signals; commits and chars are supporting. Capping each term
+// keeps one over-heated axis from dominating (e.g. a giant paste with huge
+// chars but no structure ranks below a many-entry accumulated topic).
+func hotScore(editDays, editCommits, h2Added, deltaChars int) int {
+	days := editDays
+	if days > 7 {
+		days = 7
+	}
 	commits := editCommits
 	if commits > 5 {
 		commits = 5
 	}
-	return 4*editDays + 2*commits + deltaCharBucket(deltaChars)
+	h2 := h2Added
+	if h2 > 5 {
+		h2 = 5
+	}
+	return 5*days + 3*h2 + 2*commits + deltaCharBucket(deltaChars)
 }
 
 func deltaCharBucket(n int) int {

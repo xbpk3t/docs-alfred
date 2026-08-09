@@ -15,7 +15,6 @@ import (
 
 	"github.com/avast/retry-go/v4"
 	carbon "github.com/dromara/carbon/v2"
-	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
@@ -24,6 +23,8 @@ import (
 // CompactRecommend is the AI JSON schema for one topic.
 type CompactRecommend struct {
 	Recommend      string   `json:"recommend" validate:"required|in:yes,no"`
+	// SuggestedTitle is the concrete publishable blog title (hard standard).
+	SuggestedTitle string   `json:"suggested_title,omitempty"`
 	SuggestedAngle string   `json:"suggested_angle"`
 	DuplicateOf    string   `json:"duplicate_of_existing_blog,omitempty"`
 	Error          string   `json:"-"`
@@ -156,6 +157,7 @@ func judgeOne(ctx context.Context, cfg *ai.ClientConfig, ht *HotTopic) CompactRe
 		out.Recommend = "no"
 	}
 	out.Why = parsed.Why
+	out.SuggestedTitle = parsed.SuggestedTitle
 	out.SuggestedAngle = parsed.SuggestedAngle
 	out.DuplicateOf = parsed.DuplicateOf
 	return out
@@ -172,20 +174,6 @@ func parseCompactJSON(raw string) (CompactRecommend, error) {
 		return CompactRecommend{}, err
 	}
 	return r, nil
-}
-
-// SelectNotices picks up to topNotice yes recommendations in input order (already score-sorted).
-func SelectNotices(results []CompactRecommend, topNotice int) []CompactRecommend {
-	if topNotice <= 0 {
-		topNotice = 5
-	}
-	yes := lo.Filter(results, func(r CompactRecommend, _ int) bool {
-		return !r.SkippedCooling && strings.EqualFold(r.Recommend, "yes")
-	})
-	if len(yes) <= topNotice {
-		return yes
-	}
-	return lo.Subset(yes, 0, uint(topNotice))
 }
 
 // truncateTail keeps the tail of s (recent notes are usually appended).

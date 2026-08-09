@@ -25,8 +25,13 @@ func TestIsSkip_NixSkip(t *testing.T) {
 }
 
 func TestIsSkip_RealPackages(t *testing.T) {
-	for _, name := range []string{"gcc", "coreutils", "bash", "mpv", "pipewire", "home-manager", "gpg", "ssh", "firefox", "vim", "git"} {
+	// coreutils / home-manager / ssh were added to the skip list in 92d14e2
+	// as config/scope keys — they are intentionally "skip" now.
+	for _, name := range []string{"gcc", "bash", "mpv", "pipewire", "gpg", "firefox", "vim", "git"} {
 		assert.False(t, isSkip(name), "expected isSkip(%q) = false", name)
+	}
+	for _, name := range []string{"coreutils", "home-manager", "ssh"} {
+		assert.True(t, isSkip(name), "expected isSkip(%q) = true (config/scope key)", name)
 	}
 }
 

@@ -18,19 +18,40 @@ func TestIsSubstantive(t *testing.T) {
 }
 
 func TestContentDeltaWhitespaceOnly(t *testing.T) {
-	c, l, diff := contentDelta("hello\n", "hello \n", 1000)
+	c, l, h2, diff := contentDelta("hello\n", "hello \n", 1000)
 	require.Equal(t, 0, c)
 	require.Equal(t, 0, l)
+	require.Equal(t, 0, h2)
 	require.Empty(t, diff)
 }
 
 func TestContentDeltaAppend(t *testing.T) {
 	old := "line1\n"
 	newC := "line1\n[interesting long paper about agents routing](https://example.com/very/long/path/to/paper)\n"
-	c, l, diff := contentDelta(old, newC, 1000)
+	c, l, h2, diff := contentDelta(old, newC, 1000)
 	require.GreaterOrEqual(t, c, 40)
 	require.GreaterOrEqual(t, l, 1)
+	require.Equal(t, 0, h2, "a plain append has no new heading")
 	require.Contains(t, diff, "interesting long paper")
+}
+
+func TestContentDeltaCountsNewHeading2(t *testing.T) {
+	old := "## [2026-07-01]\nalready here\n"
+	newC := "## [2026-07-01]\nalready here\n## new structured entry [2026-07-02]\ndetails\n## another [2026-07-03]\nmore\n"
+	c, l, h2, _ := contentDelta(old, newC, 1000)
+	require.Equal(t, 2, h2, "two brand-new heading-2 lines count as structure")
+	require.GreaterOrEqual(t, c, 10)
+	require.GreaterOrEqual(t, l, 1)
+}
+
+func TestContentDeltaH2UnchangedNotNullCounted(t *testing.T) {
+	old := "## existing\nbody\n"
+	newC := "## existing\nbody\n## existing\nbody\n"
+	// Duplicate heading (moved within file) is not a NEW heading — the
+	// presence-set check must not count it.
+	c, _, h2, _ := contentDelta(old, newC, 1000)
+	require.Equal(t, 0, h2)
+	require.Greater(t, c, 0)
 }
 
 func TestCollectLogEditsIntegration(t *testing.T) {
