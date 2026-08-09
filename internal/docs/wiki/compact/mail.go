@@ -48,12 +48,15 @@ func SendCompactEmail(ctx context.Context, cfg *MailConfig, brand, subject, html
 
 // CompactMailInput is data for subject/body rendering.
 type CompactMailInput struct {
-	Date       time.Time
-	Since      time.Time
-	Until      time.Time
-	Title      string
-	Notices    []CompactRecommend
-	HotTopics  []HotTopic
+	Date      time.Time
+	Since     time.Time
+	Until     time.Time
+	Title     string
+	Notices   []CompactRecommend
+	HotTopics []HotTopic
+	// Heat/Rejected carry the gate verdicts for the transparency table.
+	Heat       []HotTopic
+	Rejected   []HotTopic
 	Params     CompactParams
 	AIFailures int
 	AISkipped  bool
@@ -63,11 +66,11 @@ type CompactMailInput struct {
 // CompactParams are window thresholds shown in empty/footer.
 type CompactParams struct {
 	SinceDuration string
+	Gate          CompactGate
 	BulkThreshold int
 	MinDeltaChars int
 	MinDeltaLines int
 	TopHot        int
-	TopNotice     int
 }
 
 func RenderCompactSubject(in *CompactMailInput) string {
@@ -107,23 +110,27 @@ func buildCompactDocument(in *CompactMailInput) *md.Document {
 	switch {
 	case in.AISkipped:
 		if in.SkipAI {
-			doc.Add(md.Paragraph("AI skipped intentionally (--skip-ai) — showing hot topics only (not compact recommendations)."))
+			doc.Add(md.Paragraph("AI skipped intentionally (--skip-ai) — showing topics, not compact recommendations."))
 		} else {
-			doc.Add(md.Paragraph("AI unavailable — showing hot topics only (not compact recommendations)."))
+			doc.Add(md.Paragraph("AI unavailable — showing topics, not compact recommendations."))
 		}
-		if len(in.HotTopics) > 0 {
-			doc.Add(hotTopicsSection(in.HotTopics))
-		}
+		doc.Add(heatSection(in))
 	case len(in.Notices) == 0:
 		doc.Add(md.Paragraph("0 compact notices in this window."))
-		if len(in.HotTopics) > 0 {
+		if len(in.Heat) > 0 {
 			doc.Add(md.Paragraph(fmt.Sprintf(
-				"%d hot topic(s) after filters; AI recommended none (or all cooled).",
-				len(in.HotTopics),
+				"%d topic(s) admitted; AI recommended none (or all cooled / duplicate).",
+				len(in.Heat),
 			)))
-			doc.Add(hotTopicsSection(in.HotTopics))
+			doc.Add(heatSection(in))
+		} else if len(in.Rejected) > 0 {
+			doc.Add(md.Paragraph(fmt.Sprintf(
+				"%d hot topic(s) after heat gate; AI judged none worth a blog.",
+				len(in.Rejected),
+			)))
+			doc.Add(heatSection(in))
 		} else {
-			doc.Add(md.Paragraph("0 hot topics in window."))
+			doc.Add(md.Paragraph("0 hot topics in window (heat gate rejected all)."))
 		}
 	default:
 		for i := range in.Notices {
@@ -132,6 +139,9 @@ func buildCompactDocument(in *CompactMailInput) *md.Document {
 			}
 			n := &in.Notices[i]
 			var body []md.Section
+			if n.SuggestedTitle != "" {
+				body = append(body, md.SectionList("Title", []string{n.SuggestedTitle}))
+			}
 			if n.SuggestedAngle != "" {
 				body = append(body, md.SectionList("Angle", []string{n.SuggestedAngle}))
 			}
@@ -143,6 +153,7 @@ func buildCompactDocument(in *CompactMailInput) *md.Document {
 			}
 			doc.Add(md.NamedSection(n.Topic.TopicPath, body...))
 		}
+		doc.Add(heatSection(in))
 	}
 
 	if in.AIFailures > 0 {
@@ -152,18 +163,64 @@ func buildCompactDocument(in *CompactMailInput) *md.Document {
 		)))
 	}
 
+	gate := in.Params.Gate
 	doc.Add(md.Paragraph(fmt.Sprintf(
-		"params: since=%s bulk≥%d minΔchars=%d minΔlines=%d topHot=%d topNotice=%d",
+		"params: since=%s bulk≥%d minΔchars=%d minΔlines=%d topHot=%d gate=days≥%d,commits≥%d,Δchars≥%d",
 		in.Params.SinceDuration,
 		in.Params.BulkThreshold,
 		in.Params.MinDeltaChars,
 		in.Params.MinDeltaLines,
 		in.Params.TopHot,
-		in.Params.TopNotice,
+		gate.MinEditDays,
+		gate.MinEditCommits,
+		gate.MinDeltaChars,
 	)))
 	doc.Add(md.Paragraph("Soft reminder only — write type:blog yourself or ignore. System never auto-writes blog/log."))
 
 	return doc
+}
+
+// heatSection renders the transparency table: every window topic with its heat
+// computation, score and gate verdict. The email keeps only the admitted
+// notices; `Rejected` is used when the summary-only empty state wants to show
+// why nothing passed (temp partition grouped by admission for readability).
+func heatSection(in *CompactMailInput) md.Section {
+	headers := []string{"topic", "days", "commits", "h2", "Δchars", "score", "last", "gate", "reason"}
+	rows := make([][]string, 0, len(in.Rejected))
+	hots := in.Rejected
+	// When we have admitted topics (they get rendered in Notices anyway), show
+	// the full heat table in `Heat`; otherwise show rejected with reasons.
+	switch {
+	case len(in.Heat) > 0:
+		hots = in.Heat
+	case len(in.HotTopics) > 0:
+		// AI-skip path: HotTopics carries the gate-passed list.
+		hots = in.HotTopics
+	}
+	for i := range hots {
+		h := &hots[i]
+		verdict := "pass"
+		reason := strings.Join(h.Reasons, "; ")
+		if !h.GatePassed {
+			verdict = "reject"
+		}
+		rows = append(rows, []string{
+			h.TopicPath,
+			strconv.Itoa(h.EditDays),
+			strconv.Itoa(h.EditCommits),
+			strconv.Itoa(h.H2Added),
+			strconv.Itoa(h.DeltaChars),
+			strconv.Itoa(h.Score),
+			carbon.CreateFromStdTime(h.LastEdit).ToDateString(),
+			verdict,
+			reason,
+		})
+	}
+	return md.NamedSection(
+		fmt.Sprintf("Heat · %d (gate: days≥%d ∧ commits≥%d ∨ Δchars≥%d)", len(hots),
+			in.Params.Gate.MinEditDays, in.Params.Gate.MinEditCommits, in.Params.Gate.MinDeltaChars),
+		md.Table(headers, rows),
+	)
 }
 
 func formatWindowLine(in *CompactMailInput) string {
@@ -177,24 +234,4 @@ func formatWindowLine(in *CompactMailInput) string {
 	}
 	end := carbon.CreateFromStdTime(in.Until).ToDateTimeString()
 	return fmt.Sprintf("Window: %s [%s, %s)", label, start, end)
-}
-
-func hotTopicsSection(hots []HotTopic) md.Section {
-	headers := []string{"topic", "days", "commits", "Δchars", "score", "last"}
-	rows := make([][]string, 0, len(hots))
-	for i := range hots {
-		h := &hots[i]
-		rows = append(rows, []string{
-			h.TopicPath,
-			strconv.Itoa(h.EditDays),
-			strconv.Itoa(h.EditCommits),
-			strconv.Itoa(h.DeltaChars),
-			strconv.Itoa(h.Score),
-			carbon.CreateFromStdTime(h.LastEdit).ToDateString(),
-		})
-	}
-	return md.NamedSection(
-		fmt.Sprintf("Hot topics · %d", len(hots)),
-		md.Table(headers, rows),
-	)
 }

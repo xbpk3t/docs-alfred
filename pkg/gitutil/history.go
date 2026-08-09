@@ -21,6 +21,10 @@ type LogEdit struct {
 	Diff       string
 	DeltaChars int
 	DeltaLines int
+	// H2Added is the number of markdown heading-2 lines (`## `) added by this
+	// edit — a structural signal that separates structured accumulation (many
+	// discrete entries) from one giant paste (large chars but no structure).
+	H2Added int
 }
 
 // CollectLogEditOptions controls commit-first log.md heat collection.
@@ -239,7 +243,7 @@ func editFromChange(lc logChange, hash string, when time.Time, opts *CollectLogE
 			return LogEdit{}, false, err
 		}
 	}
-	deltaChars, deltaLines, diffText := contentDelta(oldContent, newContent, opts.MaxDiffRunes)
+	deltaChars, deltaLines, h2Added, diffText := contentDelta(oldContent, newContent, opts.MaxDiffRunes)
 	if !isSubstantive(deltaChars, deltaLines, opts.MinDeltaChars, opts.MinDeltaLines) {
 		return LogEdit{}, false, nil
 	}
@@ -249,6 +253,7 @@ func editFromChange(lc logChange, hash string, when time.Time, opts *CollectLogE
 		When:       when,
 		DeltaChars: deltaChars,
 		DeltaLines: deltaLines,
+		H2Added:    h2Added,
 		Diff:       diffText,
 	}, true, nil
 }
@@ -268,13 +273,14 @@ func isSubstantive(deltaChars, deltaLines, minChars, minLines int) bool {
 	return deltaChars >= minChars || deltaLines >= minLines
 }
 
-// contentDelta returns non-whitespace char delta, non-empty line ± count, and a
-// short diff summary. Identical / whitespace-only content yields zeros.
-func contentDelta(oldContent, newContent string, maxDiffRunes int) (deltaChars, deltaLines int, diffText string) {
+// contentDelta returns non-whitespace char delta, non-empty line ± count, the
+// count of added markdown heading-2 lines (`## `), and a short diff summary.
+// Identical / whitespace-only content yields zeros (h2Added 0).
+func contentDelta(oldContent, newContent string, maxDiffRunes int) (deltaChars, deltaLines, h2Added int, diffText string) {
 	oldNorm := stripInsignificant(oldContent)
 	newNorm := stripInsignificant(newContent)
 	if oldNorm == newNorm {
-		return 0, 0, ""
+		return 0, 0, 0, ""
 	}
 
 	// Char delta: absolute difference in non-whitespace runes between sides,
@@ -307,8 +313,34 @@ func contentDelta(oldContent, newContent string, maxDiffRunes int) (deltaChars, 
 		deltaLines += countLines(d.Text)
 	}
 
+	h2Added = addedHeading2(oldLines, newLines)
+
 	diffText = buildDiffSummary(oldContent, newContent, maxDiffRunes)
-	return deltaChars, deltaLines, diffText
+	return deltaChars, deltaLines, h2Added, diffText
+}
+
+// addedHeading2 counts markdown heading-2 lines (`## `) present in newLines but
+// not in oldLines — the "structured entry added" signal. Uses the same
+// presence-map trick as buildDiffSummary so a heading moved/renamed inside the
+// file still counts as a structural addition.
+func addedHeading2(oldLines, newLines []string) int {
+	oldSet := make(map[string]bool, len(oldLines))
+	for _, line := range oldLines {
+		if isHeading2(line) {
+			oldSet[line] = true
+		}
+	}
+	n := 0
+	for _, line := range newLines {
+		if isHeading2(line) && !oldSet[line] {
+			n++
+		}
+	}
+	return n
+}
+
+func isHeading2(line string) bool {
+	return strings.HasPrefix(line, "## ") || line == "##"
 }
 
 func stripInsignificant(s string) string {

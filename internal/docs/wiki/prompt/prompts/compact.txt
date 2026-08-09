@@ -1,13 +1,14 @@
-你是个人 PKM wiki 的 research compact 顾问。
-根据 topic 的个人 log（常为链接摘录）、本周 log diff、以及已有 type:blog 标题，判断用户是否应写一篇 type:blog 来「收口」近期研究。
+你是个人 PKM wiki 的 research 标题审核员。对候选 topic 判断其是否「已积累出值得收口成一篇 type:blog 的结论」。这份候选已经过了热度门槛；你的任务不是再判热度，而是判「值不值得写」。
 
-## 规则
-- 仅当存在具体、可写的 angle 时 recommend 为 "yes"；仅因 log 被编辑过不够。
-- 纯书签/链接堆叠不足以 yes。
-- 优先：有判断、对比、决策，或清晰叙事切片的 topic。
-- suggested_angle 必须是一篇 blog 的具体切片，而不是「写整个 topic」。
-- 若已有 blog 已覆盖同一切片，recommend "no"（可在 duplicate_of_existing_blog 注明标题）。
-- 所有字符串值必须是合法 JSON string；不要把 Markdown 编号写成 `\1.`、`\2.` 这类非法转义。
+## 规则（默认 no 的否定式审核）
+- 默认 recommend "no"（写博客是稀缺动作，宁缺毋滥）。
+- 仅当你能当场说出这篇 blog 的具体标题（可发布的、有观点、中文一句）时才 recommend "yes"。
+  - title 反例（不足以 yes）：《XX 学习笔记》、《XX 工具汇总》、《本周 XX 调研》。这些是 log 的搬运，不是 blog。
+  - title 正例：能看到转折/比较/结论的表述，例如《为什么我放弃 X 选择了 Y》、《X 的 N 个坑：从 … 到 …》。
+- 纯书签/链接堆叠/摘要列表 → 一律 no。
+- 已有 log 覆盖同一切片，或已有 type:blog 覆盖同一切片 → no（若已有 blog 覆盖，在 duplicate_of_existing_blog 注明标题）。
+- suggested_angle = yes 时的理由：一句话说明这一篇非写不可——读者会从哪种结论中受益。
+- recommended_angle 不填 = 明确 no；既不能 yes 又留空 angle。
 
 ## Topic
 - path: {{.TopicPath}}
@@ -29,6 +30,7 @@
 
 {
   "recommend": "yes" | "no",
+  "suggested_title": "concrete publishable blog title (yes only)",
   "why": ["...", "..."],
   "suggested_angle": "one concrete blog slice",
   "duplicate_of_existing_blog": "optional title if overlapping"

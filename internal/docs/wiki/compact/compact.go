@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/blog"
@@ -26,19 +27,19 @@ type Window struct {
 
 // CompactOptions controls docs-cli wiki compact.
 type CompactOptions struct {
-	Now      func() time.Time
-	AI       *ai.ClientConfig
-	WindowFn func(now time.Time) (Window, bool, string)
-	RepoRoot string
-	WikiRoot string
-	// Title is compact brand (From / subject / issue title); empty → DefaultBrand.
+	AI               *ai.ClientConfig
+	WindowFn         func(now time.Time) (Window, bool, string)
+	Now              func() time.Time
+	RepoRoot         string
+	WikiRoot         string
 	Title            string
 	Mail             MailConfig
 	Linear           LinearConfig
+	Gate             CompactGate
 	MinDeltaChars    int
-	MinDeltaLines    int
 	BulkLogThreshold int
-	TopNotice        int
+	MinDeltaLines    int
+	MinGateAge       time.Duration
 	TopHot           int
 	SendMail         bool
 	CreateIssue      bool
@@ -46,26 +47,31 @@ type CompactOptions struct {
 	SkipAI           bool
 }
 
-// CompactResult is the pipeline outcome.
+// RunCompact is the entry point for the compact pipeline.
 type CompactResult struct {
-	Until           time.Time
-	Since           time.Time
-	SoftError       error
-	IssueTitle      string
-	IssueURL        string
-	Subject         string
-	TextBody        string
-	HTMLBody        string
-	SkipReason      string
-	IssueIdentifier string
-	HotTopics       []HotTopic
-	Judged          []CompactRecommend
-	Notices         []CompactRecommend
-	AIFailures      int
-	Skipped         bool
-	AISkipped       bool
-	MailSent        bool
-	IssueCreated    bool
+	WallClockNow     time.Time
+	Since            time.Time
+	Until            time.Time
+	SoftError        error
+	IssueTitle       string
+	IssueURL         string
+	Subject          string
+	TextBody         string
+	HTMLBody         string
+	SkipReason       string
+	IssueIdentifier  string
+	HotTopics        []HotTopic
+	Notices          []CompactRecommend
+	JudgedHeat       []HotTopic
+	Rejected         []HotTopic
+	Judged           []CompactRecommend
+	Gate             CompactGate
+	AIFailures       int
+	Skipped          bool
+	SkippedEmptyGate bool
+	AISkipped        bool
+	MailSent         bool
+	IssueCreated     bool
 }
 
 // RunCompact executes hot detect → AI → optional Resend and/or Linear issue create.
@@ -111,20 +117,34 @@ func RunCompact(ctx context.Context, opts *CompactOptions) (*CompactResult, erro
 	for i := range allHot {
 		allHot[i].TopicDir = filepath.Join(repoRoot, filepath.FromSlash(allHot[i].TopicDir))
 	}
-	hot := TopNHot(allHot, opts.TopHot)
+
+	gate := gateForWindow(opts, win.Start, now)
+	admitted, rejected := applyGate(gate, allHot)
+	hot := TopNHot(admitted, opts.TopHot)
 
 	result := &CompactResult{
-		Since:     win.Start,
-		Until:     win.End,
-		HotTopics: hot,
+		Since:        win.Start,
+		Until:        win.End,
+		HotTopics:    hot,
+		Gate:         gate,
+		WallClockNow: now,
+		Rejected:     rejected,
 	}
+	if len(hot) == 0 {
+		return result, emptyGateResult(result, gate, win, now, rejected)
+	}
+	result.JudgedHeat = hot
 
 	judged, aiSkipped, aiFailures := judgeTopics(ctx, opts, hot, win.Start)
 	result.Judged = judged
 	result.AISkipped = aiSkipped
 	result.AIFailures = aiFailures
-	if !aiSkipped {
-		result.Notices = SelectNotices(judged, opts.TopNotice)
+
+	// Hard gate: a topic whose AI judgement is "yes" but duplicates an existing
+	// blog slice is NOT admitted — fact, not counted. Empty input → skip delivery.
+	result.Notices = admittedNotices(judged)
+	if result.Notices == nil && !aiSkipped && !opts.SkipAI {
+		return result, noNoticesResult(result, opts, win, now, hot, aiSkipped, aiFailures)
 	}
 
 	if err := fillMailBodies(result, opts, win, now, hot, aiSkipped, aiFailures); err != nil {
@@ -140,6 +160,63 @@ func RunCompact(ctx context.Context, opts *CompactOptions) (*CompactResult, erro
 	}
 
 	return result, nil
+}
+
+// gateForWindow materializes the heat gate with its decay window clamped to
+// the run window (decayed topics below the gate are rejected).
+func gateForWindow(opts *CompactOptions, winStart, now time.Time) CompactGate {
+	gate := defaultGate(opts, winStart)
+	decaySince := now.Add(-opts.MinGateAge)
+	if opts.MinGateAge <= 0 || decaySince.Before(winStart) {
+		decaySince = winStart
+	}
+	gate.DecaySince = decaySince
+	return gate
+}
+
+// applyGate partitions topics into admitted (heat-passed) and rejected, and
+// records GatePassed/Reasons on each for the transparency table.
+func applyGate(gate CompactGate, topics []HotTopic) (admitted, rejected []HotTopic) {
+	admitted = make([]HotTopic, 0, len(topics))
+	rejected = make([]HotTopic, 0, len(topics))
+	for i := range topics {
+		pass, reasons := gate.PassesCompactGate(&topics[i])
+		topics[i].GatePassed = pass
+		topics[i].Reasons = reasons
+		if pass {
+			admitted = append(admitted, topics[i])
+		} else {
+			rejected = append(rejected, topics[i])
+		}
+	}
+	return admitted, rejected
+}
+
+// noNoticesResult marks the run skipped when AI judged nothing worth writing.
+func noNoticesResult(result *CompactResult, opts *CompactOptions, win Window, now time.Time,
+	hot []HotTopic, aiSkipped bool, aiFailures int) error {
+	result.Skipped = true
+	if err := fillMailBodies(result, opts, win, now, hot, aiSkipped, aiFailures); err != nil {
+		return err
+	}
+	result.SkipReason = "all hot topics were judged no (or duplicate) — nothing to compact"
+	return nil
+}
+
+// emptyGateResult fills the already-constructed result so the heat table is
+// still visible (the rejected list with reasons) and the run is marked skipped.
+func emptyGateResult(result *CompactResult, gate CompactGate, win Window,
+	now time.Time, rejected []HotTopic) error {
+	result.HotTopics = rejected
+	result.Rejected = rejected
+	result.Skipped = true
+	result.SkippedEmptyGate = true
+	if err := fillMailBodies(result, &CompactOptions{}, win, now, rejected, false, 0); err != nil {
+		return err
+	}
+	result.SkipReason = fmt.Sprintf("no topic cleared the heat gate (days≥%d ∧ commits≥%d ∨ Δchars≥%d)",
+		gate.MinEditDays, gate.MinEditCommits, gate.MinDeltaChars)
+	return nil
 }
 
 // SkipReasonWindow reports why now falls outside the schedule window.
@@ -350,6 +427,8 @@ func judgeTopics(
 	return judged, false, aiFailures
 }
 
+// fillMailBodies renders subject/HTML/text into result. `hot` is only used as
+// the fallback heat list for the "0 admitted" case (rejected carries reasons).
 func fillMailBodies(
 	result *CompactResult,
 	opts *CompactOptions,
@@ -365,7 +444,7 @@ func fillMailBodies(
 		MinDeltaChars: opts.MinDeltaChars,
 		MinDeltaLines: opts.MinDeltaLines,
 		TopHot:        opts.TopHot,
-		TopNotice:     opts.TopNotice,
+		Gate:          result.Gate,
 	}
 	mailIn := CompactMailInput{
 		Date:       now,
@@ -373,6 +452,8 @@ func fillMailBodies(
 		Until:      win.End,
 		Notices:    result.Notices,
 		HotTopics:  hot,
+		Heat:       result.JudgedHeat,
+		Rejected:   result.Rejected,
 		Title:      opts.Title,
 		AISkipped:  aiSkipped,
 		SkipAI:     opts.SkipAI,
@@ -393,9 +474,6 @@ func normalizeCompactOpts(opts *CompactOptions) {
 	if opts.TopHot <= 0 {
 		opts.TopHot = 10
 	}
-	if opts.TopNotice <= 0 {
-		opts.TopNotice = 5
-	}
 	if opts.BulkLogThreshold <= 0 {
 		opts.BulkLogThreshold = 10
 	}
@@ -405,4 +483,51 @@ func normalizeCompactOpts(opts *CompactOptions) {
 	if opts.MinDeltaLines <= 0 {
 		opts.MinDeltaLines = 2
 	}
+}
+
+// defaultGate materializes the heat gate defaults in one place.
+func defaultGate(opts *CompactOptions, winStart time.Time) CompactGate {
+	g := CompactGate{
+		// B1 + strictest delta bucket: sustained editing (≥2 distinct days ∧ ≥2
+		// distinct commits) OR one material append (≥2000 non-whitespace chars).
+		MinEditDays:    2,
+		MinEditCommits: 2,
+		MinDeltaChars:  2000,
+		DecaySince:     winStart,
+	}
+	// Caller overrides are honored where set (>0), keeping defaults centralized.
+	if opts.Gate.MinEditDays > 0 {
+		g.MinEditDays = opts.Gate.MinEditDays
+	}
+	if opts.Gate.MinEditCommits > 0 {
+		g.MinEditCommits = opts.Gate.MinEditCommits
+	}
+	if opts.Gate.MinDeltaChars > 0 {
+		g.MinDeltaChars = opts.Gate.MinDeltaChars
+	}
+	return g
+}
+
+// admittedNotices applies the final hard gates to AI judgements:
+//  1. cooling: a new type:blog authored in-window for the same topic → exclude.
+//  2. duplicate: AI said yes but named an existing blog it duplicates → no.
+//
+// Returns in input order (already score-sorted). Everything that survives is
+// delivered — no top-N cut, so when this list is empty the run is skipped.
+func admittedNotices(judged []CompactRecommend) []CompactRecommend {
+	out := make([]CompactRecommend, 0, len(judged))
+	for i := range judged {
+		r := &judged[i]
+		if r.SkippedCooling || !strings.EqualFold(r.Recommend, "yes") {
+			continue
+		}
+		if strings.TrimSpace(r.DuplicateOf) != "" {
+			// Hard gate: fact, not opinion — a yes that names an existing blog
+			// slice must not be delivered. The rejection stays visible in
+			// result.Judged; the mail heat table shows the topic as pass.
+			continue
+		}
+		out = append(out, *r)
+	}
+	return out
 }

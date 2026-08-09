@@ -23,8 +23,8 @@ func init() {
 func TestAggregateHotTopicsScoring(t *testing.T) {
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 	edits := []gitutil.LogEdit{
-		{Path: "wiki/AI/LLM/LLM/log.md", CommitHash: "a", When: now, DeltaChars: 100, Diff: "+ a"},
-		{Path: "wiki/AI/LLM/LLM/log.md", CommitHash: "b", When: now.Add(-24 * time.Hour), DeltaChars: 50, Diff: "+ b"},
+		{Path: "wiki/AI/LLM/LLM/log.md", CommitHash: "a", When: now, DeltaChars: 100, H2Added: 1, Diff: "+ a"},
+		{Path: "wiki/AI/LLM/LLM/log.md", CommitHash: "b", When: now.Add(-24 * time.Hour), DeltaChars: 50, H2Added: 1, Diff: "+ b"},
 		{Path: "wiki/infra/infra/proxy/log.md", CommitHash: "c", When: now, DeltaChars: 40, Diff: "+ c"},
 	}
 	hots := AggregateHotTopics(edits, "wiki")
@@ -32,7 +32,24 @@ func TestAggregateHotTopicsScoring(t *testing.T) {
 	require.Equal(t, "AI/LLM/LLM", hots[0].TopicPath)
 	require.Equal(t, 2, hots[0].EditDays)
 	require.Equal(t, 2, hots[0].EditCommits)
+	require.Equal(t, 2, hots[0].H2Added, "h2 across edits aggregate")
 	require.Greater(t, hots[0].Score, hots[1].Score)
+}
+
+func TestHotScoreStructureAware(t *testing.T) {
+	// Structured accumulation (2 days, 3 h2, 2 commits, modest chars) must
+	// beat a giant paste (1 day, 0 h2, 1 commit, huge chars) — the structure
+	// signal is what separates them.
+	structured := hotScore(2, 2, 3, 300)
+	giantPaste := hotScore(1, 1, 0, 5000)
+	require.Greater(t, structured, giantPaste,
+		"structured many-entry topic should outrank one-off giant paste")
+
+	// Same quantity but more structure → strictly higher score.
+	require.Greater(t, hotScore(2, 2, 5, 300), hotScore(2, 2, 0, 300))
+
+	// Caps: h2/days/commits saturate, chars keeps its bucket.
+	require.Equal(t, hotScore(9, 9, 99, 40), hotScore(7, 5, 5, 40), "caps kick in")
 }
 
 func TestTopNHot(t *testing.T) {
@@ -41,7 +58,7 @@ func TestTopNHot(t *testing.T) {
 	require.Len(t, TopNHot(in, 10), 3)
 }
 
-func TestSelectNoticesOnlyYes(t *testing.T) {
+func TestAdmittedNoticesOnlyYes(t *testing.T) {
 	in := []CompactRecommend{
 		{Recommend: "no", Topic: HotTopic{TopicPath: "a"}},
 		{Recommend: "yes", Topic: HotTopic{TopicPath: "b"}},
@@ -50,20 +67,41 @@ func TestSelectNoticesOnlyYes(t *testing.T) {
 		{Recommend: "yes", Topic: HotTopic{TopicPath: "e"}},
 		{Recommend: "yes", Topic: HotTopic{TopicPath: "f"}},
 	}
-	out := SelectNotices(in, 5)
+	out := admittedNotices(in)
 	require.Len(t, out, 5)
 	require.Equal(t, "b", out[0].Topic.TopicPath)
 	require.Equal(t, "f", out[4].Topic.TopicPath)
 }
 
-func TestSelectNoticesSkipsCooling(t *testing.T) {
+func TestAdmittedNoticesSkipsCooling(t *testing.T) {
 	in := []CompactRecommend{
 		{Recommend: "yes", SkippedCooling: true, Topic: HotTopic{TopicPath: "a"}},
 		{Recommend: "yes", Topic: HotTopic{TopicPath: "b"}},
 	}
-	out := SelectNotices(in, 5)
+	out := admittedNotices(in)
 	require.Len(t, out, 1)
 	require.Equal(t, "b", out[0].Topic.TopicPath)
+}
+
+func TestAdmittedNoticesDuplicateHardGate(t *testing.T) {
+	// AI said yes but named an existing blog slice → hard excluded.
+	in := []CompactRecommend{
+		{Recommend: "yes", DuplicateOf: "2026-07-01 — 已有 skills 复盘", Topic: HotTopic{TopicPath: "a"}},
+		{Recommend: "yes", Topic: HotTopic{TopicPath: "b"}},
+	}
+	out := admittedNotices(in)
+	require.Len(t, out, 1)
+	require.Equal(t, "b", out[0].Topic.TopicPath)
+	require.Equal(t, "yes", in[0].Recommend, "input not mutated; rejection is delivery-level")
+}
+
+func TestAdmittedNoticesDuplicateAll(t *testing.T) {
+	in := []CompactRecommend{
+		{Recommend: "yes", DuplicateOf: "x", Topic: HotTopic{TopicPath: "a"}},
+		{Recommend: "yes", DuplicateOf: "y", Topic: HotTopic{TopicPath: "b"}},
+	}
+	out := admittedNotices(in)
+	require.Empty(t, out, "all duplicates → empty notices → run skips")
 }
 
 func TestParseCompactJSONAcceptsBareObject(t *testing.T) {
@@ -303,10 +341,48 @@ func TestNormalizeCompactOptsDefaults(t *testing.T) {
 	opts := CompactOptions{}
 	normalizeCompactOpts(&opts)
 	require.Equal(t, 10, opts.TopHot)
-	require.Equal(t, 5, opts.TopNotice)
 	require.Equal(t, 10, opts.BulkLogThreshold)
 	require.Equal(t, 40, opts.MinDeltaChars)
 	require.Equal(t, 2, opts.MinDeltaLines)
+}
+
+func TestDefaultGateB1Strictest(t *testing.T) {
+	winStart := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	opts := &CompactOptions{}
+	gate := defaultGate(opts, winStart)
+	require.Equal(t, 2, gate.MinEditDays)
+	require.Equal(t, 2, gate.MinEditCommits)
+	require.Equal(t, 2000, gate.MinDeltaChars)
+	require.Equal(t, winStart, gate.DecaySince)
+}
+
+func TestPassesCompactGateCombo(t *testing.T) {
+	gate := CompactGate{MinEditDays: 2, MinEditCommits: 2, MinDeltaChars: 2000}
+	// 2 days × 2 commits clears via the combo branch.
+	ok, reasons := gate.PassesCompactGate(&HotTopic{EditDays: 2, EditCommits: 2, DeltaChars: 90})
+	require.True(t, ok)
+	require.Contains(t, strings.Join(reasons, " "), "≥ 2")
+	// 1 day × 1 commit with tiny delta → rejected.
+	ok, _ = gate.PassesCompactGate(&HotTopic{EditDays: 1, EditCommits: 1, DeltaChars: 90})
+	require.False(t, ok)
+	// 1 day but huge delta (≥2000) → admitted via chars branch.
+	ok, reasons = gate.PassesCompactGate(&HotTopic{EditDays: 1, EditCommits: 1, DeltaChars: 2500})
+	require.True(t, ok)
+	require.Contains(t, strings.Join(reasons, " "), "Δchars=2500")
+}
+
+func TestPassesCompactGateDecay(t *testing.T) {
+	gate := CompactGate{
+		MinEditDays: 2, MinEditCommits: 2, MinDeltaChars: 2000,
+		DecaySince: time.Date(2026, 7, 27, 0, 0, 0, 0, time.UTC),
+	}
+	// Hot on 07-21, before decay window → rejected despite combo passing.
+	ok, reasons := gate.PassesCompactGate(&HotTopic{
+		EditDays: 4, EditCommits: 3, DeltaChars: 800,
+		LastEdit: time.Date(2026, 7, 21, 10, 0, 0, 0, time.UTC),
+	})
+	require.False(t, ok)
+	require.Contains(t, strings.Join(reasons, " "), "decay")
 }
 
 func TestRenderCompactSubject(t *testing.T) {
@@ -339,13 +415,14 @@ func TestRenderCompactHTMLWithNotices(t *testing.T) {
 			MinDeltaChars: 40,
 			MinDeltaLines: 2,
 			TopHot:        10,
-			TopNotice:     5,
+			Gate:          CompactGate{MinEditDays: 2, MinEditCommits: 2, MinDeltaChars: 2000},
 		},
 		Notices: []CompactRecommend{
 			{
 				Recommend:      "yes",
+				SuggestedTitle: "为什么我放弃了 recall 训练",
 				SuggestedAngle: "从 CPA 配置到 grok 注册机集成",
-				Why:            []string{"本月多次实质性编辑", "尚未有对应 blog"},
+				Why:            []string{"本月多次实质性推进", "是否已对应 blog"},
 				BlogTitles:     []string{"2026-06-01 — older piece"},
 				Topic:          HotTopic{TopicPath: "AI/LLM/model-routing"},
 			},
@@ -366,7 +443,39 @@ func TestRenderCompactHTMLWithNotices(t *testing.T) {
 	require.Contains(t, text, "### Why")
 	require.Contains(t, text, "Window: last-month [")
 	require.Contains(t, text, "topHot=10")
-	require.Contains(t, text, "topNotice=5")
+	require.Contains(t, text, "gate=days≥2,commits≥2,Δchars≥2000")
+}
+
+func TestRenderCompactHeatTable(t *testing.T) {
+	in := CompactMailInput{
+		Date:  time.Date(2026, 7, 1, 5, 0, 0, 0, time.UTC),
+		Since: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		Until: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC),
+		Params: CompactParams{
+			SinceDuration: "last-month",
+			BulkThreshold: 10,
+			MinDeltaChars: 40,
+			MinDeltaLines: 2,
+			TopHot:        10,
+			Gate:          CompactGate{MinEditDays: 2, MinEditCommits: 2, MinDeltaChars: 2000},
+		},
+		Rejected: []HotTopic{{
+			TopicPath:  "infra/proxy",
+			EditDays:   1,
+			EditCommits: 1,
+			DeltaChars: 90,
+			DeltaLines: 3,
+			Score:      8,
+			LastEdit:   time.Date(2026, 6, 18, 0, 0, 0, 0, time.UTC),
+			GatePassed: false,
+			Reasons:    []string{"heat miss: days=1(<2) commits=1(<2) Δchars=90(<2000)"},
+		}},
+	}
+	text := RenderCompactText(&in)
+	require.Contains(t, text, "Heat · 1")
+	require.Contains(t, text, "infra/proxy")
+	require.Contains(t, text, "reject")
+	require.Contains(t, text, "heat miss: days=1")
 }
 
 func TestRenderCompactHTMLEmptyWithHotTable(t *testing.T) {
@@ -380,9 +489,9 @@ func TestRenderCompactHTMLEmptyWithHotTable(t *testing.T) {
 			MinDeltaChars: 40,
 			MinDeltaLines: 2,
 			TopHot:        10,
-			TopNotice:     5,
+			Gate:          CompactGate{MinEditDays: 2, MinEditCommits: 2, MinDeltaChars: 2000},
 		},
-		HotTopics: []HotTopic{
+		Heat: []HotTopic{
 			{
 				TopicPath:   "infra/proxy",
 				EditDays:    3,
@@ -390,6 +499,8 @@ func TestRenderCompactHTMLEmptyWithHotTable(t *testing.T) {
 				DeltaChars:  200,
 				Score:       42,
 				LastEdit:    time.Date(2026, 6, 18, 0, 0, 0, 0, time.UTC),
+				GatePassed:  true,
+				Reasons:     []string{"heat: 3d × 4 commits ≥ 2d × 2 commits"},
 			},
 		},
 	}
@@ -403,8 +514,10 @@ func TestRenderCompactHTMLEmptyWithHotTable(t *testing.T) {
 	require.Contains(t, html, "infra/proxy")
 	require.Contains(t, html, "<table")
 
+	require.Contains(t, html, "infra/proxy")
+
 	text := RenderCompactText(&in)
-	require.Contains(t, text, "Hot topics · 1")
+	require.Contains(t, text, "Heat · 1")
 	require.Contains(t, text, "infra/proxy")
 	require.Contains(t, text, "this window")
 }

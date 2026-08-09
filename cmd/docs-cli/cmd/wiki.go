@@ -245,7 +245,6 @@ type wikiCompactFlags struct {
 	wikiRoot         string
 	model            string
 	topHot           int
-	topNotice        int
 	bulkLogThreshold int
 	minDeltaChars    int
 	minDeltaLines    int
@@ -261,7 +260,10 @@ func newWikiCompactCmd() *cobra.Command {
 		Use:   wikiCompactCommandName,
 		Short: "Scheduled compact notice: hot log topics → AI → optional Resend + Linear",
 		Long: `Identify hot wiki topics (substantive committed log.md edits in the schedule window),
-ask AI whether a type:blog compact is warranted, and optionally deliver Top5 notices via Resend and/or a new Linear issue.
+ask AI whether a type:blog compact is warranted, and optionally deliver notices via Resend and/or a new Linear issue.
+Topics must clear the heat gate (≥2 distinct edit days ∧ ≥2 commits, OR ≥2000 Δchars) to reach AI; AI is asked
+to judge "is there a publishable blog" (default no), and duplicate/cooled topics are hard-excluded. When nothing
+clears (all no / all rejected), the run is skipped with zero side effects.
 
 Schedule is week-based, controlled by compact.schedule in the config (default 1 = weekly, 2 = every other week). A run fires only on the schedule day (Saturday) of an eligible week; any other day is skipped with zero side effects — actions may trigger daily and the CLI decides whether to run.
 
@@ -276,8 +278,7 @@ Brand from compact.title (From, mail subject prefix, issue title). Each run alwa
 	}
 	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path (wiki.yml)")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
-	cmd.Flags().IntVar(&flags.topHot, "top-hot", 10, "Max hot topics to send to AI")
-	cmd.Flags().IntVar(&flags.topNotice, "top-notice", 5, "Max yes notices in email")
+	cmd.Flags().IntVar(&flags.topHot, "top-hot", 10, "Max gate-passed hot topics to send to AI")
 	cmd.Flags().IntVar(&flags.bulkLogThreshold, "bulk-log-threshold", 10, "Ignore commits touching this many log.md paths")
 	cmd.Flags().IntVar(&flags.minDeltaChars, "min-delta-chars", 40, "Min non-whitespace char delta for substantive edit")
 	cmd.Flags().IntVar(&flags.minDeltaLines, "min-delta-lines", 2, "Min non-empty line ± for substantive edit")
@@ -344,7 +345,6 @@ func buildCompactOptions(cfg *wikiuc.Config, flags *wikiCompactFlags) (*wikicomp
 			return wikicompact.ScheduleWindow(cfg.Compact.Schedule, now)
 		},
 		TopHot:           flags.topHot,
-		TopNotice:        flags.topNotice,
 		BulkLogThreshold: flags.bulkLogThreshold,
 		MinDeltaChars:    flags.minDeltaChars,
 		MinDeltaLines:    flags.minDeltaLines,
@@ -417,6 +417,14 @@ func printCompactResult(w io.Writer, result *wikicompact.CompactResult, flags *w
 	}
 	if result.Skipped {
 		_, err := fmt.Fprintf(w, "wiki compact skipped: %s\n", result.SkipReason)
+		if err != nil {
+			return err
+		}
+		// Heat transparency: when the run produced an empty list, print the
+		// computation table so the user sees WHY each topic was rejected.
+		if result.TextBody != "" {
+			_, err = fmt.Fprint(w, "\n"+result.TextBody+"\n")
+		}
 		return err
 	}
 	if _, err := fmt.Fprint(w, result.TextBody); err != nil {

@@ -15,8 +15,9 @@ func TestCategoryFromFile(t *testing.T) {
 		{"home/base/foo/deep/file.nix", "foo"},
 		{"home/core/bar/some.nix", "bar"},
 		{"home/darwin/some.nix", "desktop"},
-		{"home/nixos/some.nix", "nixos"},
-		{"home/extra/some.nix", "extra"},
+		{"home/nixos/some.nix", "desktop"},
+		// home/extra was dropped from scopeMap in 92d14e2 (merge home scopes).
+		{"home/extra/some.nix", ""},
 		{"modules/nixos/foo/some.nix", "foo"},
 		{"modules/darwin/some.nix", "desktop"},
 		{"home/base", ""},
@@ -34,7 +35,7 @@ func TestDefaultScope(t *testing.T) {
 	expected := []string{
 		"home/base", "home/core",
 		"modules/nixos", "modules/darwin",
-		"home/darwin", "home/nixos", "home/extra",
+		"home/darwin", "home/nixos",
 	}
 	assert.Equal(t, expected, scope)
 }
