@@ -19,9 +19,9 @@ import (
 
 // MockUploader is a mock of Uploader interface.
 type MockUploader struct {
+	isgomock struct{}
 	ctrl     *gomock.Controller
 	recorder *MockUploaderMockRecorder
-	isgomock struct{}
 }
 
 // MockUploaderMockRecorder is the mock recorder for MockUploader.

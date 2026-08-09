@@ -19,9 +19,9 @@ import (
 
 // MockQueryer is a mock of Queryer interface.
 type MockQueryer struct {
+	isgomock struct{}
 	ctrl     *gomock.Controller
 	recorder *MockQueryerMockRecorder
-	isgomock struct{}
 }
 
 // MockQueryerMockRecorder is the mock recorder for MockQueryer.

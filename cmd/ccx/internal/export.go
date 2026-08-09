@@ -70,11 +70,9 @@ type Frontmatter struct {
 	Score int `yaml:"score"`
 }
 
-// classifyTitleResult is the JSON response from the merged classify+title AI call.
-type classifyTitleResult struct {
+// classifyTopicResult is the JSON response from the AI topic classification call.
+type classifyTopicResult struct {
 	TopicPath string `json:"topicPath"`
-	Title     string `json:"title"`
-	EngTitle  string `json:"engTitle"`
 }
 
 // ExportSession exports the current session to wiki.
@@ -93,7 +91,7 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 		fmt.Fprintf(os.Stderr, "Transcript: %s\n", resolved.TranscriptPath)
 	}
 
-	messages, err := parseResolvedSession(resolved, input.Verbose)
+	messages, err := parseResolvedSession(&resolved, input.Verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +102,7 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 
 	// Extract model before the AI call so a rare IO/scan failure fails fast
 	// without spending classify/title tokens. Missing model is not an error.
-	model, err := extractPrimaryModel(resolved)
+	model, err := extractPrimaryModel(&resolved)
 	if err != nil {
 		return nil, fmt.Errorf("extract model: %w", err)
 	}
@@ -112,10 +110,19 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 		fmt.Fprintf(os.Stderr, "Primary model: %s\n", model)
 	}
 
-	topicPath, title, engTitle, err := classifyAndGenerateTitle(messages, input)
+	topicPath, err := classifyTopicPath(messages, input)
 	if err != nil {
 		return nil, fmt.Errorf("classify: %w", err)
 	}
+
+	// Three-part title (display title, filename slug, frontmatter title) is
+	// set from a single authoritative source: the agent's session name. AI
+	// never decides the title. When the session name is missing (short cc
+	// sessions have no ai-title yet) the export aborts — no fallback.
+	if resolved.Title == "" {
+		return nil, errors.New("session has no session name (ai-title); cannot export without a title")
+	}
+	title, engTitle := titleComponentsFromTitle(resolved.Title)
 	outputPath := determineOutputPath(input, engTitle, topicPath)
 
 	if input.Verbose {
@@ -171,7 +178,7 @@ func validateExportInput(input *ExportInput) error {
 	return nil
 }
 
-func parseResolvedSession(resolved SessionRef, verbose bool) ([]session.Message, error) {
+func parseResolvedSession(resolved *SessionRef, verbose bool) ([]session.Message, error) {
 	messages, err := parseTranscript(resolved)
 	if err != nil {
 		return nil, err
@@ -191,7 +198,7 @@ func parseResolvedSession(resolved SessionRef, verbose bool) ([]session.Message,
 	return messages, nil
 }
 
-func parseTranscript(resolved SessionRef) ([]session.Message, error) {
+func parseTranscript(resolved *SessionRef) ([]session.Message, error) {
 	switch resolved.Agent {
 	case AgentCC:
 		messages, err := session.Parse(resolved.TranscriptPath)
@@ -212,60 +219,43 @@ func parseTranscript(resolved SessionRef) ([]session.Message, error) {
 	}
 }
 
-// classifyAndGenerateTitle performs a single AI call to classify content and generate titles.
-// When AI classification fails (error, empty/invalid topic path), falls back to wiki root
-// with a user-derived title — export always happens.
-func classifyAndGenerateTitle(messages []session.Message, input *ExportInput) (string, string, string, error) {
-	topicPath, title, engTitle, err := mergedClassifyAndTitle(messages, input)
+// classifyTopicPath determines the topic path via AI. The AI has no role in
+// title generation: the title derives from the session name (resolved.Title).
+// An AI failure or unresolvable topic path maps to an empty topic path, which
+// downstream code interprets as "write to wiki root directory".
+func classifyTopicPath(messages []session.Message, input *ExportInput) (string, error) {
+	if input.AIConfig == nil {
+		slog.Warn("no AI config, exporting to wiki root")
+
+		return "", nil
+	}
+
+	topicPath, err := mergedClassifyTopicPath(messages, input)
 	if err != nil {
-		slog.Warn("AI classification failed, falling back to wiki root", "error", err)
+		slog.Warn("AI classification failed, exporting to wiki root", "error", err)
 
-		return fallbackToWikiRoot(messages)
-	}
-	if topicPath == "" {
-		slog.Warn("AI returned empty topic path, exporting to wiki root",
-			"title", title, "engTitle", engTitle)
-
-		return "", title, engTitle, nil
+		return "", nil
 	}
 
-	return topicPath, title, engTitle, nil
+	return topicPath, nil
 }
 
-// fallbackToWikiRoot derives a title from user messages and returns an empty topic path,
-// which downstream code interprets as "write to wiki root directory".
-func fallbackToWikiRoot(messages []session.Message) (string, string, string, error) {
-	title := fallbackTitleFromMessages(messages)
-	if title == "" {
-		title = "session-export"
-	}
-	engTitle := trimEngTitle(title)
-	if engTitle == "" {
-		engTitle = "session-export"
+// titleComponentsFromTitle derives the display title and its ASCII filename slug
+// from the session name using the same cleaning rules.
+func titleComponentsFromTitle(sessionName string) (title, engTitle string) {
+	title = trimTitle(sessionName)
+	if engTitle := trimEngTitle(sessionName); engTitle != "" {
+		return title, engTitle
 	}
 
-	return "", title, engTitle, nil
+	return title, title
 }
 
-// fallbackTitleFromMessages derives a title from the first non-empty user message.
-func fallbackTitleFromMessages(messages []session.Message) string {
-	for _, msg := range messages {
-		if msg.Role != roleUser {
-			continue
-		}
-		if t := textutil.FirstLineTitle(msg.Content, 50); t != "" {
-			return trimTitle(t)
-		}
-	}
-
-	return ""
-}
-
-// mergedClassifyAndTitle makes a single AI call to determine topicPath, title, and engTitle.
-func mergedClassifyAndTitle(messages []session.Message, input *ExportInput) (string, string, string, error) {
+// mergedClassifyTopicPath makes a single AI call to determine topicPath only.
+func mergedClassifyTopicPath(messages []session.Message, input *ExportInput) (string, error) {
 	prompt, candidates, err := renderClassifyTitlePrompt(messages, input.WikiRoot)
 	if err != nil {
-		return "", "", "", fmt.Errorf("render prompt: %w", err)
+		return "", fmt.Errorf("render prompt: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), mergedAITimeout)
@@ -275,29 +265,20 @@ func mergedClassifyAndTitle(messages []session.Message, input *ExportInput) (str
 		{Role: roleUser, Content: prompt},
 	})
 	if err != nil {
-		return "", "", "", fmt.Errorf("AI call: %w", err)
+		return "", fmt.Errorf("AI call: %w", err)
 	}
 
-	result, err := parseClassifyTitleResult(response)
+	result, err := parseClassifyTopicResult(response)
 	if err != nil {
-		return "", "", "", fmt.Errorf("parse AI response: %w", err)
+		return "", fmt.Errorf("parse AI response: %w", err)
 	}
 
 	topicPath, err := normalizeTopicPath(input.WikiRoot, result.TopicPath, candidates)
 	if err != nil {
-		return "", "", "", err
+		return "", err
 	}
 
-	title := trimTitle(result.Title)
-	engTitle := trimEngTitle(result.EngTitle)
-	if title == "" {
-		return "", "", "", errors.New("AI returned empty title")
-	}
-	if engTitle == "" || engTitle == "untitled" {
-		return "", "", "", fmt.Errorf("AI returned unusable engTitle %q", result.EngTitle)
-	}
-
-	return topicPath, title, engTitle, nil
+	return topicPath, nil
 }
 
 func normalizeTopicPath(wikiRoot, topicPath string, candidates []ghindex.TopicCandidate) (string, error) {
@@ -362,8 +343,8 @@ func renderClassifyTitlePrompt(messages []session.Message, wikiRoot string) (str
 	return buf.String(), candidates, nil
 }
 
-// parseClassifyTitleResult parses the JSON response from the merged AI call.
-func parseClassifyTitleResult(raw string) (*classifyTitleResult, error) {
+// parseClassifyTopicResult parses the JSON response from the AI topic call.
+func parseClassifyTopicResult(raw string) (*classifyTopicResult, error) {
 	// Strip markdown code fence if present
 	raw = strings.TrimSpace(raw)
 	if strings.HasPrefix(raw, "```") {
@@ -374,7 +355,7 @@ func parseClassifyTitleResult(raw string) (*classifyTitleResult, error) {
 		}
 	}
 
-	var result classifyTitleResult
+	var result classifyTopicResult
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		return nil, err
 	}
@@ -412,7 +393,7 @@ func trimEngTitle(engTitle string) string {
 
 // extractPrimaryModel returns the last real model used in the transcript.
 // Missing model is not an error (returns "").
-func extractPrimaryModel(resolved SessionRef) (string, error) {
+func extractPrimaryModel(resolved *SessionRef) (string, error) {
 	switch resolved.Agent {
 	case AgentCC:
 		return session.ExtractPrimaryModelCC(resolved.TranscriptPath)
