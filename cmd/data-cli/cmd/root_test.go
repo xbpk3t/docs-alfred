@@ -11,7 +11,7 @@ func TestRootCommandOwnsDataActions(t *testing.T) {
 	root := newRootCmd()
 
 	require.Equal(t, "data-cli", root.Name())
-	requireCommandNames(t, root.Commands(), []string{"check", "dedup", "dump", "render", "schema"})
+	requireCommandNames(t, root.Commands(), []string{"check", "dedup", "dump", "goods", "render", "schema"})
 }
 
 func requireCommandNames(t *testing.T, commands []*cobra.Command, want []string) {
