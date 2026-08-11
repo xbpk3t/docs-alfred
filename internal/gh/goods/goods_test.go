@@ -4,37 +4,22 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 )
 
-func TestGoods_Struct(t *testing.T) {
+func TestGoods_StructV2(t *testing.T) {
 	g := Goods{
-		Tag:   "EDC",
-		Type:  "耳机",
-		Des:   "test",
-		Score: 4,
+		Type: "EDC",
+		Tag:  "goods",
+		Topics: []content.Topic{{
+			Topic: "backpack",
+			Score: 5,
+			Table: []map[string]interface{}{{"name": "TYP7", "price": "¥339"}},
+		}},
 	}
-	assert.Equal(t, "EDC", g.Tag)
-	assert.Equal(t, "耳机", g.Type)
-	assert.Equal(t, "test", g.Des)
-	assert.Equal(t, 4, g.Score)
-}
-
-func TestItem_Struct(t *testing.T) {
-	item := Item{
-		Name:     "C50",
-		Param:    "参数",
-		Price:    "¥179",
-		Date:     "2023-04-29",
-		EndDate:  "2025-08-27",
-		EndPrice: "¥20",
-		Des:      "test",
-		URL:      "https://example.com",
-		Use:      true,
-	}
-	assert.Equal(t, "C50", item.Name)
-	assert.Equal(t, "¥179", item.Price)
-	assert.Equal(t, "2023-04-29", item.Date)
-	assert.Equal(t, "2025-08-27", item.EndDate)
-	assert.Equal(t, "¥20", item.EndPrice)
-	assert.True(t, item.Use)
+	assert.Equal(t, "EDC", g.Type)
+	assert.Equal(t, "goods", g.Tag)
+	assert.Len(t, g.Topics, 1)
+	assert.Equal(t, "backpack", g.Topics[0].Topic)
+	assert.Equal(t, "¥339", g.Topics[0].Table[0]["price"])
 }

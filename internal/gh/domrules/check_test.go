@@ -785,3 +785,56 @@ func TestCheckFile_GoodsTableItemMissingName(t *testing.T) {
 	assertHasError(t, issues, true)
 	require.True(t, containsIssue(issues, "缺少必填字段 name"), "issues: %#v", issues)
 }
+
+func TestCheckFile_GoodsEndPriceRequiresEndDate(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          price: ¥100
+          endPrice: ¥50
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "endPrice 必须和 endDate 同时存在"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsEndDateAloneAllowed(t *testing.T) {
+	// endDate alone is valid (disposed without a sale price).
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          price: ¥100
+          endDate: 2025-01-01
+`)
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsEndDateAtTopicLevel(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      endDate: 2025-01-01
+      table: []
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "endDate 只能写在 table 项上"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsEndDateAtTopLevel(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  endDate: 2025-01-01
+  topics: []
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "endDate 只能写在 table 项上"), "issues: %#v", issues)
+}
