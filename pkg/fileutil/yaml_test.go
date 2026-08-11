@@ -24,17 +24,33 @@ func TestListYAMLFiles(t *testing.T) {
 	require.Equal(t, want, files)
 }
 
-func TestListYAMLFilesRecursive(t *testing.T) {
+func TestListYAMLFilesIncludeHidden(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "a.yml"))
+	writeTestFile(t, filepath.Join(dir, ".hidden.yml"))
+	writeTestFile(t, filepath.Join(dir, ".hidden.yaml"))
+	writeTestFile(t, filepath.Join(dir, ".hidden.txt"))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, ".hidden_dir"), DirPerm))
+	writeTestFile(t, filepath.Join(dir, ".hidden_dir", "nested.yml"))
+
+	files, err := ListYAMLFiles(dir, ListOptions{IncludeHidden: true})
+	require.NoError(t, err)
+
+	want := []string{filepath.Join(dir, ".hidden.yaml"), filepath.Join(dir, ".hidden.yml"), filepath.Join(dir, "a.yml")}
+	require.Equal(t, want, files)
+}
+
+func TestListYAMLFilesRecursiveIncludeHidden(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "a.yml"))
 	writeTestFile(t, filepath.Join(dir, ".hidden.yml"))
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "subdir"), DirPerm))
 	writeTestFile(t, filepath.Join(dir, "subdir", "nested.yaml"))
 
-	files, err := ListYAMLFilesRecursive(dir)
+	files, err := ListYAMLFilesRecursive(dir, ListOptions{IncludeHidden: true})
 	require.NoError(t, err)
 
-	want := []string{filepath.Join(dir, "a.yml"), filepath.Join(dir, "subdir", "nested.yaml")}
+	want := []string{filepath.Join(dir, ".hidden.yml"), filepath.Join(dir, "a.yml"), filepath.Join(dir, "subdir", "nested.yaml")}
 	require.Equal(t, want, files)
 }
 

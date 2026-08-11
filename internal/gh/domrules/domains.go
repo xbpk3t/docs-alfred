@@ -24,7 +24,7 @@ var domainSpecs = []DomainSpec{
 	{Domain: DomainMusic, DefaultPath: "data/music", RuleScope: ScopeMusic, StructuredCheck: true, DuplicateCheck: true},
 	{Domain: DomainDiary, DefaultPath: "data/diary", RuleScope: ScopeDiary, StructuredCheck: true},
 	{Domain: DomainGH, DefaultPath: "data/gh", DuplicateCheck: true},
-	{Domain: DomainGoods, DefaultPath: "data/goods", YAMLParseOnly: true},
+	{Domain: DomainGoods, DefaultPath: "data/goods", RuleScope: ScopeGoods, StructuredCheck: true},
 	{Domain: DomainTask, DefaultPath: "data", YAMLParseOnly: true},
 	{Domain: DomainNtl, DefaultPath: "data/.archive/ntl", RuleScope: RuleScope(DomainNtl), StructuredCheck: true},
 }
@@ -61,6 +61,8 @@ func ResolveScope(file, scope string) RuleScope {
 		return ScopeMusic
 	case "diary":
 		return ScopeDiary
+	case "goods":
+		return ScopeGoods
 	case "ntl":
 		filename := strings.ToLower(filepath.Base(file))
 		if filename == "jav.yml" {
@@ -84,6 +86,9 @@ func detectScopeFromFilename(file string) RuleScope {
 	if strings.HasPrefix(filename, "music-") && strings.HasSuffix(filename, ".yml") {
 		return ScopeMusic
 	}
+	if strings.HasPrefix(filename, "goods.") && (strings.HasSuffix(filename, ".yml") || strings.HasSuffix(filename, ".yaml")) {
+		return ScopeGoods
+	}
 
 	return ScopeBooks
 }
@@ -97,6 +102,8 @@ func AllowedFieldsForScope(scope RuleScope) map[string]bool {
 		return JavFields
 	case ScopeVG:
 		return VGFields
+	case ScopeGoods:
+		return GoodsFields
 	case ScopeBooks, ScopeMovie:
 		return ContentFields
 	case ScopeMusic:

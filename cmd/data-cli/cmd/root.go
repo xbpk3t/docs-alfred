@@ -86,6 +86,7 @@ func newRenderCmd(dataPath *string) *cobra.Command {
 
 func newCheckCmd(dataPath *string) *cobra.Command {
 	var ruleScope string
+	var includeHidden bool
 
 	cmd := &cobra.Command{
 		Use:   "check <domain>",
@@ -97,21 +98,23 @@ func newCheckCmd(dataPath *string) *cobra.Command {
 				return err
 			}
 
-			return runDomainCheck(domain, *dataPath, ruleScope)
+			return runDomainCheck(domain, *dataPath, ruleScope, includeHidden)
 		},
 	}
 
 	cmd.Flags().StringVar(&ruleScope, "rule-scope", "", "Override structured data check rule scope")
 	_ = cmd.Flags().MarkHidden("rule-scope")
+	cmd.Flags().BoolVar(&includeHidden, "include-hidden", false, "Include hidden (dot-prefixed) YAML files in the check")
 
 	return cmd
 }
 
-func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string) error {
+func runDomainCheck(domain data.DataDomain, dataPath, ruleScope string, includeHidden bool) error {
 	result, err := dataops.RunDomainCheck(dataops.DomainCheckInput{
-		Domain:    domain,
-		Path:      dataPath,
-		RuleScope: ruleScope,
+		Domain:        domain,
+		Path:          dataPath,
+		RuleScope:     ruleScope,
+		IncludeHidden: includeHidden,
 	})
 	if err != nil {
 		return err

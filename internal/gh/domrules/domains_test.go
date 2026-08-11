@@ -32,6 +32,31 @@ func TestSpecForDomainUnknown(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestSpecForDomainGoods(t *testing.T) {
+	spec, ok := SpecForDomain(DomainGoods)
+	require.True(t, ok)
+	require.Equal(t, "data/goods", spec.DefaultPath)
+	require.Equal(t, ScopeGoods, spec.RuleScope)
+	require.True(t, spec.StructuredCheck)
+	require.False(t, spec.YAMLParseOnly)
+}
+
+func TestResolveScopeGoods(t *testing.T) {
+	require.Equal(t, ScopeGoods, ResolveScope("data/goods/goods.EDC.yml", ""))
+	require.Equal(t, ScopeGoods, ResolveScope("data/goods/goods.food.yml", ""))
+	require.Equal(t, ScopeGoods, ResolveScope("data/goods/goods.durs.yml", ""))
+	require.Equal(t, ScopeGoods, ResolveScope("any.yml", "goods"))
+	require.Equal(t, ScopeBooks, ResolveScope("data/goods/other.yml", ""), "non-goods-prefixed file stays books scope")
+}
+
+func TestAllowedFieldsForScopeGoods(t *testing.T) {
+	fields := AllowedFieldsForScope(ScopeGoods)
+	for _, f := range []string{"type", "tag", "topics", "topic", "table", "score", "name", "brand", "param", "price", "date", "endDate", "endPrice", "isUsing"} {
+		assert.True(t, fields[f], "GoodsFields should allow %q", f)
+	}
+	assert.False(t, fields["author"], "GoodsFields should not allow author")
+}
+
 func TestDefaultPathForDomain(t *testing.T) {
 	tests := []struct {
 		domain DataDomain

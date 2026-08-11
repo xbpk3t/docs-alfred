@@ -3,6 +3,7 @@ package domrules
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -389,5 +390,217 @@ func TestCheckFile_ScoreIntegerNodeValid(t *testing.T) {
 func TestCheckFile_SubFieldWithNilKV(t *testing.T) {
 	// sub item with a mapping that has empty key
 	issues := checkYAMLContent(t, "books.yml", "books", "- name: test\n  sub:\n    - name: sub1\n")
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsTableDateInvalidFormat(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          date: 2018-4-3
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "date 必须是 YYYY-MM-DD"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsTableDateValid(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          date: 2018-04-03
+`)
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsTableScoreOutOfRange(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          score: 99
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "score 范围必须是 0-5"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsTableUndefinedField(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          bogus: 1
+`)
+	require.Equal(t, 1, countIssues(issues, "未在规则中定义的字段: bogus"), "should warn once, not duplicate")
+}
+
+func TestCheckFile_GoodsMissingType(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- tag: goods
+  topics: []
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "缺少必填字段 type"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsTableNonArray(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table: not-array
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "table 必须是数组"), "issues: %#v", issues)
+}
+
+// helpers
+
+func containsIssue(issues []checkutil.Issue, substr string) bool {
+	for _, i := range issues {
+		if strings.Contains(i.Message, substr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func countIssues(issues []checkutil.Issue, substr string) int {
+	n := 0
+	for _, i := range issues {
+		if strings.Contains(i.Message, substr) {
+			n++
+		}
+	}
+
+	return n
+}
+
+func TestCheckFile_GoodsRecordStringItem(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          record:
+            - 1、【不喜欢硬板】
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "record 项必须是对象"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsRecordValidMappings(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          record:
+            - date: 2024-12-06
+              des: 换新
+`)
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsRecordDateInvalidFormat(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          record:
+            - date: 2020-2-1
+              des: x
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "date 必须是 YYYY-MM-DD"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsUsingDateInvalidFormat(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      using:
+        name: a
+        date: 2020-2-1
+      table: []
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "date 必须是 YYYY-MM-DD"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsUsingValid(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      using:
+        name: a
+        date: 2020-02-01
+        price: ¥100
+      table: []
+`)
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsScoreMinusOne(t *testing.T) {
+	// goods allows -1 as "no rating" placeholder.
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: -1
+      table: []
+`)
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsScoreMinusOneRejectedNonGoods(t *testing.T) {
+	// books scope still rejects -1.
+	issues := checkYAMLContent(t, "books.yml", "books", "- name: test\n  score: -1\n")
+	assertHasError(t, issues, true)
+}
+
+func TestCheckFile_GoodsFullValidStructure(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: 眼镜
+      score: 5
+      table:
+        - name: 钛框眼镜
+          brand: JINS
+          price: ¥100
+          date: 2019-07-01
+          isUsing: true
+      record:
+        - date: 2024-12-06
+          des: 换新
+      qs:
+        - 怎么选？
+`)
 	assertHasError(t, issues, false)
 }

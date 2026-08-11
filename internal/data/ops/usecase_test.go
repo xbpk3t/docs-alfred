@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
 func TestRunDomainCheck_UnknownDomain(t *testing.T) {
@@ -48,6 +49,30 @@ func TestRunDomainCheck_GoodsDomain(t *testing.T) {
 	result, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainGoods, Path: tmpDir})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
+}
+
+func TestRunDomainCheck_GoodsIgnoresHiddenByDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden.yml"), []byte(`---
+- tag: goods
+  topics: []
+`), 0644))
+
+	result, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainGoods, Path: tmpDir})
+	require.NoError(t, err)
+	assert.Empty(t, result.Issues)
+}
+
+func TestRunDomainCheck_GoodsIncludeHidden(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden.yml"), []byte(`---
+- tag: goods
+  topics: []
+`), 0644))
+
+	result, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainGoods, Path: tmpDir, IncludeHidden: true})
+	require.NoError(t, err)
+	assert.True(t, checkutil.HasErrors(result.Issues))
 }
 
 func TestRunDomainDedup_UnknownDomain(t *testing.T) {

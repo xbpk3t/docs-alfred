@@ -166,8 +166,27 @@ func TestNewCheckCmdRunEWithMaxLines(t *testing.T) {
 
 func TestRunDomainCheckGhValidData(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
-	err := runDomainCheck(data.DomainGH, ghDir, "")
+	err := runDomainCheck(data.DomainGH, ghDir, "", false)
 	require.NoError(t, err)
+}
+
+func TestCheckGoodsIncludeHiddenFlag(t *testing.T) {
+	goodsDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(goodsDir, ".hidden.yml"), []byte(`---
+- tag: goods
+  topics: []
+`), 0o644))
+
+	cmd := newRootCmd()
+
+	// Default: hidden file is ignored, check passes.
+	cmd.SetArgs([]string{"check", "goods", "--path", goodsDir})
+	require.NoError(t, cmd.Execute())
+
+	// With --include-hidden: hidden file is checked, check fails.
+	cmd = newRootCmd()
+	cmd.SetArgs([]string{"check", "goods", "--path", goodsDir, "--include-hidden"})
+	require.Error(t, cmd.Execute())
 }
 
 func TestRunDomainCheckGhInvalidKind(t *testing.T) {
@@ -176,19 +195,19 @@ func TestRunDomainCheckGhInvalidKind(t *testing.T) {
     - topic: overview
       kind: unset
 `})
-	err := runDomainCheck(data.DomainGH, ghDir, "")
+	err := runDomainCheck(data.DomainGH, ghDir, "", false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "data check gh failed")
 }
 
 func TestRunDomainCheckGhNonexistentPath(t *testing.T) {
-	err := runDomainCheck(data.DomainGH, "/tmp/__gh_no_such__", "")
+	err := runDomainCheck(data.DomainGH, "/tmp/__gh_no_such__", "", false)
 	require.Error(t, err)
 }
 
 func TestRunDomainCheckGhWithRuleScope(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
-	err := runDomainCheck(data.DomainGH, ghDir, "auto")
+	err := runDomainCheck(data.DomainGH, ghDir, "auto", false)
 	require.NoError(t, err)
 }
 
