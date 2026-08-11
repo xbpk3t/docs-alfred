@@ -190,13 +190,20 @@ func knownItemField(key string) bool {
 }
 
 // boolTrue reports whether v represents a true boolean.
-// YAML may decode "true" as a string when quotes are present.
+// goccy/yaml decodes true as bool, but unquoted YAML 1.1 truthy values
+// (on/yes/y/TRUE) come through as strings; all are accepted here so a
+// data typo like "isUsing: on" is not silently dropped.
 func boolTrue(v interface{}) bool {
 	switch b := v.(type) {
 	case bool:
 		return b
 	case string:
-		return strings.TrimSpace(strings.ToLower(b)) == "true"
+		switch strings.ToLower(strings.TrimSpace(b)) {
+		case "true", "on", "yes", "y":
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}

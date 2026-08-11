@@ -212,12 +212,90 @@ func TestExtractUsing_NumericName(t *testing.T) {
 	assert.Equal(t, "18616287252", out[0].Types[0].Topics[0].Items[0].Name)
 }
 
+// TestExtractUsing_RealWorldShapes covers real goods.*.yml patterns:
+// block-scalar des (des: |), inline comments, mixed indent, multi-topic files.
+func TestExtractUsing_RealWorldShapes(t *testing.T) {
+	dir := writeGoodsFiles(t, map[string]string{"goods.real.yml": `---
+- type: 耐用品 # 耐用商品
+  tag: goods
+  topics:
+    - topic: 速干浴巾 # quick-dry-towel
+      table:
+        - name: 速干浴巾 NH19Y001-J
+          brand: 挪客
+          price: ¥49
+          date: 2022-06-09
+          isUsing: true
+          des: |
+            有啥用？
+            - 在家直接用来装衣服，或者脏衣袋用。
+            - 用来当枕头用。
+
+        - name: 雅棉全棉面巾
+          brand: 雅棉
+          price: ¥58.5
+
+    - topic: 收纳袋
+      table:
+        - name: 抽绳束口#防水#收纳袋（15D尼龙涂硅）
+          brand: 三峰出
+          param: S码（12x28/15g）
+          price: "¥13"
+          isUsing: true
+
+- type: 虚拟物品
+  tag: goods
+  topics:
+    - topic: membership  # 会员
+      score: -1
+      table:
+        - name: 老乡鸡会员
+          price: ¥8/月
+        - name: 88VIP
+          price: ¥88/年
+          isUsing: true
+`})
+
+	out, err := ExtractUsing(dir)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Types, 2)
+
+	// 块标量 des 完整保留(含多行)
+	durs := out[0].Types[0]
+	require.Len(t, durs.Topics, 2)
+	towel := durs.Topics[0]
+	require.Len(t, towel.Items, 1)
+	assert.Equal(t, "速干浴巾 NH19Y001-J", towel.Items[0].Name)
+	assert.Contains(t, towel.Items[0].Des, "在家直接用来装衣服")
+	assert.Contains(t, towel.Items[0].Des, "用来当枕头用")
+
+	// 注释和 # 不干扰提取
+	bags := durs.Topics[1]
+	require.Len(t, bags.Items, 1)
+	assert.Equal(t, "抽绳束口#防水#收纳袋（15D尼龙涂硅）", bags.Items[0].Name)
+
+	// 第二个 type 的 isUsing 也提取
+	virtual := out[0].Types[1]
+	require.Len(t, virtual.Topics, 1)
+	require.Len(t, virtual.Topics[0].Items, 1)
+	assert.Equal(t, "88VIP", virtual.Topics[0].Items[0].Name)
+}
+
 func TestBoolTrue(t *testing.T) {
 	assert.True(t, boolTrue(true))
 	assert.True(t, boolTrue("true"))
 	assert.True(t, boolTrue(" TRUE "))
+	// YAML 1.1 真值(goccy 解析为字符串)也应视为 true
+	assert.True(t, boolTrue("on"))
+	assert.True(t, boolTrue("yes"))
+	assert.True(t, boolTrue("y"))
+	assert.True(t, boolTrue("On"))
 	assert.False(t, boolTrue(false))
 	assert.False(t, boolTrue("false"))
+	assert.False(t, boolTrue("off"))
+	assert.False(t, boolTrue("no"))
+	assert.False(t, boolTrue("n"))
 	assert.False(t, boolTrue(1))
 	assert.False(t, boolTrue(nil))
 }
