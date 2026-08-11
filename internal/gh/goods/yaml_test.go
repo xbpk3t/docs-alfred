@@ -16,23 +16,24 @@ func TestNewGoodsYAMLRender(t *testing.T) {
 func TestGoodsYAMLRender_Render(t *testing.T) {
 	r := NewGoodsYAMLRender()
 	data := []byte(`---
-- type: 耳机
-  tag: EDC
-  score: 4
-  using:
-    name: AirPods Pro
-    price: ¥1799
-  item:
-    - name: C50
-      price: ¥179
-      date: 2023-04-29
+- type: 耐用品
+  tag: goods
+  topics:
+    - topic: 收纳袋
+      score: 5
+      table:
+        - name: 抽绳束口收纳袋
+          brand: 三峰出
+          price: ¥13
+          isUsing: true
 `)
 	result, err := r.Render(data)
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
-	assert.Contains(t, result, "耳机")
-	assert.Contains(t, result, "EDC")
-	assert.Contains(t, result, "C50")
+	assert.Contains(t, result, "耐用品")
+	assert.Contains(t, result, "收纳袋")
+	assert.Contains(t, result, "抽绳束口收纳袋")
+	assert.Contains(t, result, "isUsing")
 }
 
 func TestGoodsYAMLRender_RenderInvalidYAML(t *testing.T) {

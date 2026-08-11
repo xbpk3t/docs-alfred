@@ -159,7 +159,7 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 		}
 		issues = append(issues, checkKeyValueAST(file, key, kv, allowedFields, scope)...)
 		if scope == ScopeGoods {
-			issues = append(issues, checkNestedFieldAST(file, key, kv.Value, allowedFields, scope, 0)...)
+			issues = append(issues, goodsFieldChecks(file, key, kv, allowedFields)...)
 		}
 	}
 
@@ -176,6 +176,18 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 				Message:  fmt.Sprintf("缺少必填字段 %s (%s)", required, path),
 			})
 		}
+	}
+
+	return issues
+}
+
+// goodsFieldChecks runs goods-scope field checks: nested descent plus
+// endDate/endPrice position constraints (only valid inside table rows).
+func goodsFieldChecks(file, key string, kv *ast.MappingValueNode, allowedFields map[string]bool) []checkutil.Issue {
+	issues := checkNestedFieldAST(file, key, kv.Value, allowedFields, ScopeGoods, 0)
+	// endDate/endPrice are only valid inside table rows (goods items).
+	if key == "endDate" || key == "endPrice" {
+		issues = append(issues, errIssue(file, kv.Key, key+" 只能写在 table 项上"))
 	}
 
 	return issues
@@ -217,7 +229,49 @@ func checkNestedFieldAST(file, key string, val ast.Node, allowedFields map[strin
 			if childKey == "topics" {
 				issues = append(issues, checkNestedFieldAST(file, childKey, kv.Value, allowedFields, scope, depth+1)...)
 			}
+			// endDate/endPrice are only valid inside table rows (goods items),
+			// never at topic or top level.
+			if childKey == "endDate" || childKey == "endPrice" {
+				issues = append(issues, errIssue(file, kv.Key, childKey+" 只能写在 table 项上"))
+			}
 		}
+	}
+
+	return issues
+}
+
+// checkTableRowAST validates a single table row: required name, field values,
+// and the endPrice/endDate pairing (v1 semantics: endPrice requires endDate;
+// endDate alone is allowed, e.g. disposed without a sale price).
+func checkTableRowAST(file string, mapping *ast.MappingNode, allowedFields map[string]bool, scope RuleScope, field string) []checkutil.Issue {
+	var issues []checkutil.Issue
+	hasName := false
+	hasEndDate := false
+	hasEndPrice := false
+	for _, kv := range mapping.Values {
+		if kv == nil {
+			continue
+		}
+		childKey := yamlutil.KeyString(kv.Key)
+		if childKey == "" {
+			continue
+		}
+		if childKey == fieldName {
+			hasName = true
+		}
+		if childKey == "endDate" {
+			hasEndDate = true
+		}
+		if childKey == "endPrice" {
+			hasEndPrice = true
+		}
+		issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
+	}
+	if !hasName {
+		issues = append(issues, errIssue(file, mapping, field+" 项缺少必填字段 name"))
+	}
+	if hasEndPrice && !hasEndDate {
+		issues = append(issues, errIssue(file, mapping, "endPrice 必须和 endDate 同时存在"))
 	}
 
 	return issues
@@ -356,23 +410,7 @@ func checkTableFieldAST(file string, val ast.Node, allowedFields map[string]bool
 			issues = append(issues, errIssue(file, item, field+" 项必须是对象（name/price/...）"))
 			continue
 		}
-		hasName := false
-		for _, kv := range mapping.Values {
-			if kv == nil {
-				continue
-			}
-			childKey := yamlutil.KeyString(kv.Key)
-			if childKey == "" {
-				continue
-			}
-			if childKey == fieldName {
-				hasName = true
-			}
-			issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
-		}
-		if !hasName {
-			issues = append(issues, errIssue(file, mapping, field+" 项缺少必填字段 name"))
-		}
+		issues = append(issues, checkTableRowAST(file, mapping, allowedFields, scope, field)...)
 	}
 
 	return issues
