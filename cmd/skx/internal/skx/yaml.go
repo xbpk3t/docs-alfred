@@ -55,6 +55,8 @@ const (
 	keyParams   = "params"
 	keyFormat   = "format"
 	keyStruct   = "struct"
+	keyKey      = "key"
+	keyVal      = "val"
 	keyTemplate = "template"
 	keyFewShot  = "few-shot"
 	keyRules    = "rules"

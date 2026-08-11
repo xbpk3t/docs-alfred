@@ -141,7 +141,21 @@ func TestCheckSchemaDrift(t *testing.T) {
 
 	_, err := CheckDir(dir, filepath.Join(dir, "prpt.yml"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown top-level key")
+	assert.Contains(t, err.Error(), `unknown key "brand-new"`)
+}
+
+func TestCheckDirFlatSchemaOK(t *testing.T) {
+	// prpt.yml declares frontmatter keys flat (top level) — must be accepted.
+	root := t.TempDir()
+	refs := filepath.Join(root, "references")
+	require.NoError(t, os.MkdirAll(refs, 0o755))
+	flatSchema := "name: x\nrole: atom\ndesc: d\nis-save: true\nwhat:\n  is:\n  not:\n"
+	writeFile(t, filepath.Join(root, "prpt.yml"), flatSchema)
+	writeFile(t, filepath.Join(refs, "a.yml"), samplePrompt)
+
+	res, err := CheckDir(refs, filepath.Join(root, "prpt.yml"))
+	require.NoError(t, err)
+	assert.Empty(t, res.Issues)
 }
 
 func TestFindSchema(t *testing.T) {

@@ -73,17 +73,16 @@ func renderPrompt(p *Prompt) string {
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
-// renderFrontmatter re-emits the nested frontmatter block verbatim (原样),
-// without flattening name/role into top-level keys.
+// renderFrontmatter re-emits the frontmatter keys flattened to the top level
+// of the --- block (name/role/desc/... at column 0), matching what
+// gen-aliases.nu and zzz.nu expect when they parse the rendered .md.
 func renderFrontmatter(p *Prompt) string {
 	if len(p.Frontmatter) == 0 {
 		return ""
 	}
-	doc := yaml.MapSlice{{Key: keyFrontmatter, Value: p.Frontmatter}}
-	raw, err := yaml.Marshal(doc)
+	raw, err := yaml.Marshal(p.Frontmatter)
 	if err != nil {
-		// Fall back to the inner slice: content is preserved either way.
-		raw, _ = yaml.Marshal(p.Frontmatter)
+		return ""
 	}
 	return "---\n" + string(raw) + "---\n"
 }
@@ -232,13 +231,11 @@ func renderOutput(b *strings.Builder, doc map[string]any) {
 	}
 	if v, ok := getString(m, keyTemplate); ok && strings.TrimSpace(v) != "" {
 		b.WriteString("\n**template:**\n\n")
-		b.WriteString(strings.TrimRight(v, "\n"))
-		b.WriteString("\n")
+		b.WriteString(fencedCode(v))
 	}
 	if v, ok := getString(m, keyFewShot); ok && strings.TrimSpace(v) != "" {
 		b.WriteString("\n**few-shot:**\n\n")
-		b.WriteString(strings.TrimRight(v, "\n"))
-		b.WriteString("\n")
+		b.WriteString(fencedCode(v))
 	}
 
 	// Render every schema-valid output sub-key we have no dedicated renderer
@@ -265,6 +262,13 @@ func renderOutput(b *strings.Builder, doc map[string]any) {
 		raw, _ := yaml.Marshal(v)
 		b.WriteString("```yaml\n" + string(raw) + "```\n")
 	}
+}
+
+// fencedCode wraps content in a fenced code block so embedded markdown
+// headings (##) cannot collide with the section headings around it.
+func fencedCode(v string) string {
+	content := strings.TrimRight(v, "\n")
+	return "```markdown\n" + content + "\n```\n"
 }
 
 func allStrings(list []any) bool {

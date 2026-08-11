@@ -6,6 +6,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
+	"github.com/goccy/go-yaml/token"
 )
 
 // Issue is one validation finding for a single prompt file.
@@ -92,16 +96,14 @@ func checkSchemaKeys(schemaPath string) error {
 	if err != nil {
 		return fmt.Errorf("parse schema %s: %w", schemaPath, err)
 	}
+	// prpt.yml now declares frontmatter keys flat (top level): name/role/desc/
+	// pl-serial/pl-parallel/is-save. The section keys are still top level.
 	for k := range doc {
-		if !AllowedTopLevelKeys[k] {
-			return fmt.Errorf("schema %s declares unknown top-level key %q: update AllowedTopLevelKeys", schemaPath, k)
-		}
-	}
-	if fm, ok := getMap(doc, keyFrontmatter); ok {
-		for k := range fm {
-			if !AllowedFrontmatterKeys[k] {
-				return fmt.Errorf("schema %s declares unknown frontmatter key %q: update AllowedFrontmatterKeys", schemaPath, k)
-			}
+		switch {
+		case AllowedTopLevelKeys[k]:
+		case AllowedFrontmatterKeys[k]:
+		default:
+			return fmt.Errorf("schema %s declares unknown key %q: update AllowedTopLevelKeys or AllowedFrontmatterKeys", schemaPath, k)
 		}
 	}
 	return nil
@@ -167,6 +169,7 @@ func checkFile(path string) []Issue {
 	}
 
 	checkSectionKeys(doc, add)
+	addFoldedScalarIssues(path, data, add)
 
 	return issues
 }
@@ -185,6 +188,7 @@ func checkSectionKeys(doc map[string]any, add func(format string, a ...any)) {
 				add("unknown %s key %q", sec, k)
 			}
 		}
+		checkStructItems(m, sec, add)
 	}
 
 	for _, sec := range []string{keyGate, keyWorkflow, keyHint} {
@@ -203,6 +207,67 @@ func checkSectionKeys(doc map[string]any, add func(format string, a ...any)) {
 					add("unknown %s item key %q", sec, k)
 				}
 			}
+		}
+	}
+}
+
+// addFoldedScalarIssues flags multi-line plain (unquoted, unblocked) scalars:
+// YAML folds their line breaks into spaces, silently destroying the content
+// shape that a prompt wants to preserve. They must be written as a literal
+// block (|) instead. Detected via the AST so the source style, not the
+// decoded value, is inspected.
+func addFoldedScalarIssues(path string, data []byte, add func(format string, a ...any)) {
+	file, err := parser.ParseBytes(data, parser.ParseComments)
+	if err != nil {
+		return // parse errors are already reported
+	}
+	var walk func(n ast.Node)
+	walk = func(n ast.Node) {
+		switch v := n.(type) {
+		case *ast.MappingValueNode:
+			if s, ok := v.Value.(*ast.StringNode); ok && s.Token != nil &&
+				s.Token.Type == token.StringType && strings.Contains(s.Token.Origin, "\n") {
+				add("multi-line plain scalar %q will be folded by YAML: use | block", s.Value)
+			}
+		case *ast.MappingNode:
+			for _, kv := range v.Values {
+				walk(kv.Value)
+			}
+		case *ast.SequenceNode:
+			for _, item := range v.Values {
+				walk(item)
+			}
+		}
+	}
+	if len(file.Docs) > 0 {
+		walk(file.Docs[0].Body)
+	}
+}
+
+// checkStructItems enforces that every output.struct entry carries both key
+// and val, so the rendered field table never has a valueless column.
+func checkStructItems(m map[string]any, sec string, add func(format string, a ...any)) {
+	if sec != keyOutput {
+		return
+	}
+	items, ok := m[keyStruct].([]any)
+	if !ok {
+		return
+	}
+	for _, it := range items {
+		item, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		_, hasKey := item[keyKey]
+		_, hasVal := item[keyVal]
+		switch {
+		case !hasKey && !hasVal:
+			add("struct item missing both key and val")
+		case !hasKey:
+			add("struct item missing key")
+		case !hasVal:
+			add("struct item %q missing val", item[keyKey])
 		}
 	}
 }

@@ -36,7 +36,8 @@ func TestRenderFile(t *testing.T) {
 		"检查项目配置文件",                // workflow step
 		"**format:** md",               // output.format
 		"**template:**",                // output.template
-		"### 方案对比",                   // template 内容原样
+		"```markdown",                  // template in fenced code block
+		"### 方案对比",                   // template 内容原样 (inside fence)
 		"**few-shot:**",                // output.few-shot
 		"| # | 检查项 |",                // self-check 表头
 		"是否进入 choose mode",          // self-check 内容
@@ -47,8 +48,9 @@ func TestRenderFile(t *testing.T) {
 		assert.Contains(t, md, want, "missing %q in rendered markdown", want)
 	}
 
-	// Frontmatter block is wrapped and nested (原样), not flattened.
-	assert.True(t, strings.HasPrefix(md, "---\nfrontmatter:"), "frontmatter block should open the file, got:\n%s", md)
+	// Frontmatter is flattened to top-level keys, at column 0.
+	assert.True(t, strings.HasPrefix(md, "---\nname: choose"), "frontmatter should be flat (name at top), got:\n%s", md)
+	assert.False(t, strings.Contains(md, "frontmatter:"), "frontmatter should not be nested")
 
 	// Section order is deterministic.
 	idxWhat := strings.Index(md, "## what")
