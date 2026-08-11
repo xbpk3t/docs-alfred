@@ -536,22 +536,8 @@ func TestCheckFile_GoodsRecordDateInvalidFormat(t *testing.T) {
 	require.True(t, containsIssue(issues, "date 必须是 YYYY-MM-DD"), "issues: %#v", issues)
 }
 
-func TestCheckFile_GoodsUsingDateInvalidFormat(t *testing.T) {
-	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
-  tag: goods
-  topics:
-    - topic: x
-      score: 5
-      using:
-        name: a
-        date: 2020-2-1
-      table: []
-`)
-	assertHasError(t, issues, true)
-	require.True(t, containsIssue(issues, "date 必须是 YYYY-MM-DD"), "issues: %#v", issues)
-}
-
-func TestCheckFile_GoodsUsingValid(t *testing.T) {
+func TestCheckFile_GoodsUsingLegacyFlagged(t *testing.T) {
+	// using is a legacy pre-migration key; it must be flagged as undefined.
 	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
   tag: goods
   topics:
@@ -560,10 +546,10 @@ func TestCheckFile_GoodsUsingValid(t *testing.T) {
       using:
         name: a
         date: 2020-02-01
-        price: ¥100
       table: []
 `)
-	assertHasError(t, issues, false)
+	assert.NotEmpty(t, issues)
+	require.True(t, containsIssue(issues, "未在规则中定义的字段: using"), "issues: %#v", issues)
 }
 
 func TestCheckFile_GoodsScoreMinusOne(t *testing.T) {
@@ -740,4 +726,62 @@ func TestCheckFile_GoodsEndDateValid(t *testing.T) {
           endPrice: ¥50
 `)
 	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsNestedTopicsTooDeep(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString("- type: EDC\n  tag: goods\n  topics:\n")
+	indent := 4
+	for i := 0; i < maxNestedTopics+50; i++ {
+		sb.WriteString(strings.Repeat(" ", indent) + "- topic: x\n")
+		indent += 2
+		sb.WriteString(strings.Repeat(" ", indent) + "topics:\n")
+		indent += 2
+	}
+	sb.WriteString(strings.Repeat(" ", indent) + "- topic: bottom\n")
+
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", sb.String())
+	require.True(t, containsIssue(issues, "嵌套过深"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsQsIntegerItem(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      qs:
+        - 12345
+        - 正常问题
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "qs 项必须是字符串"), "issues: %#v", issues)
+}
+
+func TestRunStructuredDataCheck_IncludeHiddenAcrossDomains(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Hidden file with a books-scope violation is checked when IncludeHidden is set.
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".books.yml"), []byte("- name: test\n  bogus: x\n"), 0644))
+
+	result, err := RunStructuredDataCheckWithOptions(tmpDir, "books", RunStructuredCheckOptions{IncludeHidden: true})
+	require.NoError(t, err)
+	require.True(t, containsIssue(result.Issues, "未在规则中定义的字段: bogus"), "issues: %#v", result.Issues)
+
+	// Without IncludeHidden the hidden file is skipped.
+	result, err = RunStructuredDataCheck(tmpDir, "books")
+	require.NoError(t, err)
+	assert.False(t, containsIssue(result.Issues, "bogus"), "hidden file should be skipped by default")
+}
+
+func TestCheckFile_GoodsTableItemMissingName(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - price: ¥100
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "缺少必填字段 name"), "issues: %#v", issues)
 }
