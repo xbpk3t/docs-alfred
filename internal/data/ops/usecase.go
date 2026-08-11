@@ -7,7 +7,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/data/render"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
-	"github.com/xbpk3t/docs-alfred/internal/gh/goods"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
@@ -16,6 +15,9 @@ type DomainCheckInput struct {
 	Domain    data.DataDomain
 	Path      string // empty = default for domain
 	RuleScope string // empty = default for domain
+
+	// IncludeHidden reports whether hidden (dot-prefixed) YAML files are checked.
+	IncludeHidden bool
 }
 
 // DomainCheckResult holds the result of a domain data check.
@@ -36,9 +38,10 @@ func RunDomainCheck(input DomainCheckInput) (*DomainCheckResult, error) {
 }
 
 type domainCheckOptions struct {
-	path       string
-	scope      string
-	spec       data.DomainSpec
+	path          string
+	scope         string
+	spec          data.DomainSpec
+	includeHidden bool
 }
 
 func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, error) {
@@ -59,7 +62,7 @@ func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, erro
 		}
 	}
 
-	return domainCheckOptions{spec: spec, path: path, scope: scope}, nil
+	return domainCheckOptions{spec: spec, path: path, scope: scope, includeHidden: input.IncludeHidden}, nil
 }
 
 func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions) (*DomainCheckResult, error) {
@@ -72,17 +75,10 @@ func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions)
 		return &DomainCheckResult{Issues: result.Issues}, nil
 	}
 
-	if domain == data.DomainGoods {
-		result, err := goods.RunCheck(opts.path)
-		if err != nil {
-			return nil, err
-		}
-
-		return &DomainCheckResult{Issues: result.Issues}, nil
-	}
-
 	if opts.spec.StructuredCheck {
-		result, err := data.RunStructuredDataCheck(opts.path, opts.scope)
+		result, err := data.RunStructuredDataCheckWithOptions(opts.path, opts.scope, data.RunStructuredCheckOptions{
+			IncludeHidden: opts.includeHidden,
+		})
 		if err != nil {
 			return nil, err
 		}

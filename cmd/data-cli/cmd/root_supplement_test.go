@@ -72,7 +72,7 @@ func TestNewDedupCmdWithInvalidDomain(t *testing.T) {
 
 func TestRunDomainCheckWithValidDomain(t *testing.T) {
 	// Test with gh domain and default path - may fail due to missing data but tests path
-	err := runDomainCheck("gh", "", "")
+	err := runDomainCheck("gh", "", "", false)
 	_ = err
 }
 

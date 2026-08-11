@@ -10,10 +10,23 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 )
 
+// ListOptions controls file listing behavior.
+type ListOptions struct {
+	// IncludeHidden reports whether dot-prefixed (hidden) files are matched.
+	// By default hidden files are excluded.
+	IncludeHidden bool
+}
+
 // IsYAMLFileName reports whether name is a visible .yml or .yaml file name.
 func IsYAMLFileName(name string) bool {
+	return isYAMLFileName(name, false)
+}
+
+// isYAMLFileName reports whether name is a .yml or .yaml file name.
+// When includeHidden is false, dot-prefixed files are excluded.
+func isYAMLFileName(name string, includeHidden bool) bool {
 	base := filepath.Base(name)
-	if strings.HasPrefix(base, ".") {
+	if !includeHidden && strings.HasPrefix(base, ".") {
 		return false
 	}
 
@@ -25,8 +38,9 @@ func IsYAMLFileName(name string) bool {
 	}
 }
 
-// ListYAMLFiles returns visible YAML files directly under dir.
-func ListYAMLFiles(dir string) ([]string, error) {
+// ListYAMLFiles returns YAML files directly under dir, sorted by name.
+// Hidden (dot-prefixed) files are excluded by default; pass ListOptions{IncludeHidden: true} to include them.
+func ListYAMLFiles(dir string, opts ...ListOptions) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("read dir %s: %w", dir, err)
@@ -34,7 +48,7 @@ func ListYAMLFiles(dir string) ([]string, error) {
 
 	files := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || !IsYAMLFileName(entry.Name()) {
+		if entry.IsDir() || !isYAMLFileName(entry.Name(), includeHidden(opts)) {
 			continue
 		}
 		files = append(files, filepath.Join(dir, entry.Name()))
@@ -44,8 +58,9 @@ func ListYAMLFiles(dir string) ([]string, error) {
 	return files, nil
 }
 
-// ListYAMLFilesRecursive returns visible YAML files under root, sorted by path.
-func ListYAMLFilesRecursive(root string) ([]string, error) {
+// ListYAMLFilesRecursive returns YAML files under root, sorted by path.
+// Hidden (dot-prefixed) files are excluded by default; pass ListOptions{IncludeHidden: true} to include them.
+func ListYAMLFilesRecursive(root string, opts ...ListOptions) ([]string, error) {
 	if _, err := os.Stat(root); err != nil {
 		return nil, fmt.Errorf("root dir %s: %w", root, err)
 	}
@@ -58,11 +73,22 @@ func ListYAMLFilesRecursive(root string) ([]string, error) {
 
 	files := matches[:0]
 	for _, path := range matches {
-		if IsYAMLFileName(path) {
+		if isYAMLFileName(path, includeHidden(opts)) {
 			files = append(files, path)
 		}
 	}
 	slices.Sort(files)
 
 	return files, nil
+}
+
+// includeHidden reports whether any given option enables hidden-file matching.
+func includeHidden(opts []ListOptions) bool {
+	for _, o := range opts {
+		if o.IncludeHidden {
+			return true
+		}
+	}
+
+	return false
 }

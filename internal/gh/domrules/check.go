@@ -27,6 +27,7 @@ const (
 	fieldDate      = "date"
 	fieldTable     = "table"
 	fieldName      = "name"
+	fieldType      = "type"
 	fieldURL       = "url"
 	extYML         = ".yml"
 	extYAML        = ".yaml"
@@ -40,7 +41,18 @@ type CheckResult struct {
 
 // RunStructuredDataCheck validates all YAML files in a directory against domain rules.
 func RunStructuredDataCheck(targetDir, scope string) (*CheckResult, error) {
-	files, err := listYAMLFiles(targetDir)
+	return RunStructuredDataCheckWithOptions(targetDir, scope, RunStructuredCheckOptions{})
+}
+
+// RunStructuredCheckOptions controls structured check behavior.
+type RunStructuredCheckOptions struct {
+	// IncludeHidden reports whether hidden (dot-prefixed) YAML files are checked.
+	IncludeHidden bool
+}
+
+// RunStructuredDataCheckWithOptions validates YAML files in a directory against domain rules.
+func RunStructuredDataCheckWithOptions(targetDir, scope string, opts RunStructuredCheckOptions) (*CheckResult, error) {
+	files, err := listYAMLFiles(targetDir, opts.IncludeHidden)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +66,13 @@ func RunStructuredDataCheck(targetDir, scope string) (*CheckResult, error) {
 	return &CheckResult{Issues: issues}, nil
 }
 
-func listYAMLFiles(dir string) ([]string, error) {
-	return fileutil.ListYAMLFiles(dir)
+func listYAMLFiles(dir string, includeHidden ...bool) ([]string, error) {
+	var opts []fileutil.ListOptions
+	if len(includeHidden) > 0 && includeHidden[0] {
+		opts = append(opts, fileutil.ListOptions{IncludeHidden: true})
+	}
+
+	return fileutil.ListYAMLFiles(dir, opts...)
 }
 
 func checkFile(file, scope string) []checkutil.Issue {
@@ -124,6 +141,7 @@ func checkItemsAST(file string, seq *ast.SequenceNode, allowedFields map[string]
 func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[string]bool, scope RuleScope, path string) []checkutil.Issue {
 	var issues []checkutil.Issue
 	hasName := false
+	hasType := false
 
 	for _, kv := range mapping.Values {
 		if kv == nil {
@@ -136,17 +154,65 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 		if key == fieldName {
 			hasName = true
 		}
+		if key == fieldType {
+			hasType = true
+		}
 		issues = append(issues, checkKeyValueAST(file, key, kv, allowedFields, scope)...)
+		if scope == ScopeGoods {
+			issues = append(issues, checkNestedFieldAST(file, key, kv.Value, allowedFields, scope)...)
+			if key == "using" {
+				issues = append(issues, checkUsingFieldAST(file, kv.Value, allowedFields, scope)...)
+			}
+		}
 	}
 
 	// Check required fields
 	if scope != ScopeDiary && scope != ScopeJav {
-		if !hasName {
+		required := "name"
+		if scope == ScopeGoods {
+			required = "type"
+		}
+		if (required == "type" && !hasType) || (required == "name" && !hasName) {
 			issues = append(issues, checkutil.Issue{
 				File: file, Line: yamlutil.NodeLine(mapping),
 				Severity: checkutil.SeverityError,
-				Message:  fmt.Sprintf("缺少必填字段 name (%s)", path),
+				Message:  fmt.Sprintf("缺少必填字段 %s (%s)", required, path),
 			})
+		}
+	}
+
+	return issues
+}
+
+// checkNestedFieldAST descends into nested list fields and validates their items.
+// It validates field names and value types (score/date/sequence) without
+// requiring per-item mandatory fields, since nested items (topics, table rows)
+// have their own shapes. checkKeyValueAST performs the undefined-field check,
+// so no duplicate checks here.
+func checkNestedFieldAST(file, key string, val ast.Node, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
+	seq, ok := yamlutil.Sequence(val)
+	if !ok {
+		return nil
+	}
+
+	var issues []checkutil.Issue
+	for _, item := range seq.Values {
+		mapping, ok := yamlutil.Mapping(item)
+		if !ok {
+			continue
+		}
+		for _, kv := range mapping.Values {
+			if kv == nil {
+				continue
+			}
+			childKey := yamlutil.KeyString(kv.Key)
+			if childKey == "" {
+				continue
+			}
+			issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
+			if childKey == "using" {
+				issues = append(issues, checkUsingFieldAST(file, kv.Value, allowedFields, scope)...)
+			}
 		}
 	}
 
@@ -171,19 +237,25 @@ func checkKeyValueAST(file, key string, kv *ast.MappingValueNode, allowedFields 
 	}
 
 	// Field-specific type/value checks
-	issues = append(issues, checkFieldValueAST(file, key, val, scope)...)
+	issues = append(issues, checkFieldValueAST(file, key, val, allowedFields, scope)...)
 
 	return issues
 }
-func checkFieldValueAST(file, key string, val ast.Node, scope RuleScope) []checkutil.Issue {
+func checkFieldValueAST(file, key string, val ast.Node, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
 	switch key {
 	case fieldScore:
-		return checkScoreFieldAST(file, val)
+		return checkScoreFieldAST(file, val, scope)
+	case fieldDate:
+		return checkDateFieldValueAST(file, val, "date", DateFull, "date")
 	case fieldReadAt:
 		return checkDateFieldValueAST(file, val, "readAt", DateFull, "date")
 	case fieldPublishAt:
 		return checkPublishAtAST(file, val, scope)
 	case fieldRecord:
+		if scope == ScopeGoods {
+			return checkRecordFieldAST(file, val, allowedFields, scope)
+		}
+
 		return checkIsSequenceAST(file, val, "record")
 	case fieldSub:
 		return checkSubFieldAST(file, val, scope)
@@ -194,22 +266,109 @@ func checkFieldValueAST(file, key string, val ast.Node, scope RuleScope) []check
 			return []checkutil.Issue{warnIssue(file, val, "tags 建议使用数组")}
 		}
 	case fieldTable, fieldRecite:
-		return checkIsSequenceAST(file, val, key)
+		// Only goods tables follow a fixed item field set; other domains
+		// (books etc.) use free-form Chinese table columns.
+		if scope != ScopeGoods {
+			return checkIsSequenceAST(file, val, key)
+		}
+
+		return checkTableFieldAST(file, val, allowedFields, scope, key)
 	}
 
 	return nil
 }
 
-func checkScoreFieldAST(file string, val ast.Node) []checkutil.Issue {
+// checkUsingFieldAST validates a goods using single-object mapping
+// (name/date/price/...) by descending into its fields.
+func checkUsingFieldAST(file string, val ast.Node, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
+	mapping, ok := yamlutil.Mapping(val)
+	if !ok || mapping == nil {
+		return nil
+	}
+
+	var issues []checkutil.Issue
+	for _, kv := range mapping.Values {
+		if kv == nil {
+			continue
+		}
+		childKey := yamlutil.KeyString(kv.Key)
+		if childKey == "" {
+			continue
+		}
+		issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
+	}
+
+	return issues
+}
+
+// checkRecordFieldAST validates a goods record sequence: it must be an array
+// of mappings (date/des/...), not plain strings.
+func checkRecordFieldAST(file string, val ast.Node, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
+	seq, ok := yamlutil.Sequence(val)
+	if !ok {
+		return []checkutil.Issue{errIssue(file, val, "record 必须是数组")}
+	}
+
+	var issues []checkutil.Issue
+	for _, item := range seq.Values {
+		mapping, ok := yamlutil.Mapping(item)
+		if !ok {
+			issues = append(issues, errIssue(file, item, "record 项必须是对象（date/des/...）"))
+			continue
+		}
+		for _, kv := range mapping.Values {
+			if kv == nil {
+				continue
+			}
+			childKey := yamlutil.KeyString(kv.Key)
+			if childKey == "" {
+				continue
+			}
+			issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
+		}
+	}
+
+	return issues
+}
+
+// checkTableFieldAST validates a table/recite sequence and its item mappings.
+func checkTableFieldAST(file string, val ast.Node, allowedFields map[string]bool, scope RuleScope, field string) []checkutil.Issue {
+	seq, ok := yamlutil.Sequence(val)
+	if !ok {
+		return []checkutil.Issue{errIssue(file, val, field+" 必须是数组")}
+	}
+
+	var issues []checkutil.Issue
+	for _, item := range seq.Values {
+		mapping, ok := yamlutil.Mapping(item)
+		if !ok {
+			continue
+		}
+		for _, kv := range mapping.Values {
+			if kv == nil {
+				continue
+			}
+			childKey := yamlutil.KeyString(kv.Key)
+			if childKey == "" {
+				continue
+			}
+			issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
+		}
+	}
+
+	return issues
+}
+
+func checkScoreFieldAST(file string, val ast.Node, scope RuleScope) []checkutil.Issue {
 	if val == nil {
 		return nil
 	}
 	switch v := val.(type) {
 	case *ast.IntegerNode:
-		return checkIntScoreAST(file, v)
+		return checkIntScoreAST(file, v, scope)
 	case *ast.FloatNode:
 		score := int(v.Value)
-		if float64(score) != v.Value || score < 0 || score > 5 {
+		if float64(score) != v.Value || !validScore(score, scope) {
 			return []checkutil.Issue{errIssue(file, val, "score 必须是整数且范围 0-5")}
 		}
 	case *ast.StringNode:
@@ -221,11 +380,21 @@ func checkScoreFieldAST(file string, val ast.Node) []checkutil.Issue {
 	return nil
 }
 
-func checkIntScoreAST(file string, val *ast.IntegerNode) []checkutil.Issue {
+// validScore reports whether score is within the allowed range for a scope.
+// goods allows -1 (no rating placeholder); other scopes require 0-5.
+func validScore(score int, scope RuleScope) bool {
+	if scope == ScopeGoods && score == -1 {
+		return true
+	}
+
+	return score >= 0 && score <= 5
+}
+
+func checkIntScoreAST(file string, val *ast.IntegerNode, scope RuleScope) []checkutil.Issue {
 	switch v := val.Value.(type) {
 	case int64:
 		score := int(v)
-		if score < 0 || score > 5 {
+		if !validScore(score, scope) {
 			return []checkutil.Issue{errIssue(file, val, "score 范围必须是 0-5")}
 		}
 	case uint64:
