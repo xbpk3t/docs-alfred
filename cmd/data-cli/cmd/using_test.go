@@ -1,0 +1,108 @@
+package cmd
+
+import (
+	"encoding/json"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// usingTag mirrors goods.UsingTag for CLI-level JSON assertions.
+type usingTag struct {
+	Tag   string      `json:"tag"`
+	Types []usingType `json:"types"`
+}
+
+type usingType struct {
+	Type   string       `json:"type"`
+	Topics []usingTopic `json:"topics"`
+}
+
+type usingTopic struct {
+	Topic string      `json:"topic"`
+	Items []usingItem `json:"items"`
+}
+
+type usingItem struct {
+	Name  string            `json:"name"`
+	Brand string            `json:"brand,omitempty"`
+	Extra map[string]string `json:"extra,omitempty"`
+}
+
+func decodeUsing(t *testing.T, raw string) []usingTag {
+	t.Helper()
+	var result []usingTag
+	require.NoError(t, json.Unmarshal([]byte(raw), &result))
+
+	return result
+}
+
+func TestNewGoodsUsingCmd_JSONShape(t *testing.T) {
+	goodsDir := writeGhFiles(t, map[string]string{
+		"goods.test.yml": `---
+- type: 耐用品
+  tag: goods
+  topics:
+    - topic: 收纳袋
+      table:
+        - name: 抽绳束口#防水#收纳袋（15D尼龙涂硅）
+          brand: 三峰出
+          price: "¥13"
+          isUsing: true
+        - name: 天纵被子收纳袋
+          price: ¥84
+
+    - topic: 速干浴巾
+      table:
+        - name: 速干浴巾 NH19Y001-J
+          brand: 挪客
+          isUsing: true
+`,
+	})
+
+	out, err := captureStdout(t, func() error {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"goods", "using", "--path", goodsDir})
+		return cmd.Execute()
+	})
+	require.NoError(t, err)
+
+	tags := decodeUsing(t, out)
+	require.Len(t, tags, 1)
+	assert.Equal(t, "goods", tags[0].Tag)
+	require.Len(t, tags[0].Types, 1)
+	assert.Equal(t, "耐用品", tags[0].Types[0].Type)
+	require.Len(t, tags[0].Types[0].Topics, 2)
+	assert.Equal(t, "收纳袋", tags[0].Types[0].Topics[0].Topic)
+	require.Len(t, tags[0].Types[0].Topics[0].Items, 1)
+	assert.Equal(t, "抽绳束口#防水#收纳袋（15D尼龙涂硅）", tags[0].Types[0].Topics[0].Items[0].Name)
+	assert.Equal(t, "三峰出", tags[0].Types[0].Topics[0].Items[0].Brand)
+	// 未标记 isUsing 的不出现
+	assert.Len(t, tags[0].Types[0].Topics[1].Items, 1)
+	// Extra 字段不出现在 JSON 里（空 map 被 omitempty 省略）
+	assert.Empty(t, tags[0].Types[0].Topics[0].Items[0].Extra)
+}
+
+func TestNewGoodsUsingCmd_EmptyResult(t *testing.T) {
+	emptyDir := t.TempDir()
+
+	out, err := captureStdout(t, func() error {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"goods", "using", "--path", emptyDir})
+		return cmd.Execute()
+	})
+	require.NoError(t, err)
+
+	tags := decodeUsing(t, out)
+	assert.Empty(t, tags)
+}
+
+func TestNewGoodsUsingCmd_ErrorOnMissingDir(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"goods", "using", "--path", filepath.Join(t.TempDir(), "missing")})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "list goods files")
+}
