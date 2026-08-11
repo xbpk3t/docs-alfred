@@ -44,7 +44,6 @@ func TestWriteExportResult_NormalWithPaths(t *testing.T) {
 		OutputPath: "/wiki/topic/file.md",
 		TopicPath:  "topic/sub",
 		Title:      "My Title",
-		EngTitle:   "my-title",
 		DryRun:     false,
 	}
 
@@ -61,7 +60,6 @@ func TestWriteLines_FprintfError(t *testing.T) {
 		OutputPath: "/tmp/test.md",
 		TopicPath:  "dev/go",
 		Title:      "Test Title",
-		EngTitle:   "test-title",
 	}
 
 	err := withBrokenStdout(t, func() error {
@@ -76,7 +74,6 @@ func TestWriteLines_MultipleFields(t *testing.T) {
 		OutputPath: "/a/b/c.md",
 		TopicPath:  "dev/go",
 		Title:      "Go Testing",
-		EngTitle:   "go-testing",
 	}
 
 	output, err := captureStdout(t, func() error {
@@ -85,11 +82,10 @@ func TestWriteLines_MultipleFields(t *testing.T) {
 	require.NoError(t, err)
 
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
-	require.Len(t, lines, 4)
+	require.Len(t, lines, 3)
 	assert.Equal(t, "Written: /a/b/c.md", lines[0])
 	assert.Equal(t, "Topic: dev/go", lines[1])
 	assert.Equal(t, "Title: Go Testing", lines[2])
-	assert.Equal(t, "EngTitle: go-testing", lines[3])
 }
 
 func TestNewSessionExportCmd_RunE_Flags(t *testing.T) {
