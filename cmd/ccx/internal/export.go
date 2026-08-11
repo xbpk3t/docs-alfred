@@ -13,6 +13,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
 
 	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
@@ -52,7 +53,6 @@ type ExportResult struct {
 	OutputPath string
 	TopicPath  string
 	Title      string // Original AI-generated title (may contain Chinese)
-	EngTitle   string // English ASCII-safe title for filename
 	DryRun     bool
 }
 
@@ -115,19 +115,20 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 		return nil, fmt.Errorf("classify: %w", err)
 	}
 
-	// Three-part title (display title, filename slug, frontmatter title) is
+	// Three-part title (display title, filename stem, frontmatter title) is
 	// set from a single authoritative source: the agent's session name. AI
 	// never decides the title. When the session name is missing (short cc
 	// sessions have no ai-title yet) the export aborts — no fallback.
 	if resolved.Title == "" {
 		return nil, errors.New("session has no session name (ai-title); cannot export without a title")
 	}
-	title, engTitle := titleComponentsFromTitle(resolved.Title)
-	outputPath := determineOutputPath(input, engTitle, topicPath)
+	title := trimTitle(resolved.Title)
+	filename := sanitizeFilename(title)
+	outputPath := determineOutputPath(input, filename, topicPath)
 
 	if input.Verbose {
 		fmt.Fprintf(os.Stderr, "Generated title: %s\n", title)
-		fmt.Fprintf(os.Stderr, "Generated engTitle: %s\n", engTitle)
+		fmt.Fprintf(os.Stderr, "Generated filename: %s\n", filename)
 		fmt.Fprintf(os.Stderr, "Topic path: %s\n", topicPath)
 	}
 
@@ -136,7 +137,6 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 			OutputPath: outputPath,
 			TopicPath:  topicPath,
 			Title:      title,
-			EngTitle:   engTitle,
 			DryRun:     true,
 		}, nil
 	}
@@ -150,7 +150,6 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 		OutputPath: outputPath,
 		TopicPath:  topicPath,
 		Title:      title,
-		EngTitle:   engTitle,
 	}, nil
 }
 
@@ -240,15 +239,56 @@ func classifyTopicPath(messages []session.Message, input *ExportInput) (string, 
 	return topicPath, nil
 }
 
-// titleComponentsFromTitle derives the display title and its ASCII filename slug
-// from the session name using the same cleaning rules.
-func titleComponentsFromTitle(sessionName string) (title, engTitle string) {
-	title = trimTitle(sessionName)
-	if engTitle := trimEngTitle(sessionName); engTitle != "" {
-		return title, engTitle
+// trimTitle cleans up a semantic title (remove quotes, truncate to 50).
+func trimTitle(title string) string {
+	title = strings.TrimSpace(title)
+	title = strings.Trim(title, `"'「」『』`)
+
+	return truncateRunes(title, 50)
+}
+
+// sanitizeFilename turns a title into a filesystem-safe filename stem,
+// preserving non-ASCII characters (Chinese titles keep their readability).
+// Only characters that are invalid or dangerous in paths are replaced.
+func sanitizeFilename(title string) string {
+	// Replace characters invalid on common filesystems and path separators.
+	replacer := strings.NewReplacer(
+		`/`, " ", `\`, " ", ":", " ", "*", " ", `?`, " ", `"`, " ", "<", " ", ">", " ", "|", " ",
+	)
+	stem := replacer.Replace(title)
+
+	// Collapse runs of spaces (which could hide a path traversal after
+	// trimming) and strip leading/trailing whitespace and dots.
+	fields := strings.Fields(stem)
+	stem = strings.Join(fields, " ")
+	stem = strings.TrimLeft(stem, ".")
+	stem = strings.TrimSpace(stem)
+
+	// Reserved names must not match a directory entry.
+	if stem == "." || stem == ".." {
+		return fallbackFilename
 	}
 
-	return title, title
+	// Control characters break tooling and terminal output.
+	var b strings.Builder
+	for _, r := range stem {
+		if unicode.IsControl(r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	stem = strings.TrimSpace(b.String())
+
+	// Unicode titles that survive sanitization keep their characters; only
+	// an empty result falls back to the ASCII-safe stem of the raw title.
+	if stem == "" {
+		stem = strings.Trim(textutil.SlugFilename(title), "-")
+	}
+	if stem == "" {
+		return fallbackFilename
+	}
+
+	return truncateRunes(stem, 50)
 }
 
 // mergedClassifyTopicPath makes a single AI call to determine topicPath only.
@@ -375,21 +415,8 @@ func extractUserMessages(messages []session.Message) []string {
 	return userMessages
 }
 
-// trimTitle cleans up a semantic title (remove quotes, truncate to 50).
-func trimTitle(title string) string {
-	title = strings.TrimSpace(title)
-	title = strings.Trim(title, `"'「」『』`)
-
-	return truncateRunes(title, 50)
-}
-
-// trimEngTitle cleans up an English title for use as filename.
-func trimEngTitle(engTitle string) string {
-	engTitle = strings.TrimSpace(engTitle)
-	engTitle = strings.Trim(engTitle, `"'「」『』`)
-	engTitle = slugTitle(engTitle)
-	return truncateRunes(engTitle, 50)
-}
+// fallbackFilename is used when a title sanitizes to something unusable.
+const fallbackFilename = "untitled"
 
 // extractPrimaryModel returns the last real model used in the transcript.
 // Missing model is not an error (returns "").
@@ -470,10 +497,6 @@ func determineOutputPath(input *ExportInput, title, topicPath string) string {
 	}
 
 	return filepath.Join(baseDir, filename)
-}
-
-func slugTitle(value string) string {
-	return textutil.SlugFilename(value)
 }
 
 func truncateRunes(value string, limit int) string {

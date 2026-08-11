@@ -104,7 +104,6 @@ func writeLines(prefix string, result *internal.ExportResult) error {
 		{prefix, result.OutputPath},
 		{"Topic: %s", result.TopicPath},
 		{"Title: %s", result.Title},
-		{"EngTitle: %s", result.EngTitle},
 	}
 	for _, l := range lines {
 		if _, err := fmt.Fprintf(os.Stdout, l.f+"\n", l.v); err != nil {

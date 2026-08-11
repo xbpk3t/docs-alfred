@@ -70,7 +70,6 @@ func TestWriteExportResult_DryRun(t *testing.T) {
 		OutputPath: "/tmp/wiki/topic/2025-01-01-title.md",
 		TopicPath:  "topic/sub",
 		Title:      "Test Title",
-		EngTitle:   "test-title",
 		DryRun:     true,
 	}
 
@@ -82,7 +81,7 @@ func TestWriteExportResult_DryRun(t *testing.T) {
 	require.Contains(t, output, "Dry run: would write to /tmp/wiki/topic/2025-01-01-title.md")
 	require.Contains(t, output, "Topic: topic/sub")
 	require.Contains(t, output, "Title: Test Title")
-	require.Contains(t, output, "EngTitle: test-title")
+	require.NotContains(t, output, "EngTitle")
 }
 
 func TestWriteExportResult_Normal(t *testing.T) {
@@ -90,7 +89,6 @@ func TestWriteExportResult_Normal(t *testing.T) {
 		OutputPath: "/tmp/wiki/topic/2025-01-01-title.md",
 		TopicPath:  "topic/sub",
 		Title:      "Test Title",
-		EngTitle:   "test-title",
 		DryRun:     false,
 	}
 
@@ -102,7 +100,7 @@ func TestWriteExportResult_Normal(t *testing.T) {
 	require.Contains(t, output, "Exported session to /tmp/wiki/topic/2025-01-01-title.md")
 	require.Contains(t, output, "Topic: topic/sub")
 	require.Contains(t, output, "Title: Test Title")
-	require.Contains(t, output, "EngTitle: test-title")
+	require.NotContains(t, output, "EngTitle")
 	require.NotContains(t, output, "Dry run")
 }
 
@@ -111,7 +109,6 @@ func TestWriteLines(t *testing.T) {
 		OutputPath: "/output/path.md",
 		TopicPath:  "dev/go",
 		Title:      "My Title",
-		EngTitle:   "my-title",
 	}
 
 	output, err := captureStdout(t, func() error {
@@ -121,11 +118,10 @@ func TestWriteLines(t *testing.T) {
 	require.NoError(t, err)
 
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
-	require.Len(t, lines, 4)
+	require.Len(t, lines, 3)
 	require.Equal(t, "Custom prefix /output/path.md", lines[0])
 	require.Equal(t, "Topic: dev/go", lines[1])
 	require.Equal(t, "Title: My Title", lines[2])
-	require.Equal(t, "EngTitle: my-title", lines[3])
 }
 
 func TestWriteLines_EmptyValues(t *testing.T) {
@@ -138,9 +134,8 @@ func TestWriteLines_EmptyValues(t *testing.T) {
 	require.NoError(t, err)
 
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
-	require.Len(t, lines, 4)
+	require.Len(t, lines, 3)
 	require.Equal(t, "Prefix: ", lines[0])
 	require.Equal(t, "Topic: ", lines[1])
 	require.Equal(t, "Title: ", lines[2])
-	require.Equal(t, "EngTitle: ", lines[3])
 }

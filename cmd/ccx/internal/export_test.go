@@ -18,38 +18,52 @@ func TestTrimTitle_TruncatesRunes(t *testing.T) {
 	require.NotContains(t, got, "�")
 }
 
-func TestTitleComponentsFromTitle(t *testing.T) {
+func TestSanitizeFilename(t *testing.T) {
 	tests := []struct {
-		name        string
-		sessionName string
-		wantTitle   string
-		wantEng     string
+		name  string
+		title string
+		want  string
 	}{
 		{
-			name:        "ascii session name",
-			sessionName: "fix export bug",
-			wantTitle:   "fix export bug",
-			wantEng:     "fix-export-bug",
+			name:  "ascii title",
+			title: "fix export bug",
+			want:  "fix export bug",
 		},
 		{
-			name:        "chinese session name",
-			sessionName: "修复 wiki compact 窗口日期 bug",
-			wantTitle:   "修复 wiki compact 窗口日期 bug",
-			wantEng:     "xiu-fu-wiki-compact-chuang-kou-ri-qi-bug",
+			name:  "chinese title keeps characters",
+			title: "修复 wiki compact 窗口日期 bug",
+			want:  "修复 wiki compact 窗口日期 bug",
 		},
 		{
-			name:        "quoted session name is trimmed of quotes",
-			sessionName: "\"带引号标题\"",
-			wantTitle:   "带引号标题",
-			wantEng:     "dai-yin-hao-biao-ti",
+			name:  "path separators are replaced",
+			title: "A/B 问题",
+			want:  "A B 问题",
+		},
+		{
+			name:  "invalid filename characters are replaced",
+			title: `foo:bar*?/"< >|`,
+			want:  "foo bar",
+		},
+		{
+			name:  "leading dots are stripped (not a hidden file)",
+			title: "...中文",
+			want:  "中文",
+		},
+		{
+			name:  "empty title falls back",
+			title: "",
+			want:  "untitled",
+		},
+		{
+			name:  "punctuation-only title falls back",
+			title: ":::***",
+			want:  "untitled",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			title, eng := titleComponentsFromTitle(tt.sessionName)
-			require.Equal(t, tt.wantTitle, title)
-			require.Equal(t, tt.wantEng, eng)
+			require.Equal(t, tt.want, sanitizeFilename(tt.title))
 		})
 	}
 }
