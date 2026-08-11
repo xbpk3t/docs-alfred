@@ -160,3 +160,33 @@ func TestRunCheck_IncludeHiddenYAMLError(t *testing.T) {
 	assert.True(t, checkutil.HasErrors(result.Issues))
 	assert.Contains(t, result.Issues[0].Message, "YAML parse error")
 }
+
+func TestRunCheck_IncludeHiddenLegacyStructure(t *testing.T) {
+	// A legacy hidden file (using/item top-level, pre-migration) must be
+	// flagged by --include-hidden: item is not a defined goods field and
+	// the top level lacks type.
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".goods.EDC.yml"), []byte(`---
+- type: sling-bag
+  tag: EDC
+  score: 3
+  using:
+    name: Packable Tote
+    price: ¥178
+  item:
+    - name: 257挎包
+      price: ¥1359
+`), 0644))
+
+	result, err := RunCheckWithOptions(dir, CheckOptions{IncludeHidden: true})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result.Issues, "legacy hidden file should be flagged: %#v", result.Issues)
+
+	msgs := make([]string, 0, len(result.Issues))
+	for _, i := range result.Issues {
+		msgs = append(msgs, i.Message)
+	}
+	assert.Contains(t, msgs, "未在规则中定义的字段: item", "legacy item field must be flagged")
+	assert.Contains(t, msgs, "未在规则中定义的字段: using", "legacy using field must be flagged")
+	assert.Contains(t, result.Issues[0].File, ".goods.EDC.yml")
+}

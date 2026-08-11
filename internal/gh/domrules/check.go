@@ -159,10 +159,7 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 		}
 		issues = append(issues, checkKeyValueAST(file, key, kv, allowedFields, scope)...)
 		if scope == ScopeGoods {
-			issues = append(issues, checkNestedFieldAST(file, key, kv.Value, allowedFields, scope)...)
-			if key == "using" {
-				issues = append(issues, checkUsingFieldAST(file, kv.Value, allowedFields, scope)...)
-			}
+			issues = append(issues, checkNestedFieldAST(file, key, kv.Value, allowedFields, scope, 0)...)
 		}
 	}
 
@@ -189,10 +186,17 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 // requiring per-item mandatory fields, since nested items (topics, table rows)
 // have their own shapes. checkKeyValueAST performs the undefined-field check,
 // so no duplicate checks here.
-func checkNestedFieldAST(file, key string, val ast.Node, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
+// maxNestedTopics caps recursive topics descent to protect against
+// pathological nesting depth.
+const maxNestedTopics = 100
+
+func checkNestedFieldAST(file, key string, val ast.Node, allowedFields map[string]bool, scope RuleScope, depth int) []checkutil.Issue {
 	seq, ok := yamlutil.Sequence(val)
 	if !ok {
 		return nil
+	}
+	if depth > maxNestedTopics {
+		return []checkutil.Issue{errIssue(file, seq, "topics 嵌套过深（超过 "+fmt.Sprintf("%d", maxNestedTopics)+" 层）")}
 	}
 
 	var issues []checkutil.Issue
@@ -210,11 +214,8 @@ func checkNestedFieldAST(file, key string, val ast.Node, allowedFields map[strin
 				continue
 			}
 			issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
-			if childKey == "using" {
-				issues = append(issues, checkUsingFieldAST(file, kv.Value, allowedFields, scope)...)
-			}
 			if childKey == "topics" {
-				issues = append(issues, checkNestedFieldAST(file, childKey, kv.Value, allowedFields, scope)...)
+				issues = append(issues, checkNestedFieldAST(file, childKey, kv.Value, allowedFields, scope, depth+1)...)
 			}
 		}
 	}
@@ -236,6 +237,10 @@ func checkStringArrayFieldAST(file, field string, val ast.Node, scope RuleScope)
 	var issues []checkutil.Issue
 	for _, item := range seq.Values {
 		if _, ok := yamlutil.Mapping(item); ok {
+			issues = append(issues, errIssue(file, item, field+" 项必须是字符串"))
+			continue
+		}
+		if _, ok := item.(*ast.StringNode); !ok {
 			issues = append(issues, errIssue(file, item, field+" 项必须是字符串"))
 		}
 	}
@@ -306,28 +311,6 @@ func checkFieldValueAST(file, key string, val ast.Node, allowedFields map[string
 	return nil
 }
 
-// checkUsingFieldAST validates a goods using single-object mapping
-// (name/date/price/...) by descending into its fields.
-func checkUsingFieldAST(file string, val ast.Node, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
-	mapping, ok := yamlutil.Mapping(val)
-	if !ok || mapping == nil {
-		return nil
-	}
-
-	var issues []checkutil.Issue
-	for _, kv := range mapping.Values {
-		if kv == nil {
-			continue
-		}
-		childKey := yamlutil.KeyString(kv.Key)
-		if childKey == "" {
-			continue
-		}
-		issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
-	}
-
-	return issues
-}
 
 // checkRecordFieldAST validates a goods record sequence: it must be an array
 // of mappings (date/des/...), not plain strings.
@@ -373,6 +356,7 @@ func checkTableFieldAST(file string, val ast.Node, allowedFields map[string]bool
 			issues = append(issues, errIssue(file, item, field+" 项必须是对象（name/price/...）"))
 			continue
 		}
+		hasName := false
 		for _, kv := range mapping.Values {
 			if kv == nil {
 				continue
@@ -381,7 +365,13 @@ func checkTableFieldAST(file string, val ast.Node, allowedFields map[string]bool
 			if childKey == "" {
 				continue
 			}
+			if childKey == fieldName {
+				hasName = true
+			}
 			issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
+		}
+		if !hasName {
+			issues = append(issues, errIssue(file, mapping, field+" 项缺少必填字段 name"))
 		}
 	}
 

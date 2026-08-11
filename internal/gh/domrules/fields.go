@@ -88,7 +88,7 @@ var GoodsFields = map[string]bool{
 	// topic-level
 	"topic": true, fieldTable: true, fieldScore: true, fieldRecord: true,
 	"qs": true, "what": true, "why": true, "hto": true, "htu": true, "hti": true,
-	fieldDes: true, "using": true,
+	fieldDes: true,
 	// table-item level
 	fieldName: true, "brand": true, "param": true, "price": true,
 	fieldDate: true, "endDate": true, "endPrice": true, "isUsing": true,
