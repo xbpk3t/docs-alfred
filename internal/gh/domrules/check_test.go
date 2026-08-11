@@ -604,3 +604,140 @@ func TestCheckFile_GoodsFullValidStructure(t *testing.T) {
 `)
 	assertHasError(t, issues, false)
 }
+
+func TestCheckFile_GoodsTableStringItem(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - 1、这是字符串项
+        - name: a
+          price: ¥100
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "table 项必须是对象"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsQsObjectItem(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      qs:
+        - name: 对象混入
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "qs 项必须是字符串"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsQsValidStrings(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      qs:
+        - 怎么选？
+        - 要注意什么？
+`)
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_BooksQsObjectAllowed(t *testing.T) {
+	// Non-goods scopes keep qs free-form.
+	issues := checkYAMLContent(t, "books.yml", "books", "- name: test\n  qs:\n    - name: 对象也行\n")
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsHtoObjectItem(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      hto:
+        - name: 对象混入
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "hto 项必须是字符串"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsWhyValidStrings(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      why:
+        - 原因1
+        - 原因2
+`)
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsNestedTopicsDateInvalid(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: 外层
+      score: 5
+      topics:
+        - topic: 内层
+          score: 5
+          table:
+            - name: a
+              date: 2020-2-1
+`)
+	assertHasError(t, issues, true)
+	require.Equal(t, 1, countIssues(issues, "date 必须是"), "should report once, not duplicate: %#v", issues)
+}
+
+func TestCheckFile_GoodsNestedTopicsValid(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: 外层
+      score: 5
+      topics:
+        - topic: 内层
+          score: 5
+          table:
+            - name: a
+              date: 2020-02-01
+`)
+	assertHasError(t, issues, false)
+}
+
+func TestCheckFile_GoodsEndDateInvalidFormat(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          price: ¥100
+          endDate: 2025-1-1
+          endPrice: ¥50
+`)
+	assertHasError(t, issues, true)
+	require.True(t, containsIssue(issues, "endDate 必须是 YYYY-MM-DD"), "issues: %#v", issues)
+}
+
+func TestCheckFile_GoodsEndDateValid(t *testing.T) {
+	issues := checkYAMLContent(t, "goods.EDC.yml", "goods", `- type: EDC
+  tag: goods
+  topics:
+    - topic: x
+      score: 5
+      table:
+        - name: a
+          price: ¥100
+          endDate: 2025-01-01
+          endPrice: ¥50
+`)
+	assertHasError(t, issues, false)
+}

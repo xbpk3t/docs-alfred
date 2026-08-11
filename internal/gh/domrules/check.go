@@ -213,6 +213,30 @@ func checkNestedFieldAST(file, key string, val ast.Node, allowedFields map[strin
 			if childKey == "using" {
 				issues = append(issues, checkUsingFieldAST(file, kv.Value, allowedFields, scope)...)
 			}
+			if childKey == "topics" {
+				issues = append(issues, checkNestedFieldAST(file, childKey, kv.Value, allowedFields, scope)...)
+			}
+		}
+	}
+
+	return issues
+}
+
+// checkStringArrayFieldAST validates a goods string-array field (qs/what/why/
+// hto/htu/hti): it must be an array of strings, not objects.
+func checkStringArrayFieldAST(file, field string, val ast.Node, scope RuleScope) []checkutil.Issue {
+	if scope != ScopeGoods {
+		return nil
+	}
+	seq, ok := yamlutil.Sequence(val)
+	if !ok {
+		return []checkutil.Issue{errIssue(file, val, field+" 必须是数组")}
+	}
+
+	var issues []checkutil.Issue
+	for _, item := range seq.Values {
+		if _, ok := yamlutil.Mapping(item); ok {
+			issues = append(issues, errIssue(file, item, field+" 项必须是字符串"))
 		}
 	}
 
@@ -247,6 +271,8 @@ func checkFieldValueAST(file, key string, val ast.Node, allowedFields map[string
 		return checkScoreFieldAST(file, val, scope)
 	case fieldDate:
 		return checkDateFieldValueAST(file, val, "date", DateFull, "date")
+	case "endDate":
+		return checkDateFieldValueAST(file, val, "endDate", DateFull, "date")
 	case fieldReadAt:
 		return checkDateFieldValueAST(file, val, "readAt", DateFull, "date")
 	case fieldPublishAt:
@@ -265,6 +291,8 @@ func checkFieldValueAST(file, key string, val ast.Node, allowedFields map[string
 		if _, ok := val.(*ast.SequenceNode); !ok {
 			return []checkutil.Issue{warnIssue(file, val, "tags 建议使用数组")}
 		}
+	case "qs", "what", "why", "hto", "htu", "hti":
+		return checkStringArrayFieldAST(file, key, val, scope)
 	case fieldTable, fieldRecite:
 		// Only goods tables follow a fixed item field set; other domains
 		// (books etc.) use free-form Chinese table columns.
@@ -342,6 +370,7 @@ func checkTableFieldAST(file string, val ast.Node, allowedFields map[string]bool
 	for _, item := range seq.Values {
 		mapping, ok := yamlutil.Mapping(item)
 		if !ok {
+			issues = append(issues, errIssue(file, item, field+" 项必须是对象（name/price/...）"))
 			continue
 		}
 		for _, kv := range mapping.Values {
