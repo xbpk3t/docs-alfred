@@ -41,6 +41,9 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newRenderCmd(flags))
 	root.AddCommand(newCheckCmd(flags))
 	root.AddCommand(newGraphCmd(flags))
+	root.AddCommand(newAliasesCmd(flags))
+	root.AddCommand(newStatsCmd(flags))
+	root.AddCommand(newRouteCmd(flags))
 
 	root.SetHelpCommand(&cobra.Command{Hidden: true})
 
