@@ -10,6 +10,7 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/token"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // Issue is one validation finding for a single prompt file.
@@ -27,42 +28,31 @@ type CheckResult struct {
 // HasErrors reports whether any issue was found.
 func (r *CheckResult) HasErrors() bool { return len(r.Issues) > 0 }
 
-// mapSectionKeys are the sub-keys allowed on map-valued sections, per prpt.yml.
-var mapSectionKeys = map[string]map[string]bool{
-	keyWhat:       {keyIs: true, keyNot: true},
-	keyConstraint: {keyMust: true, keyMustNot: true},
-	keyInput:      {keySource: true, keyParams: true},
-	keyOutput:     {keyFormat: true, keyStruct: true, keyTemplate: true, keyFewShot: true, keyRules: true},
-}
 
-// seqItemKeys are the sub-keys allowed on each item of a sequence-valued
-// section, per prpt.yml.
-var seqItemKeys = map[string]map[string]bool{
-	keyGate:     {keyQS: true, keyFail: true},
-	keyWorkflow: {keyPhase: true, keyGate: true, keyDesc: true, keySteps: true},
-	keyHint:     {keyIf: true, keyThen: true},
-}
-
-// FindSchema locates prpt.yml by walking up from dir. The schema is the
-// source of truth sitting next to the references/ directory.
+// FindSchema locates the prpt JSON Schema by walking up from dir. It prefers
+// prpt.schema.json (the JSON Schema used for validation) and falls back to
+// prpt.yml (the documented schema) so both layouts work.
 func FindSchema(dir string) (string, error) {
 	cur := dir
 	for {
-		candidate := filepath.Join(cur, "prpt.yml")
-		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
-			return candidate, nil
+		for _, name := range []string{"prpt.schema.json", "prpt.yml"} {
+			candidate := filepath.Join(cur, name)
+			if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
+				return candidate, nil
+			}
 		}
 		parent := filepath.Dir(cur)
 		if parent == cur {
-			return "", fmt.Errorf("prpt.yml schema not found above %s", dir)
+			return "", fmt.Errorf("prpt schema (prpt.schema.json) not found above %s", dir)
 		}
 		cur = parent
 	}
 }
 
-// CheckDir validates every *.yml under dir against the schema.
+// CheckDir validates every *.yml under dir against the prpt JSON Schema.
 func CheckDir(dir, schemaPath string) (*CheckResult, error) {
-	if err := checkSchemaKeys(schemaPath); err != nil {
+	sch, err := CompileSchema(schemaPath)
+	if err != nil {
 		return nil, err
 	}
 
@@ -73,7 +63,7 @@ func CheckDir(dir, schemaPath string) (*CheckResult, error) {
 
 	res := &CheckResult{Files: len(files)}
 	for _, f := range files {
-		res.Issues = append(res.Issues, checkFile(f)...)
+		res.Issues = append(res.Issues, checkFile(f, sch)...)
 	}
 
 	sort.SliceStable(res.Issues, func(i, j int) bool {
@@ -85,38 +75,27 @@ func CheckDir(dir, schemaPath string) (*CheckResult, error) {
 	return res, nil
 }
 
-// checkSchemaKeys guards against schema drift: prpt.yml is the source of
-// truth, so a key it declares that we do not know about is a real mismatch.
-func checkSchemaKeys(schemaPath string) error {
-	data, err := os.ReadFile(schemaPath)
+// CompileSchema compiles the prpt.schema.json JSON Schema into a validator.
+func CompileSchema(schemaPath string) (*jsonschema.Schema, error) {
+	c := jsonschema.NewCompiler()
+	sch, err := c.Compile(schemaPath)
 	if err != nil {
-		return fmt.Errorf("read schema %s: %w", schemaPath, err)
+		return nil, fmt.Errorf("compile schema %s: %w", schemaPath, err)
 	}
-	doc, err := parseDoc(data)
-	if err != nil {
-		return fmt.Errorf("parse schema %s: %w", schemaPath, err)
-	}
-	// prpt.yml now declares frontmatter keys flat (top level): name/role/desc/
-	// pl-serial/pl-parallel/is-save. The section keys are still top level.
-	for k := range doc {
-		switch {
-		case AllowedTopLevelKeys[k]:
-		case AllowedFrontmatterKeys[k]:
-		default:
-			return fmt.Errorf("schema %s declares unknown key %q: update AllowedTopLevelKeys or AllowedFrontmatterKeys", schemaPath, k)
-		}
-	}
-	return nil
+	return sch, nil
 }
 
-// CheckFile validates a single prompt file against the schema. Callers that
-// gate a side effect (e.g. render) on conformance should treat a non-empty
-// result as "do not proceed".
-func CheckFile(path string) []Issue {
-	return checkFile(path)
+// CheckFile validates a single prompt file against the compiled schema.
+// Callers that gate a side effect (e.g. render) on conformance should treat a
+// non-empty result as "do not proceed".
+func CheckFile(path string, sch *jsonschema.Schema) []Issue {
+	return checkFile(path, sch)
 }
 
-func checkFile(path string) []Issue {
+// checkFile validates one yml against the compiled JSON Schema, plus the
+// business rules that a JSON Schema cannot express (composite pipeline
+// presence, folded plain scalars).
+func checkFile(path string, sch *jsonschema.Schema) []Issue {
 	var issues []Issue
 	add := func(format string, a ...any) {
 		issues = append(issues, Issue{Path: path, Message: fmt.Sprintf(format, a...)})
@@ -133,83 +112,27 @@ func checkFile(path string) []Issue {
 		return issues
 	}
 
-	for k := range doc {
-		if !AllowedTopLevelKeys[k] {
-			add("unknown top-level key %q", k)
+	// JSON Schema structural validation (unknown keys, required fields,
+	// enum/type constraints) — replaces the hand-written AllowedKeys checks.
+	if verr := sch.Validate(doc); verr != nil {
+		add("%s", verr.Error())
+	}
+
+	if fm, ok := getMap(doc, keyFrontmatter); ok {
+		if role, hasRole := getString(fm, keyRole); hasRole && role == valComposite {
+			serial, _ := getStringSlice(fm, keyPlSerial)
+			parallel, _ := getStringSlice(fm, keyPlParallel)
+			if len(serial) == 0 && len(parallel) == 0 {
+				add("role=composite requires pl-serial or pl-parallel to be non-empty")
+			}
 		}
 	}
 
-	fm, ok := getMap(doc, keyFrontmatter)
-	if !ok {
-		add("missing required frontmatter block")
-		return issues
-	}
-	for k := range fm {
-		if !AllowedFrontmatterKeys[k] {
-			add("unknown frontmatter key %q", k)
-		}
-	}
-
-	name, hasName := getString(fm, keyName)
-	if !hasName || strings.TrimSpace(name) == "" {
-		add("missing required frontmatter.name")
-	}
-
-	role, hasRole := getString(fm, keyRole)
-	if !hasRole || strings.TrimSpace(role) == "" {
-		add("missing required frontmatter.role")
-	}
-
-	if role == valComposite {
-		serial, _ := getStringSlice(fm, keyPlSerial)
-		parallel, _ := getStringSlice(fm, keyPlParallel)
-		if len(serial) == 0 && len(parallel) == 0 {
-			add("role=composite requires pl-serial or pl-parallel to be non-empty")
-		}
-	}
-
-	checkSectionKeys(doc, add)
 	addFoldedScalarIssues(path, data, add)
 
 	return issues
 }
 
-// checkSectionKeys reports any sub-key inside a section that is not allowed by
-// the schema. Any key/value mismatch is a hard error, never silently tolerated.
-func checkSectionKeys(doc map[string]any, add func(format string, a ...any)) {
-	for _, sec := range []string{keyWhat, keyConstraint, keyInput, keyOutput} {
-		m, ok := getMap(doc, sec)
-		if !ok {
-			continue
-		}
-		allowed := mapSectionKeys[sec]
-		for k := range m {
-			if !allowed[k] {
-				add("unknown %s key %q", sec, k)
-			}
-		}
-		checkStructItems(m, sec, add)
-	}
-
-	for _, sec := range []string{keyGate, keyWorkflow, keyHint} {
-		items, ok := getSlice(doc, sec)
-		if !ok {
-			continue
-		}
-		allowed := seqItemKeys[sec]
-		for _, it := range items {
-			m, ok := it.(map[string]any)
-			if !ok {
-				continue
-			}
-			for k := range m {
-				if !allowed[k] {
-					add("unknown %s item key %q", sec, k)
-				}
-			}
-		}
-	}
-}
 
 // addFoldedScalarIssues flags multi-line plain (unquoted, unblocked) scalars:
 // YAML folds their line breaks into spaces, silently destroying the content
@@ -241,33 +164,5 @@ func addFoldedScalarIssues(path string, data []byte, add func(format string, a .
 	}
 	if len(file.Docs) > 0 {
 		walk(file.Docs[0].Body)
-	}
-}
-
-// checkStructItems enforces that every output.struct entry carries both key
-// and val, so the rendered field table never has a valueless column.
-func checkStructItems(m map[string]any, sec string, add func(format string, a ...any)) {
-	if sec != keyOutput {
-		return
-	}
-	items, ok := m[keyStruct].([]any)
-	if !ok {
-		return
-	}
-	for _, it := range items {
-		item, ok := it.(map[string]any)
-		if !ok {
-			continue
-		}
-		_, hasKey := item[keyKey]
-		_, hasVal := item[keyVal]
-		switch {
-		case !hasKey && !hasVal:
-			add("struct item missing both key and val")
-		case !hasKey:
-			add("struct item missing key")
-		case !hasVal:
-			add("struct item %q missing val", item[keyKey])
-		}
 	}
 }

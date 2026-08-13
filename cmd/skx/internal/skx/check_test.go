@@ -9,28 +9,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const validSchema = `---
-frontmatter:
-  name: x
-  role: atom
-  desc: d
-  pl-serial:
-  pl-parallel:
-  status: active
-  is-save: true
-what:
-  is:
-  not:
-gate:
-constraint:
-  must:
-  must-not:
-input:
-workflow:
-output:
-self-check:
-hint:
-`
+const validSchema = `{
+  "type": "object",
+  "properties": {
+    "frontmatter": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "desc": { "type": "string" },
+        "pl-serial": { "type": "array", "items": { "type": "string" } },
+        "pl-parallel": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string" },
+        "is-save": { "type": "boolean" }
+      },
+      "required": ["name", "role"],
+      "additionalProperties": false
+    },
+    "what": { "type": "object", "properties": { "is": { "type": "string" }, "not": { "type": "string" } } },
+    "gate": { "type": "array", "items": { "type": "object", "properties": { "qs": { "type": "string" }, "fail": { "type": "string" } }, "additionalProperties": false } },
+    "constraint": { "type": "object", "properties": { "must": { "type": "array", "items": { "type": "string" } }, "must-not": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false },
+    "input": { "type": "object", "properties": { "source": { "type": "string" }, "params": { "type": "array", "items": { "type": "object" } } }, "additionalProperties": false },
+    "workflow": { "type": "array", "items": { "type": "object", "properties": { "phase": { "type": "string" }, "gate": { "type": "string" }, "desc": { "type": "string" }, "steps": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false } },
+    "output": { "type": "object", "properties": { "format": { "type": "string", "enum": ["yaml", "table", "md", "artifact"] }, "struct": { "type": "array", "items": { "type": "object", "properties": { "key": { "type": "string" }, "val": { "type": ["string", "number", "boolean"] } }, "required": ["key", "val"], "additionalProperties": false } }, "template": { "type": "string" }, "few-shot": { "type": "string" } }, "additionalProperties": false },
+    "self-check": { "type": "array", "items": { "type": "string" } },
+    "hint": { "type": "array", "items": { "type": "object", "properties": { "if": { "type": "string" }, "then": { "type": "string" } }, "additionalProperties": false } }
+  },
+  "required": ["frontmatter"],
+  "additionalProperties": false
+}`
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
@@ -44,7 +51,7 @@ func setupLayout(t *testing.T, files map[string]string) (root, refs, schema stri
 	root = t.TempDir()
 	refs = filepath.Join(root, "references")
 	require.NoError(t, os.MkdirAll(refs, 0o755))
-	schema = filepath.Join(root, "prpt.yml")
+	schema = filepath.Join(root, "prpt.schema.json")
 	writeFile(t, schema, validSchema)
 	for name, content := range files {
 		writeFile(t, filepath.Join(refs, name), content)
@@ -67,7 +74,7 @@ func TestCheckDirMissingRequired(t *testing.T) {
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	assert.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "frontmatter.name")
+	assert.Contains(t, res.Issues[0].Message, "name")
 }
 
 func TestCheckDirUnknownTopLevelKey(t *testing.T) {
@@ -76,7 +83,7 @@ func TestCheckDirUnknownTopLevelKey(t *testing.T) {
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	assert.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, `unknown top-level key "bogus"`)
+	assert.Contains(t, res.Issues[0].Message, "additional properties 'bogus' not allowed")
 }
 
 func TestCheckDirUnknownFrontmatterKey(t *testing.T) {
@@ -85,7 +92,7 @@ func TestCheckDirUnknownFrontmatterKey(t *testing.T) {
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	assert.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, `unknown frontmatter key "nope"`)
+	assert.Contains(t, res.Issues[0].Message, "additional properties 'nope' not allowed")
 }
 
 func TestCheckDirCompositeRequiresPipeline(t *testing.T) {
@@ -109,15 +116,15 @@ func TestCheckDirCompositeWithPipelineOK(t *testing.T) {
 
 func TestCheckDirStrictSectionKeys(t *testing.T) {
 	_, refs, schema := setupLayout(t, map[string]string{
-		// output.rules is schema-valid; a bogus sub-key must be flagged.
-		"ok.yml":  "frontmatter:\n  name: ok\n  role: atom\noutput:\n  format: md\n  rules:\n    - a\n    - b\n",
+		// output.format is schema-valid; a bogus sub-key must be flagged.
+		"ok.yml":  "frontmatter:\n  name: ok\n  role: atom\noutput:\n  format: md\n  template: x\n",
 		"bad.yml": "frontmatter:\n  name: bad\n  role: atom\noutput:\n  format: md\n  bogus: 1\n",
 	})
 
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	require.Len(t, res.Issues, 1, "only the schema-invalid sub-key should be flagged")
-	assert.Contains(t, res.Issues[0].Message, `unknown output key "bogus"`)
+	assert.Contains(t, res.Issues[0].Message, "additional properties 'bogus' not allowed")
 
 	if !assert.True(t, res.HasErrors()) {
 		return
@@ -132,35 +139,34 @@ func TestCheckDirStrictWorkflowItemKeys(t *testing.T) {
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	require.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, `unknown workflow item key "bloop"`)
+	assert.Contains(t, res.Issues[0].Message, "additional properties 'bloop' not allowed")
 }
 
 func TestCheckSchemaDrift(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "prpt.yml"), "brand-new:\n  x: 1\n")
+	// Not a valid JSON Schema → compile fails, surfaced as an error.
+	writeFile(t, filepath.Join(dir, "prpt.schema.json"), "brand-new: 1\n")
 
-	_, err := CheckDir(dir, filepath.Join(dir, "prpt.yml"))
+	_, err := CheckDir(dir, filepath.Join(dir, "prpt.schema.json"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), `unknown key "brand-new"`)
 }
 
-func TestCheckDirFlatSchemaOK(t *testing.T) {
-	// prpt.yml declares frontmatter keys flat (top level) — must be accepted.
+func TestCheckDirNestedSchemaOK(t *testing.T) {
+	// The prpt JSON Schema uses a nested frontmatter: object (the intended form).
 	root := t.TempDir()
 	refs := filepath.Join(root, "references")
 	require.NoError(t, os.MkdirAll(refs, 0o755))
-	flatSchema := "name: x\nrole: atom\ndesc: d\nis-save: true\nwhat:\n  is:\n  not:\n"
-	writeFile(t, filepath.Join(root, "prpt.yml"), flatSchema)
+	writeFile(t, filepath.Join(root, "prpt.schema.json"), validSchema)
 	writeFile(t, filepath.Join(refs, "a.yml"), samplePrompt)
 
-	res, err := CheckDir(refs, filepath.Join(root, "prpt.yml"))
+	res, err := CheckDir(refs, filepath.Join(root, "prpt.schema.json"))
 	require.NoError(t, err)
 	assert.Empty(t, res.Issues)
 }
 
 func TestFindSchema(t *testing.T) {
 	dir := t.TempDir()
-	schema := filepath.Join(dir, "prpt.yml")
+	schema := filepath.Join(dir, "prpt.schema.json")
 	writeFile(t, schema, validSchema)
 
 	got, err := FindSchema(filepath.Join(dir, "references", "analysis"))

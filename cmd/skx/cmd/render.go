@@ -78,17 +78,22 @@ func renderOne(target string, dryRun bool) error {
 
 // gateOnCheck refuses to render when the target fails schema check.
 func gateOnCheck(target string) error {
+	schema, err := skx.FindSchema(target)
+	if err != nil {
+		return err
+	}
+
 	var issues []skx.Issue
 	if fi, err := os.Stat(target); err == nil && !fi.IsDir() {
-		issues = skx.CheckFile(target)
-	} else {
-		schema, err := skx.FindSchema(target)
-		if err != nil {
-			return err
+		sch, cerr := skx.CompileSchema(schema)
+		if cerr != nil {
+			return cerr
 		}
-		res, err := skx.CheckDir(target, schema)
-		if err != nil {
-			return err
+		issues = skx.CheckFile(target, sch)
+	} else {
+		res, cerr := skx.CheckDir(target, schema)
+		if cerr != nil {
+			return cerr
 		}
 		issues = res.Issues
 	}
