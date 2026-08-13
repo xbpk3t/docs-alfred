@@ -89,7 +89,7 @@ func TestRunCheck_MissingKind(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
 	assert.Equal(t, checkutil.SeverityError, result.Issues[0].Severity)
-	assert.Contains(t, result.Issues[0].Message, "missing property 'kind'")
+	assert.Contains(t, result.Issues[0].Message, "缺少必填字段 kind")
 }
 
 func TestRunCheck_KindNotInEnum(t *testing.T) {

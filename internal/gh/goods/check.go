@@ -2,9 +2,14 @@ package goods
 
 import (
 	"fmt"
+	"path/filepath"
+	"sort"
 
-	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
+	"github.com/bmatcuk/doublestar/v4"
+	"github.com/xbpk3t/docs-alfred/internal/gh/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/schemacheck"
 )
 
 // CheckResult holds goods validation issues.
@@ -24,16 +29,42 @@ func RunCheck(path string) (*CheckResult, error) {
 	return RunCheckWithOptions(path, CheckOptions{})
 }
 
-// RunCheckWithOptions validates goods YAML syntax and structure.
-// It reuses the shared structured-check engine with the goods rule scope,
-// so hidden .goods.*.yml files follow exactly the same rules as goods.*.yml.
+// RunCheckWithOptions validates goods YAML against the shared gh JSON Schema
+// (goods reuses the same section/topic/table/record structure as data/gh).
 func RunCheckWithOptions(path string, opts CheckOptions) (*CheckResult, error) {
-	result, err := data.RunStructuredDataCheckWithOptions(path, string(data.ScopeGoods), data.RunStructuredCheckOptions{
-		IncludeHidden: opts.IncludeHidden,
-	})
+	sch, err := schemacheck.CompileBytes(schema.Gh)
 	if err != nil {
-		return nil, fmt.Errorf("goods check: %w", err)
+		return nil, fmt.Errorf("compile gh schema: %w", err)
 	}
 
-	return &CheckResult{Issues: result.Issues}, nil
+	files, err := collectYAMLFiles(path, opts.IncludeHidden)
+	if err != nil {
+		return nil, fmt.Errorf("list goods yaml under %s: %w", path, err)
+	}
+
+	var issues []checkutil.Issue
+	for _, file := range files {
+		// goods topics carry no kind; the gh-only kind-presence post-rule is
+		// deliberately not wired here.
+		issues = append(issues, schemacheck.CheckFile(file, sch, nil)...)
+	}
+
+	return &CheckResult{Issues: issues}, nil
+}
+
+// collectYAMLFiles lists goods YAML files under root. Hidden (dot-prefixed)
+// files are included only when includeHidden is set.
+func collectYAMLFiles(root string, includeHidden bool) ([]string, error) {
+	if !includeHidden {
+		return fileutil.ListYAMLFilesRecursive(root)
+	}
+
+	pattern := filepath.Join(root, "**", "*.{yml,yaml}")
+	matches, err := doublestar.FilepathGlob(pattern, doublestar.WithFilesOnly())
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(matches)
+
+	return matches, nil
 }
