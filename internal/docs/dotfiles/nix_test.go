@@ -73,6 +73,44 @@ with pkgs; [
 	assert.Contains(t, refs, "fzf")
 }
 
+func TestParseNixRefs_ArgsetModuleWithPkgs_NoFalseBareIDs(t *testing.T) {
+	// The failing shape from home/base/devops/default.nix: an argset lambda
+	// with `with pkgs;` at file scope. Bare identifiers in that scope are
+	// attrs / args, not packages.
+	code := `{ pkgs, mylib, config, ... }:
+with pkgs;
+{
+  home.packages = mylib.precommitTools { inherit pkgs; } ++ [ prek pre-commit xurls ];
+  home.sessionVariables = {
+    TAILSCALE_API_KEY = "$(cat ${config.sops.secrets.TAILSCALE_API_KEY.path})";
+  };
+  imports = mylib.scanPaths ./.;
+}`
+	refs := parseNixRefs(code)
+	// real packages still extracted from the list
+	assert.Contains(t, refs, "prek")
+	assert.Contains(t, refs, "pre-commit")
+	assert.Contains(t, refs, "xurls")
+	// attrs / args / nested attr path segments must NOT be treated as packages
+	for _, bad := range []string{
+		"home", "packages", "sessionVariables", "TAILSCALE_API_KEY",
+		"imports", "mylib", "config", "secrets", "scanPaths", "precommitTools",
+	} {
+		assert.NotContains(t, refs, bad, "bare attr/arg %q leaked as package ref", bad)
+	}
+}
+
+func TestParseNixRefs_ArgsetModuleWithPkgs_ProgramsStillExtracted(t *testing.T) {
+	// programs./services. bindings must keep working in argset modules.
+	code := `{ pkgs, ... }: with pkgs; {
+  programs.git.enable = true;
+  services.nginx.enable = true;
+}`
+	refs := parseNixRefs(code)
+	assert.Contains(t, refs, "git")
+	assert.Contains(t, refs, "nginx")
+}
+
 func TestParseNixRefs_SkipsBuiltins(t *testing.T) {
 	code := `{ pkgs, ... }: with pkgs; [ true false null if ]`
 	refs := parseNixRefs(code)
