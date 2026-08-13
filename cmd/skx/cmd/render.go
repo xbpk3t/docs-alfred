@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/spf13/cobra"
 	"github.com/xbpk3t/docs-alfred/cmd/skx/internal/skx"
+	"github.com/xbpk3t/docs-alfred/cmd/skx/schema"
 )
 
 func newRenderCmd(flags *rootFlags) *cobra.Command {
@@ -14,12 +16,12 @@ func newRenderCmd(flags *rootFlags) *cobra.Command {
 		Short: "Render zzz prompt YAML to markdown (default: whole references dir)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRender(targetOrDir(flags, args), flags.dryRun)
+			return runRender(targetOrDir(flags, args), flags.dryRun, flags.schema, flags.dir)
 		},
 	}
 }
 
-func runRender(target string, dryRun bool) error {
+func runRender(target string, dryRun bool, schemaPath, refsDir string) error {
 	fi, statErr := os.Stat(target)
 	if statErr != nil {
 		return fmt.Errorf("stat %s: %w", target, statErr)
@@ -27,7 +29,7 @@ func runRender(target string, dryRun bool) error {
 
 	// Render is gated on schema conformance: refuse to emit output for data
 	// that deviates from prpt.yml rather than silently rendering it.
-	if gateErr := gateOnCheck(target); gateErr != nil {
+	if gateErr := gateOnCheck(target, schemaPath, refsDir); gateErr != nil {
 		return gateErr
 	}
 
@@ -77,23 +79,31 @@ func renderOne(target string, dryRun bool) error {
 }
 
 // gateOnCheck refuses to render when the target fails schema check.
-func gateOnCheck(target string) error {
-	schema, err := skx.FindSchema(target)
-	if err != nil {
-		return err
+// schemaPath honors --schema; an empty value uses the embedded schema.
+// For a single file, refsDir supplies the prompt set for dependency checks.
+func gateOnCheck(target, schemaPath, refsDir string) error {
+	var sch *jsonschema.Schema
+	var cerr error
+	if schemaPath != "" {
+		sch, cerr = skx.CompileSchema(schemaPath)
+	} else {
+		sch, cerr = skx.CompileSchemaBytes(schema.Prpt)
+	}
+	if cerr != nil {
+		return cerr
 	}
 
 	var issues []skx.Issue
 	if fi, err := os.Stat(target); err == nil && !fi.IsDir() {
-		sch, cerr := skx.CompileSchema(schema)
-		if cerr != nil {
-			return cerr
+		known, kerr := skx.KnownNames(refsDir)
+		if kerr != nil {
+			return kerr
 		}
-		issues = skx.CheckFile(target, sch)
+		issues = skx.CheckFile(target, sch, known)
 	} else {
-		res, cerr := skx.CheckDir(target, schema)
-		if cerr != nil {
-			return cerr
+		res, rerr := skx.CheckDir(target, schemaPath)
+		if rerr != nil {
+			return rerr
 		}
 		issues = res.Issues
 	}

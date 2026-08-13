@@ -18,6 +18,7 @@ func newStatsCmd(flags *rootFlags) *cobra.Command {
 	var (
 		statsFile string
 		asJSON    bool
+		prune     bool
 	)
 	cmd := &cobra.Command{
 		Use:   "stats",
@@ -27,6 +28,14 @@ func newStatsCmd(flags *rootFlags) *cobra.Command {
 			entries, err := skx.LoadStats(path)
 			if err != nil {
 				return err
+			}
+			if prune {
+				kept, removed := pruneGhosts(entries, flags.dir)
+				entries = kept
+				if err := skx.SaveStats(path, entries); err != nil {
+					return err
+				}
+				fmt.Fprintf(os.Stderr, "pruned %d ghost entries (target yml missing)\n", len(removed))
 			}
 			rankings := skx.RankStats(entries, 0)
 			if asJSON {
@@ -39,7 +48,26 @@ func newStatsCmd(flags *rootFlags) *cobra.Command {
 
 	cmd.Flags().StringVar(&statsFile, "stats", DefaultStatsFile, "path to the stats file")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "output as JSON")
+	cmd.Flags().BoolVar(&prune, "prune", false, "drop entries whose target yml is missing (writes back)")
 	return cmd
+}
+
+// pruneGhosts keeps only entries whose target resolves to an existing source
+// yml under refsDir. Returns the kept entries and the removed names.
+func pruneGhosts(entries []skx.StatsEntry, refsDir string) (kept []skx.StatsEntry, removed []string) {
+	for _, e := range entries {
+		if e.Target == "" {
+			removed = append(removed, e.Name)
+			continue
+		}
+		yml := filepath.Join(refsDir, e.Target+".yml")
+		if _, err := os.Stat(yml); err != nil {
+			removed = append(removed, e.Name)
+			continue
+		}
+		kept = append(kept, e)
+	}
+	return kept, removed
 }
 
 func expandHome(p string) string {

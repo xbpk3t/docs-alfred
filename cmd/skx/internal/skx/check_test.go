@@ -31,7 +31,7 @@ const validSchema = `{
     "constraint": { "type": "object", "properties": { "must": { "type": "array", "items": { "type": "string" } }, "must-not": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false },
     "input": { "type": "object", "properties": { "source": { "type": "string" }, "params": { "type": "array", "items": { "type": "object" } } }, "additionalProperties": false },
     "workflow": { "type": "array", "items": { "type": "object", "properties": { "phase": { "type": "string" }, "gate": { "type": "string" }, "desc": { "type": "string" }, "steps": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false } },
-    "output": { "type": "object", "properties": { "format": { "type": "string", "enum": ["yaml", "table", "md", "artifact"] }, "struct": { "type": "array", "items": { "type": "object", "properties": { "key": { "type": "string" }, "val": { "type": ["string", "number", "boolean"] } }, "required": ["key", "val"], "additionalProperties": false } }, "template": { "type": "string" }, "few-shot": { "type": "string" } }, "additionalProperties": false },
+    "output": { "type": "object", "properties": { "format": { "type": "string", "enum": ["yaml", "table", "md"] }, "struct": { "type": "array", "items": { "type": "object", "properties": { "key": { "type": "string" }, "val": { "type": ["string", "number", "boolean"] } }, "required": ["key", "val"], "additionalProperties": false } }, "template": { "type": "string" }, "few-shot": { "type": "string" } }, "additionalProperties": false },
     "self-check": { "type": "array", "items": { "type": "string" } },
     "hint": { "type": "array", "items": { "type": "object", "properties": { "if": { "type": "string" }, "then": { "type": "string" } }, "additionalProperties": false } }
   },
@@ -107,6 +107,7 @@ func TestCheckDirCompositeRequiresPipeline(t *testing.T) {
 func TestCheckDirCompositeWithPipelineOK(t *testing.T) {
 	_, refs, schema := setupLayout(t, map[string]string{
 		"a.yml": "frontmatter:\n  name: a\n  role: composite\n  pl-parallel:\n    - b\n",
+		"b.yml": "frontmatter:\n  name: b\n  role: atom\n",
 	})
 
 	res, err := CheckDir(refs, schema)
@@ -162,14 +163,4 @@ func TestCheckDirNestedSchemaOK(t *testing.T) {
 	res, err := CheckDir(refs, filepath.Join(root, "prpt.schema.json"))
 	require.NoError(t, err)
 	assert.Empty(t, res.Issues)
-}
-
-func TestFindSchema(t *testing.T) {
-	dir := t.TempDir()
-	schema := filepath.Join(dir, "prpt.schema.json")
-	writeFile(t, schema, validSchema)
-
-	got, err := FindSchema(filepath.Join(dir, "references", "analysis"))
-	require.NoError(t, err)
-	assert.Equal(t, schema, got)
 }

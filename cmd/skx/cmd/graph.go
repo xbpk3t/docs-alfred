@@ -20,7 +20,7 @@ func newGraphCmd(flags *rootFlags) *cobra.Command {
 				return err
 			}
 			for _, f := range skipped {
-				fmt.Fprintf(os.Stderr, "warning: skipped unparseable %s\n", f)
+				fmt.Fprintf(os.Stderr, "warning: %s\n", f)
 			}
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")

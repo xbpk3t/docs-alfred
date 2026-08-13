@@ -198,47 +198,32 @@ func ResolvePrompt(dir, name string) (rel, mdAbs string, ok bool, err error) {
 }
 
 // AvailableNames returns all routeable prompt names under dir (sorted).
+// Hidden files are skipped; names come straight from the source yml files.
 func AvailableNames(dir string) ([]string, error) {
-	aliases, err := BuildAliases(dir)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(aliases))
-	for n := range aliases {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return names, nil
-}
-
-// BuildAliases maps every prompt name (frontmatter.name) to its path relative
-// to dir, e.g. {"3w3h": "analysis/3w3h"}. Hidden files are skipped and only
-// names that resolve to a source .yml are included, so routing stays in sync
-// with the actual data. This is the source of truth for the zzz router.
-func BuildAliases(dir string) (map[string]string, error) {
 	files, err := CollectYML(dir)
 	if err != nil {
 		return nil, err
 	}
-	aliases := make(map[string]string, len(files))
+	seen := map[string]bool{}
 	for _, f := range files {
 		rel, err := filepath.Rel(dir, f)
-		if err != nil {
+		if err != nil || skipHidden(rel) {
 			continue
-		}
-		stem := strings.TrimSuffix(rel, filepath.Ext(rel))
-		if skipHidden(rel) {
-			continue // hidden files are cross-ref targets, not routing entries
 		}
 		p, err := LoadPrompt(f)
 		if err != nil {
 			continue // unparseable files are surfaced by `skx check`, not here
 		}
 		if p.Name != "" {
-			aliases[p.Name] = stem
+			seen[p.Name] = true
 		}
 	}
-	return aliases, nil
+	names := make([]string, 0, len(seen))
+	for n := range seen {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func parseDoc(data []byte) (map[string]any, error) {

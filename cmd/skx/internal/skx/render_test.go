@@ -48,9 +48,9 @@ func TestRenderFile(t *testing.T) {
 		assert.Contains(t, md, want, "missing %q in rendered markdown", want)
 	}
 
-	// Frontmatter is flattened to top-level keys, at column 0.
-	assert.True(t, strings.HasPrefix(md, "---\nname: choose"), "frontmatter should be flat (name at top), got:\n%s", md)
-	assert.False(t, strings.Contains(md, "frontmatter:"), "frontmatter should not be nested")
+	// Frontmatter is nested under a frontmatter: block (matches schema + data).
+	assert.True(t, strings.HasPrefix(md, "---\nfrontmatter:"), "frontmatter should be nested, got:\n%s", md)
+	assert.Contains(t, md, "name: choose")
 
 	// Section order is deterministic.
 	idxWhat := strings.Index(md, "## what")

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zzz.local/prpt.schema.json",
+  "title": "prpt",
+  "description": "JSON Schema for zzz prompt YAML files (references/**/*.yml). Top-level sections: frontmatter / what / gate / constraint / input / workflow / output / self-check / hint.",
+  "type": "object",
+  "properties": {
+    "frontmatter": {
+      "type": "object",
+      "description": "frontmatter 命名空间；必填，至少含 name+role",
+      "properties": {
+        "name": { "type": "string", "description": "必填；等于文件名 stem（路由名）" },
+        "role": { "type": "string", "enum": ["atom", "composite"], "description": "必填；composite 时 pl-serial/pl-parallel 至少一个非空" },
+        "desc": { "type": "string", "description": "短说明；多行用 | 块" },
+        "pl-parallel": { "type": "array", "items": { "type": "string" }, "description": "仅 composite；并行依赖 name 列表" },
+        "pl-serial": { "type": "array", "items": { "type": "string" }, "description": "仅 composite；串行依赖 name 列表" },
+        "is-save": { "type": "boolean", "description": "是否落盘 .md（默认 false）" },
+        "status": { "type": "string", "enum": ["active", "draft", "deprecated"], "description": "状态；省略即 active" }
+      },
+      "required": ["name", "role"],
+      "additionalProperties": false
+    },
+
+    "what": {
+      "type": "object",
+      "properties": {
+        "is": { "type": "string" },
+        "not": { "type": "string" }
+      }
+    },
+
+    "gate": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "qs": { "type": "string" },
+          "fail": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "constraint": {
+      "type": "object",
+      "properties": {
+        "must": { "type": "array", "items": { "type": "string" } },
+        "must-not": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+
+    "input": {
+      "type": "object",
+      "properties": {
+        "source": { "type": "string" },
+        "params": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+
+    "workflow": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "phase": { "type": "string" },
+          "gate": { "type": "string" },
+          "desc": { "type": "string" },
+          "steps": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "output": {
+      "type": "object",
+      "properties": {
+        "format": { "type": "string", "enum": ["yaml", "table", "md"] },
+        "struct": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": { "type": "string" },
+              "val": { "type": ["string", "number", "boolean"] }
+            },
+            "required": ["key", "val"],
+            "additionalProperties": false
+          }
+        },
+        "template": { "type": "string" },
+        "few-shot": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "self-check": { "type": "array", "items": { "type": "string" } },
+
+    "hint": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "if": { "type": "string" },
+          "then": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["frontmatter"],
+  "additionalProperties": false
+}

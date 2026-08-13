@@ -22,6 +22,7 @@ func TestBuildGraph(t *testing.T) {
     - vs
 `))
 	require.NoError(t, writeDirFile(refs, "brk.yml", "frontmatter:\n  name: brk\n  role: atom\n"))
+	require.NoError(t, writeDirFile(refs, "diagram.yml", "frontmatter:\n  name: diagram\n  role: atom\n"))
 	require.NoError(t, writeDirFile(refs, "vs.yml", `frontmatter:
   name: vs
   role: composite
@@ -33,7 +34,7 @@ func TestBuildGraph(t *testing.T) {
 	g, _, err := BuildGraph(refs)
 	require.NoError(t, err)
 
-	assert.Equal(t, []string{"3w3h", "brk", "table2yml", "vs"}, g.Nodes)
+	assert.Equal(t, []string{"3w3h", "brk", "diagram", "table2yml", "vs"}, g.Nodes)
 	assert.ElementsMatch(t, []Edge{
 		{From: "3w3h", To: "brk", Mode: "serial"},
 		{From: "3w3h", To: "diagram", Mode: "parallel"},

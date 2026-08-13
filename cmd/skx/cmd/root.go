@@ -29,7 +29,7 @@ func newRootCmd() *cobra.Command {
 		Short: "Render, validate and graph zzz prompt YAML files",
 		// Bare `skx` or `skx <path>` defaults to render.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRender(targetOrDir(flags, args), flags.dryRun)
+			return runRender(targetOrDir(flags, args), flags.dryRun, flags.schema, flags.dir)
 		},
 		SilenceUsage: true,
 	}
@@ -41,7 +41,6 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newRenderCmd(flags))
 	root.AddCommand(newCheckCmd(flags))
 	root.AddCommand(newGraphCmd(flags))
-	root.AddCommand(newAliasesCmd(flags))
 	root.AddCommand(newStatsCmd(flags))
 	root.AddCommand(newRouteCmd(flags))
 

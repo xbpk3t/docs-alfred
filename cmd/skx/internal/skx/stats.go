@@ -95,6 +95,19 @@ func suggest(count int, pct float64) string {
 	}
 }
 
+// SaveStats writes the entries to the stats file (array shape, 0600).
+func SaveStats(path string, entries []StatsEntry) error {
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("write stats %s: %w", path, err)
+	}
+	return nil
+}
+
 // RecordHit increments the counter for name (array shape, find-or-append)
 // and writes the file back. Missing file starts an empty array.
 func RecordHit(path, name, target string) error {

@@ -73,16 +73,17 @@ func renderPrompt(p *Prompt) string {
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
-// renderFrontmatter re-emits the frontmatter keys flattened to the top level
-// of the --- block (name/role/desc/... at column 0), matching what
-// gen-aliases.nu and zzz.nu expect when they parse the rendered .md.
+// renderFrontmatter re-emits the frontmatter keys under a nested
+// `frontmatter:` block, matching the source YAML shape and prpt.schema.json.
 func renderFrontmatter(p *Prompt) string {
 	if len(p.Frontmatter) == 0 {
 		return ""
 	}
-	raw, err := yaml.Marshal(p.Frontmatter)
+	doc := yaml.MapSlice{{Key: keyFrontmatter, Value: p.Frontmatter}}
+	raw, err := yaml.Marshal(doc)
 	if err != nil {
-		return ""
+		// Fall back to the inner slice: content preserved either way.
+		raw, _ = yaml.Marshal(p.Frontmatter)
 	}
 	return "---\n" + string(raw) + "---\n"
 }

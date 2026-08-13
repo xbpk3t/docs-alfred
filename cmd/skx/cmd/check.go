@@ -9,6 +9,14 @@ import (
 	"github.com/xbpk3t/docs-alfred/cmd/skx/internal/skx"
 )
 
+// schemaLabel describes which schema was used in the summary line.
+func schemaLabel(schemaPath string) string {
+	if schemaPath != "" {
+		return schemaPath
+	}
+	return "embedded prpt.schema.json"
+}
+
 func newCheckCmd(flags *rootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "check [dir]",
@@ -17,22 +25,14 @@ func newCheckCmd(flags *rootFlags) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := targetOrDir(flags, args)
 
-			schema := flags.schema
-			if schema == "" {
-				var err error
-				schema, err = skx.FindSchema(dir)
-				if err != nil {
-					return err
-				}
-			}
-
-			res, err := skx.CheckDir(dir, schema)
+			// Empty --schema uses the schema embedded in the binary.
+			res, err := skx.CheckDir(dir, flags.schema)
 			if err != nil {
 				return err
 			}
 
 			out := make([]string, 0, len(res.Issues)+2)
-			out = append(out, fmt.Sprintf("checked %d files against %s\n", res.Files, schema))
+			out = append(out, fmt.Sprintf("checked %d files against %s\n", res.Files, schemaLabel(flags.schema)))
 			for _, iss := range res.Issues {
 				out = append(out, fmt.Sprintf("  %s: %s\n", iss.Path, iss.Message))
 			}

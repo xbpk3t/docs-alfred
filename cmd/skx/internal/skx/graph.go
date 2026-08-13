@@ -1,6 +1,7 @@
 package skx
 
 import (
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -35,7 +36,12 @@ func BuildGraph(dir string) (*Graph, []string, error) {
 	nodeSet := map[string]bool{}
 	var edges []Edge
 	var skipped []string
+	var dangling []string
 	for _, f := range files {
+		rel, relErr := filepath.Rel(dir, f)
+		if relErr == nil && skipHidden(rel) {
+			continue // hidden files are cross-ref targets, not graph nodes
+		}
 		p, err := LoadPrompt(f)
 		if err != nil {
 			skipped = append(skipped, f)
@@ -56,6 +62,19 @@ func BuildGraph(dir string) (*Graph, []string, error) {
 		}
 	}
 
+	// Drop edges that reference a name with no source yml (dangling), so the
+	// JSON stays internally consistent. The underlying data issue is reported
+	// by `skx check`; dangling names are surfaced here for visibility.
+	filtered := edges[:0]
+	for _, e := range edges {
+		if !nodeSet[e.To] {
+			dangling = append(dangling, e.From+"→"+e.To+"("+e.Mode+")")
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+	edges = filtered
+
 	nodes := make([]string, 0, len(nodeSet))
 	for n := range nodeSet {
 		nodes = append(nodes, n)
@@ -75,7 +94,7 @@ func BuildGraph(dir string) (*Graph, []string, error) {
 
 	g := &Graph{Nodes: nodes, Edges: edges}
 	g.Cycles = findCycles(nodeSet, edges)
-	return g, skipped, nil
+	return g, append(skipped, dangling...), nil
 }
 
 // strList reads pl-serial / pl-parallel, accepting a scalar string or a list.

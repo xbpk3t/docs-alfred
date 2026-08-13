@@ -1,6 +1,7 @@
 package skx
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/token"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/xbpk3t/docs-alfred/cmd/skx/schema"
 )
 
 // Issue is one validation finding for a single prompt file.
@@ -29,29 +31,29 @@ type CheckResult struct {
 func (r *CheckResult) HasErrors() bool { return len(r.Issues) > 0 }
 
 
-// FindSchema locates the prpt JSON Schema by walking up from dir. It prefers
-// prpt.schema.json (the JSON Schema used for validation) and falls back to
-// prpt.yml (the documented schema) so both layouts work.
-func FindSchema(dir string) (string, error) {
-	cur := dir
-	for {
-		for _, name := range []string{"prpt.schema.json", "prpt.yml"} {
-			candidate := filepath.Join(cur, name)
-			if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
-				return candidate, nil
-			}
-		}
-		parent := filepath.Dir(cur)
-		if parent == cur {
-			return "", fmt.Errorf("prpt schema (prpt.schema.json) not found above %s", dir)
-		}
-		cur = parent
+// KnownNames returns the set of prompt names (frontmatter.name) present under
+// dir, hidden files excluded. Used to verify pl-* dependency references exist.
+func KnownNames(dir string) (map[string]bool, error) {
+	files, err := CollectYML(dir)
+	if err != nil {
+		return nil, err
 	}
+	known := map[string]bool{}
+	for _, f := range files {
+		if rel, err := filepath.Rel(dir, f); err == nil && skipHidden(rel) {
+			continue
+		}
+		if p, err := LoadPrompt(f); err == nil && p.Name != "" {
+			known[p.Name] = true
+		}
+	}
+	return known, nil
 }
 
 // CheckDir validates every *.yml under dir against the prpt JSON Schema.
+// An empty schemaPath uses the schema embedded in the binary.
 func CheckDir(dir, schemaPath string) (*CheckResult, error) {
-	sch, err := CompileSchema(schemaPath)
+	sch, err := compileSchemaOrDefault(schemaPath)
 	if err != nil {
 		return nil, err
 	}
@@ -61,9 +63,14 @@ func CheckDir(dir, schemaPath string) (*CheckResult, error) {
 		return nil, err
 	}
 
+	known, err := KnownNames(dir)
+	if err != nil {
+		return nil, err
+	}
+
 	res := &CheckResult{Files: len(files)}
 	for _, f := range files {
-		res.Issues = append(res.Issues, checkFile(f, sch)...)
+		res.Issues = append(res.Issues, checkFile(f, sch, known)...)
 	}
 
 	sort.SliceStable(res.Issues, func(i, j int) bool {
@@ -75,7 +82,16 @@ func CheckDir(dir, schemaPath string) (*CheckResult, error) {
 	return res, nil
 }
 
-// CompileSchema compiles the prpt.schema.json JSON Schema into a validator.
+// compileSchemaOrDefault compiles the --schema path if given, else the
+// embedded prpt.schema.json.
+func compileSchemaOrDefault(schemaPath string) (*jsonschema.Schema, error) {
+	if schemaPath != "" {
+		return CompileSchema(schemaPath)
+	}
+	return CompileSchemaBytes(schema.Prpt)
+}
+
+// CompileSchema compiles a JSON Schema from a file path into a validator.
 func CompileSchema(schemaPath string) (*jsonschema.Schema, error) {
 	c := jsonschema.NewCompiler()
 	sch, err := c.Compile(schemaPath)
@@ -85,17 +101,32 @@ func CompileSchema(schemaPath string) (*jsonschema.Schema, error) {
 	return sch, nil
 }
 
+// CompileSchemaBytes compiles a JSON Schema from raw bytes (e.g. the embedded
+// prpt.schema.json) into a validator.
+func CompileSchemaBytes(data []byte) (*jsonschema.Schema, error) {
+	var doc any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parse schema: %w", err)
+	}
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("urn:prpt", doc); err != nil {
+		return nil, fmt.Errorf("add schema: %w", err)
+	}
+	return c.Compile("urn:prpt")
+}
+
 // CheckFile validates a single prompt file against the compiled schema.
-// Callers that gate a side effect (e.g. render) on conformance should treat a
-// non-empty result as "do not proceed".
-func CheckFile(path string, sch *jsonschema.Schema) []Issue {
-	return checkFile(path, sch)
+// known is the set of existing prompt names for dependency checks; pass nil to
+// skip the dangling-reference check. Callers that gate a side effect (e.g.
+// render) on conformance should treat a non-empty result as "do not proceed".
+func CheckFile(path string, sch *jsonschema.Schema, known map[string]bool) []Issue {
+	return checkFile(path, sch, known)
 }
 
 // checkFile validates one yml against the compiled JSON Schema, plus the
 // business rules that a JSON Schema cannot express (composite pipeline
-// presence, folded plain scalars).
-func checkFile(path string, sch *jsonschema.Schema) []Issue {
+// presence, dangling dependencies, folded plain scalars).
+func checkFile(path string, sch *jsonschema.Schema, known map[string]bool) []Issue {
 	var issues []Issue
 	add := func(format string, a ...any) {
 		issues = append(issues, Issue{Path: path, Message: fmt.Sprintf(format, a...)})
@@ -118,19 +149,38 @@ func checkFile(path string, sch *jsonschema.Schema) []Issue {
 		add("%s", verr.Error())
 	}
 
-	if fm, ok := getMap(doc, keyFrontmatter); ok {
-		if role, hasRole := getString(fm, keyRole); hasRole && role == valComposite {
-			serial, _ := getStringSlice(fm, keyPlSerial)
-			parallel, _ := getStringSlice(fm, keyPlParallel)
-			if len(serial) == 0 && len(parallel) == 0 {
-				add("role=composite requires pl-serial or pl-parallel to be non-empty")
-			}
-		}
-	}
+	checkCompositeDeps(doc, known, add)
 
 	addFoldedScalarIssues(path, data, add)
 
 	return issues
+}
+
+// checkCompositeDeps enforces the composite-only rules: pl-serial/pl-parallel
+// must be non-empty, and every referenced dependency must exist as a prompt.
+func checkCompositeDeps(doc map[string]any, known map[string]bool, add func(format string, a ...any)) {
+	fm, ok := getMap(doc, keyFrontmatter)
+	if !ok {
+		return
+	}
+	role, hasRole := getString(fm, keyRole)
+	if !hasRole || role != valComposite {
+		return
+	}
+
+	serial, _ := getStringSlice(fm, keyPlSerial)
+	parallel, _ := getStringSlice(fm, keyPlParallel)
+	if len(serial) == 0 && len(parallel) == 0 {
+		add("role=composite requires pl-serial or pl-parallel to be non-empty")
+		return
+	}
+
+	deps := append(append([]string{}, serial...), parallel...)
+	for _, dep := range deps {
+		if known != nil && !known[dep] {
+			add("dependency %q has no prompt file in references", dep)
+		}
+	}
 }
 
 
