@@ -41,6 +41,7 @@ require (
 	github.com/resend/resend-go/v2 v2.27.0
 	github.com/samber/lo v1.52.0
 	github.com/samber/mo v1.17.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1
 	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.10

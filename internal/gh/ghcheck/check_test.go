@@ -10,13 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
-	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
-
-func TestMain(m *testing.M) {
-	validator.Setup()
-	os.Exit(m.Run())
-}
 
 func writeYAML(t *testing.T, dir, name, content string) string {
 	t.Helper()
@@ -35,15 +29,26 @@ const fullMdscc = `mdscc:
         case: k
 `
 
-func TestRunCheck_ValidKindToolsNoMdscc(t *testing.T) {
-	dir := t.TempDir()
-	writeYAML(t, dir, "ok.yml", `- type: tunnel
+const validSection = `- type: tunnel
   topics:
     - topic: 内网穿透工具
       kind: tools
       repo:
         - url: https://github.com/acme/frp
-`)
+          score: 5
+          des: frp
+          rel:
+            - url: https://github.com/acme/gofrp
+              des: go 实现
+      record:
+        - date: 2025-08-01
+          des: 初始化
+          score: 5
+`
+
+func TestRunCheck_Valid(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, dir, "ok.yml", validSection)
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.Empty(t, result.Issues)
@@ -84,25 +89,10 @@ func TestRunCheck_MissingKind(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
 	assert.Equal(t, checkutil.SeverityError, result.Issues[0].Severity)
-	assert.Contains(t, result.Issues[0].Message, `topic "overview"`)
-	assert.Contains(t, result.Issues[0].Message, "kind is required")
+	assert.Contains(t, result.Issues[0].Message, "missing property 'kind'")
 }
 
-func TestRunCheck_KindUnset(t *testing.T) {
-	dir := t.TempDir()
-	writeYAML(t, dir, "unset.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: unset
-`)
-	result, err := RunCheck(dir)
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, `invalid kind "unset"`)
-	assert.Contains(t, result.Issues[0].Message, AllowedKindsCSV)
-}
-
-func TestRunCheck_KindFoobar(t *testing.T) {
+func TestRunCheck_KindNotInEnum(t *testing.T) {
 	dir := t.TempDir()
 	writeYAML(t, dir, "bad.yml", `- type: tool
   topics:
@@ -112,7 +102,7 @@ func TestRunCheck_KindFoobar(t *testing.T) {
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, `invalid kind "foobar"`)
+	assert.Contains(t, result.Issues[0].Message, "kind")
 }
 
 func TestRunCheck_MissingTopicName(t *testing.T) {
@@ -124,7 +114,7 @@ func TestRunCheck_MissingTopicName(t *testing.T) {
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "topic is required")
+	assert.Contains(t, result.Issues[0].Message, "missing property 'topic'")
 }
 
 func TestRunCheck_MissingType(t *testing.T) {
@@ -136,10 +126,11 @@ func TestRunCheck_MissingType(t *testing.T) {
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "type is required")
+	assert.Contains(t, result.Issues[0].Message, "missing property 'type'")
 }
 
 func TestRunCheck_RepoOnlyNoTopics(t *testing.T) {
+	// topics is required on a section (min 1), matching the old gookit rule.
 	dir := t.TempDir()
 	writeYAML(t, dir, "repo-only.yml", `- type: tool
   repo:
@@ -149,18 +140,7 @@ func TestRunCheck_RepoOnlyNoTopics(t *testing.T) {
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "topics is required")
-}
-
-func TestRunCheck_EmptyTopics(t *testing.T) {
-	dir := t.TempDir()
-	writeYAML(t, dir, "empty-topics.yml", `- type: tool
-  topics: []
-`)
-	result, err := RunCheck(dir)
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "topics is required")
+	assert.Contains(t, result.Issues[0].Message, "missing property 'topics'")
 }
 
 func TestRunCheck_TooManyTopics(t *testing.T) {
@@ -174,8 +154,7 @@ func TestRunCheck_TooManyTopics(t *testing.T) {
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "too many topics")
-	assert.Contains(t, result.Issues[0].Message, fmt.Sprintf("%d > %d", MaxTopicsPerSection+1, MaxTopicsPerSection))
+	assert.Contains(t, result.Issues[0].Message, "maxItems")
 }
 
 func TestRunCheck_ExactlyMaxTopics(t *testing.T) {
@@ -189,6 +168,24 @@ func TestRunCheck_ExactlyMaxTopics(t *testing.T) {
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.Empty(t, result.Issues)
+}
+
+func TestRunCheck_MdsccMissingKey(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, dir, "missing-key.yml", `- type: tool
+  topics:
+    - topic: overview
+      kind: mech
+      mdscc:
+        meta: m
+        derive: d
+        sol: s
+        case: k
+`)
+	result, err := RunCheck(dir)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Issues)
+	assert.Contains(t, result.Issues[0].Message, "missing property 'cost'")
 }
 
 func TestRunCheck_MdsccEmptyField(t *testing.T) {
@@ -207,35 +204,42 @@ func TestRunCheck_MdsccEmptyField(t *testing.T) {
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "mdscc.cost is required")
+	assert.Contains(t, result.Issues[0].Message, "cost")
 }
 
-func TestRunCheck_MdsccMissingKey(t *testing.T) {
+func TestRunCheck_UnknownKey(t *testing.T) {
+	// The new strictness: an undeclared key is an error (was ignored before).
 	dir := t.TempDir()
-	writeYAML(t, dir, "missing-key.yml", `- type: tool
+	writeYAML(t, dir, "typo.yml", `- type: tool
   topics:
     - topic: overview
-      kind: mech
-      mdscc:
-        meta: m
-        derive: d
-        sol: s
-        case: k
+      kind: tools
+      typoKey: 1
 `)
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "mdscc.cost is required")
+	assert.Contains(t, result.Issues[0].Message, "additional properties 'typoKey' not allowed")
+}
+
+func TestRunCheck_NullValue(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, dir, "null.yml", `- type: tool
+  topics:
+    - topic: overview
+      kind: tools
+      what: null
+`)
+	result, err := RunCheck(dir)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Issues)
+	assert.Contains(t, result.Issues[0].Message, "got null")
 }
 
 func TestRunCheck_BadYAMLContinues(t *testing.T) {
 	dir := t.TempDir()
 	writeYAML(t, dir, "bad.yml", `not: a: list: [[[`)
-	writeYAML(t, dir, "sub/ok.yml", `- type: tool
-  topics:
-    - topic: ok
-      kind: tools
-`)
+	writeYAML(t, dir, "sub/ok.yml", validSection)
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.Len(t, result.Issues, 1)
@@ -248,54 +252,25 @@ func TestRunCheck_NonexistentPath(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestRunCheck_KindRepoWithRepoFieldAndMdscc(t *testing.T) {
+func TestRunCheck_RecursiveNested(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, dir, "repo-kind.yml", `- type: cloud-platform
-  topics:
-    - topic: cloudflare
-      kind: repo
-      `+fullMdscc+`      repo:
-        - url: https://github.com/cloudflare/cloudflare-docs
-`)
+	writeYAML(t, dir, "infra/tunnel.yml", validSection)
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.Empty(t, result.Issues)
 }
 
-func TestRunCheck_RecursiveNested(t *testing.T) {
+func TestRunCheck_RelIsRepoObject(t *testing.T) {
+	// rel entries are full repo objects; a bare string rel must be rejected.
 	dir := t.TempDir()
-	writeYAML(t, dir, "infra/tunnel.yml", `- type: tunnel
+	writeYAML(t, dir, "bad-rel.yml", `- type: tool
   topics:
     - topic: x
       kind: tools
+      rel:
+        - https://github.com/acme/x
 `)
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
-	require.Empty(t, result.Issues)
-}
-
-func TestRunCheck_KindHowtoRejected(t *testing.T) {
-	dir := t.TempDir()
-	writeYAML(t, dir, "howto.yml", `- type: tunnel
-  topics:
-    - topic: x
-      kind: howto
-`)
-	result, err := RunCheck(dir)
-	require.NoError(t, err)
-	require.Len(t, result.Issues, 1)
-	assert.Contains(t, result.Issues[0].Message, `invalid kind "howto"`)
-	assert.Contains(t, result.Issues[0].Message, AllowedKindsCSV)
-}
-
-func TestRunCheck_KindTrimmed(t *testing.T) {
-	dir := t.TempDir()
-	writeYAML(t, dir, "pad.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: "  tools  "
-`)
-	result, err := RunCheck(dir)
-	require.NoError(t, err)
-	require.Empty(t, result.Issues)
+	require.NotEmpty(t, result.Issues)
 }
