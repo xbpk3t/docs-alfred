@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs-alfred.local/gh.schema.json",
+  "title": "gh",
+  "description": "JSON Schema for data/gh YAML files. Top-level list of sections; each section carries a type plus optional repo/record/topics. Structural rules only — cross-field and cross-file business rules stay in Go.",
+  "type": "array",
+  "items": { "$ref": "#/$defs/section" },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "required": ["type", "topics"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "minLength": 1, "description": "本节主题（如 golang / mac / kernel）；自由字符串" },
+        "repo": { "type": "array", "items": { "$ref": "#/$defs/repo" } },
+        "record": { "type": "array", "items": { "$ref": "#/$defs/record" } },
+        "topics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/topic" },
+          "minItems": 1,
+          "maxItems": 30,
+          "description": "主题列表；必填且至少 1 项，上限 30，对齐 ghcheck"
+        }
+      }
+    },
+
+    "topic": {
+      "type": "object",
+      "required": ["topic", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "topic": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1, "enum": ["mech", "type", "repo", "tools", "temp"], "description": "topic 类型；对齐 ghcheck AllowedKindsCSV" },
+        "mdscc": { "$ref": "#/$defs/mdscc" },
+        "repo": { "type": "array", "items": { "$ref": "#/$defs/repo" } },
+        "record": { "type": "array", "items": { "$ref": "#/$defs/record" } },
+        "table": { "type": "array", "items": { "$ref": "#/$defs/tableItem" } },
+        "what": { "type": "array", "items": { "type": "string" } },
+        "why": { "type": "array", "items": { "type": "string" } },
+        "where": { "type": "array", "items": { "type": "string" } },
+        "when": { "type": "array", "items": { "type": "string" } },
+        "htu": { "type": "array", "items": { "type": "string" } },
+        "hto": { "type": "array", "items": { "type": "string" } },
+        "hti": { "type": "array", "items": { "type": "string" } },
+        "ww": { "type": "array", "items": { "type": "string" } },
+        "qs": { "type": "array", "items": { "type": "string" } },
+        "zk": { "type": "string" },
+        "lang": { "type": "string" },
+        "url": { "type": "string" },
+        "isX": { "type": "boolean" },
+        "rel": { "type": "array", "items": { "$ref": "#/$defs/repo" } },
+        "sub": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+
+    "repo": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "minLength": 1 },
+        "des": { "type": "string" },
+        "nix": { "type": "string" },
+        "doc": { "type": "string" },
+        "score": { "type": "integer", "description": "评分；数据存在 -1 与 10，故不加范围约束" },
+        "isDotfiles": { "type": "boolean" },
+        "type": { "type": "string" },
+        "record": { "type": "array", "items": { "$ref": "#/$defs/record" } },
+        "zk": { "type": "string" },
+        "lang": { "type": "string" },
+        "rel": { "type": "array", "items": { "$ref": "#/$defs/repo" } },
+        "qs": { "type": "array", "items": { "type": "string" } },
+        "what": { "type": "array", "items": { "type": "string" } },
+        "why": { "type": "array", "items": { "type": "string" } },
+        "htu": { "type": "array", "items": { "type": "string" } },
+        "hto": { "type": "array", "items": { "type": "string" } },
+        "hti": { "type": "array", "items": { "type": "string" } },
+        "ww": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "date": { "type": "string", "minLength": 1 },
+        "des": { "type": "string" },
+        "score": { "type": "integer" },
+        "url": { "type": "string" }
+      }
+    },
+
+    "mdscc": {
+      "type": "object",
+      "required": ["meta", "derive", "sol", "cost", "case"],
+      "additionalProperties": false,
+      "properties": {
+        "meta": { "type": "string", "minLength": 1 },
+        "derive": { "type": "string", "minLength": 1 },
+        "sol": { "type": "string", "minLength": 1 },
+        "cost": { "type": "string", "minLength": 1 },
+        "case": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "tableItem": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "对比表项；内容异构（name/what/why/where/when/brand/price 等），不做字段枚举"
+    }
+  }
+}
