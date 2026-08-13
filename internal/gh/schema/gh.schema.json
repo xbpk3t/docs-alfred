@@ -12,6 +12,9 @@
       "additionalProperties": false,
       "properties": {
         "type": { "type": "string", "minLength": 1, "description": "本节主题（如 golang / mac / kernel）；自由字符串" },
+        "isDotfiles": { "type": "boolean", "description": "本 section 是否 dotfiles 相关" },
+        "score": { "type": "integer", "description": "本 section 评分；-1 = 未评分" },
+        "zk": { "type": "string", "description": "本 section 关键词" },
         "repo": { "type": "array", "items": { "$ref": "#/$defs/repo" } },
         "record": { "type": "array", "items": { "$ref": "#/$defs/record" } },
         "topics": {
@@ -48,6 +51,7 @@
         "lang": { "type": "string" },
         "url": { "type": "string" },
         "isX": { "type": "boolean" },
+        "score": { "type": "integer", "description": "本 topic 评分；-1 = 未评分" },
         "rel": { "type": "array", "items": { "$ref": "#/$defs/repo" } },
         "sub": { "type": "array", "items": { "type": "object" } }
       }
