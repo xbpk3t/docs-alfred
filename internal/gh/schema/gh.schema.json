@@ -29,11 +29,13 @@
 
     "topic": {
       "type": "object",
-      "required": ["topic", "kind"],
+      "required": ["topic"],
       "additionalProperties": false,
       "properties": {
         "topic": { "type": "string", "minLength": 1 },
-        "kind": { "type": "string", "minLength": 1, "enum": ["mech", "type", "repo", "tools", "temp"], "description": "topic 类型；对齐 ghcheck AllowedKindsCSV" },
+        "kind": { "type": "string", "minLength": 1, "enum": ["mech", "type", "repo", "tools", "temp"], "description": "topic 类型（gh 必填，由 ghcheck post-rule 强制；goods 不填）" },
+        "des": { "type": "string", "description": "topic 描述（goods 使用；gh 清理后不出现）" },
+        "topics": { "type": "array", "items": { "$ref": "#/$defs/topic" }, "description": "嵌套子 topic（goods 使用）" },
         "mdscc": { "$ref": "#/$defs/mdscc" },
         "repo": { "type": "array", "items": { "$ref": "#/$defs/repo" } },
         "record": { "type": "array", "items": { "$ref": "#/$defs/record" } },

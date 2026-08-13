@@ -7,6 +7,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/data/render"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
+	"github.com/xbpk3t/docs-alfred/internal/gh/goods"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
@@ -68,6 +69,15 @@ func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, erro
 func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions) (*DomainCheckResult, error) {
 	if domain == data.DomainGH {
 		result, err := ghcheck.RunCheck(opts.path)
+		if err != nil {
+			return nil, err
+		}
+
+		return &DomainCheckResult{Issues: result.Issues}, nil
+	}
+
+	if domain == data.DomainGoods {
+		result, err := goods.RunCheckWithOptions(opts.path, goods.CheckOptions{IncludeHidden: opts.includeHidden})
 		if err != nil {
 			return nil, err
 		}
