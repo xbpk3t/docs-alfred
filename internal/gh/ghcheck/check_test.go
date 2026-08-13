@@ -21,14 +21,6 @@ func writeYAML(t *testing.T, dir, name, content string) string {
 	return path
 }
 
-const fullMdscc = `mdscc:
-        meta: m
-        derive: d
-        sol: s
-        cost: c
-        case: k
-`
-
 const validSection = `- type: tunnel
   topics:
     - topic: 内网穿透工具
@@ -54,20 +46,7 @@ func TestRunCheck_Valid(t *testing.T) {
 	require.Empty(t, result.Issues)
 }
 
-func TestRunCheck_ValidMechWithMdscc(t *testing.T) {
-	dir := t.TempDir()
-	writeYAML(t, dir, "ok.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: mech
-      `+fullMdscc)
-	result, err := RunCheck(dir)
-	require.NoError(t, err)
-	require.Empty(t, result.Issues)
-}
-
-func TestRunCheck_MechWithoutMdsccOK(t *testing.T) {
-	// mdscc is optional for every kind, including mech/type/repo.
+func TestRunCheck_ValidMech(t *testing.T) {
 	dir := t.TempDir()
 	writeYAML(t, dir, "ok.yml", `- type: tool
   topics:
@@ -77,6 +56,27 @@ func TestRunCheck_MechWithoutMdsccOK(t *testing.T) {
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.Empty(t, result.Issues)
+}
+
+func TestRunCheck_MdsccIsRejected(t *testing.T) {
+	// mdscc was removed from the data model (gh data commented it out); the
+	// shared schema must flag it as an unknown topic key.
+	dir := t.TempDir()
+	writeYAML(t, dir, "mdscc.yml", `- type: tool
+  topics:
+    - topic: overview
+      kind: mech
+      mdscc:
+        meta: m
+        derive: d
+        sol: s
+        cost: c
+        case: k
+`)
+	result, err := RunCheck(dir)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Issues)
+	assert.Contains(t, result.Issues[0].Message, "additional properties 'mdscc'")
 }
 
 func TestRunCheck_MissingKind(t *testing.T) {
@@ -168,43 +168,6 @@ func TestRunCheck_ExactlyMaxTopics(t *testing.T) {
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
 	require.Empty(t, result.Issues)
-}
-
-func TestRunCheck_MdsccMissingKey(t *testing.T) {
-	dir := t.TempDir()
-	writeYAML(t, dir, "missing-key.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: mech
-      mdscc:
-        meta: m
-        derive: d
-        sol: s
-        case: k
-`)
-	result, err := RunCheck(dir)
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "missing property 'cost'")
-}
-
-func TestRunCheck_MdsccEmptyField(t *testing.T) {
-	dir := t.TempDir()
-	writeYAML(t, dir, "empty-cost.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: tools
-      mdscc:
-        meta: m
-        derive: d
-        sol: s
-        cost: ""
-        case: k
-`)
-	result, err := RunCheck(dir)
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "cost")
 }
 
 func TestRunCheck_UnknownKey(t *testing.T) {
