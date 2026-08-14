@@ -27,7 +27,6 @@ const (
 	fieldDate      = "date"
 	fieldTable     = "table"
 	fieldName      = "name"
-	fieldType      = "type"
 	fieldURL       = "url"
 	extYML         = ".yml"
 	extYAML        = ".yaml"
@@ -141,7 +140,6 @@ func checkItemsAST(file string, seq *ast.SequenceNode, allowedFields map[string]
 func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[string]bool, scope RuleScope, path string) []checkutil.Issue {
 	var issues []checkutil.Issue
 	hasName := false
-	hasType := false
 
 	for _, kv := range mapping.Values {
 		if kv == nil {
@@ -154,149 +152,16 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 		if key == fieldName {
 			hasName = true
 		}
-		if key == fieldType {
-			hasType = true
-		}
 		issues = append(issues, checkKeyValueAST(file, key, kv, allowedFields, scope)...)
-		if scope == ScopeGoods {
-			issues = append(issues, goodsFieldChecks(file, key, kv, allowedFields)...)
-		}
 	}
 
 	// Check required fields
-	if scope != ScopeDiary && scope != ScopeJav {
-		required := "name"
-		if scope == ScopeGoods {
-			required = "type"
-		}
-		if (required == "type" && !hasType) || (required == "name" && !hasName) {
-			issues = append(issues, checkutil.Issue{
-				File: file, Line: yamlutil.NodeLine(mapping),
-				Severity: checkutil.SeverityError,
-				Message:  fmt.Sprintf("缺少必填字段 %s (%s)", required, path),
-			})
-		}
-	}
-
-	return issues
-}
-
-// goodsFieldChecks runs goods-scope field checks: nested descent plus
-// endDate/endPrice position constraints (only valid inside table rows).
-func goodsFieldChecks(file, key string, kv *ast.MappingValueNode, allowedFields map[string]bool) []checkutil.Issue {
-	issues := checkNestedFieldAST(file, key, kv.Value, allowedFields, ScopeGoods, 0)
-	// endDate/endPrice are only valid inside table rows (goods items).
-	if key == "endDate" || key == "endPrice" {
-		issues = append(issues, errIssue(file, kv.Key, key+" 只能写在 table 项上"))
-	}
-
-	return issues
-}
-
-// checkNestedFieldAST descends into nested list fields and validates their items.
-// It validates field names and value types (score/date/sequence) without
-// requiring per-item mandatory fields, since nested items (topics, table rows)
-// have their own shapes. checkKeyValueAST performs the undefined-field check,
-// so no duplicate checks here.
-// maxNestedTopics caps recursive topics descent to protect against
-// pathological nesting depth.
-const maxNestedTopics = 100
-
-func checkNestedFieldAST(file, key string, val ast.Node, allowedFields map[string]bool, scope RuleScope, depth int) []checkutil.Issue {
-	seq, ok := yamlutil.Sequence(val)
-	if !ok {
-		return nil
-	}
-	if depth > maxNestedTopics {
-		return []checkutil.Issue{errIssue(file, seq, "topics 嵌套过深（超过 "+fmt.Sprintf("%d", maxNestedTopics)+" 层）")}
-	}
-
-	var issues []checkutil.Issue
-	for _, item := range seq.Values {
-		mapping, ok := yamlutil.Mapping(item)
-		if !ok {
-			continue
-		}
-		for _, kv := range mapping.Values {
-			if kv == nil {
-				continue
-			}
-			childKey := yamlutil.KeyString(kv.Key)
-			if childKey == "" {
-				continue
-			}
-			issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
-			if childKey == "topics" {
-				issues = append(issues, checkNestedFieldAST(file, childKey, kv.Value, allowedFields, scope, depth+1)...)
-			}
-			// endDate/endPrice are only valid inside table rows (goods items),
-			// never at topic or top level.
-			if childKey == "endDate" || childKey == "endPrice" {
-				issues = append(issues, errIssue(file, kv.Key, childKey+" 只能写在 table 项上"))
-			}
-		}
-	}
-
-	return issues
-}
-
-// checkTableRowAST validates a single table row: required name, field values,
-// and the endPrice/endDate pairing (v1 semantics: endPrice requires endDate;
-// endDate alone is allowed, e.g. disposed without a sale price).
-func checkTableRowAST(file string, mapping *ast.MappingNode, allowedFields map[string]bool, scope RuleScope, field string) []checkutil.Issue {
-	var issues []checkutil.Issue
-	hasName := false
-	hasEndDate := false
-	hasEndPrice := false
-	for _, kv := range mapping.Values {
-		if kv == nil {
-			continue
-		}
-		childKey := yamlutil.KeyString(kv.Key)
-		if childKey == "" {
-			continue
-		}
-		if childKey == fieldName {
-			hasName = true
-		}
-		if childKey == "endDate" {
-			hasEndDate = true
-		}
-		if childKey == "endPrice" {
-			hasEndPrice = true
-		}
-		issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
-	}
-	if !hasName {
-		issues = append(issues, errIssue(file, mapping, field+" 项缺少必填字段 name"))
-	}
-	if hasEndPrice && !hasEndDate {
-		issues = append(issues, errIssue(file, mapping, "endPrice 必须和 endDate 同时存在"))
-	}
-
-	return issues
-}
-
-// checkStringArrayFieldAST validates a goods string-array field (qs/what/why/
-// hto/htu/hti): it must be an array of strings, not objects.
-func checkStringArrayFieldAST(file, field string, val ast.Node, scope RuleScope) []checkutil.Issue {
-	if scope != ScopeGoods {
-		return nil
-	}
-	seq, ok := yamlutil.Sequence(val)
-	if !ok {
-		return []checkutil.Issue{errIssue(file, val, field+" 必须是数组")}
-	}
-
-	var issues []checkutil.Issue
-	for _, item := range seq.Values {
-		if _, ok := yamlutil.Mapping(item); ok {
-			issues = append(issues, errIssue(file, item, field+" 项必须是字符串"))
-			continue
-		}
-		if _, ok := item.(*ast.StringNode); !ok {
-			issues = append(issues, errIssue(file, item, field+" 项必须是字符串"))
-		}
+	if scope != ScopeDiary && scope != ScopeJav && !hasName {
+		issues = append(issues, checkutil.Issue{
+			File: file, Line: yamlutil.NodeLine(mapping),
+			Severity: checkutil.SeverityError,
+			Message:  fmt.Sprintf("缺少必填字段 %s (%s)", "name", path),
+		})
 	}
 
 	return issues
@@ -337,10 +202,6 @@ func checkFieldValueAST(file, key string, val ast.Node, allowedFields map[string
 	case fieldPublishAt:
 		return checkPublishAtAST(file, val, scope)
 	case fieldRecord:
-		if scope == ScopeGoods {
-			return checkRecordFieldAST(file, val, allowedFields, scope)
-		}
-
 		return checkIsSequenceAST(file, val, "record")
 	case fieldSub:
 		return checkSubFieldAST(file, val, scope)
@@ -350,70 +211,11 @@ func checkFieldValueAST(file, key string, val ast.Node, allowedFields map[string
 		if _, ok := val.(*ast.SequenceNode); !ok {
 			return []checkutil.Issue{warnIssue(file, val, "tags 建议使用数组")}
 		}
-	case "qs", "what", "why", "hto", "htu", "hti":
-		return checkStringArrayFieldAST(file, key, val, scope)
 	case fieldTable, fieldRecite:
-		// Only goods tables follow a fixed item field set; other domains
-		// (books etc.) use free-form Chinese table columns.
-		if scope != ScopeGoods {
-			return checkIsSequenceAST(file, val, key)
-		}
-
-		return checkTableFieldAST(file, val, allowedFields, scope, key)
+		return checkIsSequenceAST(file, val, key)
 	}
 
 	return nil
-}
-
-
-// checkRecordFieldAST validates a goods record sequence: it must be an array
-// of mappings (date/des/...), not plain strings.
-func checkRecordFieldAST(file string, val ast.Node, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
-	seq, ok := yamlutil.Sequence(val)
-	if !ok {
-		return []checkutil.Issue{errIssue(file, val, "record 必须是数组")}
-	}
-
-	var issues []checkutil.Issue
-	for _, item := range seq.Values {
-		mapping, ok := yamlutil.Mapping(item)
-		if !ok {
-			issues = append(issues, errIssue(file, item, "record 项必须是对象（date/des/...）"))
-			continue
-		}
-		for _, kv := range mapping.Values {
-			if kv == nil {
-				continue
-			}
-			childKey := yamlutil.KeyString(kv.Key)
-			if childKey == "" {
-				continue
-			}
-			issues = append(issues, checkKeyValueAST(file, childKey, kv, allowedFields, scope)...)
-		}
-	}
-
-	return issues
-}
-
-// checkTableFieldAST validates a table/recite sequence and its item mappings.
-func checkTableFieldAST(file string, val ast.Node, allowedFields map[string]bool, scope RuleScope, field string) []checkutil.Issue {
-	seq, ok := yamlutil.Sequence(val)
-	if !ok {
-		return []checkutil.Issue{errIssue(file, val, field+" 必须是数组")}
-	}
-
-	var issues []checkutil.Issue
-	for _, item := range seq.Values {
-		mapping, ok := yamlutil.Mapping(item)
-		if !ok {
-			issues = append(issues, errIssue(file, item, field+" 项必须是对象（name/price/...）"))
-			continue
-		}
-		issues = append(issues, checkTableRowAST(file, mapping, allowedFields, scope, field)...)
-	}
-
-	return issues
 }
 
 func checkScoreFieldAST(file string, val ast.Node, scope RuleScope) []checkutil.Issue {
@@ -437,13 +239,8 @@ func checkScoreFieldAST(file string, val ast.Node, scope RuleScope) []checkutil.
 	return nil
 }
 
-// validScore reports whether score is within the allowed range for a scope.
-// goods allows -1 (no rating placeholder); other scopes require 0-5.
+// validScore reports whether score is within the allowed 0-5 range.
 func validScore(score int, scope RuleScope) bool {
-	if scope == ScopeGoods && score == -1 {
-		return true
-	}
-
 	return score >= 0 && score <= 5
 }
 

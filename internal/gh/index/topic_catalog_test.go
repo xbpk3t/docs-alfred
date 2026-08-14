@@ -107,8 +107,7 @@ func TestTopicBase(t *testing.T) {
 }
 
 func TestTopicDirName(t *testing.T) {
-	assert.Equal(t, "topic-name", topicDirName(&model.Topic{Topic: "topic-name"}))
-	assert.Empty(t, topicDirName(nil))
+	assert.Equal(t, "topic-name", (&model.Topic{Topic: "topic-name"}).DirName())
 }
 
 func TestTopicCatalog_NilConfig(t *testing.T) {

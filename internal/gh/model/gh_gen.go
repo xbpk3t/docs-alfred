@@ -8,70 +8,35 @@ package model
 type GhSchemaJson []Section
 
 type Record struct {
-	// Date corresponds to the JSON schema field "date".
-	Date string `json:"date" yaml:"date" mapstructure:"date"`
-
-	// Des corresponds to the JSON schema field "des".
-	Des RecordDes `json:"des,omitempty,omitzero" yaml:"des,omitempty" mapstructure:"des,omitempty"`
-
-	// Score corresponds to the JSON schema field "score".
-	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
-
-	// URL corresponds to the JSON schema field "url".
-	URL *string `json:"url,omitempty,omitzero" yaml:"url,omitempty" mapstructure:"url,omitempty"`
+	Des   RecordDes `json:"des,omitempty,omitzero" yaml:"des,omitempty" mapstructure:"des,omitempty"`
+	Score *int      `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
+	URL   *string   `json:"url,omitempty,omitzero" yaml:"url,omitempty" mapstructure:"url,omitempty"`
+	Date  string    `json:"date" yaml:"date" mapstructure:"date"`
 }
 
 type RecordDes *string
 
 type Repo struct {
-	// Des corresponds to the JSON schema field "des".
-	Des RepoDes `json:"des,omitempty,omitzero" yaml:"des,omitempty" mapstructure:"des,omitempty"`
-
-	// Doc corresponds to the JSON schema field "doc".
-	Doc *string `json:"doc,omitempty,omitzero" yaml:"doc,omitempty" mapstructure:"doc,omitempty"`
-
-	// IsDotfiles corresponds to the JSON schema field "isDotfiles".
-	IsDotfiles *bool `json:"isDotfiles,omitempty,omitzero" yaml:"isDotfiles,omitempty" mapstructure:"isDotfiles,omitempty"`
-
-	// Nix corresponds to the JSON schema field "nix".
-	Nix *string `json:"nix,omitempty,omitzero" yaml:"nix,omitempty" mapstructure:"nix,omitempty"`
-
-	// Qs corresponds to the JSON schema field "qs".
-	Qs []string `json:"qs,omitempty,omitzero" yaml:"qs,omitempty" mapstructure:"qs,omitempty"`
-
-	// Record corresponds to the JSON schema field "record".
-	Record []Record `json:"record,omitempty,omitzero" yaml:"record,omitempty" mapstructure:"record,omitempty"`
-
-	// Rel corresponds to the JSON schema field "rel".
-	Rel []Repo `json:"rel,omitempty,omitzero" yaml:"rel,omitempty" mapstructure:"rel,omitempty"`
-
-	// Score corresponds to the JSON schema field "score".
-	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
-
-	// URL corresponds to the JSON schema field "url".
-	URL string `json:"url" yaml:"url" mapstructure:"url"`
-
-	// Zk corresponds to the JSON schema field "zk".
-	Zk *string `json:"zk,omitempty,omitzero" yaml:"zk,omitempty" mapstructure:"zk,omitempty"`
+	Des        RepoDes  `json:"des,omitempty,omitzero" yaml:"des,omitempty" mapstructure:"des,omitempty"`
+	Doc        *string  `json:"doc,omitempty,omitzero" yaml:"doc,omitempty" mapstructure:"doc,omitempty"`
+	IsDotfiles *bool    `json:"isDotfiles,omitempty,omitzero" yaml:"isDotfiles,omitempty" mapstructure:"isDotfiles,omitempty"`
+	Nix        *string  `json:"nix,omitempty,omitzero" yaml:"nix,omitempty" mapstructure:"nix,omitempty"`
+	Score      *int     `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
+	Zk         *string  `json:"zk,omitempty,omitzero" yaml:"zk,omitempty" mapstructure:"zk,omitempty"`
+	URL        string   `json:"url" yaml:"url" mapstructure:"url"`
+	Qs         []string `json:"qs,omitempty,omitzero" yaml:"qs,omitempty" mapstructure:"qs,omitempty"`
+	Record     []Record `json:"record,omitempty,omitzero" yaml:"record,omitempty" mapstructure:"record,omitempty"`
+	Rel        []Repo   `json:"rel,omitempty,omitzero" yaml:"rel,omitempty" mapstructure:"rel,omitempty"`
 }
 
 type RepoDes *string
 
 type Section struct {
-	// 本 section 是否 dotfiles 相关
-	IsDotfiles *bool `json:"isDotfiles,omitempty,omitzero" yaml:"isDotfiles,omitempty" mapstructure:"isDotfiles,omitempty"`
-
-	// Repo corresponds to the JSON schema field "repo".
-	Repo []Repo `json:"repo,omitempty,omitzero" yaml:"repo,omitempty" mapstructure:"repo,omitempty"`
-
-	// 本 section 评分（0-5）
-	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
-
-	// 主题列表；必填且至少 1 项，上限 30
-	Topics []Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
-
-	// 本节主题（如 golang / mac / kernel）；自由字符串
-	Type string `json:"type" yaml:"type" mapstructure:"type"`
+	IsDotfiles *bool   `json:"isDotfiles,omitempty,omitzero" yaml:"isDotfiles,omitempty" mapstructure:"isDotfiles,omitempty"`
+	Score      *int    `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
+	Type       string  `json:"type" yaml:"type" mapstructure:"type"`
+	Repo       []Repo  `json:"repo,omitempty,omitzero" yaml:"repo,omitempty" mapstructure:"repo,omitempty"`
+	Topics     []Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
 }
 
 // 对比表项；内容异构（name/what/why/where/when/brand/price/lang 等），dynamic key 不做枚举

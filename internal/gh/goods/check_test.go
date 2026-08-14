@@ -210,3 +210,53 @@ func TestRunCheck_IncludeHiddenLegacyStructure(t *testing.T) {
 	assert.Contains(t, joined, "'item'", "legacy item field must be flagged")
 	assert.Contains(t, result.Issues[0].File, ".goods.EDC.yml")
 }
+
+func TestRunCheck_TableRowMissingName(t *testing.T) {
+	result := checkGoodsYAML(t, `---
+- type: 耐用品
+  topics:
+    - topic: 收纳
+      table:
+        - price: ¥13
+`)
+	assert.NotEmpty(t, result.Issues)
+	assert.Contains(t, joinedMsgs(result), "table 项缺少必填字段 name")
+}
+
+func TestRunCheck_EndPriceWithoutEndDate(t *testing.T) {
+	result := checkGoodsYAML(t, `---
+- type: 耐用品
+  topics:
+    - topic: 收纳
+      table:
+        - name: 物品
+          endPrice: ¥50
+`)
+	assert.NotEmpty(t, result.Issues)
+	assert.Contains(t, joinedMsgs(result), "endPrice 必须和 endDate 同时存在")
+}
+
+func TestRunCheck_EndDateAloneAllowed(t *testing.T) {
+	result := checkGoodsYAML(t, `---
+- type: 耐用品
+  topics:
+    - topic: 收纳
+      table:
+        - name: 物品
+          endDate: "2025-01-01"
+`)
+	assert.Empty(t, result.Issues)
+}
+
+func TestRunCheck_EndDateAtTopicLevelRejected(t *testing.T) {
+	result := checkGoodsYAML(t, `---
+- type: 耐用品
+  topics:
+    - topic: 收纳
+      endDate: "2025-01-01"
+      table:
+        - name: 物品
+`)
+	assert.NotEmpty(t, result.Issues)
+	assert.Contains(t, joinedMsgs(result), "endDate 只能写在 table 项上")
+}

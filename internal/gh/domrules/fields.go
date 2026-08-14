@@ -16,7 +16,6 @@ const (
 	ScopeDiary RuleScope = "diary"
 	ScopeJav   RuleScope = "jav"
 	ScopeVG    RuleScope = "vg"
-	ScopeGoods RuleScope = "goods"
 )
 
 // DataDomain defines a data domain for validation.
@@ -75,27 +74,6 @@ var VGFields = map[string]bool{
 	"url": true, "sub": true, fieldTable: true,
 	"genre": true, "status": true, "platform": true, "publishAt": true,
 	"alias": true,
-}
-
-// GoodsFields defines the allowed field set for goods scope.
-// Mirrors the goods.*.yml structure: type/tag/topics at top level,
-// topic-level fields (table/score/record/qs/what/why/...) and table-item
-// fields (name/brand/param/price/date/endDate/endPrice/isUsing/...).
-// goods.virtual.yml table items additionally use vg-style fields
-// (developer/genre/status/platform/playAt/publishAt/alias) for game records.
-var GoodsFields = map[string]bool{
-	"type": true, "tag": true, "topics": true,
-	// topic-level
-	"topic": true, fieldTable: true, fieldScore: true, fieldRecord: true,
-	"qs": true, "what": true, "why": true, "hto": true, "htu": true, "hti": true,
-	fieldDes: true,
-	// table-item level
-	fieldName: true, "brand": true, "param": true, "price": true,
-	fieldDate: true, "endDate": true, "endPrice": true, "isUsing": true,
-	fieldURL: true, "source": true, "scope": true,
-	// vg-style fields for goods.virtual.yml game records
-	"developer": true, "genre": true, "status": true, "platform": true,
-	"playAt": true, "publishAt": true, "alias": true,
 }
 
 var ForbiddenFields = map[string]bool{

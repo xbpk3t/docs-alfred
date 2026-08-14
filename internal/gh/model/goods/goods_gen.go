@@ -8,30 +8,18 @@ package goods
 type GoodsSchemaJson []Section
 
 type Record struct {
-	// Date corresponds to the JSON schema field "date".
-	Date string `json:"date" yaml:"date" mapstructure:"date"`
-
-	// Des corresponds to the JSON schema field "des".
-	Des RecordDes `json:"des,omitempty,omitzero" yaml:"des,omitempty" mapstructure:"des,omitempty"`
-
-	// Score corresponds to the JSON schema field "score".
-	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
-
-	// URL corresponds to the JSON schema field "url".
-	URL *string `json:"url,omitempty,omitzero" yaml:"url,omitempty" mapstructure:"url,omitempty"`
+	Des   RecordDes `json:"des,omitempty,omitzero" yaml:"des,omitempty" mapstructure:"des,omitempty"`
+	Score *int      `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
+	URL   *string   `json:"url,omitempty,omitzero" yaml:"url,omitempty" mapstructure:"url,omitempty"`
+	Date  string    `json:"date" yaml:"date" mapstructure:"date"`
 }
 
 type RecordDes *string
 
 type Section struct {
-	// Score corresponds to the JSON schema field "score".
-	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
-
-	// Topics corresponds to the JSON schema field "topics".
+	Score  *int    `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
+	Type   string  `json:"type" yaml:"type" mapstructure:"type"`
 	Topics []Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
-
-	// Type corresponds to the JSON schema field "type".
-	Type string `json:"type" yaml:"type" mapstructure:"type"`
 }
 
 // 商品项；键异构（name/brand/price/param/des/date/record/isUsing/endDate/endPrice/source/url/alias/developer/playAt/genre/platform/publishAt/status

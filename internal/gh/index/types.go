@@ -14,15 +14,12 @@ const GhURL = "https://github.com/"
 // config/topic/rel a repo came from). Provenance is index-layer only; it is
 // not part of the gh JSON Schema, so it lives outside the generated model.
 type Repo struct {
-	// yaml:",inline" flattens the generated model into this struct so goccy
-	// round-trips the config YAML losslessly (without it goccy nests the
-	// embedded struct under a "repo" key and drops the fields).
-	model.Repo `yaml:",inline"`
 	Tag           string `yaml:"tag,omitempty"      json:"tag,omitempty"`
 	Type          string `yaml:"type,omitempty"     json:"type,omitempty"`
 	TopicName     string `yaml:"-"                  json:"-"`
 	MainRepo      string `yaml:"-"                  json:"-"`
-	IsRelatedRepo bool   `yaml:"-"                  json:"-"`
+	model.Repo    `yaml:",inline"`
+	IsRelatedRepo bool `yaml:"-"                  json:"-"`
 }
 
 // Repository is kept as an alias for Repo so callers that only read repos

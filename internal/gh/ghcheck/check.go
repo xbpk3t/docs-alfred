@@ -4,6 +4,7 @@ package ghcheck
 import (
 	"fmt"
 
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 	"github.com/xbpk3t/docs-alfred/internal/gh/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
@@ -11,13 +12,15 @@ import (
 )
 
 // Allowed topic.kind values for data/gh. Shared with index.TopicCatalog; the
-// enum and required-kind themselves live in gh.schema.json.
+// enum itself lives in gh.schema.json and is surfaced via the generated
+// model.TopicKind constants, so these derive from it rather than duplicating
+// the literals.
 const (
-	KindMechanism = "mech"
-	KindType      = "type"
-	KindRepo      = "repo"
-	KindTools     = "tools"
-	KindTemp      = "temp"
+	KindMechanism = string(model.TopicKindMech)
+	KindType      = string(model.TopicKindType)
+	KindRepo      = string(model.TopicKindRepo)
+	KindTools     = string(model.TopicKindTools)
+	KindTemp      = string(model.TopicKindTemp)
 
 	// MaxTopicsPerSection is the max topics allowed under one section type.
 	MaxTopicsPerSection = 30
