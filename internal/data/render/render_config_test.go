@@ -145,7 +145,7 @@ func TestRunDomainRender_Goods(t *testing.T) {
 	assert.Equal(t, "earphones", earphones["topic"])
 	assert.EqualValues(t, 5, earphones["score"])
 	table, ok := earphones["table"].([]any)
-	require.True(t, ok, "earphones.table must survive render; missing means content.Topic lacks Table field")
+	require.True(t, ok, "earphones.table must survive render; missing means the generated Topic model lacks a Table field")
 	require.Len(t, table, 1)
 	row, ok := table[0].(map[string]any)
 	require.True(t, ok)

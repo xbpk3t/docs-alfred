@@ -8,8 +8,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
+
+// strptr returns a pointer to s for constructing pointer model fields in tests.
+func strptr(s string) *string { return &s }
 
 func TestSearchCmdFlags(t *testing.T) {
 	searchCmd, _, err := newRootCmd().Find([]string{"search"})
@@ -81,7 +85,7 @@ func TestRunSearchOutputWritesAlfredJSON(t *testing.T) {
 	stdout := captureStdout(t)
 
 	repos := ghindex.Repos{
-		{URL: "https://github.com/acme/tool", Des: "A tool"},
+		{Repo: model.Repo{URL: "https://github.com/acme/tool", Des: strptr("A tool")}},
 	}
 
 	cmd := &cobra.Command{Use: "test"}

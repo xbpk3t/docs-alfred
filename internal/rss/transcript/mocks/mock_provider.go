@@ -19,9 +19,9 @@ import (
 
 // MockProvider is a mock of Provider interface.
 type MockProvider struct {
+	isgomock struct{}
 	ctrl     *gomock.Controller
 	recorder *MockProviderMockRecorder
-	isgomock struct{}
 }
 
 // MockProviderMockRecorder is the mock recorder for MockProvider.

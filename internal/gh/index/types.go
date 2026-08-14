@@ -3,25 +3,44 @@ package ghindex
 import (
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 const GhURL = "https://github.com/"
 
-// Repository is an alias for content.Repo.
-type Repository = content.Repo
+// Repo is the enriched repository type: the schema-generated data model
+// (model.Repo) plus runtime provenance fields set during indexing (which
+// config/topic/rel a repo came from). Provenance is index-layer only; it is
+// not part of the gh JSON Schema, so it lives outside the generated model.
+type Repo struct {
+	Tag           string `yaml:"tag,omitempty"      json:"tag,omitempty"`
+	Type          string `yaml:"type,omitempty"     json:"type,omitempty"`
+	TopicName     string `yaml:"-"                  json:"-"`
+	MainRepo      string `yaml:"-"                  json:"-"`
+	model.Repo    `yaml:",inline"`
+	IsRelatedRepo bool `yaml:"-"                  json:"-"`
+}
 
-// Repos is an alias for content.Repos.
-type Repos = content.Repos
+// Repository is kept as an alias for Repo so callers that only read repos
+// (dedup, presenter) can keep using the same name.
+type Repository = Repo
+
+// Repos is a list of enriched repositories.
+type Repos []*Repo
+
+// Topics is the schema-generated topic list. Topics carry no provenance (the
+// index adds none today), so they are used directly from the generated model.
+// The alias keeps the composite-literal shape (`Topics{{...}}`) used by callers.
+type Topics = []model.Topic
 
 // ConfigRepo defines configuration repository structure.
 type ConfigRepo struct {
-	IsDotfiles *bool          `yaml:"isDotfiles,omitempty"`
-	Type       string         `yaml:"type"`
-	Tag        string         `yaml:"tag"`
-	Repos      Repos          `yaml:"repo"`
-	Topics     content.Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
+	IsDotfiles *bool  `yaml:"isDotfiles,omitempty"`
+	Type       string `yaml:"type"`
+	Tag        string `yaml:"tag"`
+	Repos      Repos  `yaml:"repo"`
+	Topics     Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
 }
 
 type ConfigRepos []*ConfigRepo
@@ -31,13 +50,19 @@ type Config struct {
 	ConfigRepos ConfigRepos `yaml:"config"`
 }
 
-func IsValid(repo *content.Repo) bool {
+func IsValid(repo *Repo) bool {
+	if repo == nil {
+		return false
+	}
 	_, ok := urlutil.GitHubOwnerRepo(repo.URL)
 
 	return ok
 }
 
-func FullName(repo *content.Repo) string {
+func FullName(repo *Repo) string {
+	if repo == nil {
+		return ""
+	}
 	r, ok := urlutil.GitHubOwnerRepo(repo.URL)
 	if !ok {
 		return ""
@@ -46,22 +71,34 @@ func FullName(repo *content.Repo) string {
 	return r.Owner + "/" + r.Name
 }
 
-func GetDes(repo *content.Repo) string {
-	return repo.Des
+func GetDes(repo *Repo) string {
+	if repo == nil || repo.Des == nil {
+		return ""
+	}
+
+	return *repo.Des
 }
 
-func GetURL(repo *content.Repo) string {
+func GetURL(repo *Repo) string {
+	if repo == nil {
+		return ""
+	}
+
 	return repo.URL
 }
 
-func HasNix(repo *content.Repo) bool {
-	return strings.TrimSpace(repo.NixURL) != ""
+func HasNix(repo *Repo) bool {
+	if repo == nil || repo.Nix == nil {
+		return false
+	}
+
+	return strings.TrimSpace(*repo.Nix) != ""
 }
 
-func HasSubRepos(repo *content.Repo) bool {
-	return len(repo.RelatedRepos) > 0
+func HasSubRepos(repo *Repo) bool {
+	return repo != nil && len(repo.Rel) > 0
 }
 
-func IsSubOrDepOrRelRepo(repo *content.Repo) bool {
-	return repo.IsRelatedRepo
+func IsSubOrDepOrRelRepo(repo *Repo) bool {
+	return repo != nil && repo.IsRelatedRepo
 }

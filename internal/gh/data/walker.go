@@ -27,15 +27,15 @@ const evTypeRepo = "repo"
 
 // WalkerEvent types for the gh YAML walker.
 type WalkerEvent struct {
-	Type         string
+	Repo         Repo
+	Section      Section
 	Error        string
 	Relation     string
 	FilenameStem string
 	File         string
 	Content      string
+	Type         string
 	Errors       []string
-	Section      Section
-	Repo         Repo
 	DocIndex     int
 	SectionIndex int
 	RepoIndex    int

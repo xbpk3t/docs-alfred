@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
@@ -19,10 +20,10 @@ func TestRepoBadgeState(t *testing.T) {
 	}{
 		{name: "nil", repo: nil, want: badgeState{}},
 		{name: "empty", repo: &ghindex.Repository{}, want: badgeState{Score: 0}},
-		{name: "doc nix score", repo: &ghindex.Repository{Doc: "data/gh/tool", NixURL: "github:acme/tool#tool", Score: 4}, want: badgeState{HasDoc: true, HasNix: true, Score: 4}},
-		{name: "blank doc nix", repo: &ghindex.Repository{Doc: " ", NixURL: " ", Score: 2}, want: badgeState{Score: 2}},
-		{name: "negative score", repo: &ghindex.Repository{Score: -1}, want: badgeState{Score: 0}},
-		{name: "over max score", repo: &ghindex.Repository{Score: 9}, want: badgeState{Score: 5}},
+		{name: "doc nix score", repo: &ghindex.Repository{Repo: model.Repo{Doc: strptr("data/gh/tool"), Nix: strptr("github:acme/tool#tool"), Score: intptr(4)}}, want: badgeState{HasDoc: true, HasNix: true, Score: 4}},
+		{name: "blank doc nix", repo: &ghindex.Repository{Repo: model.Repo{Doc: strptr(" "), Nix: strptr(" "), Score: intptr(2)}}, want: badgeState{Score: 2}},
+		{name: "negative score", repo: &ghindex.Repository{Repo: model.Repo{Score: intptr(-1)}}, want: badgeState{Score: 0}},
+		{name: "over max score", repo: &ghindex.Repository{Repo: model.Repo{Score: intptr(9)}}, want: badgeState{Score: 5}},
 	}
 
 	for _, tt := range tests {
@@ -62,6 +63,6 @@ func TestRepoIconPathFallsBackWhenGenerationFails(t *testing.T) {
 		repoIconCacheDir = old
 	})
 
-	got := repoIconPath(&ghindex.Repository{Doc: "data/gh/tool", NixURL: "github:acme/tool#tool", Score: 5})
+	got := repoIconPath(&ghindex.Repository{Repo: model.Repo{Doc: strptr("data/gh/tool"), Nix: strptr("github:acme/tool#tool"), Score: intptr(5)}})
 	assert.Equal(t, IconGh, got)
 }

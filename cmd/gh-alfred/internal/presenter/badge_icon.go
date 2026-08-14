@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
@@ -25,7 +24,7 @@ type badgeState struct {
 	Score  int
 }
 
-func repoIconPath(repo *content.Repo) string {
+func repoIconPath(repo *ghindex.Repo) string {
 	if repo == nil {
 		return IconGh
 	}
@@ -37,15 +36,20 @@ func repoIconPath(repo *content.Repo) string {
 	return path
 }
 
-func repoBadgeState(repo *content.Repo) badgeState {
+func repoBadgeState(repo *ghindex.Repo) badgeState {
 	if repo == nil {
 		return badgeState{}
 	}
+	score := 0
+	if repo.Score != nil {
+		score = *repo.Score
+	}
+	hasDoc := repo.Doc != nil && strings.TrimSpace(*repo.Doc) != ""
 
 	return badgeState{
-		HasDoc: strings.TrimSpace(repo.Doc) != "",
+		HasDoc: hasDoc,
 		HasNix: ghindex.HasNix(repo),
-		Score:  clampScore(repo.Score),
+		Score:  clampScore(score),
 	}
 }
 

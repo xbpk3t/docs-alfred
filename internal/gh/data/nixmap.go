@@ -31,7 +31,7 @@ func LoadNixData(ghRoot string) (ghMap map[string]map[string]bool, falsePkgs map
 		if !ghindex.HasNix(r) {
 			continue
 		}
-		short := extractNixShort(r.NixURL)
+		short := extractNixShort(*r.Nix)
 		if short == "" {
 			continue
 		}

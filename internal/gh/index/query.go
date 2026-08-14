@@ -5,12 +5,11 @@ import (
 	"strings"
 
 	"github.com/samber/lo"
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 type repoMatch struct {
-	repo  *content.Repo
+	repo  *Repo
 	score int
 	index int
 }
@@ -48,7 +47,7 @@ func FilterRepos(r Repos, query string) Repos {
 		return 0
 	})
 
-	return lo.Map(matches, func(match repoMatch, _ int) *content.Repo {
+	return lo.Map(matches, func(match repoMatch, _ int) *Repo {
 		return match.repo
 	})
 }
@@ -68,7 +67,7 @@ func normalizeSearchQuery(query string) string {
 	return strings.TrimSuffix(query, ".git")
 }
 
-func matchRepo(repo *content.Repo, query string) (int, bool) {
+func matchRepo(repo *Repo, query string) (int, bool) {
 	if repo == nil {
 		return 0, false
 	}
@@ -98,7 +97,7 @@ func matchRepo(repo *content.Repo, query string) (int, bool) {
 		return 4, true
 	case strings.Contains(strings.ToLower(repo.Type), query):
 		return 4, true
-	case strings.Contains(strings.ToLower(repo.Des), query):
+	case strings.Contains(strings.ToLower(GetDes(repo)), query):
 		return 5, true
 	}
 
@@ -116,9 +115,9 @@ func repoNameFromFullName(fullName string) string {
 
 // ExtractTags extracts unique tags from repositories.
 func ExtractTags(r Repos) []string {
-	tags := lo.Uniq(lo.Map(lo.Filter(r, func(repo *content.Repo, _ int) bool {
-		return repo.Tag != ""
-	}), func(repo *content.Repo, _ int) string {
+	tags := lo.Uniq(lo.Map(lo.Filter(r, func(repo *Repo, _ int) bool {
+		return repo != nil && repo.Tag != ""
+	}), func(repo *Repo, _ int) string {
 		return repo.Tag
 	}))
 	slices.Sort(tags)
@@ -128,23 +127,23 @@ func ExtractTags(r Repos) []string {
 
 // ExtractTypesByTag returns all types for a given tag.
 func ExtractTypesByTag(r Repos, tag string) []string {
-	return lo.Uniq(lo.Map(lo.Filter(r, func(repo *content.Repo, _ int) bool {
-		return repo.Tag == tag && repo.Type != ""
-	}), func(repo *content.Repo, _ int) string {
+	return lo.Uniq(lo.Map(lo.Filter(r, func(repo *Repo, _ int) bool {
+		return repo != nil && repo.Tag == tag && repo.Type != ""
+	}), func(repo *Repo, _ int) string {
 		return repo.Type
 	}))
 }
 
 // QueryReposByTag filters repos by tag (type).
 func QueryReposByTag(r Repos, tag string) Repos {
-	return lo.Filter(r, func(repo *content.Repo, _ int) bool {
-		return repo.Type == tag
+	return lo.Filter(r, func(repo *Repo, _ int) bool {
+		return repo != nil && repo.Type == tag
 	})
 }
 
 // QueryReposByTagAndType filters repos by tag and type.
 func QueryReposByTagAndType(r Repos, tag, typeName string) Repos {
-	return lo.Filter(r, func(repo *content.Repo, _ int) bool {
-		return repo.Tag == tag && repo.Type == typeName
+	return lo.Filter(r, func(repo *Repo, _ int) bool {
+		return repo != nil && repo.Tag == tag && repo.Type == typeName
 	})
 }

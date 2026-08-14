@@ -19,7 +19,7 @@ func TestSectionFromMap(t *testing.T) {
 	}
 	section := sectionFromMap(m)
 	assert.Equal(t, "language", section.Type)
-	assert.Len(t, section.Repos, 1)
+	assert.Len(t, section.Repo, 1)
 }
 
 func TestSectionFromMap_Topics(t *testing.T) {
@@ -32,8 +32,9 @@ func TestSectionFromMap_Topics(t *testing.T) {
 		},
 	}
 	section := sectionFromMap(m)
-	// Section doesn't parse topics directly (they're handled by ConfigRepo)
 	assert.Equal(t, "tool", section.Type)
+	assert.Len(t, section.Topics, 1)
+	assert.Equal(t, "overview", section.Topics[0].Topic)
 }
 
 func TestSectionFromMap_NilRecord(t *testing.T) {
@@ -54,32 +55,12 @@ func TestRepoFromMap(t *testing.T) {
 	}
 	repo := repoFromMap(m)
 	assert.Equal(t, "https://github.com/owner/repo", repo.URL)
-	assert.Equal(t, "test", repo.Des)
-	assert.Equal(t, "nix-value", repo.NixURL)
-	assert.Equal(t, "doc-url", repo.Doc)
-}
-
-func TestTopicFromMap(t *testing.T) {
-	m := map[string]any{
-		"topic": "main",
-		"kind":  "tools",
-		"mdscc": map[string]any{
-			"meta":   "m",
-			"derive": "d",
-			"sol":    "s",
-			"cost":   "c",
-			"case":   "k",
-		},
-	}
-	topic := topicFromMap(m)
-	assert.Equal(t, "main", topic.Topic)
-	assert.Equal(t, "tools", topic.Kind)
-	require.NotNil(t, topic.Mdscc)
-	assert.Equal(t, "m", topic.Mdscc.Meta)
-	assert.Equal(t, "d", topic.Mdscc.Derive)
-	assert.Equal(t, "s", topic.Mdscc.Sol)
-	assert.Equal(t, "c", topic.Mdscc.Cost)
-	assert.Equal(t, "k", topic.Mdscc.Case)
+	require.NotNil(t, repo.Des)
+	assert.Equal(t, "test", *repo.Des)
+	require.NotNil(t, repo.Nix)
+	assert.Equal(t, "nix-value", *repo.Nix)
+	require.NotNil(t, repo.Doc)
+	assert.Equal(t, "doc-url", *repo.Doc)
 }
 
 func TestTopic_DirName(t *testing.T) {
@@ -113,50 +94,32 @@ func TestSectionFromMap_WithRepos(t *testing.T) {
 		},
 	}
 	section := sectionFromMap(m)
-	require.Len(t, section.Repos, 2)
-	assert.Equal(t, "https://github.com/owner/repo1", section.Repos[0].URL)
-	assert.Equal(t, "first repo", section.Repos[0].Des)
-	assert.Equal(t, "https://github.com/owner/repo2", section.Repos[1].URL)
-	assert.Equal(t, "second repo", section.Repos[1].Des)
+	require.Len(t, section.Repo, 2)
+	assert.Equal(t, "https://github.com/owner/repo1", section.Repo[0].URL)
+	require.NotNil(t, section.Repo[0].Des)
+	assert.Equal(t, "first repo", *section.Repo[0].Des)
+	assert.Equal(t, "https://github.com/owner/repo2", section.Repo[1].URL)
+	require.NotNil(t, section.Repo[1].Des)
+	assert.Equal(t, "second repo", *section.Repo[1].Des)
 }
 
 func TestSectionFromMap_EmptyMap(t *testing.T) {
 	section := sectionFromMap(map[string]any{})
 	assert.Empty(t, section.Type)
-	assert.Empty(t, section.Repos)
-}
-
-func TestTopicFromMap_WithRepos(t *testing.T) {
-	m := map[string]any{
-		"topic": "parent",
-		"repo": []any{
-			map[string]any{"url": "https://github.com/acme/sub"},
-		},
-	}
-	topic := topicFromMap(m)
-	assert.Equal(t, "parent", topic.Topic)
-	require.Len(t, topic.Repos, 1)
-	assert.Equal(t, "https://github.com/acme/sub", topic.Repos[0].URL)
-}
-
-func TestDecodeYAMLMap_Basic(t *testing.T) {
-	input := map[string]any{
-		"url": "https://github.com/test/repo",
-		"des": "a description",
-	}
-	var out repoFields
-	decodeYAMLMap(input, &out)
-	assert.Equal(t, "https://github.com/test/repo", out.URL)
-	assert.Equal(t, "a description", out.Des)
+	assert.Empty(t, section.Repo)
 }
 
 func TestSectionFromMap_RepoNonMappingItem(t *testing.T) {
+	// mapstructure decodes non-mapping repo items as empty Repo structs; the
+	// walker's emitRepoEvents filters them out before yielding events, so real
+	// repos are unaffected.
 	m := map[string]any{
 		"type": "tool",
 		"repo": []any{"just a string", 42},
 	}
 	section := sectionFromMap(m)
-	assert.Empty(t, section.Repos)
+	assert.Len(t, section.Repo, 2)
+	assert.Empty(t, section.Repo[0].URL)
 }
 
 func TestSectionFromMap_TopicsNonSlice(t *testing.T) {
@@ -174,5 +137,5 @@ func TestSectionFromMap_RepoEmptySlice(t *testing.T) {
 		"repo": []any{},
 	}
 	section := sectionFromMap(m)
-	assert.Empty(t, section.Repos)
+	assert.Empty(t, section.Repo)
 }

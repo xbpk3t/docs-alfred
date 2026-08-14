@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 )
 
 func TestBadgeIconPathJoinsCacheDir(t *testing.T) {
@@ -92,8 +93,7 @@ func TestEnsureBadgeIconCachesSVG(t *testing.T) {
 
 func TestRepoBadgeStateWithNixURL(t *testing.T) {
 	repo := &ghindex.Repository{
-		NixURL: "github:acme/tool#tool",
-		Score:  3,
+		Repo: model.Repo{Nix: strptr("github:acme/tool#tool"), Score: intptr(3)},
 	}
 	got := repoBadgeState(repo)
 	assert.True(t, got.HasNix)
