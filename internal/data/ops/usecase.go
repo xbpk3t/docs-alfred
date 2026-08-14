@@ -68,7 +68,7 @@ func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, erro
 
 func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions) (*DomainCheckResult, error) {
 	if domain == data.DomainGH {
-		result, err := ghcheck.RunCheck(opts.path)
+		result, err := ghcheck.RunCheckWithOptions(opts.path, ghcheck.CheckOptions{IncludeHidden: opts.includeHidden})
 		if err != nil {
 			return nil, err
 		}

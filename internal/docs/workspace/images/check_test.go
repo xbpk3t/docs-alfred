@@ -349,7 +349,7 @@ func TestCollectExpectedImageDirsShortPath(t *testing.T) {
 func TestCollectRepoTopicDirsEmptyURL(t *testing.T) {
 	var dirs []string
 	// Empty URL should result in empty repoName, causing early return
-	collectRepoTopicDirs(&ghdata.Repo{URL: ""}, "base", &dirs, false)
+	collectRepoTopicDirs(&ghdata.Repo{Url: ""}, "base", &dirs, false)
 	assert.Empty(t, dirs)
 }
 

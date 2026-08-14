@@ -89,7 +89,7 @@ func TestRunCheck_MissingKind(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
 	assert.Equal(t, checkutil.SeverityError, result.Issues[0].Severity)
-	assert.Contains(t, result.Issues[0].Message, "缺少必填字段 kind")
+	assert.Contains(t, result.Issues[0].Message, "missing property 'kind'")
 }
 
 func TestRunCheck_KindNotInEnum(t *testing.T) {
@@ -224,16 +224,21 @@ func TestRunCheck_RecursiveNested(t *testing.T) {
 }
 
 func TestRunCheck_RelIsRepoObject(t *testing.T) {
-	// rel entries are full repo objects; a bare string rel must be rejected.
+	// rel lives on repo (not topic); each entry must be a full repo object,
+	// so a bare-string rel must be rejected.
 	dir := t.TempDir()
 	writeYAML(t, dir, "bad-rel.yml", `- type: tool
   topics:
     - topic: x
       kind: tools
-      rel:
-        - https://github.com/acme/x
+      repo:
+        - url: https://github.com/acme/x
+          rel:
+            - https://github.com/acme/y
 `)
 	result, err := RunCheck(dir)
 	require.NoError(t, err)
-	require.NotEmpty(t, result.Issues)
+	require.Len(t, result.Issues, 1)
+	assert.Contains(t, result.Issues[0].Message, "rel/0")
+	assert.Contains(t, result.Issues[0].Message, "want object")
 }

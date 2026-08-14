@@ -9,12 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// usingTag mirrors goods.UsingTag for CLI-level JSON assertions.
-type usingTag struct {
-	Tag   string      `json:"tag"`
-	Types []usingType `json:"types"`
-}
-
+// usingType mirrors goods.UsingType for CLI-level JSON assertions.
+// The tag grouping layer was removed; output is type → topic directly.
 type usingType struct {
 	Type   string       `json:"type"`
 	Topics []usingTopic `json:"topics"`
@@ -31,9 +27,9 @@ type usingItem struct {
 	Extra map[string]string `json:"extra,omitempty"`
 }
 
-func decodeUsing(t *testing.T, raw string) []usingTag {
+func decodeUsing(t *testing.T, raw string) []usingType {
 	t.Helper()
-	var result []usingTag
+	var result []usingType
 	require.NoError(t, json.Unmarshal([]byte(raw), &result))
 
 	return result
@@ -43,7 +39,6 @@ func TestNewGoodsUsingCmd_JSONShape(t *testing.T) {
 	goodsDir := writeGhFiles(t, map[string]string{
 		"goods.test.yml": `---
 - type: 耐用品
-  tag: goods
   topics:
     - topic: 收纳袋
       table:
@@ -69,20 +64,18 @@ func TestNewGoodsUsingCmd_JSONShape(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tags := decodeUsing(t, out)
-	require.Len(t, tags, 1)
-	assert.Equal(t, "goods", tags[0].Tag)
-	require.Len(t, tags[0].Types, 1)
-	assert.Equal(t, "耐用品", tags[0].Types[0].Type)
-	require.Len(t, tags[0].Types[0].Topics, 2)
-	assert.Equal(t, "收纳袋", tags[0].Types[0].Topics[0].Topic)
-	require.Len(t, tags[0].Types[0].Topics[0].Items, 1)
-	assert.Equal(t, "抽绳束口#防水#收纳袋（15D尼龙涂硅）", tags[0].Types[0].Topics[0].Items[0].Name)
-	assert.Equal(t, "三峰出", tags[0].Types[0].Topics[0].Items[0].Brand)
+	types := decodeUsing(t, out)
+	require.Len(t, types, 1)
+	assert.Equal(t, "耐用品", types[0].Type)
+	require.Len(t, types[0].Topics, 2)
+	assert.Equal(t, "收纳袋", types[0].Topics[0].Topic)
+	require.Len(t, types[0].Topics[0].Items, 1)
+	assert.Equal(t, "抽绳束口#防水#收纳袋（15D尼龙涂硅）", types[0].Topics[0].Items[0].Name)
+	assert.Equal(t, "三峰出", types[0].Topics[0].Items[0].Brand)
 	// 未标记 isUsing 的不出现
-	assert.Len(t, tags[0].Types[0].Topics[1].Items, 1)
+	assert.Len(t, types[0].Topics[1].Items, 1)
 	// Extra 字段不出现在 JSON 里（空 map 被 omitempty 省略）
-	assert.Empty(t, tags[0].Types[0].Topics[0].Items[0].Extra)
+	assert.Empty(t, types[0].Topics[0].Items[0].Extra)
 }
 
 func TestNewGoodsUsingCmd_EmptyResult(t *testing.T) {
