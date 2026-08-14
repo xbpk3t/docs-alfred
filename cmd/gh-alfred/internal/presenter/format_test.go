@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 )
 
 func useTempRepoIconCache(t *testing.T) string {
@@ -32,16 +33,13 @@ func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
 	cacheDir := useTempRepoIconCache(t)
 	repos := ghindex.Repos{
 		{
-			URL:      "https://github.com/acme/tool",
-			Des:      "Tooling",
-			Doc:      "data/gh/tool",
+			Repo:     model.Repo{URL: "https://github.com/acme/tool", Des: strptr("Tooling"), Doc: strptr("data/gh/tool")},
 			Tag:      "kernel",
 			Type:     "tool",
 			MainRepo: "acme/main",
 		},
 		{
-			URL: "https://github.com/acme/external-doc",
-			Doc: "https://example.com/external-doc",
+			Repo: model.Repo{URL: "https://github.com/acme/external-doc", Doc: strptr("https://example.com/external-doc")},
 		},
 	}
 
@@ -76,7 +74,7 @@ func TestFormatAlfredItemsBuildsRepoAndDocActions(t *testing.T) {
 
 func TestFormatAlfredItemsAddsGitHubSearchFallbackForQueries(t *testing.T) {
 	useTempRepoIconCache(t)
-	repos := ghindex.Repos{{URL: "https://github.com/acme/tool"}}
+	repos := ghindex.Repos{{Repo: model.Repo{URL: "https://github.com/acme/tool"}}}
 
 	items := FormatAlfredItems(repos, "https://docs.lucc.dev/", "tool kit")
 	require.Len(t, items, 2)

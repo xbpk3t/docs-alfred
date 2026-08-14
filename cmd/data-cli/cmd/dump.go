@@ -82,7 +82,7 @@ func runDomainDump(domain data.DataDomain, dataPath, kindsFlag string) error {
 
 		topics := make([]string, 0, len(r.Topics))
 		for i := range r.Topics {
-			if !ghindex.KindAllowed(r.Topics[i].Kind, kinds) {
+			if !ghindex.KindAllowed(string(r.Topics[i].Kind), kinds) {
 				continue
 			}
 			topics = append(topics, r.Topics[i].Topic)

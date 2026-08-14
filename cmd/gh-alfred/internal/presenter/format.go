@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/wf"
 )
@@ -40,8 +39,8 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredIt
 		}
 
 		// shift → Open URL (shared openurl connection; arg from JSON mods)
-		if repo.Doc != "" {
-			docURL := BuildDocURL(docsURL, repo.Doc)
+		if repo.Doc != nil && *repo.Doc != "" {
+			docURL := BuildDocURL(docsURL, *repo.Doc)
 			item.Mods["shift"] = &wf.AlfredMod{
 				Valid:    true,
 				Arg:      docURL,
@@ -50,11 +49,11 @@ func FormatAlfredItems(repos ghindex.Repos, docsURL, query string) []wf.AlfredIt
 		}
 
 		// alt → Open URL (nix flake/attr when present)
-		if ghindex.HasNix(repo) {
+		if ghindex.HasNix(repo) && repo.Nix != nil {
 			item.Mods["alt"] = &wf.AlfredMod{
 				Valid:    true,
-				Arg:      repo.NixURL,
-				Subtitle: "nixpkgs: " + repo.NixURL,
+				Arg:      *repo.Nix,
+				Subtitle: "nixpkgs: " + *repo.Nix,
 			}
 		}
 
@@ -99,7 +98,7 @@ func appendGitHubSearchFallback(items []wf.AlfredItem, query string) []wf.Alfred
 	})
 }
 
-func formatRepoSubtitle(repo *content.Repo) string {
+func formatRepoSubtitle(repo *ghindex.Repo) string {
 	parts := make([]string, 0, 4)
 	if repo == nil {
 		return ""
@@ -153,9 +152,9 @@ func FormatPlain(repos ghindex.Repos, docsURL string) string {
 		if ghindex.GetDes(repo) != "" {
 			fmt.Fprintf(&sb, "desc: %s\n", ghindex.GetDes(repo))
 		}
-		if repo.Doc != "" {
-			docURL := BuildDocURL(docsURL, repo.Doc)
-			fmt.Fprintf(&sb, "doc: %s\n", repo.Doc)
+		if repo.Doc != nil && *repo.Doc != "" {
+			docURL := BuildDocURL(docsURL, *repo.Doc)
+			fmt.Fprintf(&sb, "doc: %s\n", *repo.Doc)
 			fmt.Fprintf(&sb, "docs: %s\n", docURL)
 		}
 		if repo.Type != "" {
