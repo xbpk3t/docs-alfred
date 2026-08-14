@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 )
 
 func TestRepository_IsValid(t *testing.T) {
@@ -18,7 +19,7 @@ func TestRepository_IsValid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := &Repository{URL: tt.url}
+			r := &Repository{Repo: model.Repo{URL: tt.url}}
 			assert.Equal(t, tt.want, IsValid(r))
 		})
 	}
@@ -36,27 +37,30 @@ func TestRepository_FullName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := &Repository{URL: tt.url}
+			r := &Repository{Repo: model.Repo{URL: tt.url}}
 			assert.Equal(t, tt.want, FullName(r))
 		})
 	}
 }
 
 func TestRepository_GetDes(t *testing.T) {
-	r := &Repository{Des: "test description"}
+	r := &Repository{Repo: model.Repo{Des: strptr("test description")}}
 	assert.Equal(t, "test description", GetDes(r))
+
+	nilDes := &Repository{}
+	assert.Empty(t, GetDes(nilDes))
 }
 
 func TestRepository_GetURL(t *testing.T) {
-	r := &Repository{URL: "https://github.com/a/b"}
+	r := &Repository{Repo: model.Repo{URL: "https://github.com/a/b"}}
 	assert.Equal(t, "https://github.com/a/b", GetURL(r))
 }
 
 func TestRepository_HasNix(t *testing.T) {
-	r1 := &Repository{NixURL: "github:acme/repo#pkg"}
+	r1 := &Repository{Repo: model.Repo{Nix: strptr("github:acme/repo#pkg")}}
 	assert.True(t, HasNix(r1))
 
-	r2 := &Repository{NixURL: "  "}
+	r2 := &Repository{Repo: model.Repo{Nix: strptr("  ")}}
 	assert.False(t, HasNix(r2))
 
 	r3 := &Repository{}
@@ -64,7 +68,7 @@ func TestRepository_HasNix(t *testing.T) {
 }
 
 func TestRepository_HasSubRepos(t *testing.T) {
-	r1 := &Repository{RelatedRepos: Repos{{URL: "https://github.com/a/b"}}}
+	r1 := &Repository{Repo: model.Repo{Rel: []model.Repo{{URL: "https://github.com/a/b"}}}}
 	assert.True(t, HasSubRepos(r1))
 
 	r2 := &Repository{}

@@ -6,6 +6,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 )
 
 func TestGithubYAMLRenderParsesTopics(t *testing.T) {
@@ -35,7 +36,8 @@ func TestGithubYAMLRenderParsesTopics(t *testing.T) {
 	assert.Equal(t, "explicit", cfg.Topics[1].Topic)
 
 	require.Len(t, cfg.Repos, 1)
-	assert.Equal(t, "github:acme/main-repo#main-repo", cfg.Repos[0].NixURL)
+	require.NotNil(t, cfg.Repos[0].Nix)
+	assert.Equal(t, "github:acme/main-repo#main-repo", *cfg.Repos[0].Nix)
 }
 
 func TestGithubYAMLRender_InvalidInput(t *testing.T) {
@@ -71,7 +73,7 @@ func TestNormalizeRepoTopics_NilRepo(t *testing.T) {
 
 func TestNormalizeRepoTopics_EmptyURL(t *testing.T) {
 	repo := &Repository{
-		URL: "",
+		Repo: model.Repo{URL: ""},
 	}
 	normalizeRepoTopics(repo, "base", false)
 	// Should not panic; empty repo name means return early
@@ -79,7 +81,7 @@ func TestNormalizeRepoTopics_EmptyURL(t *testing.T) {
 
 func TestNormalizeRepoTopics_UseBase(t *testing.T) {
 	repo := &Repository{
-		URL: "https://github.com/acme/repo",
+		Repo: model.Repo{URL: "https://github.com/acme/repo"},
 	}
 	normalizeRepoTopics(repo, "base", true)
 	// Should not panic

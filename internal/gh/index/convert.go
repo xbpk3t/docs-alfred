@@ -1,7 +1,7 @@
 package ghindex
 
 import (
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -28,14 +28,13 @@ func (cr ConfigRepos) ToRepos() Repos {
 }
 
 // processTopicRepos processes repos inside a topic.
-func processTopicRepos(topic *content.Topic, tag, typeName string) Repos {
+func processTopicRepos(topic *model.Topic, tag, typeName string) Repos {
 	var repos Repos
 
-	for i := range topic.Repos {
-		topic.Repos[i].Tag = tag
-		topic.Repos[i].Type = typeName
-		topic.Repos[i].TopicName = topic.Topic // 设置 topic 名称
-		repos = append(repos, processRepo(topic.Repos[i], typeName)...)
+	for i := range topic.Repo {
+		// topic.repo entries are pure data-model repos; enrich them with provenance.
+		repo := &Repo{Repo: topic.Repo[i], Tag: tag, Type: typeName, TopicName: topic.Topic}
+		repos = append(repos, processRepo(repo, typeName)...)
 	}
 
 	return repos
@@ -64,12 +63,15 @@ func processMainRepo(repo *Repository, configType string) *Repository {
 func processAllSubRepos(repo *Repository) Repos {
 	var repos Repos
 
-	for i := range repo.RelatedRepos {
-		repo.RelatedRepos[i].IsRelatedRepo = true
-		repo.RelatedRepos[i].Type = repo.Type
-		repo.RelatedRepos[i].Tag = repo.Tag
-		repo.RelatedRepos[i].MainRepo = FullName(repo)
-		repos = append(repos, processRepo(repo.RelatedRepos[i], repo.Type)...)
+	for i := range repo.Rel {
+		rel := &Repo{
+			Repo:          repo.Rel[i],
+			IsRelatedRepo: true,
+			Type:          repo.Type,
+			Tag:           repo.Tag,
+			MainRepo:      FullName(repo),
+		}
+		repos = append(repos, processRepo(rel, repo.Type)...)
 	}
 
 	return repos

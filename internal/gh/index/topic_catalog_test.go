@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 )
 
 func TestTopicCatalogIncludesConfigRepoTopics(t *testing.T) {
@@ -12,11 +12,13 @@ func TestTopicCatalogIncludesConfigRepoTopics(t *testing.T) {
 		{
 			Tag:    "kernel",
 			Type:   "tool",
-			Topics: content.Topics{{Topic: "Config Topic", Kind: "type"}},
+			Topics: Topics{{Topic: "Config Topic", Kind: "type"}},
 			Repos: Repos{
 				{
-					URL:            "https://github.com/acme/main-repo",
-					RelatedRepos: Repos{{URL: "https://github.com/acme/related-repo"}},
+					Repo: model.Repo{
+						URL: "https://github.com/acme/main-repo",
+						Rel: []model.Repo{{URL: "https://github.com/acme/related-repo"}},
+					},
 				},
 			},
 		},
@@ -105,7 +107,7 @@ func TestTopicBase(t *testing.T) {
 }
 
 func TestTopicDirName(t *testing.T) {
-	assert.Equal(t, "topic-name", topicDirName(&content.Topic{Topic: "topic-name"}))
+	assert.Equal(t, "topic-name", topicDirName(&model.Topic{Topic: "topic-name"}))
 	assert.Empty(t, topicDirName(nil))
 }
 
@@ -135,7 +137,7 @@ func TestTopicCatalogExcludesTemp(t *testing.T) {
 		{
 			Tag:  "kernel",
 			Type: "mem",
-			Topics: content.Topics{
+			Topics: Topics{
 				{Topic: "futex", Kind: "type"},
 				{Topic: "draft", Kind: "temp"},
 				{Topic: "bpf", Kind: "tools"},

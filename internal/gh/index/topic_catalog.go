@@ -4,8 +4,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
 	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -90,21 +90,26 @@ func appendRepoTopicCandidates(
 		}
 		repoName := urlutil.RepoName(repo.URL)
 		_ = repoName
-		appendRepoTopicCandidates(candidates, seen, repo.RelatedRepos, tag, typeName, allow)
+		for i := range repo.Rel {
+			// rel entries are pure data-model repos; recurse through them as
+			// enriched repos carrying the same provenance as their parent.
+			rel := &Repo{Repo: repo.Rel[i], Tag: tag, Type: typeName}
+			appendRepoTopicCandidates(candidates, seen, Repos{rel}, tag, typeName, allow)
+		}
 	}
 }
 
 func appendTopicCandidates(
 	candidates []TopicCandidate,
 	seen map[string]bool,
-	topics content.Topics,
+	topics Topics,
 	base,
 	source string,
 	allow map[string]struct{},
 ) []TopicCandidate {
 	for i := range topics {
 		topic := &topics[i]
-		if !KindAllowed(topic.Kind, allow) {
+		if !KindAllowed(string(topic.Kind), allow) {
 			continue
 		}
 		topicPath := canonicalTopicPath(topic, base)
@@ -121,7 +126,7 @@ func appendTopicCandidates(
 	return candidates
 }
 
-func canonicalTopicPath(topic *content.Topic, base string) string {
+func canonicalTopicPath(topic *model.Topic, base string) string {
 	if topic == nil {
 		return cleanCatalogPath(base)
 	}

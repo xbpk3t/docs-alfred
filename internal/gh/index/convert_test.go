@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 )
 
 func TestToRepos_BasicConversion(t *testing.T) {
@@ -13,7 +14,7 @@ func TestToRepos_BasicConversion(t *testing.T) {
 			Type: "tool",
 			Tag:  "kernel",
 			Repos: Repos{
-				{URL: "https://github.com/acme/main-repo"},
+				{Repo: model.Repo{URL: "https://github.com/acme/main-repo"}},
 			},
 		},
 	}
@@ -30,9 +31,9 @@ func TestToRepos_SubRepos(t *testing.T) {
 			Tag:  "kernel",
 			Repos: Repos{
 				{
-					URL: "https://github.com/acme/main",
-					RelatedRepos: Repos{
-						{URL: "https://github.com/acme/related"},
+					Repo: model.Repo{
+						URL: "https://github.com/acme/main",
+						Rel: []model.Repo{{URL: "https://github.com/acme/related"}},
 					},
 				},
 			},
@@ -58,7 +59,7 @@ func TestToRepos_InvalidURL(t *testing.T) {
 			Type: "tool",
 			Tag:  "kernel",
 			Repos: Repos{
-				{URL: "not-a-github-url"},
+				{Repo: model.Repo{URL: "not-a-github-url"}},
 			},
 		},
 	}
@@ -70,7 +71,7 @@ func TestToRepos_InvalidURL(t *testing.T) {
 
 func TestProcessRepo_NilSubRepos(t *testing.T) {
 	repo := &Repository{
-		URL: "https://github.com/acme/main",
+		Repo: model.Repo{URL: "https://github.com/acme/main"},
 	}
 	repos := processRepo(repo, "tool")
 	require.Len(t, repos, 1)
@@ -84,8 +85,10 @@ func TestToRepos_GitLabWithNix(t *testing.T) {
 			Tag:  "devops",
 			Repos: Repos{
 				{
-					URL:    "https://gitlab.com/gitlab-org/cli",
-					NixURL: "https://mynixos.com/nixpkgs/package/glab",
+					Repo: model.Repo{
+						URL: "https://gitlab.com/gitlab-org/cli",
+						Nix: strptr("https://mynixos.com/nixpkgs/package/glab"),
+					},
 				},
 			},
 		},
@@ -94,7 +97,8 @@ func TestToRepos_GitLabWithNix(t *testing.T) {
 	repos := cr.ToRepos()
 	require.NotEmpty(t, repos)
 	assert.Equal(t, "https://gitlab.com/gitlab-org/cli", repos[0].URL)
-	assert.Equal(t, "https://mynixos.com/nixpkgs/package/glab", repos[0].NixURL)
+	require.NotNil(t, repos[0].Nix)
+	assert.Equal(t, "https://mynixos.com/nixpkgs/package/glab", *repos[0].Nix)
 }
 
 func TestIsValidSourceRepoURL(t *testing.T) {

@@ -204,7 +204,7 @@ func TestWalkerEvent_Fields(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "language", ev.Section.Type)
-	assert.Equal(t, "https://github.com/acme/tool", ev.Repo.Url)
+	assert.Equal(t, "https://github.com/acme/tool", ev.Repo.URL)
 	require.NotNil(t, ev.Repo.Des)
 	assert.Equal(t, "test", *ev.Repo.Des)
 	assert.Equal(t, evTypeRepo, ev.Relation)

@@ -17,8 +17,8 @@ type Record struct {
 	// Score corresponds to the JSON schema field "score".
 	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
 
-	// Url corresponds to the JSON schema field "url".
-	Url *string `json:"url,omitempty,omitzero" yaml:"url,omitempty" mapstructure:"url,omitempty"`
+	// URL corresponds to the JSON schema field "url".
+	URL *string `json:"url,omitempty,omitzero" yaml:"url,omitempty" mapstructure:"url,omitempty"`
 }
 
 type RecordDes *string
@@ -48,8 +48,8 @@ type Repo struct {
 	// Score corresponds to the JSON schema field "score".
 	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
 
-	// Url corresponds to the JSON schema field "url".
-	Url string `json:"url" yaml:"url" mapstructure:"url"`
+	// URL corresponds to the JSON schema field "url".
+	URL string `json:"url" yaml:"url" mapstructure:"url"`
 
 	// Zk corresponds to the JSON schema field "zk".
 	Zk *string `json:"zk,omitempty,omitzero" yaml:"zk,omitempty" mapstructure:"zk,omitempty"`

@@ -54,7 +54,7 @@ func TestRepoFromMap(t *testing.T) {
 		"doc": "doc-url",
 	}
 	repo := repoFromMap(m)
-	assert.Equal(t, "https://github.com/owner/repo", repo.Url)
+	assert.Equal(t, "https://github.com/owner/repo", repo.URL)
 	require.NotNil(t, repo.Des)
 	assert.Equal(t, "test", *repo.Des)
 	require.NotNil(t, repo.Nix)
@@ -95,10 +95,10 @@ func TestSectionFromMap_WithRepos(t *testing.T) {
 	}
 	section := sectionFromMap(m)
 	require.Len(t, section.Repo, 2)
-	assert.Equal(t, "https://github.com/owner/repo1", section.Repo[0].Url)
+	assert.Equal(t, "https://github.com/owner/repo1", section.Repo[0].URL)
 	require.NotNil(t, section.Repo[0].Des)
 	assert.Equal(t, "first repo", *section.Repo[0].Des)
-	assert.Equal(t, "https://github.com/owner/repo2", section.Repo[1].Url)
+	assert.Equal(t, "https://github.com/owner/repo2", section.Repo[1].URL)
 	require.NotNil(t, section.Repo[1].Des)
 	assert.Equal(t, "second repo", *section.Repo[1].Des)
 }
@@ -119,7 +119,7 @@ func TestSectionFromMap_RepoNonMappingItem(t *testing.T) {
 	}
 	section := sectionFromMap(m)
 	assert.Len(t, section.Repo, 2)
-	assert.Empty(t, section.Repo[0].Url)
+	assert.Empty(t, section.Repo[0].URL)
 }
 
 func TestSectionFromMap_TopicsNonSlice(t *testing.T) {
