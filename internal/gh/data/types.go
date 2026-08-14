@@ -2,103 +2,27 @@ package ghdata
 
 import (
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/xbpk3t/docs-alfred/internal/gh/content"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model"
 )
 
-// Section is a typed representation of a data/gh YAML section.
-type Section struct {
-	Type   string          `yaml:"type"`
-	Repos  []content.Repo  `yaml:"repo"`
-	Topics []content.Topic `yaml:"topics"`
-}
-
-// Repo is an alias for content.Repo.
-type Repo = content.Repo
-
-// Topic is an alias for content.Topic.
-type Topic = content.Topic
-
-type sectionFields struct {
-	Type string `yaml:"type"`
-}
-
-type repoFields struct {
-	URL string `yaml:"url"`
-	Des string `yaml:"des"`
-	Nix string `yaml:"nix"`
-	Doc string `yaml:"doc"`
-}
-
-type topicFields struct {
-	Mdscc *content.Mdscc `yaml:"mdscc"`
-	Topic string         `yaml:"topic"`
-	Kind  string         `yaml:"kind"`
-}
+// Section/Repo/Topic are aliases of the schema-generated data model, so the
+// walker decodes data/gh into the same types the schema validates.
+type Section = model.Section
+type Repo = model.Repo
+type Topic = model.Topic
 
 func sectionFromMap(m map[string]any) Section {
-	var fields sectionFields
-	decodeYAMLMap(m, &fields)
-
-	section := Section{Type: fields.Type, Topics: topicsFromAny(m["topics"])}
-
-	if repos, ok := m["repo"].([]any); ok {
-		section.Repos = make([]content.Repo, 0, len(repos))
-		for _, item := range repos {
-			if repoMap, ok := item.(map[string]any); ok {
-				section.Repos = append(section.Repos, repoFromMap(repoMap))
-			}
-		}
-	}
+	var section Section
+	decodeYAMLMap(m, &section)
 
 	return section
 }
 
-func repoFromMap(m map[string]any) content.Repo {
-	var fields repoFields
-	decodeYAMLMap(m, &fields)
+func repoFromMap(m map[string]any) Repo {
+	var repo Repo
+	decodeYAMLMap(m, &repo)
 
-	return content.Repo{
-		URL:    fields.URL,
-		Des:    fields.Des,
-		NixURL: fields.Nix,
-		Doc:    fields.Doc,
-	}
-}
-
-func topicsFromAny(v any) []content.Topic {
-	items, ok := v.([]any)
-	if !ok {
-		return nil
-	}
-
-	topics := make([]content.Topic, 0, len(items))
-	for _, item := range items {
-		if topicMap, ok := item.(map[string]any); ok {
-			topics = append(topics, topicFromMap(topicMap))
-		}
-	}
-
-	return topics
-}
-
-func topicFromMap(m map[string]any) content.Topic {
-	var fields topicFields
-	decodeYAMLMap(m, &fields)
-
-	topic := content.Topic{Topic: fields.Topic, Kind: fields.Kind, Mdscc: fields.Mdscc}
-
-	// 解析 topic 内嵌的 repos
-	if repos, ok := m["repo"].([]any); ok {
-		topic.Repos = make([]*content.Repo, 0, len(repos))
-		for _, item := range repos {
-			if repoMap, ok := item.(map[string]any); ok {
-				repo := repoFromMap(repoMap)
-				topic.Repos = append(topic.Repos, &repo)
-			}
-		}
-	}
-
-	return topic
+	return repo
 }
 
 func decodeYAMLMap(input, output any) {

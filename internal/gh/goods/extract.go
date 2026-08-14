@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	modelgoods "github.com/xbpk3t/docs-alfred/internal/gh/model/goods"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
@@ -36,17 +37,11 @@ type UsingType struct {
 	Topics []UsingTopic `json:"topics"`
 }
 
-// UsingTag groups in-use items by tag.
-type UsingTag struct {
-	Tag   string      `json:"tag"`
-	Types []UsingType `json:"types"`
-}
-
-// UsingExtract holds extracted in-use goods grouped by tag/type/topic.
-type UsingExtract []UsingTag
+// UsingExtract holds extracted in-use goods grouped by type → topic.
+type UsingExtract []UsingType
 
 // ExtractUsing reads all goods YAML files under dir and returns items with
-// isUsing: true, grouped by tag → type → topic. Files are parsed as flattened
+// isUsing: true, grouped by type → topic. Files are parsed as flattened
 // multi-document YAML (same shape as data/gh). Only item maps that declare
 // isUsing explicitly as true are kept.
 func ExtractUsing(dir string) (UsingExtract, error) {
@@ -55,7 +50,6 @@ func ExtractUsing(dir string) (UsingExtract, error) {
 		return nil, fmt.Errorf("list goods files %s: %w", dir, err)
 	}
 
-	tags := make(map[string]int)
 	types := make(map[string]int)
 	topics := make(map[string]int)
 	var out UsingExtract
@@ -64,7 +58,7 @@ func ExtractUsing(dir string) (UsingExtract, error) {
 		if !isGoodsFileName(file) {
 			continue
 		}
-		if err := extractFileUsing(file, &out, tags, types, topics); err != nil {
+		if err := extractFileUsing(file, &out, types, topics); err != nil {
 			return nil, err
 		}
 	}
@@ -83,15 +77,15 @@ func isGoodsFileName(file string) bool {
 }
 
 // extractFileUsing parses one goods YAML file and merges its in-use items into out.
-// tags/types/topics maps track index positions so items from separate files merge
-// into the same tag/type/topic buckets.
-func extractFileUsing(file string, out *UsingExtract, tags, types, topics map[string]int) error {
+// types/topics maps track index positions so items from separate files merge
+// into the same type/topic buckets.
+func extractFileUsing(file string, out *UsingExtract, types, topics map[string]int) error {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("read goods file %s: %w", file, err)
 	}
 
-	goodsList, err := parser.NewParser[Goods](data).ParseFlatten()
+	goodsList, err := parser.NewParser[modelgoods.Section](data).ParseFlatten()
 	if err != nil {
 		return fmt.Errorf("parse goods file %s: %w", file, err)
 	}
@@ -99,18 +93,11 @@ func extractFileUsing(file string, out *UsingExtract, tags, types, topics map[st
 	for i := range goodsList {
 		g := &goodsList[i]
 
-		gi, ok := tags[g.Tag]
+		ti, ok := types[g.Type]
 		if !ok {
-			gi = len(*out)
-			tags[g.Tag] = gi
-			*out = append(*out, UsingTag{Tag: g.Tag})
-		}
-
-		ti, ok := types[g.Tag+"\x00"+g.Type]
-		if !ok {
-			ti = len((*out)[gi].Types)
-			types[g.Tag+"\x00"+g.Type] = ti
-			(*out)[gi].Types = append((*out)[gi].Types, UsingType{Type: g.Type})
+			ti = len(*out)
+			types[g.Type] = ti
+			*out = append(*out, UsingType{Type: g.Type})
 		}
 
 		for j := range g.Topics {
@@ -120,13 +107,13 @@ func extractFileUsing(file string, out *UsingExtract, tags, types, topics map[st
 				continue
 			}
 
-			pi, ok := topics[g.Tag+"\x00"+g.Type+"\x00"+tp.Topic]
+			pi, ok := topics[g.Type+"\x00"+tp.Topic]
 			if !ok {
-				pi = len((*out)[gi].Types[ti].Topics)
-				topics[g.Tag+"\x00"+g.Type+"\x00"+tp.Topic] = pi
-				(*out)[gi].Types[ti].Topics = append((*out)[gi].Types[ti].Topics, UsingTopic{Topic: tp.Topic})
+				pi = len((*out)[ti].Topics)
+				topics[g.Type+"\x00"+tp.Topic] = pi
+				(*out)[ti].Topics = append((*out)[ti].Topics, UsingTopic{Topic: tp.Topic})
 			}
-			(*out)[gi].Types[ti].Topics[pi].Items = append((*out)[gi].Types[ti].Topics[pi].Items, items...)
+			(*out)[ti].Topics[pi].Items = append((*out)[ti].Topics[pi].Items, items...)
 		}
 	}
 
@@ -135,7 +122,7 @@ func extractFileUsing(file string, out *UsingExtract, tags, types, topics map[st
 
 // usingItemsFromTable returns items with isUsing: true from a table row list,
 // in original order. Non-map rows and missing/empty names are skipped.
-func usingItemsFromTable(table []map[string]interface{}) []UsingItem {
+func usingItemsFromTable(table []modelgoods.TableItem) []UsingItem {
 	var items []UsingItem
 	for _, row := range table {
 		v, ok := row["isUsing"]

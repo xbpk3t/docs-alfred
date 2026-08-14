@@ -204,8 +204,9 @@ func TestWalkerEvent_Fields(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "language", ev.Section.Type)
-	assert.Equal(t, "https://github.com/acme/tool", ev.Repo.URL)
-	assert.Equal(t, "test", ev.Repo.Des)
+	assert.Equal(t, "https://github.com/acme/tool", ev.Repo.Url)
+	require.NotNil(t, ev.Repo.Des)
+	assert.Equal(t, "test", *ev.Repo.Des)
 	assert.Equal(t, evTypeRepo, ev.Relation)
 	assert.Equal(t, "go", ev.FilenameStem)
 }
@@ -496,6 +497,6 @@ func TestWalkGhRepos_TopicWithRepos_RealFile(t *testing.T) {
 	// Verify sections were parsed
 	assert.True(t, len(sections) > 0, "Expected to find sections in LLM.yml")
 	for _, section := range sections {
-		t.Logf("✓ Section: %s, Repos: %d", section.Type, len(section.Repos))
+		t.Logf("✓ Section: %s, Repos: %d", section.Type, len(section.Repo))
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	modelgoods "github.com/xbpk3t/docs-alfred/internal/gh/model/goods"
 )
 
 // writeGoodsFiles creates a temp dir and writes goods-format YAML files.
@@ -24,7 +25,6 @@ func writeGoodsFiles(t *testing.T, files map[string]string) string {
 
 const sampleGoodsYAML = `---
 - type: 耐用品
-  tag: goods
   topics:
     - topic: 收纳袋
       table:
@@ -49,7 +49,6 @@ const sampleGoodsYAML = `---
           price: ¥58.5
 
 - type: 衣物
-  tag: goods
   topics:
     - topic: long-johns  # 秋裤
       table:
@@ -63,17 +62,15 @@ const sampleGoodsYAML = `---
           des: 现在在穿
 `
 
-func TestExtractUsing_GroupsByTagTypeTopic(t *testing.T) {
+func TestExtractUsing_GroupsByTypeTopic(t *testing.T) {
 	dir := writeGoodsFiles(t, map[string]string{"goods.test.yml": sampleGoodsYAML})
 
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
-	require.Len(t, out, 1)
-	require.Equal(t, "goods", out[0].Tag)
-	require.Len(t, out[0].Types, 2)
+	require.Len(t, out, 2) // 两个 type，无 tag 层
 
 	// 耐用品 type
-	first := out[0].Types[0]
+	first := out[0]
 	require.Equal(t, "耐用品", first.Type)
 	require.Len(t, first.Topics, 2)
 	assert.Equal(t, "收纳袋", first.Topics[0].Topic)
@@ -86,7 +83,8 @@ func TestExtractUsing_GroupsByTagTypeTopic(t *testing.T) {
 	assert.Equal(t, "速干浴巾 NH19Y001-J", first.Topics[1].Items[0].Name)
 
 	// 衣物 type
-	second := out[0].Types[1]
+	second := out[1]
+	require.Equal(t, "衣物", second.Type)
 	require.Len(t, second.Topics, 1)
 	assert.Equal(t, "long-johns", second.Topics[0].Topic)
 	require.Len(t, second.Topics[0].Items, 1)
@@ -97,7 +95,6 @@ func TestExtractUsing_GroupsByTagTypeTopic(t *testing.T) {
 func TestExtractUsing_NoUsingItems(t *testing.T) {
 	dir := writeGoodsFiles(t, map[string]string{"goods.test.yml": `---
 - type: 耐用品
-  tag: goods
   topics:
     - topic: 收纳袋
       table:
@@ -108,9 +105,7 @@ func TestExtractUsing_NoUsingItems(t *testing.T) {
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
 	require.Len(t, out, 1)
-	require.Len(t, out[0].Types, 1)
-	// 无 isUsing item 的 topic 不产生条目
-	require.Len(t, out[0].Types[0].Topics, 0)
+	require.Len(t, out[0].Topics, 0)
 }
 
 func TestExtractUsing_EmptyDir(t *testing.T) {
@@ -125,12 +120,11 @@ func TestExtractUsing_NonExistentDir(t *testing.T) {
 	assert.Contains(t, err.Error(), "list goods files")
 }
 
-func TestExtractUsing_MultipleFilesMergeTags(t *testing.T) {
+func TestExtractUsing_MultipleFilesMergeTypes(t *testing.T) {
 	dir := writeGoodsFiles(t, map[string]string{
 		"goods.a.yml": sampleGoodsYAML,
 		"goods.b.yml": `---
 - type: 食品
-  tag: goods
   topics:
     - topic: 零食
       table:
@@ -141,11 +135,9 @@ func TestExtractUsing_MultipleFilesMergeTags(t *testing.T) {
 
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
-	require.Len(t, out, 1) // 同一个 tag: goods 合并
-	require.Equal(t, "goods", out[0].Tag)
-	// 同 tag 下 3 个 type 合并（耐用品/衣物/食品）
+	require.Len(t, out, 3) // 耐用品/衣物/食品 三个 type 合并
 	types := map[string]bool{}
-	for _, tp := range out[0].Types {
+	for _, tp := range out {
 		types[tp.Type] = true
 	}
 	assert.Len(t, types, 3)
@@ -154,19 +146,18 @@ func TestExtractUsing_MultipleFilesMergeTags(t *testing.T) {
 func TestExtractUsing_IgnoreNonGoodsFiles(t *testing.T) {
 	dir := writeGoodsFiles(t, map[string]string{
 		"goods.test.yml":      sampleGoodsYAML,
-		"other.yml":           "- type: unrelated\n  tag: other\n",
+		"other.yml":           "- type: unrelated\n",
 		"sub/goods.inner.yml": sampleGoodsYAML,
 	})
 
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
 	// 只读直接子目录的文件，sub/ 下文件忽略
-	require.Len(t, out, 1)
-	require.Len(t, out[0].Types, 2)
+	require.Len(t, out, 2)
 }
 
 func TestUsingItemsFromTable(t *testing.T) {
-	items := usingItemsFromTable([]map[string]interface{}{
+	items := usingItemsFromTable([]modelgoods.TableItem{
 		{"name": "A", "isUsing": true},
 		{"name": "B", "isUsing": false},
 		{"name": "C"},                    // 无 isUsing
@@ -179,7 +170,7 @@ func TestUsingItemsFromTable(t *testing.T) {
 }
 
 func TestUsingItemsFromTable_ExtraFields(t *testing.T) {
-	items := usingItemsFromTable([]map[string]interface{}{
+	items := usingItemsFromTable([]modelgoods.TableItem{
 		{"name": "X", "isUsing": true, "brand": "B", "scope": "home"},
 	})
 	require.Len(t, items, 1)
@@ -193,7 +184,6 @@ func TestExtractUsing_NumericName(t *testing.T) {
 	// name 是纯数字（如话费号码），YAML 解析为 int，必须转成 string 输出
 	dir := writeGoodsFiles(t, map[string]string{"goods.test.yml": `---
 - type: 虚拟物品
-  tag: goods
   topics:
     - topic: 话费
       table:
@@ -206,10 +196,9 @@ func TestExtractUsing_NumericName(t *testing.T) {
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
 	require.Len(t, out, 1)
-	require.Len(t, out[0].Types, 1)
-	require.Len(t, out[0].Types[0].Topics, 1)
-	require.Len(t, out[0].Types[0].Topics[0].Items, 1)
-	assert.Equal(t, "18616287252", out[0].Types[0].Topics[0].Items[0].Name)
+	require.Len(t, out[0].Topics, 1)
+	require.Len(t, out[0].Topics[0].Items, 1)
+	assert.Equal(t, "18616287252", out[0].Topics[0].Items[0].Name)
 }
 
 // TestExtractUsing_RealWorldShapes covers real goods.*.yml patterns:
@@ -217,7 +206,6 @@ func TestExtractUsing_NumericName(t *testing.T) {
 func TestExtractUsing_RealWorldShapes(t *testing.T) {
 	dir := writeGoodsFiles(t, map[string]string{"goods.real.yml": `---
 - type: 耐用品 # 耐用商品
-  tag: goods
   topics:
     - topic: 速干浴巾 # quick-dry-towel
       table:
@@ -244,10 +232,8 @@ func TestExtractUsing_RealWorldShapes(t *testing.T) {
           isUsing: true
 
 - type: 虚拟物品
-  tag: goods
   topics:
     - topic: membership  # 会员
-      score: -1
       table:
         - name: 老乡鸡会员
           price: ¥8/月
@@ -258,11 +244,10 @@ func TestExtractUsing_RealWorldShapes(t *testing.T) {
 
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
-	require.Len(t, out, 1)
-	require.Len(t, out[0].Types, 2)
+	require.Len(t, out, 2)
 
 	// 块标量 des 完整保留(含多行)
-	durs := out[0].Types[0]
+	durs := out[0]
 	require.Len(t, durs.Topics, 2)
 	towel := durs.Topics[0]
 	require.Len(t, towel.Items, 1)
@@ -276,7 +261,7 @@ func TestExtractUsing_RealWorldShapes(t *testing.T) {
 	assert.Equal(t, "抽绳束口#防水#收纳袋（15D尼龙涂硅）", bags.Items[0].Name)
 
 	// 第二个 type 的 isUsing 也提取
-	virtual := out[0].Types[1]
+	virtual := out[1]
 	require.Len(t, virtual.Topics, 1)
 	require.Len(t, virtual.Topics[0].Items, 1)
 	assert.Equal(t, "88VIP", virtual.Topics[0].Items[0].Name)

@@ -30,14 +30,17 @@ func writeGhFiles(t *testing.T, files map[string]string) string {
 
 // validGhYAML is minimal gh-format YAML that passes check validation.
 // kind tools does not require mdscc; section must have at least one topic.
+// Section-level record/zk are not part of the schema; records live on topics/repos.
 const validGhYAML = `- type: tool
   topics:
     - topic: overview
       kind: tools
+      record:
+        - date: 2025-08-01
+          des: a note
   repo:
     - url: https://github.com/acme/tool
       des: a tool
-  record: []
 `
 
 // ---------------------------------------------------------------------------
@@ -233,8 +236,8 @@ func TestNewDedupCmdRunEGhNoDuplicates(t *testing.T) {
 func TestNewDedupCmdRunEGhWithDuplicates(t *testing.T) {
 	// GH duplicate check expects YAML files inside subdirectories of the target dir.
 	ghDir := writeGhFiles(t, map[string]string{
-		"dev/a.yml": "- type: a\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n  record: []\n",
-		"ops/b.yml": "- type: b\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n  record: []\n",
+		"dev/a.yml": "- type: a\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n",
+		"ops/b.yml": "- type: b\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n",
 	})
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"dedup", "gh", "--path", ghDir})
@@ -259,8 +262,8 @@ func TestRunDomainDedupGhNonexistentPath(t *testing.T) {
 func TestRunDomainDedupGhWithDuplicates(t *testing.T) {
 	// GH duplicate check expects YAML files inside subdirectories.
 	ghDir := writeGhFiles(t, map[string]string{
-		"dev/a.yml": "- type: a\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n  record: []\n",
-		"ops/b.yml": "- type: b\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n  record: []\n",
+		"dev/a.yml": "- type: a\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n",
+		"ops/b.yml": "- type: b\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n",
 	})
 	err := runDomainDedup(data.DomainGH, ghDir)
 	_ = err

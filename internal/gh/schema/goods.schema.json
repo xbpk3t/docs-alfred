@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/xbpk3t/docs-alfred/main/internal/gh/schema/goods.schema.json",
+  "title": "goods",
+  "description": "JSON Schema for data/goods YAML files (goods.*.yml). Field sets verified against all goods files including hidden .goods.*.yml. Topics are flat (one level, no recursion); there is no kind/repo/rel.",
+  "type": "array",
+  "items": { "$ref": "#/$defs/section" },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "required": ["type", "topics"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "topics": { "type": "array", "items": { "$ref": "#/$defs/topic" }, "minItems": 1 },
+        "score": { "type": "integer", "minimum": 0, "maximum": 5 }
+      }
+    },
+
+    "topic": {
+      "type": "object",
+      "required": ["topic"],
+      "additionalProperties": false,
+      "properties": {
+        "topic": { "type": "string", "minLength": 1 },
+        "score": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "des": { "type": ["string", "null"] },
+        "table": { "type": "array", "items": { "$ref": "#/$defs/tableItem" } },
+        "record": { "type": "array", "items": { "$ref": "#/$defs/record" } },
+        "qs": { "type": "array", "items": { "type": "string" } },
+        "what": { "type": "array", "items": { "type": "string" } },
+        "why": { "type": "array", "items": { "type": "string" } },
+        "htu": { "type": "array", "items": { "type": "string" } },
+        "hto": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "record": {
+      "type": "object",
+      "required": ["date"],
+      "additionalProperties": false,
+      "properties": {
+        "date": { "type": "string", "minLength": 1 },
+        "des": { "type": ["string", "null"] },
+        "score": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "url": { "type": "string" }
+      }
+    },
+
+    "tableItem": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "商品项；键异构（name/brand/price/param/des/date/record/isUsing/endDate/endPrice/source/url/alias/developer/playAt/genre/platform/publishAt/status 等），不做枚举"
+    }
+  }
+}

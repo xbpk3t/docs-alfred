@@ -2,10 +2,7 @@ package goods
 
 import (
 	"fmt"
-	"path/filepath"
-	"sort"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/xbpk3t/docs-alfred/internal/gh/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
@@ -29,15 +26,15 @@ func RunCheck(path string) (*CheckResult, error) {
 	return RunCheckWithOptions(path, CheckOptions{})
 }
 
-// RunCheckWithOptions validates goods YAML against the shared gh JSON Schema
-// (goods reuses the same section/topic/table/record structure as data/gh).
+// RunCheckWithOptions validates goods YAML against the embedded goods JSON
+// Schema.
 func RunCheckWithOptions(path string, opts CheckOptions) (*CheckResult, error) {
-	sch, err := schemacheck.CompileBytes(schema.Gh)
+	sch, err := schemacheck.CompileBytes(schema.Goods)
 	if err != nil {
-		return nil, fmt.Errorf("compile gh schema: %w", err)
+		return nil, fmt.Errorf("compile goods schema: %w", err)
 	}
 
-	files, err := collectYAMLFiles(path, opts.IncludeHidden)
+	files, err := fileutil.ListYAMLFilesRecursive(path, fileutil.ListOptions{IncludeHidden: opts.IncludeHidden})
 	if err != nil {
 		return nil, fmt.Errorf("list goods yaml under %s: %w", path, err)
 	}
@@ -50,21 +47,4 @@ func RunCheckWithOptions(path string, opts CheckOptions) (*CheckResult, error) {
 	}
 
 	return &CheckResult{Issues: issues}, nil
-}
-
-// collectYAMLFiles lists goods YAML files under root. Hidden (dot-prefixed)
-// files are included only when includeHidden is set.
-func collectYAMLFiles(root string, includeHidden bool) ([]string, error) {
-	if !includeHidden {
-		return fileutil.ListYAMLFilesRecursive(root)
-	}
-
-	pattern := filepath.Join(root, "**", "*.{yml,yaml}")
-	matches, err := doublestar.FilepathGlob(pattern, doublestar.WithFilesOnly())
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(matches)
-
-	return matches, nil
 }

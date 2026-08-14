@@ -27,20 +27,15 @@ func newUsingCmd(dataPath *string) *cobra.Command {
 		Short: "Extract goods items in use (isUsing: true)",
 		Long: `Load goods data from the goods domain and output items with isUsing: true.
 
-Output is grouped by tag → type → topic, mirroring the dump command shape:
+Output is grouped by type → topic:
 	[
 	  {
-	    "tag": "goods",
-	    "types": [
+	    "type": "耐用品",
+	    "topics": [
 	      {
-	        "type": "耐用品",
-	        "topics": [
-	          {
-	            "topic": "收纳袋",
-	            "items": [
-	              { "name": "...", "brand": "...", "price": "...", ... }
-	            ]
-	          }
+	        "topic": "收纳袋",
+	        "items": [
+	          { "name": "...", "brand": "...", "price": "...", ... }
 	        ]
 	      }
 	    ]
