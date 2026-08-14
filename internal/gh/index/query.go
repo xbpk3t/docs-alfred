@@ -116,7 +116,7 @@ func repoNameFromFullName(fullName string) string {
 // ExtractTags extracts unique tags from repositories.
 func ExtractTags(r Repos) []string {
 	tags := lo.Uniq(lo.Map(lo.Filter(r, func(repo *Repo, _ int) bool {
-		return repo.Tag != ""
+		return repo != nil && repo.Tag != ""
 	}), func(repo *Repo, _ int) string {
 		return repo.Tag
 	}))
@@ -128,7 +128,7 @@ func ExtractTags(r Repos) []string {
 // ExtractTypesByTag returns all types for a given tag.
 func ExtractTypesByTag(r Repos, tag string) []string {
 	return lo.Uniq(lo.Map(lo.Filter(r, func(repo *Repo, _ int) bool {
-		return repo.Tag == tag && repo.Type != ""
+		return repo != nil && repo.Tag == tag && repo.Type != ""
 	}), func(repo *Repo, _ int) string {
 		return repo.Type
 	}))
@@ -137,13 +137,13 @@ func ExtractTypesByTag(r Repos, tag string) []string {
 // QueryReposByTag filters repos by tag (type).
 func QueryReposByTag(r Repos, tag string) Repos {
 	return lo.Filter(r, func(repo *Repo, _ int) bool {
-		return repo.Type == tag
+		return repo != nil && repo.Type == tag
 	})
 }
 
 // QueryReposByTagAndType filters repos by tag and type.
 func QueryReposByTagAndType(r Repos, tag, typeName string) Repos {
 	return lo.Filter(r, func(repo *Repo, _ int) bool {
-		return repo.Tag == tag && repo.Type == typeName
+		return repo != nil && repo.Tag == tag && repo.Type == typeName
 	})
 }

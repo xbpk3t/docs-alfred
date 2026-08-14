@@ -131,7 +131,7 @@ func canonicalTopicPath(topic *model.Topic, base string) string {
 		return cleanCatalogPath(base)
 	}
 
-	return cleanCatalogPath(joinPath(base, topicDirName(topic)))
+	return cleanCatalogPath(joinPath(base, topic.DirName()))
 }
 
 func cleanCatalogPath(candidate string) string {

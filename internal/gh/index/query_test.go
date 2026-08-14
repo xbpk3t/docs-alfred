@@ -195,6 +195,12 @@ func TestExtractTags_EmptyRepos(t *testing.T) {
 	assert.Empty(t, tags)
 }
 
+func TestExtractTags_NilRepo(t *testing.T) {
+	repos := Repos{nil, {Tag: "kernel"}}
+	tags := ExtractTags(repos)
+	assert.Equal(t, []string{"kernel"}, tags)
+}
+
 func TestExtractTypesByTag_EmptyRepos(t *testing.T) {
 	var repos Repos
 	types := ExtractTypesByTag(repos, "kernel")

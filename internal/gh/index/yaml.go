@@ -82,14 +82,6 @@ func normalizeTopic(topic *model.Topic, base string) {
 	}
 }
 
-func topicDirName(topic *model.Topic) string {
-	if topic == nil {
-		return ""
-	}
-
-	return topic.Topic
-}
-
 func topicBase(tag, typeName string) string {
 	if tag == "" || typeName == "" {
 		return ""
