@@ -1,11 +1,8 @@
 package books
 
 import (
-	"fmt"
-
 	"github.com/xbpk3t/docs-alfred/internal/gh/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
-	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/schemacheck"
 )
 
@@ -27,22 +24,13 @@ func RunCheck(path string) (*CheckResult, error) {
 }
 
 // RunCheckWithOptions validates books YAML against the embedded books JSON
-// Schema. No post-rule is needed: the schema already enforces row name, score
-// range, and enumerated row keys (additionalProperties false).
+// Schema (shared with ntl). No post-rule is needed: the schema enforces row
+// name, score range, enumerated row keys (additionalProperties false), and
+// publishAt as a year integer.
 func RunCheckWithOptions(path string, opts CheckOptions) (*CheckResult, error) {
-	sch, err := schemacheck.CompileBytes(schema.Books)
+	issues, err := schemacheck.CheckDirectory(path, "books", schema.Books, opts.IncludeHidden)
 	if err != nil {
-		return nil, fmt.Errorf("compile books schema: %w", err)
-	}
-
-	files, err := fileutil.ListYAMLFilesRecursive(path, fileutil.ListOptions{IncludeHidden: opts.IncludeHidden})
-	if err != nil {
-		return nil, fmt.Errorf("list books yaml under %s: %w", path, err)
-	}
-
-	var issues []checkutil.Issue
-	for _, file := range files {
-		issues = append(issues, schemacheck.CheckFile(file, sch, nil)...)
+		return nil, err
 	}
 
 	return &CheckResult{Issues: issues}, nil

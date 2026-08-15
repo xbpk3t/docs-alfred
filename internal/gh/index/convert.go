@@ -1,7 +1,7 @@
 package ghindex
 
 import (
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -28,7 +28,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 }
 
 // processTopicRepos processes repos inside a topic.
-func processTopicRepos(topic *model.Topic, tag, typeName string) Repos {
+func processTopicRepos(topic *gh.Topic, tag, typeName string) Repos {
 	var repos Repos
 
 	for i := range topic.Repo {

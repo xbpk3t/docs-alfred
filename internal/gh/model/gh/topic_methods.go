@@ -1,4 +1,4 @@
-package model
+package gh
 
 // DirName returns the directory name implied by a topic.
 func (t *Topic) DirName() string {

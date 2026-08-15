@@ -1,8 +1,6 @@
 package domrules
 
 import (
-	"regexp"
-
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
@@ -37,9 +35,8 @@ var ForbiddenFields = map[string]bool{
 	"category": true,
 }
 
-// date format patterns.
+// date format patterns. publishAt 年份校验已迁到 books.schema.json
+// (type: integer, 1000-9999)，不再需要 DateYear。
 var (
-	DateFull   = checkutil.DateFullPattern // alias for backward compatibility
-	DateYear   = regexp.MustCompile(`^-?\d{1,4}$`)
-	SeriesHint = regexp.MustCompile(`(系列|三部曲|四部曲|合集)`)
+	DateFull = checkutil.DateFullPattern // alias for backward compatibility
 )

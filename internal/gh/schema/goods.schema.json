@@ -137,19 +137,14 @@
       "description": "商品项；key 严格枚举（additionalProperties false），行必有 name；endDate/endPrice/isUsing 均为可选生命周期字段",
       "properties": {
         "name": {
-          "type": [
-            "string",
-            "number"
-          ]
+          "type": "string",
+          "minLength": 1
         },
         "brand": {
           "type": "string"
         },
         "price": {
-          "type": [
-            "string",
-            "number"
-          ]
+          "type": "string"
         },
         "param": {
           "type": "string"

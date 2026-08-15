@@ -6,7 +6,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 // Adversarial probe: full render→parse→ToRepos round-trip with nested rel,
@@ -100,12 +100,12 @@ func TestAdv_RoundTripWithNestedRel(t *testing.T) {
 func TestAdv_EnrichedRepoMarshalUnmarshal(t *testing.T) {
 	des := "d"
 	nix := "n"
-	rec := model.Repo{
+	rec := gh.Repo{
 		URL:    "https://github.com/a/b",
 		Des:    &des,
 		Nix:    &nix,
-		Record: []model.Record{{Date: "2025-01-01", Des: &des}},
-		Rel:    []model.Repo{{URL: "https://github.com/a/c"}},
+		Record: []gh.Record{{Date: "2025-01-01", Des: &des}},
+		Rel:    []gh.Repo{{URL: "https://github.com/a/c"}},
 	}
 	r := &Repo{Repo: rec, Tag: "t", Type: "ty", TopicName: "tn"}
 

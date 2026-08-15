@@ -1,11 +1,8 @@
 package goods
 
 import (
-	"fmt"
-
 	"github.com/xbpk3t/docs-alfred/internal/gh/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
-	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/schemacheck"
 )
 
@@ -31,19 +28,9 @@ func RunCheck(path string) (*CheckResult, error) {
 // (additionalProperties false), requires name, and expresses the
 // endPrice → endDate relationship via dependentRequired.
 func RunCheckWithOptions(path string, opts CheckOptions) (*CheckResult, error) {
-	sch, err := schemacheck.CompileBytes(schema.Goods)
+	issues, err := schemacheck.CheckDirectory(path, "goods", schema.Goods, opts.IncludeHidden)
 	if err != nil {
-		return nil, fmt.Errorf("compile goods schema: %w", err)
-	}
-
-	files, err := fileutil.ListYAMLFilesRecursive(path, fileutil.ListOptions{IncludeHidden: opts.IncludeHidden})
-	if err != nil {
-		return nil, fmt.Errorf("list goods yaml under %s: %w", path, err)
-	}
-
-	var issues []checkutil.Issue
-	for _, file := range files {
-		issues = append(issues, schemacheck.CheckFile(file, sch, nil)...)
+		return nil, err
 	}
 
 	return &CheckResult{Issues: issues}, nil

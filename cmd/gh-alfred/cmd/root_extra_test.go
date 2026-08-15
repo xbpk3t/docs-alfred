@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/output"
 )
 
@@ -85,7 +85,7 @@ func TestRunSearchOutputWritesAlfredJSON(t *testing.T) {
 	stdout := captureStdout(t)
 
 	repos := ghindex.Repos{
-		{Repo: model.Repo{URL: "https://github.com/acme/tool", Des: strptr("A tool")}},
+		{Repo: gh.Repo{URL: "https://github.com/acme/tool", Des: strptr("A tool")}},
 	}
 
 	cmd := &cobra.Command{Use: "test"}

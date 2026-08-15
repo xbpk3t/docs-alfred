@@ -3,8 +3,6 @@ package domrules
 import (
 	"fmt"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/goccy/go-yaml/ast"
@@ -15,22 +13,19 @@ import (
 )
 
 const (
-	fieldDes       = "des"
-	fieldScore     = "score"
-	fieldReadAt    = "readAt"
-	fieldPublishAt = "publishAt"
-	fieldRecord    = "record"
-	fieldSub       = "sub"
-	fieldItem      = "item"
-	fieldTags      = "tags"
-	fieldRecite    = "recite"
-	fieldDate      = "date"
-	fieldTable     = "table"
-	fieldName      = "name"
-	fieldURL       = "url"
-	extYML         = ".yml"
-	extYAML        = ".yaml"
-	kindYear       = "year"
+	fieldDes    = "des"
+	fieldScore  = "score"
+	fieldReadAt = "readAt"
+	fieldRecord = "record"
+	fieldSub    = "sub"
+	fieldItem   = "item"
+	fieldTags   = "tags"
+	fieldRecite = "recite"
+	fieldDate   = "date"
+	fieldTable  = "table"
+	fieldURL    = "url"
+	extYML      = ".yml"
+	extYAML     = ".yaml"
 )
 
 // CheckResult is the result of running a data check.
@@ -109,7 +104,7 @@ func checkFile(file, scope string) []checkutil.Issue {
 
 			continue
 		}
-		docIssues := checkItemsAST(file, seq, allowedFields, ruleScope)
+		docIssues := checkItemsAST(file, seq, allowedFields)
 		issues = append(issues, docIssues...)
 	}
 
@@ -118,7 +113,7 @@ func checkFile(file, scope string) []checkutil.Issue {
 
 // ---- AST-based checking (with line/col) ----
 
-func checkItemsAST(file string, seq *ast.SequenceNode, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
+func checkItemsAST(file string, seq *ast.SequenceNode, allowedFields map[string]bool) []checkutil.Issue {
 	var issues []checkutil.Issue
 	for i, item := range seq.Values {
 		mapping, ok := item.(*ast.MappingNode)
@@ -131,15 +126,14 @@ func checkItemsAST(file string, seq *ast.SequenceNode, allowedFields map[string]
 
 			continue
 		}
-		issues = append(issues, checkMappingAST(file, mapping, allowedFields, scope, fmt.Sprintf("[%d]", i+1))...)
+		issues = append(issues, checkMappingAST(file, mapping, allowedFields)...)
 	}
 
 	return issues
 }
 
-func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[string]bool, scope RuleScope, path string) []checkutil.Issue {
+func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[string]bool) []checkutil.Issue {
 	var issues []checkutil.Issue
-	hasName := false
 
 	for _, kv := range mapping.Values {
 		if kv == nil {
@@ -149,24 +143,12 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 		if key == "" {
 			continue
 		}
-		if key == fieldName {
-			hasName = true
-		}
-		issues = append(issues, checkKeyValueAST(file, key, kv, allowedFields, scope)...)
-	}
-
-	// Check required fields
-	if scope != ScopeDiary && !hasName {
-		issues = append(issues, checkutil.Issue{
-			File: file, Line: yamlutil.NodeLine(mapping),
-			Severity: checkutil.SeverityError,
-			Message:  fmt.Sprintf("缺少必填字段 %s (%s)", "name", path),
-		})
+		issues = append(issues, checkKeyValueAST(file, key, kv, allowedFields)...)
 	}
 
 	return issues
 }
-func checkKeyValueAST(file, key string, kv *ast.MappingValueNode, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
+func checkKeyValueAST(file, key string, kv *ast.MappingValueNode, allowedFields map[string]bool) []checkutil.Issue {
 	var issues []checkutil.Issue
 
 	if ForbiddenFields[key] {
@@ -185,26 +167,24 @@ func checkKeyValueAST(file, key string, kv *ast.MappingValueNode, allowedFields 
 	}
 
 	// Field-specific type/value checks
-	issues = append(issues, checkFieldValueAST(file, key, val, allowedFields, scope)...)
+	issues = append(issues, checkFieldValueAST(file, key, val)...)
 
 	return issues
 }
-func checkFieldValueAST(file, key string, val ast.Node, allowedFields map[string]bool, scope RuleScope) []checkutil.Issue {
+func checkFieldValueAST(file, key string, val ast.Node) []checkutil.Issue {
 	switch key {
 	case fieldScore:
-		return checkScoreFieldAST(file, val, scope)
+		return checkScoreFieldAST(file, val)
 	case fieldDate:
-		return checkDateFieldValueAST(file, val, "date", DateFull, "date")
+		return checkDateFieldValueAST(file, val, "date")
 	case "endDate":
-		return checkDateFieldValueAST(file, val, "endDate", DateFull, "date")
+		return checkDateFieldValueAST(file, val, "endDate")
 	case fieldReadAt:
-		return checkDateFieldValueAST(file, val, "readAt", DateFull, "date")
-	case fieldPublishAt:
-		return checkPublishAtAST(file, val, scope)
+		return checkDateFieldValueAST(file, val, "readAt")
 	case fieldRecord:
 		return checkIsSequenceAST(file, val, "record")
 	case fieldSub:
-		return checkSubFieldAST(file, val, scope)
+		return checkSubFieldAST(file, val)
 	case fieldItem:
 		return checkIsSequenceAST(file, val, "item")
 	case fieldTags:
@@ -218,16 +198,16 @@ func checkFieldValueAST(file, key string, val ast.Node, allowedFields map[string
 	return nil
 }
 
-func checkScoreFieldAST(file string, val ast.Node, scope RuleScope) []checkutil.Issue {
+func checkScoreFieldAST(file string, val ast.Node) []checkutil.Issue {
 	if val == nil {
 		return nil
 	}
 	switch v := val.(type) {
 	case *ast.IntegerNode:
-		return checkIntScoreAST(file, v, scope)
+		return checkIntScoreAST(file, v)
 	case *ast.FloatNode:
 		score := int(v.Value)
-		if float64(score) != v.Value || !validScore(score, scope) {
+		if float64(score) != v.Value || !validScore(score) {
 			return []checkutil.Issue{errIssue(file, val, "score 必须是整数且范围 0-5")}
 		}
 	case *ast.StringNode:
@@ -240,15 +220,15 @@ func checkScoreFieldAST(file string, val ast.Node, scope RuleScope) []checkutil.
 }
 
 // validScore reports whether score is within the allowed 0-5 range.
-func validScore(score int, scope RuleScope) bool {
+func validScore(score int) bool {
 	return score >= 0 && score <= 5
 }
 
-func checkIntScoreAST(file string, val *ast.IntegerNode, scope RuleScope) []checkutil.Issue {
+func checkIntScoreAST(file string, val *ast.IntegerNode) []checkutil.Issue {
 	switch v := val.Value.(type) {
 	case int64:
 		score := int(v)
-		if !validScore(score, scope) {
+		if !validScore(score) {
 			return []checkutil.Issue{errIssue(file, val, "score 范围必须是 0-5")}
 		}
 	case uint64:
@@ -260,52 +240,20 @@ func checkIntScoreAST(file string, val *ast.IntegerNode, scope RuleScope) []chec
 	return nil
 }
 
-func checkDateFieldValueAST(file string, val ast.Node, field string, pattern *regexp.Regexp, kind string) []checkutil.Issue {
+func checkDateFieldValueAST(file string, val ast.Node, field string) []checkutil.Issue {
 	if val == nil {
 		return nil
 	}
 
 	switch v := val.(type) {
 	case *ast.StringNode:
-		str := v.Value
-		if kind == fieldDate && !pattern.MatchString(str) {
-			return []checkutil.Issue{errIssue(file, val, fmt.Sprintf("%s 必须是 YYYY-MM-DD 格式: %s", field, str))}
+		if !DateFull.MatchString(v.Value) {
+			return []checkutil.Issue{errIssue(file, val, fmt.Sprintf("%s 必须是 YYYY-MM-DD 格式: %s", field, v.Value))}
 		}
-		if kind == kindYear && !pattern.MatchString(str) {
-			return []checkutil.Issue{errIssue(file, val, fmt.Sprintf("%s 格式错误: %s", field, str))}
-		}
-	case *ast.IntegerNode:
-		return checkDateFieldIntValueAST(file, v, field, pattern, kind)
 	default:
 		return []checkutil.Issue{errIssue(file, val, field+" 必须是字符串")}
 	}
 
-	return nil
-}
-
-func checkDateFieldIntValueAST(file string, val *ast.IntegerNode, field string, pattern *regexp.Regexp, kind string) []checkutil.Issue {
-	if kind == fieldDate {
-		return []checkutil.Issue{errIssue(file, val, field+" 必须是字符串")}
-	}
-	var yearStr string
-	switch v := val.Value.(type) {
-	case int64:
-		yearStr = strconv.FormatInt(v, 10)
-	case uint64:
-		yearStr = strconv.FormatUint(v, 10)
-	default:
-		return []checkutil.Issue{errIssue(file, val, field+" 必须是字符串")}
-	}
-	if !pattern.MatchString(yearStr) {
-		return []checkutil.Issue{errIssue(file, val, fmt.Sprintf("%s 格式错误: %s", field, yearStr))}
-	}
-
-	return nil
-}
-
-func checkPublishAtAST(file string, val ast.Node, scope RuleScope) []checkutil.Issue {
-	// Only diary uses the structured check, and diary has no publishAt field;
-	// publishAt year validation is handled by the schema domains.
 	return nil
 }
 
@@ -317,7 +265,7 @@ func checkIsSequenceAST(file string, val ast.Node, field string) []checkutil.Iss
 	return nil
 }
 
-func checkSubFieldAST(file string, val ast.Node, scope RuleScope) []checkutil.Issue {
+func checkSubFieldAST(file string, val ast.Node) []checkutil.Issue {
 	seq, ok := val.(*ast.SequenceNode)
 	if !ok {
 		return []checkutil.Issue{errIssue(file, val, "sub 必须是数组")}
@@ -331,7 +279,7 @@ func checkSubFieldAST(file string, val ast.Node, scope RuleScope) []checkutil.Is
 
 			continue
 		}
-		issues = append(issues, checkMappingAST(file, mapping, AllowedFieldsForScope(scope), scope, "sub")...)
+		issues = append(issues, checkMappingAST(file, mapping, AllowedFieldsForScope(ScopeDiary))...)
 	}
 
 	return issues

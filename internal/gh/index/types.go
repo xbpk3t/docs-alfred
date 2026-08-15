@@ -3,23 +3,23 @@ package ghindex
 import (
 	"strings"
 
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 const GhURL = "https://github.com/"
 
 // Repo is the enriched repository type: the schema-generated data model
-// (model.Repo) plus runtime provenance fields set during indexing (which
+// (gh.Repo) plus runtime provenance fields set during indexing (which
 // config/topic/rel a repo came from). Provenance is index-layer only; it is
-// not part of the gh JSON Schema, so it lives outside the generated model.
+// not part of the gh JSON Schema, so it lives outside the generated gh.
 type Repo struct {
+	gh.Repo       `yaml:",inline"`
 	Tag           string `yaml:"tag,omitempty"      json:"tag,omitempty"`
 	Type          string `yaml:"type,omitempty"     json:"type,omitempty"`
 	TopicName     string `yaml:"-"                  json:"-"`
 	MainRepo      string `yaml:"-"                  json:"-"`
-	model.Repo    `yaml:",inline"`
-	IsRelatedRepo bool `yaml:"-"                  json:"-"`
+	IsRelatedRepo bool   `yaml:"-"                  json:"-"`
 }
 
 // Repository is kept as an alias for Repo so callers that only read repos
@@ -30,9 +30,9 @@ type Repository = Repo
 type Repos []*Repo
 
 // Topics is the schema-generated topic list. Topics carry no provenance (the
-// index adds none today), so they are used directly from the generated model.
+// index adds none today), so they are used directly from the generated gh.
 // The alias keeps the composite-literal shape (`Topics{{...}}`) used by callers.
-type Topics = []model.Topic
+type Topics = []gh.Topic
 
 // ConfigRepo defines configuration repository structure.
 type ConfigRepo struct {

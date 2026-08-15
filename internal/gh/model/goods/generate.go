@@ -3,3 +3,4 @@
 package goods
 
 //go:generate go run github.com/atombender/go-jsonschema@v0.24.1 -p goods --only-models --capitalization URL -o goods_gen.go ../../schema/goods.schema.json
+//go:generate go run github.com/atombender/go-jsonschema@v0.24.1 -p goods --only-models --capitalization URL -o using_gen.go ../../schema/using.schema.json

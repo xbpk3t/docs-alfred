@@ -8,6 +8,7 @@ import (
 
 	"github.com/samber/lo"
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
+	modelbooks "github.com/xbpk3t/docs-alfred/internal/gh/model/books"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
@@ -292,25 +293,15 @@ func parseDomainFiles(targetDir string) ([]parsedItem, error) {
 	return items, nil
 }
 
-// yamlSection / yamlTopic model the type→topics→table section shape used by
-// books / ntl / goods after the table migration.
-type yamlSection struct {
-	Type   string      `yaml:"type"`
-	Topics []yamlTopic `yaml:"topics"`
-}
-
-type yamlTopic struct {
-	Topic string     `yaml:"topic"`
-	Table []yamlItem `yaml:"table"`
-}
-
 // parseSectionRows extracts (name/author/url/score) rows from section-shaped
-// YAML by recursing topics[].table[]. Returns ok=false when the file is not
-// section-shaped (e.g. the legacy flat format): a flat file parses as sections
-// with empty Type and no topics, which is treated as "not a section" so the
-// caller falls back to the flat parser.
+// YAML by recursing topics[].table[]. The decode target is generated from
+// books.schema.json (internal/gh/model/books), so the section shape stays in
+// lockstep with the schema instead of a hand-mirrored struct. Returns ok=false
+// when the file is not section-shaped (e.g. the legacy flat format): a flat
+// file parses as sections with no topics, which is treated as "not a section"
+// so the caller falls back to the flat parser.
 func parseSectionRows(data []byte, fileName string) ([]parsedItem, bool) {
-	docs, err := parser.NewParser[[]yamlSection](data).ParseMulti()
+	docs, err := parser.NewParser[[]modelbooks.Section](data).ParseMulti()
 	if err != nil {
 		return nil, false
 	}
@@ -319,7 +310,7 @@ func parseSectionRows(data []byte, fileName string) ([]parsedItem, bool) {
 	hasSection := false
 	for _, doc := range docs {
 		for _, sec := range doc {
-			if sec.Type != "" || len(sec.Topics) > 0 {
+			if len(sec.Topics) > 0 {
 				hasSection = true
 			}
 			for _, topic := range sec.Topics {
@@ -330,10 +321,9 @@ func parseSectionRows(data []byte, fileName string) ([]parsedItem, bool) {
 					items = append(items, parsedItem{
 						file:   fileName,
 						name:   row.Name,
-						author: row.Author,
-						url:    row.URL,
-						tags:   toTags(row.Tags),
-						score:  row.Score,
+						author: derefStr(row.Author),
+						url:    derefStr(row.URL),
+						score:  derefInt(row.Score),
 					})
 				}
 			}
@@ -345,6 +335,22 @@ func parseSectionRows(data []byte, fileName string) ([]parsedItem, bool) {
 	}
 
 	return items, true
+}
+
+func derefStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+
+	return *p
+}
+
+func derefInt(p *int) int {
+	if p == nil {
+		return 0
+	}
+
+	return *p
 }
 
 // toTags normalizes a tags value (string or []string) into a []string.

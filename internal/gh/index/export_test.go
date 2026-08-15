@@ -8,7 +8,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 func TestRenderConfigYAMLFromDirBuildsValidatedRemoteArtifact(t *testing.T) {
@@ -99,7 +99,7 @@ func TestMarshalConfigReposYAML(t *testing.T) {
 			Type: "tool",
 			Tag:  "test",
 			Repos: Repos{
-				{Repo: model.Repo{URL: "https://github.com/acme/tool", Des: strptr("test")}},
+				{Repo: gh.Repo{URL: "https://github.com/acme/tool", Des: strptr("test")}},
 			},
 		},
 	}

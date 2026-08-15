@@ -21,3 +21,9 @@ var Goods []byte
 //
 //go:embed books.schema.json
 var Books []byte
+
+// Using is the JSON Schema for the `goods using` output view (a projection of
+// goods.schema.json). It drives the generated using model.
+//
+//go:embed using.schema.json
+var Using []byte

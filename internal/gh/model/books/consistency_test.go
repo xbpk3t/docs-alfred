@@ -1,4 +1,4 @@
-package goods
+package books
 
 import (
 	"encoding/json"
@@ -12,35 +12,19 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/gh/schema"
 )
 
-// The generated goods model must stay in lockstep with goods.schema.json.
-// Run `go generate ./internal/gh/model/goods` after changing the schema.
+// The generated books model must stay in lockstep with books.schema.json.
+// Run `go generate ./internal/gh/model/books` after changing the schema.
+// All $defs are covered — including tableItem, which the goods model test
+// historically missed.
 
-func TestGoodsModel_MatchesSchema(t *testing.T) {
-	defs := parseSchemaDefs(t, schema.Goods)
+func TestBooksModel_MatchesSchema(t *testing.T) {
+	defs := parseSchemaDefs(t, schema.Books)
 
 	instances := map[string]any{
 		"section":   Section{},
 		"topic":     Topic{},
 		"record":    Record{},
 		"tableItem": TableItem{},
-	}
-	for name, inst := range instances {
-		schemaProps := defs[name]
-		structTags := yamlTags(reflect.TypeOf(inst))
-		assert.ElementsMatchf(t, schemaProps, structTags, "def %s: schema properties vs model yaml tags", name)
-	}
-}
-
-// The using view model (using.schema.json output shape) must stay in lockstep
-// with the view schema too. Run `go generate ./internal/gh/model/goods` after
-// changing either schema.
-func TestUsingModel_MatchesSchema(t *testing.T) {
-	defs := parseSchemaDefs(t, schema.Using)
-
-	instances := map[string]any{
-		"usingType":  UsingType{},
-		"usingTopic": UsingTopic{},
-		"usingItem":  UsingItem{},
 	}
 	for name, inst := range instances {
 		schemaProps := defs[name]

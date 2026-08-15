@@ -6,19 +6,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 func TestFormatPlainIncludesLabels(t *testing.T) {
 	useTempRepoIconCache(t)
 	repos := ghindex.Repos{
 		{
-			Repo: model.Repo{URL: "https://github.com/acme/tool", Des: strptr("A useful tool"), Doc: strptr("data/gh/tool")},
+			Repo: gh.Repo{URL: "https://github.com/acme/tool", Des: strptr("A useful tool"), Doc: strptr("data/gh/tool")},
 			Tag:  "kernel",
 			Type: "tool",
 		},
 		{
-			Repo: model.Repo{URL: "https://github.com/acme/simple"},
+			Repo: gh.Repo{URL: "https://github.com/acme/simple"},
 		},
 	}
 
@@ -38,8 +38,8 @@ func TestFormatPlainEmptyRepos(t *testing.T) {
 
 func TestFormatRofiIncludesFullNameAndDesc(t *testing.T) {
 	repos := ghindex.Repos{
-		{Repo: model.Repo{URL: "https://github.com/acme/tool", Des: strptr("A tool")}},
-		{Repo: model.Repo{URL: "https://github.com/acme/simple"}},
+		{Repo: gh.Repo{URL: "https://github.com/acme/tool", Des: strptr("A tool")}},
+		{Repo: gh.Repo{URL: "https://github.com/acme/simple"}},
 	}
 
 	got := FormatRofi(repos)
@@ -55,7 +55,7 @@ func TestFormatRofiEmptyRepos(t *testing.T) {
 func TestFormatAlfredItemsNoDocNoNixNoQuery(t *testing.T) {
 	useTempRepoIconCache(t)
 	repos := ghindex.Repos{
-		{Repo: model.Repo{URL: "https://github.com/acme/tool"}},
+		{Repo: gh.Repo{URL: "https://github.com/acme/tool"}},
 	}
 
 	items := FormatAlfredItems(repos, "https://docs.lucc.dev/", "")
@@ -74,7 +74,7 @@ func TestFormatAlfredItemsWithNixURL(t *testing.T) {
 	useTempRepoIconCache(t)
 	repos := ghindex.Repos{
 		{
-			Repo: model.Repo{URL: "https://github.com/acme/tool", Nix: strptr("github:acme/tool#tool")},
+			Repo: gh.Repo{URL: "https://github.com/acme/tool", Nix: strptr("github:acme/tool#tool")},
 		},
 	}
 
@@ -89,7 +89,7 @@ func TestFormatAlfredItemsRelatedRepo(t *testing.T) {
 	useTempRepoIconCache(t)
 	repos := ghindex.Repos{
 		{
-			Repo:          model.Repo{URL: "https://github.com/acme/tool"},
+			Repo:          gh.Repo{URL: "https://github.com/acme/tool"},
 			MainRepo:      "acme/main",
 			IsRelatedRepo: true,
 		},
@@ -104,7 +104,7 @@ func TestFormatAlfredItemsTypeWithoutTag(t *testing.T) {
 	useTempRepoIconCache(t)
 	repos := ghindex.Repos{
 		{
-			Repo: model.Repo{URL: "https://github.com/acme/tool"},
+			Repo: gh.Repo{URL: "https://github.com/acme/tool"},
 			Type: "library",
 		},
 	}

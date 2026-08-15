@@ -7,10 +7,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// validateReferencesDir ensures --dir is set and points at an existing
-// directory so commands fail with a clear error instead of a bare "walk: no
-// such file" from deep inside the package. No machine-specific default path is
-// baked into the binary: the references dir is required and explicit.
+// validateReferencesDir ensures the references dir is set and points at an
+// existing directory, so commands fail with a clear error instead of a bare
+// "walk: no such file" from deep inside the package. dir is the resolved
+// path (positional arg or --dir). No machine-specific default path is baked
+// into the binary: the references dir is required and explicit.
 func validateReferencesDir(dir string) error {
 	if dir == "" {
 		return fmt.Errorf("references dir is required (--dir)")
@@ -42,7 +43,8 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "skx",
 		Short: "Render, validate and graph zzz prompt YAML files",
-		// Bare `skx` or `skx <path>` defaults to render.
+		// Bare `skx` (with --dir) defaults to render. Positional paths are
+		// handled by the subcommands via targetOrDir.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRender(targetOrDir(flags, args), flags.dryRun, flags.schema, flags.dir)
 		},
@@ -51,11 +53,19 @@ func newRootCmd() *cobra.Command {
 	}
 
 	root.PersistentFlags().StringVar(&flags.dir, "dir", "", "zzz references dir")
-	_ = root.MarkFlagRequired("dir")
 
 	// Fail fast with an actionable error when the references dir is missing or
-	// points at a deleted worktree instead of a deep filesystem error.
+	// points at a deleted worktree instead of a deep filesystem error. No
+	// machine-specific default path is baked into the binary.
+	//
+	// A positional target is validated by the command itself: render accepts a
+	// single file ([file-or-dir]), and route takes a name, so a positional is
+	// not necessarily a directory. --dir is only enforced when no positional is
+	// given.
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return nil
+		}
 		return validateReferencesDir(flags.dir)
 	}
 

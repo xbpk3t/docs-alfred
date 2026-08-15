@@ -1,6 +1,7 @@
 package goods
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	modelgoods "github.com/xbpk3t/docs-alfred/internal/gh/model/goods"
+	"github.com/xbpk3t/docs-alfred/internal/gh/schema"
+	"github.com/xbpk3t/docs-alfred/pkg/schemacheck"
 )
 
 // writeGoodsFiles creates a temp dir and writes goods-format YAML files.
@@ -76,8 +79,8 @@ func TestExtractUsing_GroupsByTypeTopic(t *testing.T) {
 	assert.Equal(t, "收纳袋", first.Topics[0].Topic)
 	require.Len(t, first.Topics[0].Items, 1)
 	assert.Equal(t, "抽绳束口#防水#收纳袋（15D尼龙涂硅）", first.Topics[0].Items[0].Name)
-	assert.Equal(t, "三峰出", first.Topics[0].Items[0].Brand)
-	assert.Equal(t, "¥13", first.Topics[0].Items[0].Price)
+	assert.Equal(t, "三峰出", strDeref(first.Topics[0].Items[0].Brand))
+	assert.Equal(t, "¥13", strDeref(first.Topics[0].Items[0].Price))
 	// 未标记 isUsing 的 item 不出现
 	assert.Len(t, first.Topics[1].Items, 1)
 	assert.Equal(t, "速干浴巾 NH19Y001-J", first.Topics[1].Items[0].Name)
@@ -89,7 +92,7 @@ func TestExtractUsing_GroupsByTypeTopic(t *testing.T) {
 	assert.Equal(t, "long-johns", second.Topics[0].Topic)
 	require.Len(t, second.Topics[0].Items, 1)
 	assert.Equal(t, "HEATTECH系列秋裤", second.Topics[0].Items[0].Name)
-	assert.Equal(t, "现在在穿", second.Topics[0].Items[0].Des)
+	assert.Equal(t, "现在在穿", strDeref(second.Topics[0].Items[0].Des))
 }
 
 func TestExtractUsing_NoUsingItems(t *testing.T) {
@@ -112,6 +115,38 @@ func TestExtractUsing_EmptyDir(t *testing.T) {
 	out, err := ExtractUsing(t.TempDir())
 	require.NoError(t, err)
 	require.Empty(t, out)
+}
+
+// TestExtractUsing_OutputValidatesAgainstSchema locks the using output to the
+// using.schema.json contract: the marshaled JSON must validate, including empty
+// types emitting `topics: []` rather than null.
+func TestExtractUsing_OutputValidatesAgainstSchema(t *testing.T) {
+	dir := writeGoodsFiles(t, map[string]string{"goods.test.yml": `---
+- type: 空类型
+  topics:
+    - topic: 无在用
+      table:
+        - name: 未使用
+- type: 在用类型
+  topics:
+    - topic: 收纳袋
+      table:
+        - name: 在用袋
+          isUsing: true
+          price: ¥13
+`})
+
+	out, err := ExtractUsing(dir)
+	require.NoError(t, err)
+
+	raw, err := json.Marshal(out)
+	require.NoError(t, err)
+	var doc any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+
+	sch, err := schemacheck.CompileBytes(schema.Using)
+	require.NoError(t, err)
+	require.Empty(t, schemacheck.Validate(sch, doc), "using output must validate against using.schema.json")
 }
 
 func TestExtractUsing_NonExistentDir(t *testing.T) {
@@ -158,36 +193,54 @@ func TestExtractUsing_IgnoreNonGoodsFiles(t *testing.T) {
 
 func TestUsingItemsFromTable(t *testing.T) {
 	items := usingItemsFromTable([]modelgoods.TableItem{
-		{"name": "A", "isUsing": true},
-		{"name": "B", "isUsing": false},
-		{"name": "C"},                    // 无 isUsing
-		{"isUsing": true},                // 无 name，跳过
-		{"name": "D", "isUsing": "true"}, // 字符串 true
+		{Name: "A", IsUsing: boolPtr(true)},
+		{Name: "B", IsUsing: boolPtr(false)},
+		{Name: "C"},              // 无 isUsing
+		{IsUsing: boolPtr(true)}, // 无 name，跳过
+		{Name: "D", IsUsing: boolPtr(true)},
 	})
 	require.Len(t, items, 2)
 	assert.Equal(t, "A", items[0].Name)
 	assert.Equal(t, "D", items[1].Name)
 }
 
-func TestUsingItemsFromTable_ExtraFields(t *testing.T) {
+func TestUsingItemsFromTable_CopiesFields(t *testing.T) {
+	// goods.schema.json 已把 name/price 收紧为 string，映射是纯字段拷贝；
+	// 数字形态的 name（手机号）必须引号化成字符串，不再是 interface{}。
 	items := usingItemsFromTable([]modelgoods.TableItem{
-		{"name": "X", "isUsing": true, "brand": "B", "scope": "home"},
+		{Name: "18616287252", IsUsing: boolPtr(true), Brand: strPtr("B"), Price: strPtr("¥8/月")},
 	})
 	require.Len(t, items, 1)
-	assert.Equal(t, "B", items[0].Brand)
-	// scope 是非标准字段，进 Extra
-	require.NotNil(t, items[0].Extra)
-	assert.Equal(t, "home", items[0].Extra["scope"])
+	assert.Equal(t, "18616287252", items[0].Name)
+	assert.Equal(t, "B", strDeref(items[0].Brand))
+	assert.Equal(t, "¥8/月", strDeref(items[0].Price))
+}
+
+func strDeref(p *string) string {
+	if p == nil {
+		return ""
+	}
+
+	return *p
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func strPtr(s string) *string {
+	return &s
 }
 
 func TestExtractUsing_NumericName(t *testing.T) {
-	// name 是纯数字（如话费号码），YAML 解析为 int，必须转成 string 输出
+	// 数字形态 name（话费号码）由 goods.schema.json 强制为 string：未引号的纯
+	// 数字会被 check 拒绝，数据必须写成 "18616287252"，输出保持字符串。
 	dir := writeGoodsFiles(t, map[string]string{"goods.test.yml": `---
 - type: 虚拟物品
   topics:
     - topic: 话费
       table:
-        - name: 18616287252
+        - name: "18616287252"
           brand: 话费
           price: ¥8/月
           isUsing: true
@@ -252,8 +305,8 @@ func TestExtractUsing_RealWorldShapes(t *testing.T) {
 	towel := durs.Topics[0]
 	require.Len(t, towel.Items, 1)
 	assert.Equal(t, "速干浴巾 NH19Y001-J", towel.Items[0].Name)
-	assert.Contains(t, towel.Items[0].Des, "在家直接用来装衣服")
-	assert.Contains(t, towel.Items[0].Des, "用来当枕头用")
+	assert.Contains(t, strDeref(towel.Items[0].Des), "在家直接用来装衣服")
+	assert.Contains(t, strDeref(towel.Items[0].Des), "用来当枕头用")
 
 	// 注释和 # 不干扰提取
 	bags := durs.Topics[1]
@@ -267,20 +320,5 @@ func TestExtractUsing_RealWorldShapes(t *testing.T) {
 	assert.Equal(t, "88VIP", virtual.Topics[0].Items[0].Name)
 }
 
-func TestBoolTrue(t *testing.T) {
-	assert.True(t, boolTrue(true))
-	assert.True(t, boolTrue("true"))
-	assert.True(t, boolTrue(" TRUE "))
-	// YAML 1.1 真值(goccy 解析为字符串)也应视为 true
-	assert.True(t, boolTrue("on"))
-	assert.True(t, boolTrue("yes"))
-	assert.True(t, boolTrue("y"))
-	assert.True(t, boolTrue("On"))
-	assert.False(t, boolTrue(false))
-	assert.False(t, boolTrue("false"))
-	assert.False(t, boolTrue("off"))
-	assert.False(t, boolTrue("no"))
-	assert.False(t, boolTrue("n"))
-	assert.False(t, boolTrue(1))
-	assert.False(t, boolTrue(nil))
-}
+// boolTrue 已随 schema 严格化移除：goods.schema.json 强制 isUsing: boolean，
+// YAML 1.1 真值字符串（on/yes/y）会被 check 直接拒绝，无需运行时容错。

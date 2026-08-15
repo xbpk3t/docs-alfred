@@ -22,9 +22,8 @@ type usingTopic struct {
 }
 
 type usingItem struct {
-	Name  string            `json:"name"`
-	Brand string            `json:"brand,omitempty"`
-	Extra map[string]string `json:"extra,omitempty"`
+	Name  string `json:"name"`
+	Brand string `json:"brand,omitempty"`
 }
 
 func decodeUsing(t *testing.T, raw string) []usingType {
@@ -74,8 +73,7 @@ func TestNewGoodsUsingCmd_JSONShape(t *testing.T) {
 	assert.Equal(t, "三峰出", types[0].Topics[0].Items[0].Brand)
 	// 未标记 isUsing 的不出现
 	assert.Len(t, types[0].Topics[1].Items, 1)
-	// Extra 字段不出现在 JSON 里（空 map 被 omitempty 省略）
-	assert.Empty(t, types[0].Topics[0].Items[0].Extra)
+	// schema 严格枚举 goods 行 key，输出不含 extra 字段
 }
 
 func TestNewGoodsUsingCmd_EmptyResult(t *testing.T) {

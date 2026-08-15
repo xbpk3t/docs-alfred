@@ -4,7 +4,7 @@ import (
 	"path"
 
 	yaml "github.com/goccy/go-yaml"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
@@ -75,7 +75,7 @@ func normalizeTopics(topics Topics, base string) {
 	}
 }
 
-func normalizeTopic(topic *model.Topic, base string) {
+func normalizeTopic(topic *gh.Topic, base string) {
 	// 处理 topic 内的 repos（rel 遍历见 normalizeRepoTopics；此处为兼容保留）
 	for i := range topic.Repo {
 		normalizeRepoTopics(&Repo{Repo: topic.Repo[i]}, base, false)

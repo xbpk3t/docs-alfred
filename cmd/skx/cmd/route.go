@@ -33,6 +33,11 @@ func newRouteCmd(flags *rootFlags) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := flags.dir
 			name := args[0]
+			// route always resolves against --dir (the positional is a name,
+			// not a path), so validate it here rather than a deep walk error.
+			if err := validateReferencesDir(dir); err != nil {
+				return err
+			}
 			rel, mdAbs, ok, resolveErr := skx.ResolvePrompt(dir, name)
 			if resolveErr != nil {
 				return resolveErr

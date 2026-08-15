@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/xbpk3t/docs-alfred/main/internal/gh/schema/using.schema.json",
+  "title": "using",
+  "description": "Output view of `data-cli goods using`: goods rows with isUsing:true, flattened to plain strings and grouped type → topic → items. This is a projection of goods.schema.json, not its mirror: it only carries the fields shown in the using output.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/usingType"
+  },
+  "$defs": {
+    "usingType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "topics"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "topics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/usingTopic"
+          }
+        }
+      }
+    },
+    "usingTopic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic",
+        "items"
+      ],
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/usingItem"
+          }
+        }
+      }
+    },
+    "usingItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "brand": {
+          "type": "string"
+        },
+        "param": {
+          "type": "string"
+        },
+        "price": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "des": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

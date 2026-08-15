@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -126,7 +126,7 @@ func appendTopicCandidates(
 	return candidates
 }
 
-func canonicalTopicPath(topic *model.Topic, base string) string {
+func canonicalTopicPath(topic *gh.Topic, base string) string {
 	if topic == nil {
 		return cleanCatalogPath(base)
 	}

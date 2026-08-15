@@ -5,13 +5,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 func TestReposFilterSlashQueryMatchesRepoPathNotGitHubURLPrefix(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/microsoft/LightGBM", Des: strptr("gradient boosting framework")}},
-		{Repo: model.Repo{URL: "https://github.com/git/git", Des: strptr("Git SCM")}},
+		{Repo: gh.Repo{URL: "https://github.com/microsoft/LightGBM", Des: strptr("gradient boosting framework")}},
+		{Repo: gh.Repo{URL: "https://github.com/git/git", Des: strptr("Git SCM")}},
 	}
 
 	got := FilterRepos(repos, "/git")
@@ -21,8 +21,8 @@ func TestReposFilterSlashQueryMatchesRepoPathNotGitHubURLPrefix(t *testing.T) {
 
 func TestReposFilterRanksRepoNameMatchesBeforeMetadataMatches(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/microsoft/LightGBM", Des: strptr("uses git for source control")}},
-		{Repo: model.Repo{URL: "https://github.com/git/git", Des: strptr("Git SCM")}},
+		{Repo: gh.Repo{URL: "https://github.com/microsoft/LightGBM", Des: strptr("uses git for source control")}},
+		{Repo: gh.Repo{URL: "https://github.com/git/git", Des: strptr("Git SCM")}},
 	}
 
 	got := FilterRepos(repos, "git")
@@ -33,7 +33,7 @@ func TestReposFilterRanksRepoNameMatchesBeforeMetadataMatches(t *testing.T) {
 
 func TestReposFilterNormalizesGitHubURLQueries(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/git/git", Des: strptr("Git SCM")}},
+		{Repo: gh.Repo{URL: "https://github.com/git/git", Des: strptr("Git SCM")}},
 	}
 
 	got := FilterRepos(repos, "https://github.com/git/git.git/tree/master")
@@ -49,7 +49,7 @@ func TestReposFilter_EmptyRepos(t *testing.T) {
 
 func TestReposFilter_EmptyQuery(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b"}},
+		{Repo: gh.Repo{URL: "https://github.com/a/b"}},
 	}
 	got := FilterRepos(repos, "")
 	assert.Len(t, got, 1)
@@ -57,8 +57,8 @@ func TestReposFilter_EmptyQuery(t *testing.T) {
 
 func TestReposFilter_TagMatch(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b"}, Tag: "kernel"},
-		{Repo: model.Repo{URL: "https://github.com/c/d"}, Tag: "network"},
+		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Tag: "kernel"},
+		{Repo: gh.Repo{URL: "https://github.com/c/d"}, Tag: "network"},
 	}
 	got := FilterRepos(repos, "kernel")
 	require.Len(t, got, 1)
@@ -67,7 +67,7 @@ func TestReposFilter_TagMatch(t *testing.T) {
 
 func TestReposFilter_TypeMatch(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b"}, Type: "tool"},
+		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Type: "tool"},
 	}
 	got := FilterRepos(repos, "tool")
 	require.Len(t, got, 1)
@@ -75,7 +75,7 @@ func TestReposFilter_TypeMatch(t *testing.T) {
 
 func TestReposFilter_DesMatch(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b", Des: strptr("awesome tool")}},
+		{Repo: gh.Repo{URL: "https://github.com/a/b", Des: strptr("awesome tool")}},
 	}
 	got := FilterRepos(repos, "awesome")
 	require.Len(t, got, 1)
@@ -83,7 +83,7 @@ func TestReposFilter_DesMatch(t *testing.T) {
 
 func TestReposFilter_SuffixMatch(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b", Des: strptr("test")}},
+		{Repo: gh.Repo{URL: "https://github.com/a/b", Des: strptr("test")}},
 	}
 	got := FilterRepos(repos, "a/b")
 	require.Len(t, got, 1)
@@ -91,7 +91,7 @@ func TestReposFilter_SuffixMatch(t *testing.T) {
 
 func TestReposFilter_SlashQueryNoMetadata(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b", Des: strptr("git tool")}},
+		{Repo: gh.Repo{URL: "https://github.com/a/b", Des: strptr("git tool")}},
 	}
 	// Slash query should not match metadata
 	got := FilterRepos(repos, "/git")
@@ -145,8 +145,8 @@ func TestExtractTypesByTag(t *testing.T) {
 
 func TestQueryReposByTag(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b"}, Type: "tool"},
-		{Repo: model.Repo{URL: "https://github.com/c/d"}, Type: "lib"},
+		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Type: "tool"},
+		{Repo: gh.Repo{URL: "https://github.com/c/d"}, Type: "lib"},
 	}
 	filtered := QueryReposByTag(repos, "tool")
 	assert.Len(t, filtered, 1)
@@ -154,9 +154,9 @@ func TestQueryReposByTag(t *testing.T) {
 
 func TestQueryReposByTagAndType(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b"}, Tag: "kernel", Type: "tool"},
-		{Repo: model.Repo{URL: "https://github.com/c/d"}, Tag: "kernel", Type: "lib"},
-		{Repo: model.Repo{URL: "https://github.com/e/f"}, Tag: "network", Type: "tool"},
+		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Tag: "kernel", Type: "tool"},
+		{Repo: gh.Repo{URL: "https://github.com/c/d"}, Tag: "kernel", Type: "lib"},
+		{Repo: gh.Repo{URL: "https://github.com/e/f"}, Tag: "network", Type: "tool"},
 	}
 	filtered := QueryReposByTagAndType(repos, "kernel", "tool")
 	assert.Len(t, filtered, 1)
@@ -169,8 +169,8 @@ func TestMatchRepo_NilRepo(t *testing.T) {
 
 func TestReposFilter_FullNameExactMatch(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b"}},
-		{Repo: model.Repo{URL: "https://github.com/c/d"}},
+		{Repo: gh.Repo{URL: "https://github.com/a/b"}},
+		{Repo: gh.Repo{URL: "https://github.com/c/d"}},
 	}
 	got := FilterRepos(repos, "a/b")
 	require.Len(t, got, 1)
@@ -179,7 +179,7 @@ func TestReposFilter_FullNameExactMatch(t *testing.T) {
 
 func TestReposFilter_ContainsMatch(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/owner/my-repo"}},
+		{Repo: gh.Repo{URL: "https://github.com/owner/my-repo"}},
 	}
 	got := FilterRepos(repos, "my-re")
 	require.Len(t, got, 1)
@@ -209,7 +209,7 @@ func TestExtractTypesByTag_EmptyRepos(t *testing.T) {
 
 func TestQueryReposByTag_EmptyResult(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b"}, Type: "tool"},
+		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Type: "tool"},
 	}
 	filtered := QueryReposByTag(repos, "nonexistent")
 	assert.Empty(t, filtered)
@@ -217,7 +217,7 @@ func TestQueryReposByTag_EmptyResult(t *testing.T) {
 
 func TestQueryReposByTagAndType_EmptyResult(t *testing.T) {
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/b"}, Tag: "kernel", Type: "tool"},
+		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Tag: "kernel", Type: "tool"},
 	}
 	filtered := QueryReposByTagAndType(repos, "kernel", "nonexistent")
 	assert.Empty(t, filtered)
@@ -228,9 +228,9 @@ func TestReposFilter_SortByScoreAndIndex(t *testing.T) {
 	// "awesome" matches: a/z-repo (des=score 60), b/a-repo (des=score 60), c/m-repo (tag=score 4)
 	// After sort: tag matches (score 4) come first (ascending), then des matches (score 60)
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/z-repo", Des: strptr("awesome")}},
-		{Repo: model.Repo{URL: "https://github.com/b/a-repo", Des: strptr("awesome")}},
-		{Repo: model.Repo{URL: "https://github.com/c/m-repo"}, Tag: "awesome"},
+		{Repo: gh.Repo{URL: "https://github.com/a/z-repo", Des: strptr("awesome")}},
+		{Repo: gh.Repo{URL: "https://github.com/b/a-repo", Des: strptr("awesome")}},
+		{Repo: gh.Repo{URL: "https://github.com/c/m-repo"}, Tag: "awesome"},
 	}
 	got := FilterRepos(repos, "awesome")
 	require.Len(t, got, 3)
@@ -241,8 +241,8 @@ func TestReposFilter_SortByScoreAndIndex(t *testing.T) {
 func TestReposFilter_RepoNameExactMatch(t *testing.T) {
 	// Test repo name exact match (score 1 vs des match score 5)
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/xyz", Des: strptr("has tool in it")}},
-		{Repo: model.Repo{URL: "https://github.com/b/tool"}},
+		{Repo: gh.Repo{URL: "https://github.com/a/xyz", Des: strptr("has tool in it")}},
+		{Repo: gh.Repo{URL: "https://github.com/b/tool"}},
 	}
 	got := FilterRepos(repos, "tool")
 	require.Len(t, got, 2)
@@ -253,8 +253,8 @@ func TestReposFilter_RepoNameExactMatch(t *testing.T) {
 func TestReposFilter_EqualScoresDifferentIndices(t *testing.T) {
 	// Two repos with same score should maintain original order (stable sort)
 	repos := Repos{
-		{Repo: model.Repo{URL: "https://github.com/a/first", Des: strptr("test")}},
-		{Repo: model.Repo{URL: "https://github.com/b/second", Des: strptr("test")}},
+		{Repo: gh.Repo{URL: "https://github.com/a/first", Des: strptr("test")}},
+		{Repo: gh.Repo{URL: "https://github.com/b/second", Des: strptr("test")}},
 	}
 	got := FilterRepos(repos, "test")
 	require.Len(t, got, 2)

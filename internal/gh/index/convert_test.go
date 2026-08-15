@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 func TestToRepos_BasicConversion(t *testing.T) {
@@ -14,7 +14,7 @@ func TestToRepos_BasicConversion(t *testing.T) {
 			Type: "tool",
 			Tag:  "kernel",
 			Repos: Repos{
-				{Repo: model.Repo{URL: "https://github.com/acme/main-repo"}},
+				{Repo: gh.Repo{URL: "https://github.com/acme/main-repo"}},
 			},
 		},
 	}
@@ -31,9 +31,9 @@ func TestToRepos_SubRepos(t *testing.T) {
 			Tag:  "kernel",
 			Repos: Repos{
 				{
-					Repo: model.Repo{
+					Repo: gh.Repo{
 						URL: "https://github.com/acme/main",
-						Rel: []model.Repo{{URL: "https://github.com/acme/related"}},
+						Rel: []gh.Repo{{URL: "https://github.com/acme/related"}},
 					},
 				},
 			},
@@ -59,7 +59,7 @@ func TestToRepos_InvalidURL(t *testing.T) {
 			Type: "tool",
 			Tag:  "kernel",
 			Repos: Repos{
-				{Repo: model.Repo{URL: "not-a-github-url"}},
+				{Repo: gh.Repo{URL: "not-a-github-url"}},
 			},
 		},
 	}
@@ -71,7 +71,7 @@ func TestToRepos_InvalidURL(t *testing.T) {
 
 func TestProcessRepo_NilSubRepos(t *testing.T) {
 	repo := &Repository{
-		Repo: model.Repo{URL: "https://github.com/acme/main"},
+		Repo: gh.Repo{URL: "https://github.com/acme/main"},
 	}
 	repos := processRepo(repo, "tool")
 	require.Len(t, repos, 1)
@@ -85,7 +85,7 @@ func TestToRepos_GitLabWithNix(t *testing.T) {
 			Tag:  "devops",
 			Repos: Repos{
 				{
-					Repo: model.Repo{
+					Repo: gh.Repo{
 						URL: "https://gitlab.com/gitlab-org/cli",
 						Nix: strptr("https://mynixos.com/nixpkgs/package/glab"),
 					},

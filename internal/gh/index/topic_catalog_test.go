@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 func TestTopicCatalogIncludesConfigRepoTopics(t *testing.T) {
@@ -15,9 +15,9 @@ func TestTopicCatalogIncludesConfigRepoTopics(t *testing.T) {
 			Topics: Topics{{Topic: "Config Topic", Kind: "type"}},
 			Repos: Repos{
 				{
-					Repo: model.Repo{
+					Repo: gh.Repo{
 						URL: "https://github.com/acme/main-repo",
-						Rel: []model.Repo{{URL: "https://github.com/acme/related-repo"}},
+						Rel: []gh.Repo{{URL: "https://github.com/acme/related-repo"}},
 					},
 				},
 			},
@@ -107,7 +107,7 @@ func TestTopicBase(t *testing.T) {
 }
 
 func TestTopicDirName(t *testing.T) {
-	assert.Equal(t, "topic-name", (&model.Topic{Topic: "topic-name"}).DirName())
+	assert.Equal(t, "topic-name", (&gh.Topic{Topic: "topic-name"}).DirName())
 }
 
 func TestTopicCatalog_NilConfig(t *testing.T) {

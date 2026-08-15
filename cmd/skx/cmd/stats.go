@@ -23,6 +23,9 @@ func newStatsCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stats",
 		Short: "Show routing statistics (read ~/.claude/zzz-stats.json)",
+		// Read-only stats needs no references dir; --prune validates flags.dir
+		// inside RunE. Shadow the root's dir-required pre-run for this command.
+		PersistentPreRunE: func(*cobra.Command, []string) error { return nil },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := expandHome(statsFile)
 			entries, err := skx.LoadStats(path)
@@ -30,6 +33,11 @@ func newStatsCmd(flags *rootFlags) *cobra.Command {
 				return err
 			}
 			if prune {
+				// --prune needs the references dir to detect ghost entries;
+				// read-only stats does not.
+				if err := validateReferencesDir(flags.dir); err != nil {
+					return err
+				}
 				kept, removed := pruneGhosts(entries, flags.dir)
 				entries = kept
 				if err := skx.SaveStats(path, entries); err != nil {

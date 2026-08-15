@@ -103,6 +103,10 @@ linters:
       settings:
         rangeExprCopy:
           sizeThreshold: 32  # #21(切片预分配) 超过32字节强制预分配
+        rangeValCopy:
+          # schema 生成的模型 struct 指针多、天然 100-200B，range 按值拷贝在
+          # 冷路径上可忽略；阈值从默认 128 提到 256，仍拦住真正的大对象拷贝。
+          sizeThreshold: 256
         truncateCmp:
           skipArchDependent: false
         hugeParam:

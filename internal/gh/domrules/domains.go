@@ -22,8 +22,9 @@ var domainSpecs = []DomainSpec{
 	// the goods domain check; it has no structured-check rule scope.
 	{Domain: DomainGoods, DefaultPath: "data/goods"},
 	{Domain: DomainTask, DefaultPath: "data", YAMLParseOnly: true},
-	// ntl (movie/TV/music/asmr) is validated by its embedded JSON Schema
-	// (ntl.schema.json); .jav.yml is excluded as a hidden file.
+	// ntl (movie/TV/music) is validated against the shared books.schema.json
+	// (see internal/gh/schema); .jav.yml/.asmr.yml are dot-prefixed and excluded
+	// as hidden files by the default check.
 	{Domain: DomainNtl, DefaultPath: "data/ntl"},
 }
 

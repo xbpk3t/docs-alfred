@@ -18,6 +18,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 // Compile compiles a JSON Schema from a file path into a reusable validator.
@@ -82,6 +83,28 @@ func Validate(sch *jsonschema.Schema, doc any) []string {
 	}
 
 	return nil
+}
+
+// CheckDirectory compiles schemaBytes and validates every YAML file under dir
+// against it. name is used only in error messages (e.g. "compile books
+// schema"); pass the domain name. Each finding is an error-severity Issue.
+func CheckDirectory(dir, name string, schemaBytes []byte, includeHidden bool) ([]checkutil.Issue, error) {
+	sch, err := CompileBytes(schemaBytes)
+	if err != nil {
+		return nil, fmt.Errorf("compile %s schema: %w", name, err)
+	}
+
+	files, err := fileutil.ListYAMLFilesRecursive(dir, fileutil.ListOptions{IncludeHidden: includeHidden})
+	if err != nil {
+		return nil, fmt.Errorf("list %s yaml under %s: %w", name, dir, err)
+	}
+
+	var issues []checkutil.Issue
+	for _, file := range files {
+		issues = append(issues, CheckFile(file, sch, nil)...)
+	}
+
+	return issues, nil
 }
 
 // CheckFile validates a single YAML file against sch, then runs post rules.

@@ -23,18 +23,5 @@ func TestForbiddenFields(t *testing.T) {
 	assert.False(t, ForbiddenFields["name"])
 }
 
-func TestDateYearPattern(t *testing.T) {
-	assert.True(t, DateYear.MatchString("2024"))
-	assert.True(t, DateYear.MatchString("0"))
-	assert.True(t, DateYear.MatchString("-100"))
-	assert.False(t, DateYear.MatchString("abcde"))
-	assert.False(t, DateYear.MatchString("12345"))
-}
-
-func TestSeriesHintPattern(t *testing.T) {
-	assert.True(t, SeriesHint.MatchString("三部曲"))
-	assert.True(t, SeriesHint.MatchString("系列"))
-	assert.True(t, SeriesHint.MatchString("四部曲"))
-	assert.True(t, SeriesHint.MatchString("合集"))
-	assert.False(t, SeriesHint.MatchString("single"))
-}
+// DateYear/SeriesHint 已移除：publishAt 年份校验迁到 books.schema.json，
+// SeriesHint 在生产代码中无引用。

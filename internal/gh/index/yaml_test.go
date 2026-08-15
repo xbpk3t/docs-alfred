@@ -6,7 +6,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 func TestGithubYAMLRenderParsesTopics(t *testing.T) {
@@ -73,7 +73,7 @@ func TestNormalizeRepoTopics_NilRepo(t *testing.T) {
 
 func TestNormalizeRepoTopics_EmptyURL(t *testing.T) {
 	repo := &Repository{
-		Repo: model.Repo{URL: ""},
+		Repo: gh.Repo{URL: ""},
 	}
 	normalizeRepoTopics(repo, "base", false)
 	// Should not panic; empty repo name means return early
@@ -81,7 +81,7 @@ func TestNormalizeRepoTopics_EmptyURL(t *testing.T) {
 
 func TestNormalizeRepoTopics_UseBase(t *testing.T) {
 	repo := &Repository{
-		Repo: model.Repo{URL: "https://github.com/acme/repo"},
+		Repo: gh.Repo{URL: "https://github.com/acme/repo"},
 	}
 	normalizeRepoTopics(repo, "base", true)
 	// Should not panic

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 func TestRepository_IsValid(t *testing.T) {
@@ -19,7 +19,7 @@ func TestRepository_IsValid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := &Repository{Repo: model.Repo{URL: tt.url}}
+			r := &Repository{Repo: gh.Repo{URL: tt.url}}
 			assert.Equal(t, tt.want, IsValid(r))
 		})
 	}
@@ -37,14 +37,14 @@ func TestRepository_FullName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := &Repository{Repo: model.Repo{URL: tt.url}}
+			r := &Repository{Repo: gh.Repo{URL: tt.url}}
 			assert.Equal(t, tt.want, FullName(r))
 		})
 	}
 }
 
 func TestRepository_GetDes(t *testing.T) {
-	r := &Repository{Repo: model.Repo{Des: strptr("test description")}}
+	r := &Repository{Repo: gh.Repo{Des: strptr("test description")}}
 	assert.Equal(t, "test description", GetDes(r))
 
 	nilDes := &Repository{}
@@ -52,15 +52,15 @@ func TestRepository_GetDes(t *testing.T) {
 }
 
 func TestRepository_GetURL(t *testing.T) {
-	r := &Repository{Repo: model.Repo{URL: "https://github.com/a/b"}}
+	r := &Repository{Repo: gh.Repo{URL: "https://github.com/a/b"}}
 	assert.Equal(t, "https://github.com/a/b", GetURL(r))
 }
 
 func TestRepository_HasNix(t *testing.T) {
-	r1 := &Repository{Repo: model.Repo{Nix: strptr("github:acme/repo#pkg")}}
+	r1 := &Repository{Repo: gh.Repo{Nix: strptr("github:acme/repo#pkg")}}
 	assert.True(t, HasNix(r1))
 
-	r2 := &Repository{Repo: model.Repo{Nix: strptr("  ")}}
+	r2 := &Repository{Repo: gh.Repo{Nix: strptr("  ")}}
 	assert.False(t, HasNix(r2))
 
 	r3 := &Repository{}
@@ -68,7 +68,7 @@ func TestRepository_HasNix(t *testing.T) {
 }
 
 func TestRepository_HasSubRepos(t *testing.T) {
-	r1 := &Repository{Repo: model.Repo{Rel: []model.Repo{{URL: "https://github.com/a/b"}}}}
+	r1 := &Repository{Repo: gh.Repo{Rel: []gh.Repo{{URL: "https://github.com/a/b"}}}}
 	assert.True(t, HasSubRepos(r1))
 
 	r2 := &Repository{}
