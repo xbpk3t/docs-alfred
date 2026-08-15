@@ -21,6 +21,11 @@ includes:
       BINARY_NAME: devtools
 
 tasks:
+  gen:
+    desc: regenerate schema models (books/gh/goods/using)
+    cmds:
+      - go generate ./internal/gh/model/...
+
   lint:
     desc: pre-commit
     cmds:
