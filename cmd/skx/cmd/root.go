@@ -1,14 +1,29 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 )
 
-// DefaultReferencesDir is the zzz references source of truth: the directory
-// that holds references/**/*.yml. It currently points at the YAML-skills
-// worktree inside dotfiles; switch it to the main checkout path once the data
-// migrates there (single place to change).
-const DefaultReferencesDir = "/Users/luck/Desktop/dotfiles/.worktrees/YAML-skills/home/base/AI/skills/zzz/references"
+// validateReferencesDir ensures --dir is set and points at an existing
+// directory so commands fail with a clear error instead of a bare "walk: no
+// such file" from deep inside the package. No machine-specific default path is
+// baked into the binary: the references dir is required and explicit.
+func validateReferencesDir(dir string) error {
+	if dir == "" {
+		return fmt.Errorf("references dir is required (--dir)")
+	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("references dir %s: %w", dir, err)
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("references dir %s is not a directory", dir)
+	}
+	return nil
+}
 
 type rootFlags struct {
 	dir    string
@@ -31,10 +46,19 @@ func newRootCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRender(targetOrDir(flags, args), flags.dryRun, flags.schema, flags.dir)
 		},
-		SilenceUsage: true,
+		SilenceUsage:  true,
+		SilenceErrors: true, // main prints the error once; avoids double-printing
 	}
 
-	root.PersistentFlags().StringVar(&flags.dir, "dir", DefaultReferencesDir, "zzz references dir (default: "+DefaultReferencesDir+")")
+	root.PersistentFlags().StringVar(&flags.dir, "dir", "", "zzz references dir")
+	_ = root.MarkFlagRequired("dir")
+
+	// Fail fast with an actionable error when the references dir is missing or
+	// points at a deleted worktree instead of a deep filesystem error.
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		return validateReferencesDir(flags.dir)
+	}
+
 	root.PersistentFlags().StringVar(&flags.schema, "schema", "", "prpt.yml schema path (default: auto-located above dir)")
 	root.PersistentFlags().BoolVar(&flags.dryRun, "dry-run", false, "print what would be written without writing")
 

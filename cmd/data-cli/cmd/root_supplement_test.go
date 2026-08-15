@@ -92,9 +92,6 @@ func TestParseDataDomainArgValid(t *testing.T) {
 	}{
 		{"gh", data.DomainGH},
 		{"books", data.DomainBooks},
-		{"movie", data.DomainMovie},
-		{"tv", data.DomainTV},
-		{"music", data.DomainMusic},
 		{"diary", data.DomainDiary},
 		{"goods", data.DomainGoods},
 		{"task", data.DomainTask},

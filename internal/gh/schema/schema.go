@@ -15,3 +15,9 @@ var Gh []byte
 //
 //go:embed goods.schema.json
 var Goods []byte
+
+// Books is the shared JSON Schema for data/books and data/ntl YAML files
+// (books.*.yml + movie/TV/music). ntl borrows the books schema.
+//
+//go:embed books.schema.json
+var Books []byte

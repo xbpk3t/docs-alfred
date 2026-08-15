@@ -220,7 +220,7 @@ func TestRunCheck_TableRowMissingName(t *testing.T) {
         - price: ¥13
 `)
 	assert.NotEmpty(t, result.Issues)
-	assert.Contains(t, joinedMsgs(result), "table 项缺少必填字段 name")
+	assert.Contains(t, joinedMsgs(result), "missing property 'name'")
 }
 
 func TestRunCheck_EndPriceWithoutEndDate(t *testing.T) {
@@ -233,7 +233,7 @@ func TestRunCheck_EndPriceWithoutEndDate(t *testing.T) {
           endPrice: ¥50
 `)
 	assert.NotEmpty(t, result.Issues)
-	assert.Contains(t, joinedMsgs(result), "endPrice 必须和 endDate 同时存在")
+	assert.Contains(t, joinedMsgs(result), "required, if 'endPrice' exists")
 }
 
 func TestRunCheck_EndDateAloneAllowed(t *testing.T) {
@@ -258,5 +258,5 @@ func TestRunCheck_EndDateAtTopicLevelRejected(t *testing.T) {
         - name: 物品
 `)
 	assert.NotEmpty(t, result.Issues)
-	assert.Contains(t, joinedMsgs(result), "endDate 只能写在 table 项上")
+	assert.Contains(t, joinedMsgs(result), "additional properties 'endDate'")
 }

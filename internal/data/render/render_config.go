@@ -160,6 +160,8 @@ func serviceParseModeMap() map[string]render.ParseMode {
 		"goods": render.ParseFlatten,
 		"task":  render.ParseMulti,
 		"gh":    render.ParseFlatten,
+		"books": render.ParseFlatten,
+		"ntl":   render.ParseFlatten,
 	}
 }
 

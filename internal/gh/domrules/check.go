@@ -156,7 +156,7 @@ func checkMappingAST(file string, mapping *ast.MappingNode, allowedFields map[st
 	}
 
 	// Check required fields
-	if scope != ScopeDiary && scope != ScopeJav && !hasName {
+	if scope != ScopeDiary && !hasName {
 		issues = append(issues, checkutil.Issue{
 			File: file, Line: yamlutil.NodeLine(mapping),
 			Severity: checkutil.SeverityError,
@@ -304,11 +304,8 @@ func checkDateFieldIntValueAST(file string, val *ast.IntegerNode, field string, 
 }
 
 func checkPublishAtAST(file string, val ast.Node, scope RuleScope) []checkutil.Issue {
-	switch scope {
-	case ScopeBooks, ScopeMovie, ScopeJav, ScopeVG:
-		return checkDateFieldValueAST(file, val, "publishAt", DateYear, kindYear)
-	}
-
+	// Only diary uses the structured check, and diary has no publishAt field;
+	// publishAt year validation is handled by the schema domains.
 	return nil
 }
 

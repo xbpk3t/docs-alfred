@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://zzz.local/prpt.schema.json",
+  "$id": "https://raw.githubusercontent.com/xbpk3t/docs-alfred/main/cmd/skx/schema/prpt.schema.json",
   "title": "prpt",
   "description": "JSON Schema for zzz prompt YAML files (references/**/*.yml). Top-level sections: frontmatter / what / gate / constraint / input / workflow / output / self-check / hint.",
   "type": "object",

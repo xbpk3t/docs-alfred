@@ -1,10 +1,5 @@
 package domrules
 
-import (
-	"path/filepath"
-	"strings"
-)
-
 // DomainSpec defines the default behavior for a data domain.
 type DomainSpec struct {
 	Domain          DataDomain
@@ -18,17 +13,18 @@ type DomainSpec struct {
 const defaultPathBooks = "data/books"
 
 var domainSpecs = []DomainSpec{
-	{Domain: DomainBooks, DefaultPath: defaultPathBooks, RuleScope: ScopeBooks, StructuredCheck: true, DuplicateCheck: true},
-	{Domain: DomainMovie, DefaultPath: defaultPathBooks, RuleScope: ScopeMovie, StructuredCheck: true},
-	{Domain: DomainTV, DefaultPath: defaultPathBooks, RuleScope: ScopeMovie, StructuredCheck: true},
-	{Domain: DomainMusic, DefaultPath: "data/music", RuleScope: ScopeMusic, StructuredCheck: true, DuplicateCheck: true},
+	// books is validated by its embedded JSON Schema (books.schema.json) via
+	// the books domain check; it has no structured-check rule scope.
+	{Domain: DomainBooks, DefaultPath: defaultPathBooks, DuplicateCheck: true},
 	{Domain: DomainDiary, DefaultPath: "data/diary", RuleScope: ScopeDiary, StructuredCheck: true},
 	{Domain: DomainGH, DefaultPath: "data/gh", DuplicateCheck: true},
 	// goods is validated by its embedded JSON Schema (goods.schema.json) via
 	// the goods domain check; it has no structured-check rule scope.
 	{Domain: DomainGoods, DefaultPath: "data/goods"},
 	{Domain: DomainTask, DefaultPath: "data", YAMLParseOnly: true},
-	{Domain: DomainNtl, DefaultPath: "data/.archive/ntl", RuleScope: RuleScope(DomainNtl), StructuredCheck: true},
+	// ntl (movie/TV/music/asmr) is validated by its embedded JSON Schema
+	// (ntl.schema.json); .jav.yml is excluded as a hidden file.
+	{Domain: DomainNtl, DefaultPath: "data/ntl"},
 }
 
 // SpecForDomain returns the configured behavior for a data domain.
@@ -52,58 +48,15 @@ func DefaultPathForDomain(domain DataDomain) string {
 	return spec.DefaultPath
 }
 
-// ResolveScope determines the actual RuleScope based on scope and filename.
+// ResolveScope determines the actual RuleScope. Only diary uses the structured
+// check now (books/ntl/goods are schema-checked, gh uses the walker, task is
+// YAML-parse-only), so this always resolves to the diary scope.
 func ResolveScope(file, scope string) RuleScope {
-	switch scope {
-	case "books":
-		return ScopeBooks
-	case "movie", "tv":
-		return ScopeMovie
-	case "music":
-		return ScopeMusic
-	case "diary":
-		return ScopeDiary
-	case "ntl":
-		filename := strings.ToLower(filepath.Base(file))
-		if filename == "jav.yml" {
-			return ScopeJav
-		}
-		if filename == "vg.yml" {
-			return ScopeVG
-		}
-
-		return ScopeMovie
-	}
-
-	return detectScopeFromFilename(file)
-}
-
-func detectScopeFromFilename(file string) RuleScope {
-	filename := strings.ToLower(filepath.Base(file))
-	if filename == "movie.yml" || filename == "tv.yml" {
-		return ScopeMovie
-	}
-	if strings.HasPrefix(filename, "music-") && strings.HasSuffix(filename, ".yml") {
-		return ScopeMusic
-	}
-
-	return ScopeBooks
+	return ScopeDiary
 }
 
 // AllowedFieldsForScope returns the allowed field set for a rule scope.
+// Diary is the only structured-checked domain.
 func AllowedFieldsForScope(scope RuleScope) map[string]bool {
-	switch scope {
-	case ScopeDiary:
-		return DiaryFields
-	case ScopeJav:
-		return JavFields
-	case ScopeVG:
-		return VGFields
-	case ScopeBooks, ScopeMovie:
-		return ContentFields
-	case ScopeMusic:
-		return MusicFields
-	}
-
-	return ContentFields
+	return DiaryFields
 }

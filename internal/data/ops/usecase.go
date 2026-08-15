@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/xbpk3t/docs-alfred/internal/data/render"
+	datarender "github.com/xbpk3t/docs-alfred/internal/data/render"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
+	"github.com/xbpk3t/docs-alfred/internal/gh/books"
 	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
 	"github.com/xbpk3t/docs-alfred/internal/gh/goods"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -76,8 +77,19 @@ func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions)
 		return &DomainCheckResult{Issues: result.Issues}, nil
 	}
 
+	// goods is validated against goods.schema.json; books and ntl share the
+	// books.schema.json (ntl borrows the books schema — same table shape).
 	if domain == data.DomainGoods {
 		result, err := goods.RunCheckWithOptions(opts.path, goods.CheckOptions{IncludeHidden: opts.includeHidden})
+		if err != nil {
+			return nil, err
+		}
+
+		return &DomainCheckResult{Issues: result.Issues}, nil
+	}
+
+	if domain == data.DomainBooks || domain == data.DomainNtl {
+		result, err := books.RunCheckWithOptions(opts.path, books.CheckOptions{IncludeHidden: opts.includeHidden})
 		if err != nil {
 			return nil, err
 		}
@@ -209,7 +221,7 @@ func defaultRenderFormat(domain data.DataDomain) string {
 	switch domain {
 	case data.DomainGH:
 		return "json,yaml"
-	case data.DomainGoods:
+	case data.DomainGoods, data.DomainBooks, data.DomainNtl:
 		return "json"
 	default:
 		return "yaml"

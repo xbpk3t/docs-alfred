@@ -19,6 +19,11 @@ includes:
     dir: cmd/devtools
     vars:
       BINARY_NAME: devtools
+  zed-alfred:
+    taskfile: .github/taskfile/Taskfile.alfred.yml
+    dir: cmd/zed-alfred
+    vars:
+      BINARY_NAME: zed-alfred
 
 tasks:
   lint:

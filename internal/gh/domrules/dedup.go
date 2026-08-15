@@ -272,25 +272,109 @@ func parseDomainFiles(targetDir string) ([]parsedItem, error) {
 			continue
 		}
 
+		base := filepath.Base(docPath)
+		if secItems, ok := parseSectionRows(data, base); ok {
+			items = append(items, secItems...)
+			continue
+		}
+
+		// Fall back to the legacy flat format (top-level name/author/url rows).
 		docs, err := parser.NewParser[[]yamlItem](data).ParseMulti()
 		if err != nil {
 			continue
 		}
 
 		for _, doc := range docs {
-			items = append(items, parseYAMLDocItems(doc, filepath.Base(docPath))...)
+			items = append(items, parseYAMLDocItems(doc, base)...)
 		}
 	}
 
 	return items, nil
 }
 
+// yamlSection / yamlTopic model the type→topics→table section shape used by
+// books / ntl / goods after the table migration.
+type yamlSection struct {
+	Type   string      `yaml:"type"`
+	Topics []yamlTopic `yaml:"topics"`
+}
+
+type yamlTopic struct {
+	Topic string     `yaml:"topic"`
+	Table []yamlItem `yaml:"table"`
+}
+
+// parseSectionRows extracts (name/author/url/score) rows from section-shaped
+// YAML by recursing topics[].table[]. Returns ok=false when the file is not
+// section-shaped (e.g. the legacy flat format): a flat file parses as sections
+// with empty Type and no topics, which is treated as "not a section" so the
+// caller falls back to the flat parser.
+func parseSectionRows(data []byte, fileName string) ([]parsedItem, bool) {
+	docs, err := parser.NewParser[[]yamlSection](data).ParseMulti()
+	if err != nil {
+		return nil, false
+	}
+
+	var items []parsedItem
+	hasSection := false
+	for _, doc := range docs {
+		for _, sec := range doc {
+			if sec.Type != "" || len(sec.Topics) > 0 {
+				hasSection = true
+			}
+			for _, topic := range sec.Topics {
+				for _, row := range topic.Table {
+					if row.Name == "" {
+						continue
+					}
+					items = append(items, parsedItem{
+						file:   fileName,
+						name:   row.Name,
+						author: row.Author,
+						url:    row.URL,
+						tags:   toTags(row.Tags),
+						score:  row.Score,
+					})
+				}
+			}
+		}
+	}
+
+	if !hasSection {
+		return nil, false
+	}
+
+	return items, true
+}
+
+// toTags normalizes a tags value (string or []string) into a []string.
+func toTags(v any) []string {
+	switch t := v.(type) {
+	case string:
+		if t != "" {
+			return []string{t}
+		}
+	case []any:
+		var out []string
+		for _, x := range t {
+			if s, ok := x.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return t
+	}
+
+	return nil
+}
+
 type yamlItem struct {
-	Name   string   `yaml:"name"`
-	Author string   `yaml:"author"`
-	URL    string   `yaml:"url"`
-	Tags   []string `yaml:"tags"`
-	Score  int      `yaml:"score"`
+	Tags   any    `yaml:"tags"`
+	Name   string `yaml:"name"`
+	Author string `yaml:"author"`
+	URL    string `yaml:"url"`
+	Score  int    `yaml:"score"`
 }
 
 func parseYAMLDocItems(doc []yamlItem, fileName string) []parsedItem {
@@ -304,7 +388,7 @@ func parseYAMLDocItems(doc []yamlItem, fileName string) []parsedItem {
 			name:   item.Name,
 			author: item.Author,
 			score:  item.Score,
-			tags:   item.Tags,
+			tags:   toTags(item.Tags),
 			url:    item.URL,
 		})
 	}

@@ -260,5 +260,6 @@ func TestRunDomainRender_DefaultRenderFormat(t *testing.T) {
 	assert.Equal(t, "json,yaml", defaultRenderFormat(data.DomainGH))
 	assert.Equal(t, "json", defaultRenderFormat(data.DomainGoods))
 	assert.Equal(t, "yaml", defaultRenderFormat(data.DomainTask))
-	assert.Equal(t, "yaml", defaultRenderFormat(data.DomainBooks))
+	assert.Equal(t, "json", defaultRenderFormat(data.DomainBooks))
+	assert.Equal(t, "json", defaultRenderFormat(data.DomainNtl))
 }

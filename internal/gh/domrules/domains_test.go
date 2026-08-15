@@ -16,8 +16,8 @@ func TestSpecForDomain(t *testing.T) {
 
 	spec, ok = SpecForDomain(DomainBooks)
 	require.True(t, ok)
-	require.Equal(t, ScopeBooks, spec.RuleScope)
-	require.True(t, spec.StructuredCheck)
+	require.Empty(t, spec.RuleScope)
+	require.False(t, spec.StructuredCheck)
 	require.True(t, spec.DuplicateCheck)
 
 	spec, ok = SpecForDomain(DomainTask)
@@ -49,14 +49,11 @@ func TestDefaultPathForDomain(t *testing.T) {
 		path   string
 	}{
 		{DomainBooks, "data/books"},
-		{DomainMovie, "data/books"},
-		{DomainTV, "data/books"},
-		{DomainMusic, "data/music"},
 		{DomainDiary, "data/diary"},
 		{DomainGH, "data/gh"},
 		{DomainGoods, "data/goods"},
 		{DomainTask, "data"},
-		{DomainNtl, "data/.archive/ntl"},
+		{DomainNtl, "data/ntl"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.domain), func(t *testing.T) {
