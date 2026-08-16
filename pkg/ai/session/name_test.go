@@ -34,6 +34,58 @@ func TestSessionNameFromCC_LatestEvent(t *testing.T) {
 	assert.Equal(t, "新标题", name)
 }
 
+func TestSessionNameFromCC_CustomTitleEvent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.jsonl")
+	writeLines(t, path,
+		`{"type":"user","message":{"role":"user","content":"继续"}}`,
+		`{"type":"custom-title","customTitle":"hatchet-vs-temporal","sessionId":"s1"}`,
+	)
+
+	name, err := SessionNameFromCC(path)
+	require.NoError(t, err)
+	assert.Equal(t, "hatchet-vs-temporal", name)
+}
+
+func TestSessionNameFromCC_LatestAcrossShapes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.jsonl")
+	writeLines(t, path,
+		`{"type":"ai-title","aiTitle":"旧版AI标题","sessionId":"s1"}`,
+		`{"type":"custom-title","customTitle":"用户改名","sessionId":"s1"}`,
+	)
+
+	name, err := SessionNameFromCC(path)
+	require.NoError(t, err)
+	assert.Equal(t, "用户改名", name)
+}
+
+func TestSessionNameFromCC_CustomTitleBeatsLegacyOrder(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.jsonl")
+	writeLines(t, path,
+		`{"type":"custom-title","customTitle":"改名后又AI更新","sessionId":"s1"}`,
+		`{"type":"ai-title","aiTitle":"旧版AI标题","sessionId":"s1"}`,
+	)
+
+	// The latest event wins regardless of shape; here the legacy ai-title is
+	// later, so it must take precedence over the earlier custom-title.
+	name, err := SessionNameFromCC(path)
+	require.NoError(t, err)
+	assert.Equal(t, "旧版AI标题", name)
+}
+
+func TestSessionNameFromCC_CustomTitleEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.jsonl")
+	writeLines(t, path,
+		`{"type":"custom-title","customTitle":"","sessionId":"s1"}`,
+	)
+
+	_, err := SessionNameFromCC(path)
+	require.ErrorIs(t, err, ErrNoSessionName)
+}
+
 func TestSessionNameFromCC_NoTitle(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "session.jsonl")

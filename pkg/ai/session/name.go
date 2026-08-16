@@ -18,23 +18,46 @@ var ErrNoSessionName = errors.New("no session name")
 
 // SessionNameFromCC extracts the session title from a Claude Code transcript.
 //
-// CC writes `ai-title` events as the session evolves; multiple events may exist
-// and the title may be updated as the conversation focus shifts. The latest
-// (last) event is authoritative.
+// CC writes title events as the session evolves; multiple events may exist and
+// the title may be updated as the conversation focus shifts. The latest (last)
+// event is authoritative.
+//
+// Two event shapes carry the session name, because Claude Code changed the
+// event it writes for a user rename:
+//
+//   - `custom-title` events (field `customTitle`): the current shape, written
+//     when the user runs `/rename`. Newer CC builds no longer emit `ai-title`.
+//   - `ai-title` events (field `aiTitle`): the legacy shape written by older CC
+//     builds as the session evolves.
+//
+// Both are matched so transcripts from either generation resolve a title; only
+// a session with no rename in either shape yields ErrNoSessionName.
 func SessionNameFromCC(path string) (string, error) {
 	latest := ""
 
 	err := scanJSONLLines(path, "open session file: %w", "scan session file: %w", func(lineNum int, line string) error {
 		var ev struct {
-			Type    string `json:"type"`
-			AITitle string `json:"aiTitle"`
+			Type        string `json:"type"`
+			CustomTitle string `json:"customTitle"`
+			AITitle     string `json:"aiTitle"`
 		}
 		if err := json.Unmarshal([]byte(line), &ev); err != nil {
 			slog.Warn("skipping malformed JSONL line", "error", err, "line_num", lineNum)
 			return nil
 		}
-		if ev.Type == "ai-title" && strings.TrimSpace(ev.AITitle) != "" {
-			latest = strings.TrimSpace(ev.AITitle)
+
+		// Match whichever title event shape this CC build writes; the switch
+		// keeps the two field names explicit so a future event shape is an
+		// obvious addition here rather than a silent extra case.
+		var title string
+		switch ev.Type {
+		case "custom-title":
+			title = ev.CustomTitle
+		case "ai-title":
+			title = ev.AITitle
+		}
+		if trimmed := strings.TrimSpace(title); trimmed != "" {
+			latest = trimmed
 		}
 		return nil
 	})
@@ -42,7 +65,7 @@ func SessionNameFromCC(path string) (string, error) {
 		return "", err
 	}
 	if latest == "" {
-		return "", fmt.Errorf("ai-title: %w", ErrNoSessionName)
+		return "", fmt.Errorf("session name: %w", ErrNoSessionName)
 	}
 
 	return latest, nil

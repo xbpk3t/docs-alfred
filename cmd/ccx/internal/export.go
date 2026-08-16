@@ -117,10 +117,11 @@ func ExportSession(input *ExportInput) (*ExportResult, error) {
 
 	// Three-part title (display title, filename stem, frontmatter title) is
 	// set from a single authoritative source: the agent's session name. AI
-	// never decides the title. When the session name is missing (short cc
-	// sessions have no ai-title yet) the export aborts — no fallback.
+	// never decides the title. When the session name is missing (e.g. a short
+	// cc session that was never renamed has no custom-title/ai-title event) the
+	// export aborts — no fallback, so an unapproved title never reaches disk.
 	if resolved.Title == "" {
-		return nil, errors.New("session has no session name (ai-title); cannot export without a title")
+		return nil, errors.New("session has no session name; cannot export without a title")
 	}
 	title := trimTitle(resolved.Title)
 	filename := sanitizeFilename(title)
@@ -291,13 +292,32 @@ func sanitizeFilename(title string) string {
 	return truncateRunes(stem, 50)
 }
 
-// mergedClassifyTopicPath makes a single AI call to determine topicPath only.
+// mergedClassifyTopicPath determines topicPath via a single AI call, retrying
+// once on failure. The prompt forbids an empty topicPath, but a model may still
+// emit an unresolvable value on an unlucky sample; a single retry absorbs that
+// transient jitter without spending unbounded tokens.
 func mergedClassifyTopicPath(messages []session.Message, input *ExportInput) (string, error) {
 	prompt, candidates, err := renderClassifyTitlePrompt(messages, input.WikiRoot)
 	if err != nil {
 		return "", fmt.Errorf("render prompt: %w", err)
 	}
 
+	topicPath, err := classifyOnce(prompt, candidates, input)
+	if err == nil {
+		return topicPath, nil
+	}
+
+	slog.Warn("classification failed, retrying once", "error", err)
+	topicPath, retryErr := classifyOnce(prompt, candidates, input)
+	if retryErr != nil {
+		return "", fmt.Errorf("classify retry: %w (first attempt: %w)", retryErr, err)
+	}
+
+	return topicPath, nil
+}
+
+// classifyOnce runs a single classification AI call and normalizes its result.
+func classifyOnce(prompt string, candidates []ghindex.TopicCandidate, input *ExportInput) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), mergedAITimeout)
 	defer cancel()
 

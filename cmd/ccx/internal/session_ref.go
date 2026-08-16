@@ -55,8 +55,9 @@ type SessionRef struct {
 	SessionID      string
 	TranscriptPath string
 	Source         string
-	// Title is the session name: cc's latest ai-title or codex threads.title.
-	// Empty when the transcript/state has no session name yet.
+	// Title is the session name: cc's latest custom-title/ai-title event or
+	// codex threads.title. Empty when the transcript/state has no session name
+	// yet.
 	Title string
 }
 
@@ -137,7 +138,7 @@ func resolveClaudeSession(sessionIDOverride, projectDir string) (SessionRef, err
 		transcriptPath = found
 	}
 
-	// Session name from the transcript (latest ai-title event).
+	// Session name from the transcript (latest custom-title/ai-title event).
 	title, _ := session.SessionNameFromCC(transcriptPath)
 
 	return SessionRef{
