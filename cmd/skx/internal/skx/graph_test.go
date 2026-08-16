@@ -15,21 +15,31 @@ func TestBuildGraph(t *testing.T) {
 	require.NoError(t, writeDirFile(refs, "3w3h.yml", `frontmatter:
   name: 3w3h
   role: composite
-  pl-serial:
-    - brk
-  pl-parallel:
-    - diagram
-    - vs
+pipeline:
+  serial:
+    - name: brk
+      when: x
+      merge: y
+  parallel:
+    - name: diagram
+      when: x
+      merge: y
+    - name: vs
+      when: x
+      merge: y
 `))
-	require.NoError(t, writeDirFile(refs, "brk.yml", "frontmatter:\n  name: brk\n  role: atom\n"))
-	require.NoError(t, writeDirFile(refs, "diagram.yml", "frontmatter:\n  name: diagram\n  role: atom\n"))
+	require.NoError(t, writeDirFile(refs, "brk.yml", "frontmatter:\n  name: brk\n  role: atom\nwhat:\n  is: x\n"))
+	require.NoError(t, writeDirFile(refs, "diagram.yml", "frontmatter:\n  name: diagram\n  role: atom\nwhat:\n  is: x\n"))
 	require.NoError(t, writeDirFile(refs, "vs.yml", `frontmatter:
   name: vs
   role: composite
-  pl-serial:
-    - table2yml
+pipeline:
+  serial:
+    - name: table2yml
+      when: x
+      merge: y
 `))
-	require.NoError(t, writeDirFile(refs, "table2yml.yml", "frontmatter:\n  name: table2yml\n  role: atom\n"))
+	require.NoError(t, writeDirFile(refs, "table2yml.yml", "frontmatter:\n  name: table2yml\n  role: atom\nwhat:\n  is: x\n"))
 
 	g, _, err := BuildGraph(refs)
 	require.NoError(t, err)
@@ -53,14 +63,14 @@ func TestBuildGraphLegacyPipelineIgnored(t *testing.T) {
 	g, _, err := BuildGraph(refs)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"a", "b"}, g.Nodes)
-	assert.Empty(t, g.Edges, "legacy pipeline must not produce edges")
+	assert.Empty(t, g.Edges, "non-object pipeline must not produce edges")
 }
 
 func TestBuildGraphCycle(t *testing.T) {
 	root := t.TempDir()
 	refs := filepath.Join(root, "references")
-	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  name: a\n  role: composite\n  pl-parallel:\n    - b\n"))
-	require.NoError(t, writeDirFile(refs, "b.yml", "frontmatter:\n  name: b\n  role: composite\n  pl-serial:\n    - a\n"))
+	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  name: a\n  role: composite\npipeline:\n  parallel:\n    - name: b\n      when: x\n      merge: y\n"))
+	require.NoError(t, writeDirFile(refs, "b.yml", "frontmatter:\n  name: b\n  role: composite\npipeline:\n  serial:\n    - name: a\n      when: x\n      merge: y\n"))
 
 	g, _, err := BuildGraph(refs)
 	require.NoError(t, err)
@@ -70,7 +80,7 @@ func TestBuildGraphCycle(t *testing.T) {
 func TestBuildGraphSelfLoop(t *testing.T) {
 	root := t.TempDir()
 	refs := filepath.Join(root, "references")
-	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  name: a\n  role: composite\n  pl-serial:\n    - a\n"))
+	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  name: a\n  role: composite\npipeline:\n  serial:\n    - name: a\n      when: x\n      merge: y\n"))
 
 	g, _, err := BuildGraph(refs)
 	require.NoError(t, err)

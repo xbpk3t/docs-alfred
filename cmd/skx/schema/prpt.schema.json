@@ -2,7 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/xbpk3t/docs-alfred/main/cmd/skx/schema/prpt.schema.json",
   "title": "prpt",
-  "description": "JSON Schema for zzz prompt YAML files (references/**/*.yml)。唯一 source of truth（模板 prpt.yml 已并入本 schema 的描述）。\n顶层 section：frontmatter / what / gate / constraint / input / pipeline / workflow / output / self-check / hint。\n- prompts 直接以 .yml 形态被 route/Read，无渲染层。\n- composite 的并行依赖在 frontmatter 用 pl-parallel/pl-serial 声明，触发/合并契约在 pipeline section。\n- 改完 prompt 后 `skx check` 校验本 schema；`skx graph` 看依赖/环。",
+  "description": "JSON Schema for zzz prompt YAML files (references/**/*.yml)。唯一 source of truth（模板 prpt.yml 已并入本 schema 的描述）。\n顶层 section：frontmatter / what / gate / constraint / input / pipeline / workflow / output / self-check / hint。\n- prompts 直接以 .yml 形态被 route/Read，无渲染层。\n- composite 的编排契约（fan-out 步、模式、触发/合并/必跑）全部在 pipeline section，单一 source。\n- 改完 prompt 后 `skx check` 校验本 schema；`skx graph` 看依赖/环。",
+  "$defs": {
+    "pipelineStep": {
+      "type": "object",
+      "description": "pipeline 的一步：fan-out 目标 + 触发/合并契约",
+      "properties": {
+        "name": { "type": "string", "description": "(必填) 步名（= references 里对应 prompt 的 stem）" },
+        "when": { "type": "string", "description": "(必填) 触发条件（尽量用可检查的关键词，如「hti 含【breakdown】」）" },
+        "merge": { "type": "string", "description": "(必填) 该步产物并入 composite 输出的哪个字段（如 hti#breakdown）" },
+        "required": { "type": "boolean", "description": "(可选) true=结构必需，无触发也得跑或硬引用已有 artifact；false=条件触发，未触发须显式 skipped（默认 false）" }
+      },
+      "required": ["name", "when", "merge"],
+      "additionalProperties": false
+    }
+  },
   "type": "object",
   "properties": {
     "frontmatter": {
@@ -16,18 +30,11 @@
         "role": {
           "type": "string",
           "enum": ["atom", "composite"],
-          "description": "(必填) 可选值 atom | composite；composite 时 pl-serial/pl-parallel 至少一个非空"
+          "description": "(必填) 可选值 atom | composite；composite 时必须有 pipeline section（fan-out 契约）"
         },
-        "desc": { "type": "string", "description": "(可选) 短说明，给自己看，非 trigger；多行用 | 块" },
-        "pl-parallel": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "(可选，仅 composite) 并行依赖 name 列表"
-        },
-        "pl-serial": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "(可选，仅 composite) 串行依赖 name 列表"
+        "desc": {
+          "type": "string",
+          "description": "(可选) 短说明，给自己看，非 trigger；多行用 | 块"
         },
         "status": {
           "type": "string",
@@ -44,7 +51,10 @@
       "description": "(必填) 这个 prompt 是什么 / 不是什么",
       "properties": {
         "is": { "type": "string", "description": "(可选) 一句话说明它是什么" },
-        "not": { "type": "string", "description": "(可选) 一句话说明它不是什么（边界/反模式）" }
+        "not": {
+          "type": "string",
+          "description": "(可选) 一句话说明它不是什么（边界/反模式）"
+        }
       },
       "minProperties": 1,
       "additionalProperties": false
@@ -68,8 +78,16 @@
       "type": "object",
       "description": "(可选) 硬约束",
       "properties": {
-        "must": { "type": "array", "items": { "type": "string" }, "description": "(可选) 必须遵守的规则" },
-        "must-not": { "type": "array", "items": { "type": "string" }, "description": "(可选) 禁止做的事（反模式）" }
+        "must": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "(可选) 必须遵守的规则"
+        },
+        "must-not": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "(可选) 禁止做的事（反模式）"
+        }
       },
       "additionalProperties": false
     },
@@ -78,7 +96,10 @@
       "type": "object",
       "description": "(可选) 输入参数声明",
       "properties": {
-        "source": { "type": "string", "description": "(可选) 输入来源文件路径" },
+        "source": {
+          "type": "string",
+          "description": "(可选) 输入来源文件路径"
+        },
         "params": {
           "type": "array",
           "items": { "type": "object" },
@@ -90,17 +111,24 @@
 
     "pipeline": {
       "type": "object",
-      "description": "(可选，仅 composite) 编排契约：对 frontmatter 每个 pl-* 步声明触发/合并/是否必跑。触发条件从散文提升为字段，避免 model 主观判断该不该并行。执行协议（起 sub-agent、ledger）见 SKILL.md。",
-      "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "when": { "type": "string", "description": "(必填) 触发条件（尽量用可检查的关键词，如「hti 含【breakdown】」）" },
-          "merge": { "type": "string", "description": "(必填) 该步产物并入 composite 输出的哪个字段（如 hti#breakdown）" },
-          "required": { "type": "boolean", "description": "(可选) true=结构必需，无触发也得跑或硬引用已有 artifact；false=条件触发，未触发须显式 skipped（默认 false）" }
+      "description": "(必填，仅 composite) 编排契约（单一 source）：fan-out 到哪些步、什么模式、各自何时触发/并到哪/是否必跑。执行协议（起 sub-agent、ledger）见 SKILL.md。",
+      "properties": {
+        "parallel": {
+          "type": "array",
+          "description": "(可选) 可并行 fan-out 的步",
+          "items": { "$ref": "#/$defs/pipelineStep" }
         },
-        "required": ["when", "merge"],
-        "additionalProperties": false
-      }
+        "serial": {
+          "type": "array",
+          "description": "(可选) 串行执行的步",
+          "items": { "$ref": "#/$defs/pipelineStep" }
+        }
+      },
+      "anyOf": [
+        { "required": ["parallel"] },
+        { "required": ["serial"] }
+      ],
+      "additionalProperties": false
     },
 
     "workflow": {
@@ -109,10 +137,17 @@
       "items": {
         "type": "object",
         "properties": {
-          "phase": { "type": "string", "description": "(必填) 宏观板块（Phase）" },
+          "phase": {
+            "type": "string",
+            "description": "(必填) 宏观板块（Phase）"
+          },
           "gate": { "type": "string", "description": "(可选) 进入条件" },
           "desc": { "type": "string", "description": "(可选) 做什么" },
-          "steps": { "type": "array", "items": { "type": "string" }, "description": "(可选) 该 phase 内的微观动作（Step）" }
+          "steps": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "(可选) 该 phase 内的微观动作（Step）"
+          }
         },
         "required": ["phase"],
         "additionalProperties": false
@@ -123,7 +158,11 @@
       "type": "object",
       "description": "(可选，但强烈建议) 输出契约：产出什么形态 + 产出物落不落盘",
       "properties": {
-        "format": { "type": "string", "enum": ["yaml", "table", "md"], "description": "(可选) 可选值 yaml | table | md" },
+        "format": {
+          "type": "string",
+          "enum": ["yaml", "table", "md"],
+          "description": "(可选) 可选值 yaml | table | md"
+        },
         "struct": {
           "type": "array",
           "description": "(可选) 输出字段语义表",
@@ -131,16 +170,30 @@
             "type": "object",
             "properties": {
               "key": { "type": "string", "description": "(必填) 字段名" },
-              "val": { "type": ["string", "number", "boolean"], "description": "(必填) 示例或该字段 enum 值" }
+              "val": {
+                "type": ["string", "number", "boolean"],
+                "description": "(必填) 示例或该字段 enum 值"
+              }
             },
             "required": ["key", "val"],
             "additionalProperties": false
           }
         },
-        "template": { "type": "string", "description": "(可选) 输出模板 codeblock" },
+        "template": {
+          "type": "string",
+          "description": "(可选) 输出模板 codeblock"
+        },
         "few-shot": { "type": "string", "description": "(可选) 示例输入输出" },
-        "is-save": { "type": "boolean", "description": "(可选) 产出物落盘开关，默认 false" },
-        "save-path": { "type": "string", "description": "(可选) 落盘路径（相对 workspace）；仅 is-save: true 时生效" }
+        "persist": {
+          "type": "object",
+          "description": "(可选) 产出物落盘行为；persist 存在即表示要落盘",
+          "properties": {
+            "enabled": { "type": "boolean", "description": "(可选) 落盘开关，默认 true" },
+            "path": { "type": "string", "description": "(必填) 落盘路径（相对 workspace）" }
+          },
+          "required": ["path"],
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },
@@ -158,7 +211,10 @@
         "type": "object",
         "properties": {
           "if": { "type": "string", "description": "(必填) 触发条件" },
-          "then": { "type": "string", "description": "(必填) 满足条件时的建议动作" }
+          "then": {
+            "type": "string",
+            "description": "(必填) 满足条件时的建议动作"
+          }
         },
         "required": ["if", "then"],
         "additionalProperties": false
@@ -174,13 +230,6 @@
     }
   },
   "then": {
-    "properties": {
-      "frontmatter": {
-        "anyOf": [
-          { "required": ["pl-parallel"], "properties": { "pl-parallel": { "minItems": 1 } } },
-          { "required": ["pl-serial"], "properties": { "pl-serial": { "minItems": 1 } } }
-        ]
-      }
-    }
+    "required": ["pipeline"]
   }
 }

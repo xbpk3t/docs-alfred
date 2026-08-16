@@ -75,12 +75,12 @@ func TestCheckDirCompositeRequiresPipeline(t *testing.T) {
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	require.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "pl-parallel")
+	assert.Contains(t, res.Issues[0].Message, "pipeline")
 }
 
 func TestCheckDirCompositeWithPipelineOK(t *testing.T) {
 	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: composite\n  pl-parallel:\n    - b\npipeline:\n  b:\n    when: x\n    merge: y\nwhat:\n  is: x\n",
+		"a.yml": "frontmatter:\n  name: a\n  role: composite\npipeline:\n  parallel:\n    - name: b\n      when: x\n      merge: y\nwhat:\n  is: x\n",
 		"b.yml": "frontmatter:\n  name: b\n  role: atom\nwhat:\n  is: x\n",
 	})
 
@@ -89,32 +89,16 @@ func TestCheckDirCompositeWithPipelineOK(t *testing.T) {
 	assert.Empty(t, res.Issues)
 }
 
-func TestCheckDirCompositeMissingPipelineEntries(t *testing.T) {
-	// composite with pl-* deps but no pipeline section: orchestration
-	// contract missing — must be flagged, not left to prose.
+func TestCheckDirCompositePipelineDanglingDep(t *testing.T) {
+	// pipeline references a prompt that has no source file.
 	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: composite\n  pl-parallel:\n    - b\nwhat:\n  is: x\n",
-		"b.yml": "frontmatter:\n  name: b\n  role: atom\nwhat:\n  is: x\n",
+		"a.yml": "frontmatter:\n  name: a\n  role: composite\npipeline:\n  parallel:\n    - name: ghost\n      when: x\n      merge: y\nwhat:\n  is: x\n",
 	})
 
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	require.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "must declare a pipeline section")
-}
-
-func TestCheckDirCompositePipelineMissingStep(t *testing.T) {
-	// pipeline section exists but not every pl-* dep has an entry.
-	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: composite\n  pl-parallel:\n    - b\n    - c\npipeline:\n  b:\n    when: x\n    merge: y\nwhat:\n  is: x\n",
-		"b.yml": "frontmatter:\n  name: b\n  role: atom\nwhat:\n  is: x\n",
-		"c.yml": "frontmatter:\n  name: c\n  role: atom\nwhat:\n  is: x\n",
-	})
-
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
-	require.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, `"c" has no pipeline entry`)
+	assert.Contains(t, res.Issues[0].Message, `"ghost" has no prompt file`)
 }
 
 func TestCheckDirStrictSectionKeys(t *testing.T) {

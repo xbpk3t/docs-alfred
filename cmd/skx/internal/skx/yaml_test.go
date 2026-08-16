@@ -14,8 +14,6 @@ frontmatter:
   name: choose
   role: atom
   desc: Grill me 对齐入口；先对齐再 PLAN/写码
-  pl-serial:
-    - setup
 
 what:
   is: |
@@ -87,7 +85,7 @@ func TestLoadPrompt(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "choose", p.Name)
 	assert.Equal(t, "atom", p.Role)
-	assert.Len(t, p.Frontmatter, 4) // name, role, description, pl-serial
+	assert.Len(t, p.Frontmatter, 3) // name, role, description
 	assert.Equal(t, "name", p.Frontmatter[0].Key)
 }
 

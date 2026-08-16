@@ -34,42 +34,16 @@ const (
 
 // Frontmatter sub-keys.
 const (
-	keyName       = "name"
-	keyRole       = "role"
-	keyDesc       = "desc"
-	keyPlSerial   = "pl-serial"
-	keyPlParallel = "pl-parallel"
-	keyStatus     = "status"
-	keyIsSave     = "is-save"
-	valComposite  = "composite"
+	keyName      = "name"
+	keyRole      = "role"
+	valComposite = "composite"
 )
 
-// AllowedTopLevelKeys are the top-level document keys declared by prpt.yml.
-// Unknown keys are reported by check.
-var AllowedTopLevelKeys = map[string]bool{
-	keyFrontmatter: true,
-	keyWhat:        true,
-	keyGate:        true,
-	keyConstraint:  true,
-	keyInput:       true,
-	keyWorkflow:    true,
-	keyOutput:      true,
-	keySelfCheck:   true,
-	keyHint:        true,
-}
-
-// AllowedFrontmatterKeys are the keys allowed inside frontmatter, per prpt.yml
-// (the single source of truth). description / pipeline / pipeline-mode have
-// been retired from the schema; data must use desc / pl-serial / pl-parallel.
-var AllowedFrontmatterKeys = map[string]bool{
-	keyName:       true,
-	keyRole:       true,
-	keyDesc:       true,
-	keyPlSerial:   true,
-	keyPlParallel: true,
-	keyStatus:     true,
-	keyIsSave:     true,
-}
+// Pipeline sub-keys (composite orchestration, see prpt.schema.json).
+const (
+	keyParallel = "parallel"
+	keySerial   = "serial"
+)
 
 // Prompt is a single parsed zzz prompt document.
 type Prompt struct {
@@ -239,25 +213,39 @@ func getString(m map[string]any, key string) (string, bool) {
 	return s, ok
 }
 
-// getStringSlice returns key as a list of strings. A scalar string value is
-// accepted as a single-element list.
-func getStringSlice(m map[string]any, key string) ([]string, bool) {
-	v, ok := m[key]
+// pipelineDeps returns the fan-out step names declared in the pipeline
+// section: parallel (pipeline.parallel) and serial (pipeline.serial). Each
+// step is an object whose name is the target prompt stem.
+func pipelineDeps(doc map[string]any) (parallel, serial []string) {
+	pipe, ok := getMap(doc, keyPipeline)
 	if !ok {
-		return nil, false
+		return nil, nil
 	}
-	if s, isString := v.(string); isString {
-		return []string{s}, true
-	}
-	list, ok := v.([]any)
-	if !ok {
-		return nil, false
-	}
-	out := make([]string, 0, len(list))
-	for _, item := range list {
-		if s, isString := item.(string); isString {
-			out = append(out, s)
+	for _, v := range listAny(pipe, keyParallel) {
+		if n := stepName(v); n != "" {
+			parallel = append(parallel, n)
 		}
 	}
-	return out, true
+	for _, v := range listAny(pipe, keySerial) {
+		if n := stepName(v); n != "" {
+			serial = append(serial, n)
+		}
+	}
+	return parallel, serial
+}
+
+// listAny returns key as a list of any (empty if absent or wrong type).
+func listAny(m map[string]any, key string) []any {
+	v, _ := m[key].([]any)
+	return v
+}
+
+// stepName extracts a pipeline step object's name field.
+func stepName(v any) string {
+	m, _ := v.(map[string]any)
+	if m == nil {
+		return ""
+	}
+	s, _ := m[keyName].(string)
+	return s
 }

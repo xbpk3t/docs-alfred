@@ -21,9 +21,9 @@ type Graph struct {
 }
 
 // BuildGraph extracts the dependency graph from every prompt under dir.
-// Edges come only from frontmatter.pl-serial (mode serial) and
-// frontmatter.pl-parallel (mode parallel). The legacy pipeline key is not a
-// dependency source. Cycles are detected across all edges regardless of mode.
+// Edges come from the pipeline section: pipeline.serial (mode serial) and
+// pipeline.parallel (mode parallel). Cycles are detected across all edges
+// regardless of mode.
 // Files that cannot be parsed are skipped and reported in skipped so the
 // graph still covers everything parseable (degrade with reason, never a
 // silent partial result).
@@ -50,14 +50,11 @@ func BuildGraph(dir string) (*Graph, []string, error) {
 		if p.Name != "" {
 			nodeSet[p.Name] = true
 		}
-		fm, ok := getMap(p.Doc, keyFrontmatter)
-		if !ok {
-			continue
-		}
-		for _, to := range strList(fm, keyPlSerial) {
+		parallel, serial := pipelineDeps(p.Doc)
+		for _, to := range serial {
 			edges = append(edges, Edge{From: p.Name, To: to, Mode: "serial"})
 		}
-		for _, to := range strList(fm, keyPlParallel) {
+		for _, to := range parallel {
 			edges = append(edges, Edge{From: p.Name, To: to, Mode: "parallel"})
 		}
 	}
@@ -95,28 +92,6 @@ func BuildGraph(dir string) (*Graph, []string, error) {
 	g := &Graph{Nodes: nodes, Edges: edges}
 	g.Cycles = findCycles(nodeSet, edges)
 	return g, append(skipped, dangling...), nil
-}
-
-// strList reads pl-serial / pl-parallel, accepting a scalar string or a list.
-func strList(m map[string]any, key string) []string {
-	v, ok := m[key]
-	if !ok || v == nil {
-		return nil
-	}
-	if s, isString := v.(string); isString {
-		return []string{s}
-	}
-	list, ok := v.([]any)
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(list))
-	for _, item := range list {
-		if s, isString := item.(string); isString {
-			out = append(out, s)
-		}
-	}
-	return out
 }
 
 func dedupEdges(edges []Edge) []Edge {
