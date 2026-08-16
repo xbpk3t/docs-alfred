@@ -156,8 +156,10 @@ func checkFile(path string, sch *jsonschema.Schema, known map[string]bool) []Iss
 	return issues
 }
 
-// checkCompositeDeps enforces the composite-only rules: pl-serial/pl-parallel
-// must be non-empty, and every referenced dependency must exist as a prompt.
+// checkCompositeDeps enforces the composite-only rules: every dispatch step
+// (workflow steps of shape {kind: prompt, name}) must reference a prompt that
+// exists. role=composite without workflow is already rejected by the schema's
+// if/then.
 func checkCompositeDeps(doc map[string]any, known map[string]bool, add func(format string, a ...any)) {
 	fm, ok := getMap(doc, keyFrontmatter)
 	if !ok {
@@ -168,14 +170,9 @@ func checkCompositeDeps(doc map[string]any, known map[string]bool, add func(form
 		return
 	}
 
-	// The pipeline section IS the composite's fan-out declaration (the schema
-	// if/then requires it for composites). Every step name must resolve to an
-	// existing prompt.
-	parallel, serial := pipelineDeps(doc)
-	deps := append(append([]string{}, serial...), parallel...)
-	for _, dep := range deps {
+	for _, dep := range dispatchNames(doc) {
 		if known != nil && !known[dep] {
-			add("pipeline dependency %q has no prompt file in references", dep)
+			add("dispatch step %q has no prompt file in references", dep)
 		}
 	}
 }

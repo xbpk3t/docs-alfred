@@ -25,7 +25,6 @@ const (
 	keyGate        = "gate"
 	keyConstraint  = "constraint"
 	keyInput       = "input"
-	keyPipeline    = "pipeline"
 	keyWorkflow    = "workflow"
 	keyOutput      = "output"
 	keySelfCheck   = "self-check"
@@ -39,10 +38,11 @@ const (
 	valComposite = "composite"
 )
 
-// Pipeline sub-keys (composite orchestration, see prpt.schema.json).
+// Dispatch step sub-keys (workflow.steps items with kind: prompt).
 const (
-	keyParallel = "parallel"
-	keySerial   = "serial"
+	keyKind    = "kind"
+	keySteps   = "steps"
+	valPrompt  = "prompt"
 )
 
 // Prompt is a single parsed zzz prompt document.
@@ -213,39 +213,35 @@ func getString(m map[string]any, key string) (string, bool) {
 	return s, ok
 }
 
-// pipelineDeps returns the fan-out step names declared in the pipeline
-// section: parallel (pipeline.parallel) and serial (pipeline.serial). Each
-// step is an object whose name is the target prompt stem.
-func pipelineDeps(doc map[string]any) (parallel, serial []string) {
-	pipe, ok := getMap(doc, keyPipeline)
-	if !ok {
-		return nil, nil
-	}
-	for _, v := range listAny(pipe, keyParallel) {
-		if n := stepName(v); n != "" {
-			parallel = append(parallel, n)
+// dispatchNames returns the sub-agent dispatch targets declared in the
+// workflow: every steps item of shape {kind: prompt, name: <stem>}. Serial
+// execution order follows workflow/phase/step order.
+func dispatchNames(doc map[string]any) []string {
+	var names []string
+	for _, phase := range listAny(doc, keyWorkflow) {
+		pm, _ := phase.(map[string]any)
+		if pm == nil {
+			continue
+		}
+		for _, s := range listAny(pm, keySteps) {
+			sm, _ := s.(map[string]any)
+			if sm == nil {
+				continue
+			}
+			k, _ := sm[keyKind].(string)
+			if k != valPrompt {
+				continue
+			}
+			if n, _ := sm[keyName].(string); n != "" {
+				names = append(names, n)
+			}
 		}
 	}
-	for _, v := range listAny(pipe, keySerial) {
-		if n := stepName(v); n != "" {
-			serial = append(serial, n)
-		}
-	}
-	return parallel, serial
+	return names
 }
 
 // listAny returns key as a list of any (empty if absent or wrong type).
 func listAny(m map[string]any, key string) []any {
 	v, _ := m[key].([]any)
 	return v
-}
-
-// stepName extracts a pipeline step object's name field.
-func stepName(v any) string {
-	m, _ := v.(map[string]any)
-	if m == nil {
-		return ""
-	}
-	s, _ := m[keyName].(string)
-	return s
 }

@@ -21,9 +21,8 @@ type Graph struct {
 }
 
 // BuildGraph extracts the dependency graph from every prompt under dir.
-// Edges come from the pipeline section: pipeline.serial (mode serial) and
-// pipeline.parallel (mode parallel). Cycles are detected across all edges
-// regardless of mode.
+// Edges come from workflow steps of shape {kind: prompt, name} — serial
+// sub-agent dispatch targets. Cycles are detected across all edges.
 // Files that cannot be parsed are skipped and reported in skipped so the
 // graph still covers everything parseable (degrade with reason, never a
 // silent partial result).
@@ -50,12 +49,10 @@ func BuildGraph(dir string) (*Graph, []string, error) {
 		if p.Name != "" {
 			nodeSet[p.Name] = true
 		}
-		parallel, serial := pipelineDeps(p.Doc)
-		for _, to := range serial {
+		// Dispatch steps (kind: prompt) in the workflow are serial sub-agent
+		// targets; execution order follows the workflow/phase/step sequence.
+		for _, to := range dispatchNames(p.Doc) {
 			edges = append(edges, Edge{From: p.Name, To: to, Mode: "serial"})
-		}
-		for _, to := range parallel {
-			edges = append(edges, Edge{From: p.Name, To: to, Mode: "parallel"})
 		}
 	}
 

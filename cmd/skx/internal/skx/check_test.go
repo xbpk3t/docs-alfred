@@ -75,12 +75,12 @@ func TestCheckDirCompositeRequiresPipeline(t *testing.T) {
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	require.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "pipeline")
+	assert.Contains(t, res.Issues[0].Message, "workflow")
 }
 
-func TestCheckDirCompositeWithPipelineOK(t *testing.T) {
+func TestCheckDirCompositeWithDispatchOK(t *testing.T) {
 	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: composite\npipeline:\n  parallel:\n    - name: b\n      when: x\n      merge: y\nwhat:\n  is: x\n",
+		"a.yml": "frontmatter:\n  name: a\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: b\nwhat:\n  is: x\n",
 		"b.yml": "frontmatter:\n  name: b\n  role: atom\nwhat:\n  is: x\n",
 	})
 
@@ -89,16 +89,28 @@ func TestCheckDirCompositeWithPipelineOK(t *testing.T) {
 	assert.Empty(t, res.Issues)
 }
 
-func TestCheckDirCompositePipelineDanglingDep(t *testing.T) {
-	// pipeline references a prompt that has no source file.
+func TestCheckDirCompositeDispatchDanglingDep(t *testing.T) {
+	// dispatch step references a prompt that has no source file.
 	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: composite\npipeline:\n  parallel:\n    - name: ghost\n      when: x\n      merge: y\nwhat:\n  is: x\n",
+		"a.yml": "frontmatter:\n  name: a\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: ghost\nwhat:\n  is: x\n",
 	})
 
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	require.Len(t, res.Issues, 1)
 	assert.Contains(t, res.Issues[0].Message, `"ghost" has no prompt file`)
+}
+
+func TestCheckDirCompositeDispatchMissingKeys(t *testing.T) {
+	// dispatch step without kind/name must fail schema (oneOf object requires both).
+	_, refs, schema := setupLayout(t, map[string]string{
+		"a.yml": "frontmatter:\n  name: a\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\nwhat:\n  is: x\n",
+	})
+
+	res, err := CheckDir(refs, schema)
+	require.NoError(t, err)
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "name")
 }
 
 func TestCheckDirStrictSectionKeys(t *testing.T) {
