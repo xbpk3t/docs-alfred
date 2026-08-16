@@ -29,7 +29,6 @@ func validateReferencesDir(dir string) error {
 type rootFlags struct {
 	dir    string
 	schema string
-	dryRun bool
 }
 
 // Execute runs the skx root command.
@@ -42,11 +41,11 @@ func newRootCmd() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:   "skx",
-		Short: "Render, validate and graph zzz prompt YAML files",
-		// Bare `skx` (with --dir) defaults to render. Positional paths are
-		// handled by the subcommands via targetOrDir.
+		Short: "Validate, route and graph zzz prompt YAML files",
+		// Bare `skx` shows help; positional paths are handled by the
+		// subcommands via targetOrDir.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRender(targetOrDir(flags, args), flags.dryRun, flags.schema, flags.dir)
+			return cmd.Help()
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true, // main prints the error once; avoids double-printing
@@ -66,13 +65,14 @@ func newRootCmd() *cobra.Command {
 		if len(args) > 0 {
 			return nil
 		}
+		if flags.dir == "" {
+			return nil
+		}
 		return validateReferencesDir(flags.dir)
 	}
 
 	root.PersistentFlags().StringVar(&flags.schema, "schema", "", "prpt.yml schema path (default: auto-located above dir)")
-	root.PersistentFlags().BoolVar(&flags.dryRun, "dry-run", false, "print what would be written without writing")
 
-	root.AddCommand(newRenderCmd(flags))
 	root.AddCommand(newCheckCmd(flags))
 	root.AddCommand(newGraphCmd(flags))
 	root.AddCommand(newStatsCmd(flags))

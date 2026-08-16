@@ -43,29 +43,6 @@ const (
 	valComposite  = "composite"
 )
 
-// Section sub-keys.
-const (
-	keyIs       = "is"
-	keyNot      = "not"
-	keyQS       = "qs"
-	keyFail     = "fail"
-	keyMust     = "must"
-	keyMustNot  = "must-not"
-	keySource   = "source"
-	keyParams   = "params"
-	keyFormat   = "format"
-	keyStruct   = "struct"
-	keyKey      = "key"
-	keyVal      = "val"
-	keyTemplate = "template"
-	keyFewShot  = "few-shot"
-	keyRules    = "rules"
-	keyPhase    = "phase"
-	keySteps    = "steps"
-	keyIf       = "if"
-	keyThen     = "then"
-)
-
 // AllowedTopLevelKeys are the top-level document keys declared by prpt.yml.
 // Unknown keys are reported by check.
 var AllowedTopLevelKeys = map[string]bool{
@@ -172,7 +149,7 @@ func skipHidden(rel string) bool {
 // dir. It returns the relative references path (e.g. "analysis/3w3h") and the
 // absolute path to the rendered markdown sibling. ok is false when no source
 // .yml carries that name.
-func ResolvePrompt(dir, name string) (rel, mdAbs string, ok bool, err error) {
+func ResolvePrompt(dir, name string) (rel, ymlAbs string, ok bool, err error) {
 	files, err := CollectYML(dir)
 	if err != nil {
 		return "", "", false, err
@@ -191,7 +168,7 @@ func ResolvePrompt(dir, name string) (rel, mdAbs string, ok bool, err error) {
 			continue
 		}
 		if p.Name == name {
-			return stem, MDNameFor(f), true, nil
+			return stem, f, true, nil
 		}
 	}
 	return "", "", false, nil
@@ -258,15 +235,6 @@ func getString(m map[string]any, key string) (string, bool) {
 		return "", false
 	}
 	s, ok := v.(string)
-	return s, ok
-}
-
-func getSlice(m map[string]any, key string) ([]any, bool) {
-	v, ok := m[key]
-	if !ok {
-		return nil, false
-	}
-	s, ok := v.([]any)
 	return s, ok
 }
 

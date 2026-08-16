@@ -74,11 +74,11 @@ func TestResolvePromptHitAndMiss(t *testing.T) {
 	require.NoError(t, writeDirFile(dir, "brk.yml", "frontmatter:\n  name: brk\n  role: atom\n"))
 	require.NoError(t, writeDirFile(dir, ".TableCate.yml", "frontmatter:\n  name: TableCate\n  role: atom\n"))
 
-	rel, mdAbs, ok, err := ResolvePrompt(dir, "brk")
+	rel, ymlAbs, ok, err := ResolvePrompt(dir, "brk")
 	require.NoError(t, err)
 	assert.True(t, ok)
 	assert.Equal(t, "brk", rel)
-	assert.Equal(t, filepath.Join(dir, "brk.md"), mdAbs)
+	assert.Equal(t, filepath.Join(dir, "brk.yml"), ymlAbs)
 
 	// hidden file must not resolve
 	_, _, okHidden, err := ResolvePrompt(dir, "TableCate")

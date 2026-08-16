@@ -105,8 +105,3 @@ func TestCollectYML(t *testing.T) {
 	assert.Equal(t, "a.yml", filepath.Base(files[0]))
 	assert.Equal(t, "d.yml", filepath.Base(files[2]))
 }
-
-func TestMDNameFor(t *testing.T) {
-	assert.Equal(t, "references/x.md", MDNameFor("references/x.yml"))
-	assert.Equal(t, "a.md", MDNameFor("a.yml"))
-}
