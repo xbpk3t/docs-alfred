@@ -21,6 +21,19 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// previousShanghaiDay returns a time firmly inside the previous Asia/Shanghai
+// calendar day, i.e. the daily newsletter filter window. Needed because
+// FilterFeedsWithTimeRange is timezone-independent but excludes today's items.
+func previousShanghaiDay() time.Time {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		panic(err)
+	}
+	now := time.Now().In(loc)
+
+	return time.Date(now.Year(), now.Month(), now.Day()-1, 12, 0, 0, 0, loc)
+}
+
 func TestGetItemTitle(t *testing.T) {
 	tests := []struct {
 		item          *gofeed.Item
@@ -310,15 +323,15 @@ func TestMergeFeedItems_DedupByLink(t *testing.T) {
 		},
 	}, "")
 
-	now := time.Now()
+	yesterday := previousShanghaiDay()
 	fetchMeta := []rss.FetchResult{
 		{
 			Feed: &gofeed.Feed{
 				Title: "Test Feed",
 				Items: []*gofeed.Item{
-					{Title: "Item 1", Link: "http://example.com/1", GUID: "1", PublishedParsed: &now},
-					{Title: "Item 2", Link: "http://example.com/2", GUID: "2", PublishedParsed: &now},
-					{Title: "Item 1 duplicate", Link: "http://example.com/1", GUID: "1", PublishedParsed: &now},
+					{Title: "Item 1", Link: "http://example.com/1", GUID: "1", PublishedParsed: &yesterday},
+					{Title: "Item 2", Link: "http://example.com/2", GUID: "2", PublishedParsed: &yesterday},
+					{Title: "Item 1 duplicate", Link: "http://example.com/1", GUID: "1", PublishedParsed: &yesterday},
 				},
 			},
 			URL: "http://example.com/feed",

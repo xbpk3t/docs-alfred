@@ -8,8 +8,8 @@ import (
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
-	carbon "github.com/dromara/carbon/v2"
 	"github.com/mmcdole/gofeed"
+	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"golang.org/x/sync/errgroup"
 )
@@ -279,6 +279,12 @@ func collectFetchResults(urls []string, results []fetchURLResult) ([]*gofeed.Fee
 }
 
 // FilterFeedsWithTimeRange 根据时间范围过滤feeds.
+//
+// Day boundaries are computed in the fixed Asia/Shanghai timezone (via
+// carboninit), so the result is independent of the runner/process local
+// timezone. daily selects the previous full calendar day, weekly the previous
+// 7 full calendar days; today's items are excluded from both. Comparisons are
+// absolute instants, so created/endDate may be in any timezone.
 func FilterFeedsWithTimeRange(created, endDate time.Time, schedule string) bool {
 	scheduleTimeRanges := GetScheduleTimeRanges()
 	timeRange, exists := scheduleTimeRanges[schedule]
@@ -289,7 +295,10 @@ func FilterFeedsWithTimeRange(created, endDate time.Time, schedule string) bool 
 		return false
 	}
 
-	createdTime := carbon.CreateFromStdTime(created)
+	loc := carboninit.Location()
+	now := endDate.In(loc)
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	lower := todayStart.Add(-time.Duration(timeRange) * time.Hour)
 
-	return createdTime.Gte(carbon.CreateFromStdTime(endDate).SubHours(timeRange).StartOfDay())
+	return (created.After(lower) || created.Equal(lower)) && created.Before(todayStart)
 }

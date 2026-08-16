@@ -449,13 +449,13 @@ func TestMergeFeedItemsFeedLimit(t *testing.T) {
 		FeedConfig:       rss.FeedConfig{FeedLimit: 1},
 		NewsletterConfig: rss.NewsletterConfig{Schedule: "daily"},
 	}, "")
-	now := time.Now()
+	yesterday := previousShanghaiDay()
 	fetchMeta := []rss.FetchResult{
 		{
 			Feed: &gofeed.Feed{
 				Items: []*gofeed.Item{
-					{Title: "Item 1", Link: "https://a.com/1", GUID: "1", PublishedParsed: &now},
-					{Title: "Item 2", Link: "https://a.com/2", GUID: "2", PublishedParsed: &now},
+					{Title: "Item 1", Link: "https://a.com/1", GUID: "1", PublishedParsed: &yesterday},
+					{Title: "Item 2", Link: "https://a.com/2", GUID: "2", PublishedParsed: &yesterday},
 				},
 			},
 			URL: "https://a.com/feed",

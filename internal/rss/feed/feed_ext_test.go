@@ -45,7 +45,10 @@ func TestGetScheduleTimeRanges(t *testing.T) {
 }
 
 func TestFilterFeedsWithTimeRange(t *testing.T) {
-	endDate := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	// endDate simulates a runner clock in UTC (the self-hosted runner is not
+	// guaranteed to be Asia/Shanghai): 2026-08-15 22:00 UTC == 2026-08-16 06:00
+	// Asia/Shanghai. Day boundaries must still resolve in Asia/Shanghai.
+	endDate := time.Date(2026, 8, 15, 22, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name     string
@@ -54,26 +57,44 @@ func TestFilterFeedsWithTimeRange(t *testing.T) {
 		want     bool
 	}{
 		{
-			name:     "daily schedule within range",
-			created:  time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC),
+			name:     "daily: yesterday evening Shanghai",
+			created:  time.Date(2026, 8, 15, 10, 0, 0, 0, time.UTC), // 18:00 +08 Aug 15
 			schedule: Daily,
 			want:     true,
 		},
 		{
-			name:     "daily schedule out of range",
-			created:  time.Date(2026, 6, 18, 0, 0, 0, 0, time.UTC),
+			name:     "daily: yesterday early morning Shanghai (still previous UTC day)",
+			created:  time.Date(2026, 8, 14, 17, 0, 0, 0, time.UTC), // 01:00 +08 Aug 15
+			schedule: Daily,
+			want:     true,
+		},
+		{
+			name:     "daily: two calendar days ago excluded",
+			created:  time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC), // 08:00 +08 Aug 14
 			schedule: Daily,
 			want:     false,
 		},
 		{
-			name:     "weekly schedule within range",
-			created:  time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC),
+			name:     "daily: today excluded (strict yesterday)",
+			created:  time.Date(2026, 8, 15, 23, 0, 0, 0, time.UTC), // 07:00 +08 Aug 16
+			schedule: Daily,
+			want:     false,
+		},
+		{
+			name:     "weekly: within previous 7 calendar days",
+			created:  time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC), // 08:00 +08 Aug 10
 			schedule: Weekly,
 			want:     true,
 		},
 		{
+			name:     "weekly: outside window",
+			created:  time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+			schedule: Weekly,
+			want:     false,
+		},
+		{
 			name:     "invalid schedule",
-			created:  time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC),
+			created:  time.Date(2026, 8, 15, 10, 0, 0, 0, time.UTC),
 			schedule: "monthly",
 			want:     false,
 		},

@@ -21,6 +21,7 @@ import (
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/html"
 	"github.com/xbpk3t/docs-alfred/internal/rss/feed"
+	"github.com/xbpk3t/docs-alfred/pkg/carboninit"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/mail"
@@ -296,7 +297,7 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feedGroup rss
 		if r.Feed != nil && len(r.Feed.Items) > 0 {
 			latest := getFeedLatestTime(r.Feed)
 			if !latest.IsZero() {
-				s.feedLastUpdated[r.URL] = carbon.CreateFromStdTime(latest).ToDateString()
+				s.feedLastUpdated[r.URL] = carboninit.In(latest).ToDateString()
 			}
 			s.feedPublishFreq[r.URL] = calcPublishFreq(r.Feed)
 		}
@@ -387,7 +388,7 @@ func (s *NewsletterService) makeNewsletterItem(item *gofeed.Item, sourceFeed *go
 	ni := NewsletterItem{
 		Title:     s.getItemTitle(item),
 		Link:      item.Link,
-		PubDate:   carbon.CreateFromStdTime(getItemCreationTime(item)).ToDateTimeString(),
+		PubDate:   carboninit.In(getItemCreationTime(item)).ToDateTimeString(),
 		FeedTitle: feedDisplayName(sourceFeed),
 		ItemHash:  itemHash,
 	}
