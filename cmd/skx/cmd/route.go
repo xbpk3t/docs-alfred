@@ -25,8 +25,11 @@ func newRouteCmd(flags *rootFlags) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := flags.dir
+			if dir == "" {
+				dir = defaultDir()
+			}
 			name := args[0]
-			// route always resolves against --dir (the positional is a name,
+			// route always resolves against a dir (the positional is a name,
 			// not a path), so validate it here rather than a deep walk error.
 			if err := validateReferencesDir(dir); err != nil {
 				return err
