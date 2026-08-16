@@ -7,37 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	prptschema "github.com/xbpk3t/docs-alfred/cmd/skx/schema"
 )
-
-const validSchema = `{
-  "type": "object",
-  "properties": {
-    "frontmatter": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "role": { "type": "string" },
-        "desc": { "type": "string" },
-        "pl-serial": { "type": "array", "items": { "type": "string" } },
-        "pl-parallel": { "type": "array", "items": { "type": "string" } },
-        "status": { "type": "string" },
-        "is-save": { "type": "boolean" }
-      },
-      "required": ["name", "role"],
-      "additionalProperties": false
-    },
-    "what": { "type": "object", "properties": { "is": { "type": "string" }, "not": { "type": "string" } } },
-    "gate": { "type": "array", "items": { "type": "object", "properties": { "qs": { "type": "string" }, "fail": { "type": "string" } }, "additionalProperties": false } },
-    "constraint": { "type": "object", "properties": { "must": { "type": "array", "items": { "type": "string" } }, "must-not": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false },
-    "input": { "type": "object", "properties": { "source": { "type": "string" }, "params": { "type": "array", "items": { "type": "object" } } }, "additionalProperties": false },
-    "workflow": { "type": "array", "items": { "type": "object", "properties": { "phase": { "type": "string" }, "gate": { "type": "string" }, "desc": { "type": "string" }, "steps": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false } },
-    "output": { "type": "object", "properties": { "format": { "type": "string", "enum": ["yaml", "table", "md"] }, "struct": { "type": "array", "items": { "type": "object", "properties": { "key": { "type": "string" }, "val": { "type": ["string", "number", "boolean"] } }, "required": ["key", "val"], "additionalProperties": false } }, "template": { "type": "string" }, "few-shot": { "type": "string" } }, "additionalProperties": false },
-    "self-check": { "type": "array", "items": { "type": "string" } },
-    "hint": { "type": "array", "items": { "type": "object", "properties": { "if": { "type": "string" }, "then": { "type": "string" } }, "additionalProperties": false } }
-  },
-  "required": ["frontmatter"],
-  "additionalProperties": false
-}`
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
@@ -45,14 +16,16 @@ func writeFile(t *testing.T, path, content string) {
 }
 
 // setupLayout mirrors the real on-disk layout: prpt.yml sits above a
-// references/ directory that holds the prompt yml files.
+// references/ directory that holds the prompt yml files. The schema used is
+// the real embedded prpt.schema.json (schema.Prpt) so tests never drift from
+// the source of truth.
 func setupLayout(t *testing.T, files map[string]string) (root, refs, schema string) {
 	t.Helper()
 	root = t.TempDir()
 	refs = filepath.Join(root, "references")
 	require.NoError(t, os.MkdirAll(refs, 0o755))
 	schema = filepath.Join(root, "prpt.schema.json")
-	writeFile(t, schema, validSchema)
+	writeFile(t, schema, string(prptschema.Prpt))
 	for name, content := range files {
 		writeFile(t, filepath.Join(refs, name), content)
 	}
@@ -96,18 +69,19 @@ func TestCheckDirUnknownFrontmatterKey(t *testing.T) {
 }
 
 func TestCheckDirCompositeRequiresPipeline(t *testing.T) {
-	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  name: a\n  role: composite\n"})
+	// role=composite without pl-* is rejected by the schema's if/then.
+	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  name: a\n  role: composite\nwhat:\n  is: x\n"})
 
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
-	assert.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "pl-serial or pl-parallel")
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "pl-parallel")
 }
 
 func TestCheckDirCompositeWithPipelineOK(t *testing.T) {
 	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: composite\n  pl-parallel:\n    - b\n",
-		"b.yml": "frontmatter:\n  name: b\n  role: atom\n",
+		"a.yml": "frontmatter:\n  name: a\n  role: composite\n  pl-parallel:\n    - b\npipeline:\n  b:\n    when: x\n    merge: y\nwhat:\n  is: x\n",
+		"b.yml": "frontmatter:\n  name: b\n  role: atom\nwhat:\n  is: x\n",
 	})
 
 	res, err := CheckDir(refs, schema)
@@ -115,11 +89,39 @@ func TestCheckDirCompositeWithPipelineOK(t *testing.T) {
 	assert.Empty(t, res.Issues)
 }
 
+func TestCheckDirCompositeMissingPipelineEntries(t *testing.T) {
+	// composite with pl-* deps but no pipeline section: orchestration
+	// contract missing — must be flagged, not left to prose.
+	_, refs, schema := setupLayout(t, map[string]string{
+		"a.yml": "frontmatter:\n  name: a\n  role: composite\n  pl-parallel:\n    - b\nwhat:\n  is: x\n",
+		"b.yml": "frontmatter:\n  name: b\n  role: atom\nwhat:\n  is: x\n",
+	})
+
+	res, err := CheckDir(refs, schema)
+	require.NoError(t, err)
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "must declare a pipeline section")
+}
+
+func TestCheckDirCompositePipelineMissingStep(t *testing.T) {
+	// pipeline section exists but not every pl-* dep has an entry.
+	_, refs, schema := setupLayout(t, map[string]string{
+		"a.yml": "frontmatter:\n  name: a\n  role: composite\n  pl-parallel:\n    - b\n    - c\npipeline:\n  b:\n    when: x\n    merge: y\nwhat:\n  is: x\n",
+		"b.yml": "frontmatter:\n  name: b\n  role: atom\nwhat:\n  is: x\n",
+		"c.yml": "frontmatter:\n  name: c\n  role: atom\nwhat:\n  is: x\n",
+	})
+
+	res, err := CheckDir(refs, schema)
+	require.NoError(t, err)
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, `"c" has no pipeline entry`)
+}
+
 func TestCheckDirStrictSectionKeys(t *testing.T) {
 	_, refs, schema := setupLayout(t, map[string]string{
 		// output.format is schema-valid; a bogus sub-key must be flagged.
-		"ok.yml":  "frontmatter:\n  name: ok\n  role: atom\noutput:\n  format: md\n  template: x\n",
-		"bad.yml": "frontmatter:\n  name: bad\n  role: atom\noutput:\n  format: md\n  bogus: 1\n",
+		"ok.yml":  "frontmatter:\n  name: ok\n  role: atom\nwhat:\n  is: x\noutput:\n  format: md\n  template: x\n",
+		"bad.yml": "frontmatter:\n  name: bad\n  role: atom\nwhat:\n  is: x\noutput:\n  format: md\n  bogus: 1\n",
 	})
 
 	res, err := CheckDir(refs, schema)
@@ -157,7 +159,7 @@ func TestCheckDirNestedSchemaOK(t *testing.T) {
 	root := t.TempDir()
 	refs := filepath.Join(root, "references")
 	require.NoError(t, os.MkdirAll(refs, 0o755))
-	writeFile(t, filepath.Join(root, "prpt.schema.json"), validSchema)
+	writeFile(t, filepath.Join(root, "prpt.schema.json"), string(prptschema.Prpt))
 	writeFile(t, filepath.Join(refs, "a.yml"), samplePrompt)
 
 	res, err := CheckDir(refs, filepath.Join(root, "prpt.schema.json"))

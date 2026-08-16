@@ -170,15 +170,27 @@ func checkCompositeDeps(doc map[string]any, known map[string]bool, add func(form
 
 	serial, _ := getStringSlice(fm, keyPlSerial)
 	parallel, _ := getStringSlice(fm, keyPlParallel)
-	if len(serial) == 0 && len(parallel) == 0 {
-		add("role=composite requires pl-serial or pl-parallel to be non-empty")
-		return
-	}
+	// role=composite without any pl-* is already rejected by the schema's
+	// if/then; here we only care about deps that exist.
 
 	deps := append(append([]string{}, serial...), parallel...)
 	for _, dep := range deps {
 		if known != nil && !known[dep] {
 			add("dependency %q has no prompt file in references", dep)
+		}
+	}
+
+	// Every pl-* dependency must declare an orchestration contract in the
+	// pipeline section (when/merge/required). Without it the composite can't
+	// be mechanically fan-out — the model would have to judge from prose.
+	pipeline, hasPipeline := getMap(doc, keyPipeline)
+	for _, dep := range deps {
+		if !hasPipeline {
+			add("composite with pl-* deps must declare a pipeline section (when/merge per step)")
+			break
+		}
+		if _, ok := pipeline[dep]; !ok {
+			add("pl-* dependency %q has no pipeline entry (when/merge)", dep)
 		}
 	}
 }

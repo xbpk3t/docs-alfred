@@ -2,20 +2,38 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/xbpk3t/docs-alfred/main/cmd/skx/schema/prpt.schema.json",
   "title": "prpt",
-  "description": "JSON Schema for zzz prompt YAML files (references/**/*.yml). Top-level sections: frontmatter / what / gate / constraint / input / workflow / output / self-check / hint.",
+  "description": "JSON Schema for zzz prompt YAML files (references/**/*.yml)。唯一 source of truth（模板 prpt.yml 已并入本 schema 的描述）。\n顶层 section：frontmatter / what / gate / constraint / input / pipeline / workflow / output / self-check / hint。\n- prompts 直接以 .yml 形态被 route/Read，无渲染层。\n- composite 的并行依赖在 frontmatter 用 pl-parallel/pl-serial 声明，触发/合并契约在 pipeline section。\n- 改完 prompt 后 `skx check` 校验本 schema；`skx graph` 看依赖/环。",
   "type": "object",
   "properties": {
     "frontmatter": {
       "type": "object",
-      "description": "frontmatter 命名空间；必填，至少含 name+role",
+      "description": "(必填) frontmatter 命名空间；至少含 name+role",
       "properties": {
-        "name": { "type": "string", "description": "必填；等于文件名 stem（路由名）" },
-        "role": { "type": "string", "enum": ["atom", "composite"], "description": "必填；composite 时 pl-serial/pl-parallel 至少一个非空" },
-        "desc": { "type": "string", "description": "短说明；多行用 | 块" },
-        "pl-parallel": { "type": "array", "items": { "type": "string" }, "description": "仅 composite；并行依赖 name 列表" },
-        "pl-serial": { "type": "array", "items": { "type": "string" }, "description": "仅 composite；串行依赖 name 列表" },
-        "is-save": { "type": "boolean", "description": "是否落盘 .md（默认 false）" },
-        "status": { "type": "string", "enum": ["active", "draft", "deprecated"], "description": "状态；省略即 active" }
+        "name": {
+          "type": "string",
+          "description": "(必填) 等于文件名 stem（路由名）"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["atom", "composite"],
+          "description": "(必填) 可选值 atom | composite；composite 时 pl-serial/pl-parallel 至少一个非空"
+        },
+        "desc": { "type": "string", "description": "(可选) 短说明，给自己看，非 trigger；多行用 | 块" },
+        "pl-parallel": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "(可选，仅 composite) 并行依赖 name 列表"
+        },
+        "pl-serial": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "(可选，仅 composite) 串行依赖 name 列表"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "draft", "deprecated"],
+          "description": "(可选) 状态；省略即 active"
+        }
       },
       "required": ["name", "role"],
       "additionalProperties": false
@@ -23,92 +41,146 @@
 
     "what": {
       "type": "object",
+      "description": "(必填) 这个 prompt 是什么 / 不是什么",
       "properties": {
-        "is": { "type": "string" },
-        "not": { "type": "string" }
-      }
+        "is": { "type": "string", "description": "(可选) 一句话说明它是什么" },
+        "not": { "type": "string", "description": "(可选) 一句话说明它不是什么（边界/反模式）" }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
     },
 
     "gate": {
       "type": "array",
+      "description": "(可选) 入口闸门（先答，不满足则不进入）",
       "items": {
         "type": "object",
         "properties": {
-          "qs": { "type": "string" },
-          "fail": { "type": "string" }
+          "qs": { "type": "string", "description": "(必填) 问什么" },
+          "fail": { "type": "string", "description": "(必填) 不满足则怎样" }
         },
+        "required": ["qs", "fail"],
         "additionalProperties": false
       }
     },
 
     "constraint": {
       "type": "object",
+      "description": "(可选) 硬约束",
       "properties": {
-        "must": { "type": "array", "items": { "type": "string" } },
-        "must-not": { "type": "array", "items": { "type": "string" } }
+        "must": { "type": "array", "items": { "type": "string" }, "description": "(可选) 必须遵守的规则" },
+        "must-not": { "type": "array", "items": { "type": "string" }, "description": "(可选) 禁止做的事（反模式）" }
       },
       "additionalProperties": false
     },
 
     "input": {
       "type": "object",
+      "description": "(可选) 输入参数声明",
       "properties": {
-        "source": { "type": "string" },
-        "params": { "type": "array", "items": { "type": "object" } }
+        "source": { "type": "string", "description": "(可选) 输入来源文件路径" },
+        "params": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "(可选) 参数列表，每项一个自由对象（如 {mode: default | heavy}）"
+        }
       },
       "additionalProperties": false
     },
 
+    "pipeline": {
+      "type": "object",
+      "description": "(可选，仅 composite) 编排契约：对 frontmatter 每个 pl-* 步声明触发/合并/是否必跑。触发条件从散文提升为字段，避免 model 主观判断该不该并行。执行协议（起 sub-agent、ledger）见 SKILL.md。",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "when": { "type": "string", "description": "(必填) 触发条件（尽量用可检查的关键词，如「hti 含【breakdown】」）" },
+          "merge": { "type": "string", "description": "(必填) 该步产物并入 composite 输出的哪个字段（如 hti#breakdown）" },
+          "required": { "type": "boolean", "description": "(可选) true=结构必需，无触发也得跑或硬引用已有 artifact；false=条件触发，未触发须显式 skipped（默认 false）" }
+        },
+        "required": ["when", "merge"],
+        "additionalProperties": false
+      }
+    },
+
     "workflow": {
       "type": "array",
+      "description": "(可选) 阶段化流程（复杂 prompt）",
       "items": {
         "type": "object",
         "properties": {
-          "phase": { "type": "string" },
-          "gate": { "type": "string" },
-          "desc": { "type": "string" },
-          "steps": { "type": "array", "items": { "type": "string" } }
+          "phase": { "type": "string", "description": "(必填) 宏观板块（Phase）" },
+          "gate": { "type": "string", "description": "(可选) 进入条件" },
+          "desc": { "type": "string", "description": "(可选) 做什么" },
+          "steps": { "type": "array", "items": { "type": "string" }, "description": "(可选) 该 phase 内的微观动作（Step）" }
         },
+        "required": ["phase"],
         "additionalProperties": false
       }
     },
 
     "output": {
       "type": "object",
+      "description": "(可选，但强烈建议) 输出契约：产出什么形态 + 产出物落不落盘",
       "properties": {
-        "format": { "type": "string", "enum": ["yaml", "table", "md"] },
+        "format": { "type": "string", "enum": ["yaml", "table", "md"], "description": "(可选) 可选值 yaml | table | md" },
         "struct": {
           "type": "array",
+          "description": "(可选) 输出字段语义表",
           "items": {
             "type": "object",
             "properties": {
-              "key": { "type": "string" },
-              "val": { "type": ["string", "number", "boolean"] }
+              "key": { "type": "string", "description": "(必填) 字段名" },
+              "val": { "type": ["string", "number", "boolean"], "description": "(必填) 示例或该字段 enum 值" }
             },
             "required": ["key", "val"],
             "additionalProperties": false
           }
         },
-        "template": { "type": "string" },
-        "few-shot": { "type": "string" }
+        "template": { "type": "string", "description": "(可选) 输出模板 codeblock" },
+        "few-shot": { "type": "string", "description": "(可选) 示例输入输出" },
+        "is-save": { "type": "boolean", "description": "(可选) 产出物落盘开关，默认 false" },
+        "save-path": { "type": "string", "description": "(可选) 落盘路径（相对 workspace）；仅 is-save: true 时生效" }
       },
       "additionalProperties": false
     },
 
-    "self-check": { "type": "array", "items": { "type": "string" } },
+    "self-check": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "(可选) 交付前自检项（yes/no）"
+    },
 
     "hint": {
       "type": "array",
+      "description": "(可选) 条件式推进/下一步提示；交付时建议给出。每项 {if, then}：if=触发条件，then=建议动作（recall/deepen/write/skip…）。旧 string 形式已废弃。",
       "items": {
         "type": "object",
         "properties": {
-          "if": { "type": "string" },
-          "then": { "type": "string" }
+          "if": { "type": "string", "description": "(必填) 触发条件" },
+          "then": { "type": "string", "description": "(必填) 满足条件时的建议动作" }
         },
+        "required": ["if", "then"],
         "additionalProperties": false
       }
     }
   },
-  "required": ["frontmatter"],
-  "additionalProperties": false
+  "required": ["frontmatter", "what"],
+  "additionalProperties": false,
+
+  "if": {
+    "properties": {
+      "frontmatter": { "properties": { "role": { "const": "composite" } } }
+    }
+  },
+  "then": {
+    "properties": {
+      "frontmatter": {
+        "anyOf": [
+          { "required": ["pl-parallel"], "properties": { "pl-parallel": { "minItems": 1 } } },
+          { "required": ["pl-serial"], "properties": { "pl-serial": { "minItems": 1 } } }
+        ]
+      }
+    }
+  }
 }

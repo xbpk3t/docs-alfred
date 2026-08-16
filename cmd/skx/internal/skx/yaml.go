@@ -25,6 +25,7 @@ const (
 	keyGate        = "gate"
 	keyConstraint  = "constraint"
 	keyInput       = "input"
+	keyPipeline    = "pipeline"
 	keyWorkflow    = "workflow"
 	keyOutput      = "output"
 	keySelfCheck   = "self-check"
