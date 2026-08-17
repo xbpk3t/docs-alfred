@@ -59,15 +59,16 @@ This command:
 			}
 
 			input := internal.ExportInput{
-				Agent:      agent,
-				SessionID:  sessionID,
-				Issue:      flags.issue,
-				DryRun:     flags.dryRun,
-				Verbose:    flags.verbose,
-				WikiRoot:   cfg.WikiRoot,
-				OutputDir:  flags.outputDir,
-				ProjectDir: projectDir,
-				AIConfig:   buildAIConfig(cfg),
+				Agent:       agent,
+				SessionID:   sessionID,
+				Issue:       flags.issue,
+				DryRun:      flags.dryRun,
+				Verbose:     flags.verbose,
+				WikiRoot:    cfg.WikiRoot,
+				GHTopicsURL: cfg.GHTopicsURL,
+				OutputDir:   flags.outputDir,
+				ProjectDir:  projectDir,
+				AIConfig:    buildAIConfig(cfg),
 			}
 
 			result, err := internal.ExportSession(&input)

@@ -24,6 +24,7 @@ type wikiFlags struct {
 	config         string
 	wikiRoot       string
 	model          string
+	ghTopicsURL    string
 	auditPaths     []string
 	maxContentSize int
 	dryRun         bool
@@ -492,6 +493,9 @@ func applyWikiFlagOverrides(cfg *wikiuc.Config, flags *wikiFlags) {
 	if flags.model != "" {
 		cfg.AI.Model = flags.model
 	}
+	if flags.ghTopicsURL != "" {
+		cfg.Wiki.GHTopicsURL = flags.ghTopicsURL
+	}
 	if flags.maxContentSize > 0 {
 		cfg.Wiki.MaxContentSize = flags.maxContentSize
 	}
@@ -501,6 +505,7 @@ func addWikiFlags(cmd *cobra.Command, flags *wikiFlags) {
 	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
 	cmd.Flags().StringVar(&flags.model, "model", "", "AI model override (e.g. deepseek-v3)")
+	cmd.Flags().StringVar(&flags.ghTopicsURL, "gh-topics-url", "", "Remote gh.yml URL for topic candidates (default https://docs.lucc.dev/gh.yml)")
 	cmd.Flags().IntVar(&flags.maxContentSize, "max-content-size", 0, "Max content chars sent to AI (default 20000)")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Run fetch/classify without writing files or flushing inbox")
 }

@@ -56,3 +56,19 @@ func LocalTopicCatalog(cfg LocalGHConfig) ([]TopicCandidate, error) {
 
 	return repos.TopicCatalog(), nil
 }
+
+// RemoteTopicCatalog loads formal topic candidates from a remote gh.yml URL,
+// using the same cache+TTL semantics as gh-alfred's Manager. When url is empty
+// it falls back to the local split tree via LocalTopicCatalog.
+func RemoteTopicCatalog(cfg LocalGHConfig, url string) ([]TopicCandidate, error) {
+	if strings.TrimSpace(url) == "" {
+		return LocalTopicCatalog(cfg)
+	}
+
+	manager := NewManager(DefaultConfigPath, url)
+	if err := manager.LoadWithBackgroundSync(); err != nil {
+		return nil, fmt.Errorf("load remote gh topics from %s: %w", url, err)
+	}
+
+	return manager.ConfigRepos().TopicCatalog(), nil
+}

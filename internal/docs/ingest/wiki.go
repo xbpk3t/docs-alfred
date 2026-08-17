@@ -258,7 +258,7 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		deps.classifier = wikiclassify.NewClassifier(
 			newAIConfig(cfg),
 			resolveWikiRoot(cfg),
-			"",
+			cfg.Wiki.GHTopicsURL,
 			wikiclassify.WithMaxContentSize(cfg.Wiki.MaxContentSize),
 		)
 	}
@@ -269,7 +269,7 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		deps.inbox = serviceInboxStore{}
 	}
 	if deps.validTopicPaths == nil {
-		deps.validTopicPaths = wikiwrite.LoadValidTopicPaths(resolveWikiRoot(cfg))
+		deps.validTopicPaths = wikiwrite.LoadValidTopicPaths(resolveWikiRoot(cfg), cfg.Wiki.GHTopicsURL)
 	}
 
 	return deps

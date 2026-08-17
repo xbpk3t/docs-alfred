@@ -18,7 +18,7 @@ func TestNewManager_Defaults(t *testing.T) {
 	require.NotNil(t, m)
 	assert.Equal(t, DefaultConfigPath, m.configPath)
 	assert.Equal(t, DefaultConfigURL, m.configURL)
-	assert.Equal(t, "https://cdn.lucc.dev/gh.yml", m.configURL)
+	assert.Equal(t, "https://docs.lucc.dev/gh.yml", m.configURL)
 	assert.Equal(t, DefaultMaxAge, m.maxAge)
 }
 
@@ -30,9 +30,9 @@ func TestNewManager_CustomPaths(t *testing.T) {
 }
 
 func TestNewManager_AppendsGhYMLToBaseURL(t *testing.T) {
-	m := NewManager("", "https://cdn.lucc.dev/")
+	m := NewManager("", "https://docs.lucc.dev/")
 	require.NotNil(t, m)
-	assert.Equal(t, "https://cdn.lucc.dev/gh.yml", m.configURL)
+	assert.Equal(t, "https://docs.lucc.dev/gh.yml", m.configURL)
 }
 
 func TestSetTTL(t *testing.T) {
@@ -311,8 +311,8 @@ func TestManager_ConfigRepos_Empty(t *testing.T) {
 }
 
 func TestNormalizeConfigURL_WithSuffix(t *testing.T) {
-	assert.Equal(t, "https://cdn.lucc.dev/gh.yml", normalizeConfigURL("https://cdn.lucc.dev/"))
-	assert.Equal(t, "https://cdn.lucc.dev/gh.yml", normalizeConfigURL("https://cdn.lucc.dev/gh.yml"))
+	assert.Equal(t, "https://docs.lucc.dev/gh.yml", normalizeConfigURL("https://docs.lucc.dev/"))
+	assert.Equal(t, "https://docs.lucc.dev/gh.yml", normalizeConfigURL("https://docs.lucc.dev/gh.yml"))
 	assert.Equal(t, "https://custom.url/config.yml", normalizeConfigURL("https://custom.url/config.yml"))
 }
 

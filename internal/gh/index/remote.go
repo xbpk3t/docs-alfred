@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	DefaultConfigURL = "https://cdn.lucc.dev/gh.yml"
+	DefaultConfigURL = "https://docs.lucc.dev/gh.yml"
 	DefaultMaxAge    = 24 * time.Hour
 )
 

@@ -109,8 +109,8 @@ func TestMarshalConfigReposYAML(t *testing.T) {
 }
 
 func TestNormalizeConfigURL(t *testing.T) {
-	assert.Equal(t, "https://cdn.lucc.dev/gh.yml", normalizeConfigURL("https://cdn.lucc.dev/"))
-	assert.Equal(t, "https://cdn.lucc.dev/gh.yml", normalizeConfigURL("https://cdn.lucc.dev/gh.yml"))
+	assert.Equal(t, "https://docs.lucc.dev/gh.yml", normalizeConfigURL("https://docs.lucc.dev/"))
+	assert.Equal(t, "https://docs.lucc.dev/gh.yml", normalizeConfigURL("https://docs.lucc.dev/gh.yml"))
 }
 
 func TestRenderConfigYAMLFromDir_EmptySubDirs(t *testing.T) {

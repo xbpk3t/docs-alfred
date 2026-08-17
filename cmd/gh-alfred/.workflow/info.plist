@@ -94,7 +94,7 @@
 				<key>runningsubtext</key>
 				<string></string>
 				<key>script</key>
-				<string>./gh-alfred search "$1" --docs-url "{var:docs}"</string>
+				<string>./gh-alfred search "$1" --url "{var:url}" --docs-url "{var:docs}"</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -256,7 +256,7 @@
 			<key>config</key>
 			<dict>
 				<key>default</key>
-				<string>https://cdn.lucc.dev/gh.yml</string>
+				<string>https://docs.lucc.dev/gh.yml</string>
 				<key>placeholder</key>
 				<string></string>
 				<key>required</key>

@@ -37,15 +37,16 @@ const (
 
 // ExportInput contains inputs for session export.
 type ExportInput struct {
-	AIConfig   *ai.ClientConfig
-	Agent      Agent `validate:"required|in:cc,codex"`
-	WikiRoot   string
-	OutputDir  string
-	ProjectDir string // Resolved project directory; set once by CLI layer.
-	SessionID  string // Explicit session/thread ID; defaults to the selected agent env var.
-	Issue      string // Optional issue URL (Linear/GitHub/...); omitted from frontmatter when empty.
-	DryRun     bool
-	Verbose    bool
+	AIConfig    *ai.ClientConfig
+	Agent       Agent `validate:"required|in:cc,codex"`
+	WikiRoot    string
+	GHTopicsURL string // Remote gh.yml URL for topic candidates; empty falls back to local data/gh.
+	OutputDir   string
+	ProjectDir  string // Resolved project directory; set once by CLI layer.
+	SessionID   string // Explicit session/thread ID; defaults to the selected agent env var.
+	Issue       string // Optional issue URL (Linear/GitHub/...); omitted from frontmatter when empty.
+	DryRun      bool
+	Verbose     bool
 }
 
 // ExportResult contains the result of session export.
@@ -297,7 +298,7 @@ func sanitizeFilename(title string) string {
 // emit an unresolvable value on an unlucky sample; a single retry absorbs that
 // transient jitter without spending unbounded tokens.
 func mergedClassifyTopicPath(messages []session.Message, input *ExportInput) (string, error) {
-	prompt, candidates, err := renderClassifyTitlePrompt(messages, input.WikiRoot)
+	prompt, candidates, err := renderClassifyTitlePrompt(messages, input.WikiRoot, input.GHTopicsURL)
 	if err != nil {
 		return "", fmt.Errorf("render prompt: %w", err)
 	}
@@ -371,8 +372,8 @@ func hasTopicCandidate(candidates []ghindex.TopicCandidate, topicPath string) bo
 
 // renderClassifyTitlePrompt renders the classify-title.txt prompt template.
 // Returns the rendered prompt and topic candidates for validation.
-func renderClassifyTitlePrompt(messages []session.Message, wikiRoot string) (string, []ghindex.TopicCandidate, error) {
-	candidates := wikiclassify.LoadClassificationCandidates(wikiRoot)
+func renderClassifyTitlePrompt(messages []session.Message, wikiRoot, ghTopicsURL string) (string, []ghindex.TopicCandidate, error) {
+	candidates := wikiclassify.LoadClassificationCandidates(wikiRoot, ghTopicsURL)
 	if len(candidates) == 0 {
 		return "", nil, errors.New("no topic candidates available")
 	}

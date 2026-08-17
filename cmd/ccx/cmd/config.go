@@ -13,8 +13,9 @@ import (
 )
 
 type exportConfig struct {
-	AI       exportAIConfig `yaml:"ai"`
-	WikiRoot string         `default:"wiki" yaml:"wikiRoot"`
+	AI          exportAIConfig `yaml:"ai"`
+	WikiRoot    string         `default:"wiki" yaml:"wikiRoot"`
+	GHTopicsURL string         `default:"https://docs.lucc.dev/gh.yml" yaml:"ghTopicsURL"`
 }
 
 type exportAIConfig struct {

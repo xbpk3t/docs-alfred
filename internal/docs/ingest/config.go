@@ -26,8 +26,8 @@ const (
 
 // Config holds wiki workflow configuration shared by wiki subcommands.
 type Config struct {
-	Compact CompactConfig `yaml:"compact"`
 	AI      AIConfig      `yaml:"ai"`
+	Compact CompactConfig `yaml:"compact"`
 	Wiki    WikiConfig    `yaml:"wiki"`
 }
 
@@ -72,6 +72,7 @@ type CompactLinearConfig struct {
 type WikiConfig struct {
 	WikiRoot       string          `default:"wiki"    validate:"required" yaml:"wikiRoot"`
 	Driver         string          `default:"opencli"                     yaml:"driver"`
+	GHTopicsURL    string          `default:"https://docs.lucc.dev/gh.yml" yaml:"ghTopicsURL"`
 	Concurrency    int             `default:"3"       validate:"gte:1"    yaml:"concurrency"`
 	PerURLTimeout  int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
 	MaxContentSize int             `default:"20000"                       yaml:"maxContentSize"`

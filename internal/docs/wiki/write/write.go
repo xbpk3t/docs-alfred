@@ -174,12 +174,16 @@ func resolveTopicDir(item *types.ClassifyItem, opts *WriteOptions) string {
 	return filepath.Join(opts.WikiRoot, item.TopicPath)
 }
 
-// LoadValidTopicPaths loads valid topic paths from data/gh beside wikiRoot (formal kinds only).
-// Returns a set of folder/type/topic paths that are valid for writing.
-func LoadValidTopicPaths(wikiRoot string) map[string]bool {
-	remote, err := ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{WikiRoot: wikiRoot})
+// LoadValidTopicPaths loads valid topic paths from the remote gh.yml URL when
+// ghTopicsURL is set; otherwise falls back to data/gh beside wikiRoot.
+// Returns a set of folder/type/topic paths that are valid for writing (formal kinds only).
+func LoadValidTopicPaths(wikiRoot, ghTopicsURL string) map[string]bool {
+	remote, err := ghindex.RemoteTopicCatalog(
+		ghindex.LocalGHConfig{WikiRoot: wikiRoot},
+		ghTopicsURL,
+	)
 	if err != nil {
-		slog.Warn("Local topic catalog unavailable for write validation", "error", err)
+		slog.Warn("Topic catalog unavailable for write validation", "error", err)
 
 		return nil
 	}

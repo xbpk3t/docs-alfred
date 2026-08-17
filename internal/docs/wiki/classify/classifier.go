@@ -818,8 +818,15 @@ func (c *Classifier) ghTopicCatalog() ([]ghindex.TopicCandidate, error) {
 	return c.catalog, nil
 }
 
+// defaultGHTopicsLoader loads topic candidates from the remote gh.yml URL when
+// configured; otherwise falls back to the local split data/gh tree.
 func (c *Classifier) defaultGHTopicsLoader() ([]ghindex.TopicCandidate, error) {
-	return ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{WikiRoot: c.WikiRoot})
+	cfg := ghindex.LocalGHConfig{WikiRoot: c.WikiRoot}
+	if strings.TrimSpace(c.GhTopicsURL) == "" {
+		return ghindex.LocalTopicCatalog(cfg)
+	}
+
+	return ghindex.RemoteTopicCatalog(cfg, c.GhTopicsURL)
 }
 
 func scanTopLevelCandidates(
@@ -1289,10 +1296,7 @@ func truncate(s string, maxLen int) string {
 // This is a shared function that can be used by both wiki and ccx.
 // Topic candidates are loaded from data/gh (sibling of wiki root).
 func ClassifyContent(content, wikiRoot string, aiConfig *ai.ClientConfig) (string, error) {
-	classifier := NewClassifier(aiConfig, wikiRoot, "")
-	classifier.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
-		return ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{WikiRoot: wikiRoot})
-	}
+	classifier := NewClassifier(aiConfig, wikiRoot, ghindex.DefaultConfigURL)
 
 	// Truncate content for classification (use first 2000 chars for speed)
 	if len(content) > 2000 {
@@ -1371,12 +1375,16 @@ func FormatTopicCandidatesGrouped(candidates []ghindex.TopicCandidate) string {
 	return strings.Join(lines, "\n")
 }
 
-// LoadClassificationCandidates loads topic candidates from data/gh beside wikiRoot.
+// LoadClassificationCandidates loads topic candidates from remote gh.yml
+// (when ghTopicsURL is set) or data/gh beside wikiRoot as fallback.
 // Used by ccx session export for topic path validation.
-func LoadClassificationCandidates(wikiRoot string) []ghindex.TopicCandidate {
-	remote, err := ghindex.LocalTopicCatalog(ghindex.LocalGHConfig{WikiRoot: wikiRoot})
+func LoadClassificationCandidates(wikiRoot, ghTopicsURL string) []ghindex.TopicCandidate {
+	remote, err := ghindex.RemoteTopicCatalog(
+		ghindex.LocalGHConfig{WikiRoot: wikiRoot},
+		ghTopicsURL,
+	)
 	if err != nil {
-		slog.Warn("Local topic catalog unavailable", "error", err)
+		slog.Warn("Topic catalog unavailable", "error", err)
 
 		return nil
 	}
