@@ -6,7 +6,6 @@ import (
 
 	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
 	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
-	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // DefaultTopicKinds is the formal topic set shared by TopicCatalog, dump, and
@@ -88,8 +87,6 @@ func appendRepoTopicCandidates(
 		if repo == nil {
 			continue
 		}
-		repoName := urlutil.RepoName(repo.URL)
-		_ = repoName
 		for i := range repo.Rel {
 			// rel entries are pure data-model repos; recurse through them as
 			// enriched repos carrying the same provenance as their parent.

@@ -5,27 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	yaml "github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
-
-func TestRenderConfigYAMLFromDirBuildsValidatedRemoteArtifact(t *testing.T) {
-	src := writeExportFixture(t)
-
-	data, err := RenderConfigYAMLFromDir(src)
-	require.NoError(t, err)
-	require.NoError(t, ValidateConfigYAML(data))
-
-	var configRepos ConfigRepos
-	require.NoError(t, yaml.Unmarshal(data, &configRepos))
-	require.Len(t, configRepos, 1)
-	assert.Equal(t, "kernel", configRepos[0].Tag)
-	assert.Equal(t, "tool", configRepos[0].Type)
-	require.Len(t, configRepos[0].Repos, 1)
-	assert.Equal(t, "https://github.com/acme/tool", configRepos[0].Repos[0].URL)
-}
 
 func TestWriteConfigYAMLFromDirWritesValidatedRemoteArtifact(t *testing.T) {
 	src := writeExportFixture(t)
@@ -113,14 +96,6 @@ func TestNormalizeConfigURL(t *testing.T) {
 	assert.Equal(t, "https://docs.lucc.dev/gh.yml", normalizeConfigURL("https://docs.lucc.dev/gh.yml"))
 }
 
-func TestRenderConfigYAMLFromDir_EmptySubDirs(t *testing.T) {
-	src := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(src, "empty"), 0755))
-
-	_, err := RenderConfigYAMLFromDir(src)
-	require.Error(t, err)
-}
-
 func TestWriteConfigYAMLFromDir_EmptySubDirs(t *testing.T) {
 	src := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(src, "empty"), 0755))
@@ -197,13 +172,6 @@ func TestLoadConfigReposFromDir_RenderError(t *testing.T) {
 
 	_, err := LoadConfigReposFromDir(src)
 	require.Error(t, err)
-}
-
-func TestRenderConfigYAMLFromDir_WriteError(t *testing.T) {
-	src := writeExportFixture(t)
-	// Write to a path that doesn't exist (can't create parent dirs)
-	_, err := RenderConfigYAMLFromDir(src)
-	require.NoError(t, err) // This should succeed
 }
 
 func TestWriteConfigYAMLFromDir_InvalidOutputPath(t *testing.T) {

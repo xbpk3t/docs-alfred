@@ -39,34 +39,22 @@ type chatFn func(ctx context.Context, cfg *ai.ClientConfig, messages []ai.Messag
 
 // Classifier handles AI-powered classification of URLs.
 type Classifier struct {
-	catalogErr        error
-	AIConfig          *ai.ClientConfig
-	chat              chatFn
-	loadGHTopics      func() ([]ghindex.TopicCandidate, error)
-	WikiRoot          string
-	GhTopicsURL       string
-	GhTopicsCachePath string
-	catalog           []ghindex.TopicCandidate
-	GhTopicsMaxAge    time.Duration
-	CandidateLimit    int
-	MinConfidence     float64
-	MaxContentSize    int // max chars sent to AI; 0 defaults to 20000
-	catalogMu         sync.Mutex
-	catalogLoaded     bool
+	catalogErr     error
+	AIConfig       *ai.ClientConfig
+	chat           chatFn
+	loadGHTopics   func() ([]ghindex.TopicCandidate, error)
+	WikiRoot       string
+	GhTopicsURL    string
+	catalog        []ghindex.TopicCandidate
+	CandidateLimit int
+	MinConfidence  float64
+	MaxContentSize int // max chars sent to AI; 0 defaults to 20000
+	catalogMu      sync.Mutex
+	catalogLoaded  bool
 }
 
 // ClassifierOption customizes a classifier.
 type ClassifierOption func(*Classifier)
-
-// WithGHTopicsCachePath sets the cache path for remote gh.yml.
-func WithGHTopicsCachePath(cachePath string) ClassifierOption {
-	return func(c *Classifier) { c.GhTopicsCachePath = cachePath }
-}
-
-// WithGHTopicsMaxAge sets the remote gh.yml cache TTL.
-func WithGHTopicsMaxAge(maxAge time.Duration) ClassifierOption {
-	return func(c *Classifier) { c.GhTopicsMaxAge = maxAge }
-}
 
 // WithCandidateLimit sets the maximum remote topic candidates sent to AI.
 func WithCandidateLimit(limit int) ClassifierOption {
@@ -90,7 +78,6 @@ func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string, opts ..
 		chat:           ai.ChatContext,
 		WikiRoot:       wikiRoot,
 		GhTopicsURL:    ghTopicsURL,
-		GhTopicsMaxAge: ghindex.DefaultMaxAge,
 		CandidateLimit: 120,
 		MinConfidence:  0.30,
 		MaxContentSize: 20000,

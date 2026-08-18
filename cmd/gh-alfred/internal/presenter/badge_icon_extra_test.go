@@ -92,7 +92,7 @@ func TestEnsureBadgeIconCachesSVG(t *testing.T) {
 }
 
 func TestRepoBadgeStateWithNixURL(t *testing.T) {
-	repo := &ghindex.Repository{
+	repo := &ghindex.Repo{
 		Repo: gh.Repo{Nix: strptr("github:acme/tool#tool"), Score: intptr(3)},
 	}
 	got := repoBadgeState(repo)

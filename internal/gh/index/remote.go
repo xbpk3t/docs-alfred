@@ -165,13 +165,6 @@ func startBackgroundSyncProcess(m *Manager) error {
 	return cmdutil.RunBackground(binaryPath, "sync", "--url", m.configURL, "--cache", m.configPath)
 }
 
-// IsBackgroundSyncAvailable checks if the binary can run background sync.
-func IsBackgroundSyncAvailable(binaryPath string) bool {
-	_, ok := cmdutil.LookPath(binaryPath)
-
-	return ok
-}
-
 func (m *Manager) loadFromFile() error {
 	data, err := os.ReadFile(m.configPath)
 	if err != nil {

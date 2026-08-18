@@ -120,23 +120,6 @@ func DomainBlocked(domain string, blockedSet map[string]bool) bool {
 	return false
 }
 
-// RepoName returns the last path segment, trimming a trailing .git suffix.
-func RepoName(rawURL string) string {
-	if rawURL == "" {
-		return ""
-	}
-
-	u, err := url.Parse(rawURL)
-	if err == nil && u.Path != "" {
-		return repoNameFromPath(u.Path)
-	}
-
-	cleaned := strings.TrimPrefix(rawURL, "https://")
-	cleaned = strings.TrimPrefix(cleaned, "http://")
-
-	return repoNameFromPath(cleaned)
-}
-
 // GitHubOwnerRepo parses a github.com repository URL.
 func GitHubOwnerRepo(rawURL string) (GitHubRepo, bool) {
 	repo, ok := SourceRepo(rawURL)
@@ -172,13 +155,4 @@ func IsSourceRepo(rawURL string) bool {
 	_, ok := SourceRepo(rawURL)
 
 	return ok
-}
-
-func repoNameFromPath(path string) string {
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return strings.TrimSuffix(parts[len(parts)-1], ".git")
 }

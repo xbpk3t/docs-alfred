@@ -13,22 +13,6 @@ func TestEqualNormalizesURL(t *testing.T) {
 	), "expected normalized URLs to match")
 }
 
-func TestRepoName(t *testing.T) {
-	tests := map[string]string{
-		"https://github.com/owner/repo":      "repo",
-		"https://github.com/owner/repo.git/": "repo",
-		"https://github.com/a/b/c/d":         "d",
-		"owner/repo.git":                     "repo",
-		"":                                   "",
-	}
-
-	for input, want := range tests {
-		t.Run(input, func(t *testing.T) {
-			require.Equal(t, want, RepoName(input))
-		})
-	}
-}
-
 func TestGitHubOwnerRepo(t *testing.T) {
 	repo, ok := GitHubOwnerRepo("https://github.com/owner/repo.git/tree/main")
 	require.True(t, ok, "expected GitHub repo URL to parse")
@@ -123,22 +107,6 @@ func TestDomainBlocked_ReturnsFalse(t *testing.T) {
 
 func TestDomainBlocked_NotBlocked(t *testing.T) {
 	require.False(t, DomainBlocked("safe.org", map[string]bool{"example.com": true}))
-}
-
-func TestRepoName_ParsePath(t *testing.T) {
-	// When url.Parse succeeds and path is non-empty, use repoNameFromPath
-	require.Equal(t, "repo", RepoName("https://github.com/owner/repo"))
-}
-
-func TestRepoName_Fallback(t *testing.T) {
-	// When url.Parse succeeds but path is empty, fall back to stripping scheme prefix
-	require.Equal(t, "example.com", RepoName("https://example.com"))
-}
-
-func TestRepoNameFromPath_Empty(t *testing.T) {
-	require.Empty(t, repoNameFromPath(""))
-	require.Equal(t, "repo", repoNameFromPath("/owner/repo"))
-	require.Equal(t, "repo", repoNameFromPath("/owner/repo.git"))
 }
 
 func TestSourceRepo_ParseError(t *testing.T) {

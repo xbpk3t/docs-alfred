@@ -220,7 +220,7 @@ func parseGhYAMLEntries(yf, targetDir string) ([]ghEntry, error) {
 	return entries, nil
 }
 
-func ghRepoRelation(repo *ghindex.Repository) string {
+func ghRepoRelation(repo *ghindex.Repo) string {
 	if repo.IsRelatedRepo {
 		return "rel"
 	}

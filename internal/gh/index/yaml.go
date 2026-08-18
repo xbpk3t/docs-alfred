@@ -61,7 +61,7 @@ func normalizeConfigRepo(config *ConfigRepo) {
 	}
 }
 
-func normalizeRepoTopics(repo *Repository, base string, useBase bool) {
+func normalizeRepoTopics(repo *Repo, base string, useBase bool) {
 	if repo == nil {
 		return
 	}

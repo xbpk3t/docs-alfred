@@ -14,16 +14,16 @@ import (
 
 func TestRepoBadgeState(t *testing.T) {
 	tests := []struct {
-		repo *ghindex.Repository
+		repo *ghindex.Repo
 		name string
 		want badgeState
 	}{
 		{name: "nil", repo: nil, want: badgeState{}},
-		{name: "empty", repo: &ghindex.Repository{}, want: badgeState{Score: 0}},
-		{name: "doc nix score", repo: &ghindex.Repository{Repo: gh.Repo{Doc: strptr("data/gh/tool"), Nix: strptr("github:acme/tool#tool"), Score: intptr(4)}}, want: badgeState{HasDoc: true, HasNix: true, Score: 4}},
-		{name: "blank doc nix", repo: &ghindex.Repository{Repo: gh.Repo{Doc: strptr(" "), Nix: strptr(" "), Score: intptr(2)}}, want: badgeState{Score: 2}},
-		{name: "negative score", repo: &ghindex.Repository{Repo: gh.Repo{Score: intptr(-1)}}, want: badgeState{Score: 0}},
-		{name: "over max score", repo: &ghindex.Repository{Repo: gh.Repo{Score: intptr(9)}}, want: badgeState{Score: 5}},
+		{name: "empty", repo: &ghindex.Repo{}, want: badgeState{Score: 0}},
+		{name: "doc nix score", repo: &ghindex.Repo{Repo: gh.Repo{Doc: strptr("data/gh/tool"), Nix: strptr("github:acme/tool#tool"), Score: intptr(4)}}, want: badgeState{HasDoc: true, HasNix: true, Score: 4}},
+		{name: "blank doc nix", repo: &ghindex.Repo{Repo: gh.Repo{Doc: strptr(" "), Nix: strptr(" "), Score: intptr(2)}}, want: badgeState{Score: 2}},
+		{name: "negative score", repo: &ghindex.Repo{Repo: gh.Repo{Score: intptr(-1)}}, want: badgeState{Score: 0}},
+		{name: "over max score", repo: &ghindex.Repo{Repo: gh.Repo{Score: intptr(9)}}, want: badgeState{Score: 5}},
 	}
 
 	for _, tt := range tests {
@@ -63,6 +63,6 @@ func TestRepoIconPathFallsBackWhenGenerationFails(t *testing.T) {
 		repoIconCacheDir = old
 	})
 
-	got := repoIconPath(&ghindex.Repository{Repo: gh.Repo{Doc: strptr("data/gh/tool"), Nix: strptr("github:acme/tool#tool"), Score: intptr(5)}})
+	got := repoIconPath(&ghindex.Repo{Repo: gh.Repo{Doc: strptr("data/gh/tool"), Nix: strptr("github:acme/tool#tool"), Score: intptr(5)}})
 	assert.Equal(t, IconGh, got)
 }

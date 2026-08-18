@@ -39,16 +39,6 @@ func SpecForDomain(domain DataDomain) (DomainSpec, bool) {
 	return DomainSpec{}, false
 }
 
-// DefaultPathForDomain returns the default data path for a domain.
-func DefaultPathForDomain(domain DataDomain) string {
-	spec, ok := SpecForDomain(domain)
-	if !ok {
-		return ""
-	}
-
-	return spec.DefaultPath
-}
-
 // ResolveScope determines the actual RuleScope. Only diary uses the structured
 // check now (books/ntl/goods are schema-checked, gh uses the walker, task is
 // YAML-parse-only), so this always resolves to the diary scope.

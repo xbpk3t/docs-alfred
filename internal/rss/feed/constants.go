@@ -24,10 +24,9 @@ const (
 
 // 日志字段常量.
 const (
-	LogKeyURL       = "url"
-	LogKeyAttempts  = "attempts"
-	LogKeyError     = "error"
-	LogKeyFeedTitle = "feed_title"
+	LogKeyURL      = "url"
+	LogKeyAttempts = "attempts"
+	LogKeyError    = "error"
 )
 
 // GetScheduleTimeRanges returns the time range mapping.

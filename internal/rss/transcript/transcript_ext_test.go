@@ -521,14 +521,6 @@ func TestLoadCredentialsDefaultDeviceID(t *testing.T) {
 	assert.Equal(t, xiaoyuzhouDefaultDevID, creds.DeviceID)
 }
 
-// --- LitterboxUploader ---
-
-func TestNewLitterboxUploader(t *testing.T) {
-	u := NewLitterboxUploader("1h")
-	assert.NotNil(t, u)
-	assert.NotNil(t, u.inner)
-}
-
 // --- Summarizer ---
 
 func TestNewSummarizerDefaultLanguage(t *testing.T) {

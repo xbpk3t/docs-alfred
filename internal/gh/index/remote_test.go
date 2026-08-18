@@ -239,12 +239,6 @@ func TestLoadWithBackgroundSync_FreshCache(t *testing.T) {
 	require.Len(t, result, 1)
 }
 
-func TestIsBackgroundSyncAvailable(t *testing.T) {
-	// "ls" should be available on macOS
-	assert.True(t, IsBackgroundSyncAvailable("ls"))
-	assert.False(t, IsBackgroundSyncAvailable("/nonexistent-binary-99999"))
-}
-
 func TestLoadWithCacheTTL_StaleSyncSuccess(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "gh.yml")

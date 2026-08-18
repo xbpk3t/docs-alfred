@@ -70,7 +70,7 @@ func TestToRepos_InvalidURL(t *testing.T) {
 }
 
 func TestProcessRepo_NilSubRepos(t *testing.T) {
-	repo := &Repository{
+	repo := &Repo{
 		Repo: gh.Repo{URL: "https://github.com/acme/main"},
 	}
 	repos := processRepo(repo, "tool")

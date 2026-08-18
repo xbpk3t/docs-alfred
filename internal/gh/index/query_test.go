@@ -122,46 +122,6 @@ func TestRepoNameFromFullName(t *testing.T) {
 	assert.Equal(t, "full", repoNameFromFullName("full"))
 }
 
-func TestExtractTags(t *testing.T) {
-	repos := Repos{
-		{Tag: "kernel"},
-		{Tag: "network"},
-		{Tag: "kernel"},
-		{Tag: ""},
-	}
-	tags := ExtractTags(repos)
-	assert.Equal(t, []string{"kernel", "network"}, tags)
-}
-
-func TestExtractTypesByTag(t *testing.T) {
-	repos := Repos{
-		{Tag: "kernel", Type: "tool"},
-		{Tag: "kernel", Type: "lib"},
-		{Tag: "network", Type: "tool"},
-	}
-	types := ExtractTypesByTag(repos, "kernel")
-	assert.Equal(t, []string{"tool", "lib"}, types)
-}
-
-func TestQueryReposByTag(t *testing.T) {
-	repos := Repos{
-		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Type: "tool"},
-		{Repo: gh.Repo{URL: "https://github.com/c/d"}, Type: "lib"},
-	}
-	filtered := QueryReposByTag(repos, "tool")
-	assert.Len(t, filtered, 1)
-}
-
-func TestQueryReposByTagAndType(t *testing.T) {
-	repos := Repos{
-		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Tag: "kernel", Type: "tool"},
-		{Repo: gh.Repo{URL: "https://github.com/c/d"}, Tag: "kernel", Type: "lib"},
-		{Repo: gh.Repo{URL: "https://github.com/e/f"}, Tag: "network", Type: "tool"},
-	}
-	filtered := QueryReposByTagAndType(repos, "kernel", "tool")
-	assert.Len(t, filtered, 1)
-}
-
 func TestMatchRepo_NilRepo(t *testing.T) {
 	_, ok := matchRepo(nil, "test")
 	assert.False(t, ok)
@@ -187,40 +147,6 @@ func TestReposFilter_ContainsMatch(t *testing.T) {
 
 func TestNormalizeSearchQuery_TrimGitSuffix(t *testing.T) {
 	assert.Equal(t, "owner/repo", normalizeSearchQuery("owner/repo.git"))
-}
-
-func TestExtractTags_EmptyRepos(t *testing.T) {
-	var repos Repos
-	tags := ExtractTags(repos)
-	assert.Empty(t, tags)
-}
-
-func TestExtractTags_NilRepo(t *testing.T) {
-	repos := Repos{nil, {Tag: "kernel"}}
-	tags := ExtractTags(repos)
-	assert.Equal(t, []string{"kernel"}, tags)
-}
-
-func TestExtractTypesByTag_EmptyRepos(t *testing.T) {
-	var repos Repos
-	types := ExtractTypesByTag(repos, "kernel")
-	assert.Empty(t, types)
-}
-
-func TestQueryReposByTag_EmptyResult(t *testing.T) {
-	repos := Repos{
-		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Type: "tool"},
-	}
-	filtered := QueryReposByTag(repos, "nonexistent")
-	assert.Empty(t, filtered)
-}
-
-func TestQueryReposByTagAndType_EmptyResult(t *testing.T) {
-	repos := Repos{
-		{Repo: gh.Repo{URL: "https://github.com/a/b"}, Tag: "kernel", Type: "tool"},
-	}
-	filtered := QueryReposByTagAndType(repos, "kernel", "nonexistent")
-	assert.Empty(t, filtered)
 }
 
 func TestReposFilter_SortByScoreAndIndex(t *testing.T) {

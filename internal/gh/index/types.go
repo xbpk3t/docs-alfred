@@ -22,10 +22,6 @@ type Repo struct {
 	IsRelatedRepo bool   `yaml:"-"                  json:"-"`
 }
 
-// Repository is kept as an alias for Repo so callers that only read repos
-// (dedup, presenter) can keep using the same name.
-type Repository = Repo
-
 // Repos is a list of enriched repositories.
 type Repos []*Repo
 

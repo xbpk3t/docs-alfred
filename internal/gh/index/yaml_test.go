@@ -72,7 +72,7 @@ func TestNormalizeRepoTopics_NilRepo(t *testing.T) {
 }
 
 func TestNormalizeRepoTopics_EmptyURL(t *testing.T) {
-	repo := &Repository{
+	repo := &Repo{
 		Repo: gh.Repo{URL: ""},
 	}
 	normalizeRepoTopics(repo, "base", false)
@@ -80,7 +80,7 @@ func TestNormalizeRepoTopics_EmptyURL(t *testing.T) {
 }
 
 func TestNormalizeRepoTopics_UseBase(t *testing.T) {
-	repo := &Repository{
+	repo := &Repo{
 		Repo: gh.Repo{URL: "https://github.com/acme/repo"},
 	}
 	normalizeRepoTopics(repo, "base", true)

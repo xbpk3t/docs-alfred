@@ -41,7 +41,7 @@ func processTopicRepos(topic *gh.Topic, tag, typeName string) Repos {
 }
 
 // processRepo processes a repository and its sub-repos.
-func processRepo(repo *Repository, configType string) Repos {
+func processRepo(repo *Repo, configType string) Repos {
 	var repos Repos
 	if mainRepo := processMainRepo(repo, configType); mainRepo != nil {
 		repos = append(repos, mainRepo)
@@ -51,7 +51,7 @@ func processRepo(repo *Repository, configType string) Repos {
 	return repos
 }
 
-func processMainRepo(repo *Repository, configType string) *Repository {
+func processMainRepo(repo *Repo, configType string) *Repo {
 	if !isValidSourceRepoURL(repo.URL) {
 		return nil
 	}
@@ -60,7 +60,7 @@ func processMainRepo(repo *Repository, configType string) *Repository {
 	return repo
 }
 
-func processAllSubRepos(repo *Repository) Repos {
+func processAllSubRepos(repo *Repo) Repos {
 	var repos Repos
 
 	for i := range repo.Rel {

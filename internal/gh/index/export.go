@@ -73,24 +73,6 @@ func MarshalConfigReposYAML(configRepos ConfigRepos) ([]byte, error) {
 	return data, nil
 }
 
-// RenderConfigYAMLFromDir renders split data/gh YAML files into gh.yml bytes.
-func RenderConfigYAMLFromDir(src string) ([]byte, error) {
-	configRepos, err := LoadConfigReposFromDir(src)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := MarshalConfigReposYAML(configRepos)
-	if err != nil {
-		return nil, err
-	}
-	if err := ValidateConfigYAML(data); err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
 // WriteConfigYAMLFromDir renders split data/gh YAML files and writes a gh.yml file.
 func WriteConfigYAMLFromDir(src, out string) (int, error) {
 	configRepos, err := LoadConfigReposFromDir(src)
