@@ -19,26 +19,18 @@ const (
 	evFile       = "file"
 	evNotArray   = "not-array"
 	evSection    = "section"
-	evRepo       = "repo"
 )
-
-// Relation type constants for walker events.
-const evTypeRepo = "repo"
 
 // WalkerEvent types for the gh YAML walker.
 type WalkerEvent struct {
-	Repo         Repo
 	Section      Section
 	Error        string
-	Relation     string
 	FilenameStem string
 	File         string
 	Content      string
 	Type         string
-	Errors       []string
 	DocIndex     int
 	SectionIndex int
-	RepoIndex    int
 	LineCount    int
 }
 
@@ -132,10 +124,6 @@ func processYAMLDoc(doc any, relPath, filenameStem string, fn func(WalkerEvent) 
 		if err := emitSectionEvent(fn, relPath, filenameStem, sectionIdx, section); err != nil {
 			return fmt.Errorf("section %d in %s: %w", sectionIdx, relPath, err)
 		}
-
-		if err := emitRepoEvents(fn, relPath, filenameStem, sectionIdx, section); err != nil {
-			return fmt.Errorf("repos in section %d of %s: %w", sectionIdx, relPath, err)
-		}
 	}
 
 	return nil
@@ -150,31 +138,6 @@ func emitSectionEvent(fn func(WalkerEvent) error, relPath, filenameStem string, 
 		SectionIndex: sectionIdx,
 		Section:      sectionFromMap(section),
 	})
-}
-
-// emitRepoEvents yields events for repo entries in a section.
-func emitRepoEvents(fn func(WalkerEvent) error, relPath, filenameStem string, sectionIdx int, section map[string]any) error {
-	// Process repo entries
-	if repos, ok := section["repo"].([]any); ok {
-		for repoIdx, r := range repos {
-			if repo, ok := r.(map[string]any); ok {
-				if err2 := fn(WalkerEvent{
-					Type:         evRepo,
-					File:         relPath,
-					FilenameStem: filenameStem,
-					SectionIndex: sectionIdx,
-					RepoIndex:    repoIdx,
-					Relation:     evTypeRepo,
-					Repo:         repoFromMap(repo),
-					Section:      sectionFromMap(section),
-				}); err2 != nil {
-					return err2
-				}
-			}
-		}
-	}
-
-	return nil
 }
 
 func collectYAMLFilesRecursive(root string) ([]string, error) {

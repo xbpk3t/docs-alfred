@@ -13,7 +13,6 @@ import (
 
 // Config 主配置结构.
 type Config struct {
-	WikiConfig       WikiConfig       `yaml:"wiki,omitempty"`
 	FeedConfig       FeedConfig       `yaml:"feed"`
 	ResendConfig     ResendConfig     `yaml:"resend"`
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
@@ -93,16 +92,9 @@ type Feeds struct {
 // TrnsConfig 转写（transcript）主配置.
 type TrnsConfig struct {
 	Summary         TrnsSummaryConfig         `yaml:"summary,omitempty"`
-	Asr             TrnsAsrConfig             `yaml:"asr,omitempty"`
 	TemporaryUpload TrnsTemporaryUploadConfig `yaml:"temporaryUpload,omitempty"`
 	DefaultLimit    int                       `default:"10"                     yaml:"defaultLimit,omitempty"`
 	Enabled         bool                      `yaml:"enabled,omitempty"`
-}
-
-// TrnsAsrConfig ASR（自动语音识别）配置.
-type TrnsAsrConfig struct {
-	Language string `yaml:"language,omitempty"`
-	Enabled  bool   `yaml:"enabled,omitempty"`
 }
 
 // TrnsSummaryConfig AI 摘要配置.
@@ -145,42 +137,6 @@ type HuntPublishConfig struct {
 // HuntCategoriesConfig 分类级别覆盖配置.
 type HuntCategoriesConfig struct {
 	Except []string `yaml:"except,omitempty"`
-}
-
-// -- Wiki Config --
-
-// WikiConfig Wiki 知识库配置.
-type WikiConfig struct {
-	WikiRootDir  string       `yaml:"wikiRootDir,omitempty"`
-	GhTopicsPath string       `yaml:"ghTopicsPath,omitempty"`
-	PendingPath  string       `yaml:"pendingPath,omitempty"`
-	Ai           WikiAiConfig `yaml:"ai,omitempty"`
-}
-
-// WikiAiConfig Wiki AI 配置（fallback 到 trns.summary 的 model/baseUrl）.
-type WikiAiConfig struct {
-	Model   string `yaml:"model,omitempty"`
-	BaseURL string `yaml:"baseUrl,omitempty"`
-}
-
-// AiModelForWiki returns the effective model for wiki AI.
-// Falls back to trns.summary.model if wiki.ai.model is empty.
-func (c *Config) AiModelForWiki() string {
-	if c.WikiConfig.Ai.Model != "" {
-		return c.WikiConfig.Ai.Model
-	}
-
-	return c.TrnsConfig.Summary.Model
-}
-
-// AiBaseURLForWiki returns the effective base URL for wiki AI.
-// Falls back to trns.summary.baseUrl if wiki.ai.baseUrl is empty.
-func (c *Config) AiBaseURLForWiki() string {
-	if c.WikiConfig.Ai.BaseURL != "" {
-		return c.WikiConfig.Ai.BaseURL
-	}
-
-	return c.TrnsConfig.Summary.BaseURL
 }
 
 // NewConfig 加载配置文件.

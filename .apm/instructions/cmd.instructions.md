@@ -31,7 +31,6 @@ applyTo: "cmd/**"
 子命令：`send`、`trns`（含 `check` 子命令）、`hunt`。
 
 - `send` 默认会发送 newsletter；agent 只能使用 `--check` 或显式 dry-run。
-- `hunt --send-mail` 会发邮件；默认不运行。
 - Exa、Tavily、ASR、AI summary、temporary upload 是外部/付费副作用；默认使用 mock 或关闭开关。
 - `.cache/rss2nl/**` 是运行产物，不作为业务 source of truth。
 - RSS 解析使用 `internal/rss/feed`（gofeed），不手写 parser。

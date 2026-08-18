@@ -346,13 +346,6 @@ func TestCollectExpectedImageDirsShortPath(t *testing.T) {
 	assert.Empty(t, dirs)
 }
 
-func TestCollectRepoTopicDirsEmptyURL(t *testing.T) {
-	var dirs []string
-	// Empty URL should result in empty repoName, causing early return
-	collectRepoTopicDirs(&ghdata.Repo{URL: ""}, "base", &dirs, false)
-	assert.Empty(t, dirs)
-}
-
 func TestCollectTopicDirsEmptyDirName(t *testing.T) {
 	var dirs []string
 	// Topic with empty DirName should be skipped

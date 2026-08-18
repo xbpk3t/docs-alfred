@@ -14,7 +14,6 @@ import (
 
 	"github.com/asticode/go-astisub"
 	"github.com/gabriel-vasile/mimetype"
-	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
@@ -44,7 +43,6 @@ type Provider interface {
 var (
 	_ Provider = (*RssTranscriptProvider)(nil)
 	_ Provider = (*DescriptionLinkProvider)(nil)
-	_ Provider = (*AudioTranscriptionProvider)(nil)
 	_ Provider = (*XiaoyuzhouProvider)(nil)
 )
 
@@ -211,54 +209,6 @@ func extractTranscriptLinksFromText(text, baseURL string) []string {
 
 func isTranscriptURL(rawURL string) bool {
 	return urlutil.IsTranscriptURL(rawURL)
-}
-
-// --- AudioTranscriptionProvider ---
-
-type AudioTranscriptionProvider struct {
-	CLIPath  string
-	Language string
-}
-
-func NewAudioTranscriptionProvider(cliPath, language string) *AudioTranscriptionProvider {
-	if cliPath == "" {
-		cliPath = "pt"
-	}
-	if language == "" {
-		language = "auto"
-	}
-
-	return &AudioTranscriptionProvider{CLIPath: cliPath, Language: language}
-}
-
-func (p *AudioTranscriptionProvider) Name() string {
-	return "audio-asr"
-}
-
-func (p *AudioTranscriptionProvider) Fetch(ctx context.Context, ep *EpisodeRef) (*TranscriptResult, error) {
-	if ep.EnclosureURL == "" {
-		return nil, errors.New("no audio enclosure URL for ASR")
-	}
-
-	output, err := cmdutil.RunStdout(ctx, p.CLIPath,
-		"--language", p.Language,
-		"--output-format", "txt",
-		ep.EnclosureURL,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("asr failed: %w", err)
-	}
-
-	content := strings.TrimSpace(string(output))
-	if content == "" {
-		return nil, errors.New("asr produced empty transcript")
-	}
-
-	return &TranscriptResult{
-		Content:     content,
-		ContentType: plaintextContentType,
-		Source:      "audio-asr",
-	}, nil
 }
 
 // --- Pipeline ---

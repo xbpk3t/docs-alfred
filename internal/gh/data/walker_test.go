@@ -81,39 +81,17 @@ func TestWalkGhRepos_ValidData(t *testing.T) {
   record: []
 `), 0644))
 
-	var sectionEvents, repoEvents int
+	var sectionEvents int
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
 		switch ev.Type {
 		case evSection:
 			sectionEvents++
-		case evRepo:
-			repoEvents++
 		}
 
 		return nil
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, sectionEvents)
-	assert.Equal(t, 1, repoEvents)
-}
-
-func TestWalkGhRepos_RepoEntry(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: language
-  repo:
-    - url: https://github.com/acme/repo
-`), 0644))
-
-	var repoCount int
-	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
-		if ev.Type == evRepo {
-			repoCount++
-		}
-
-		return nil
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, repoCount)
 }
 
 func TestWalkGhRepos_NonMappingInSection(t *testing.T) {
@@ -150,7 +128,7 @@ func TestWalkGhRepos_CallbackError(t *testing.T) {
 `), 0644))
 
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
-		if ev.Type == evRepo {
+		if ev.Type == evSection {
 			return assert.AnError
 		}
 
@@ -168,16 +146,16 @@ func TestWalkGhRepos_SubDirs(t *testing.T) {
     - url: https://github.com/acme/nested
 `), 0644))
 
-	var repoCount int
+	var sectionEvent bool
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
-		if ev.Type == evRepo {
-			repoCount++
+		if ev.Type == evSection {
+			sectionEvent = true
 		}
 
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 1, repoCount)
+	assert.True(t, sectionEvent)
 }
 
 func TestWalkerEvent_Fields(t *testing.T) {
@@ -196,7 +174,7 @@ func TestWalkerEvent_Fields(t *testing.T) {
 
 	var ev WalkerEvent
 	err := WalkGhRepos(tmpDir, func(event WalkerEvent) error {
-		if event.Type == evRepo {
+		if event.Type == evSection {
 			ev = event
 		}
 
@@ -204,10 +182,6 @@ func TestWalkerEvent_Fields(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "language", ev.Section.Type)
-	assert.Equal(t, "https://github.com/acme/tool", ev.Repo.URL)
-	require.NotNil(t, ev.Repo.Des)
-	assert.Equal(t, "test", *ev.Repo.Des)
-	assert.Equal(t, evTypeRepo, ev.Relation)
 	assert.Equal(t, "go", ev.FilenameStem)
 }
 
@@ -225,26 +199,22 @@ func TestWalkGhRepos_MultiDoc(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "multi.yml"), []byte(`---
 - type: lang1
-  repo:
-    - url: https://github.com/a/b
   record: []
 ---
 - type: lang2
-  repo:
-    - url: https://github.com/c/d
   record: []
 `), 0644))
 
-	var repoCount int
+	var sectionCount int
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
-		if ev.Type == evRepo {
-			repoCount++
+		if ev.Type == evSection {
+			sectionCount++
 		}
 
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 2, repoCount)
+	assert.Equal(t, 2, sectionCount)
 }
 
 func TestWalkGhRepos_NilDoc(t *testing.T) {
@@ -259,14 +229,14 @@ func TestWalkGhRepos_NilDoc(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	// Should have file event but no section/ repo events
-	var hasRepo bool
+	// Should have file event but no section events
+	var hasSection bool
 	for _, ev := range events {
-		if ev.Type == evRepo {
-			hasRepo = true
+		if ev.Type == evSection {
+			hasSection = true
 		}
 	}
-	assert.False(t, hasRepo)
+	assert.False(t, hasSection)
 }
 
 func TestWalkGhRepos_EmptySequenceItem(t *testing.T) {
@@ -357,7 +327,7 @@ func TestWalkGhRepos_RepoCallbackError(t *testing.T) {
 
 	var callCount int
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
-		if ev.Type == evRepo && ev.Relation == evTypeRepo {
+		if ev.Type == evSection {
 			callCount++
 
 			return assert.AnError
@@ -394,17 +364,16 @@ func TestWalkGhRepos_RepoNotMappingSkipped(t *testing.T) {
   record: []
 `), 0644))
 
-	var repoCount int
+	var sectionCount int
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
-		if ev.Type == evRepo {
-			repoCount++
+		if ev.Type == evSection {
+			sectionCount++
 		}
 
 		return nil
 	})
 	require.NoError(t, err)
-	// "string item" is skipped, only 1 repo counted
-	assert.Equal(t, 1, repoCount)
+	assert.Equal(t, 1, sectionCount)
 }
 
 func TestWalkGhRepos_NoRepoNoUsing(t *testing.T) {
@@ -413,16 +382,16 @@ func TestWalkGhRepos_NoRepoNoUsing(t *testing.T) {
   record: []
 `), 0644))
 
-	var repoCount int
+	var sectionCount int
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
-		if ev.Type == evRepo {
-			repoCount++
+		if ev.Type == evSection {
+			sectionCount++
 		}
 
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 0, repoCount)
+	assert.Equal(t, 1, sectionCount)
 }
 
 func TestWalkGhRepos_EmptyRepoList(t *testing.T) {
@@ -432,16 +401,16 @@ func TestWalkGhRepos_EmptyRepoList(t *testing.T) {
   record: []
 `), 0644))
 
-	var repoCount int
+	var sectionCount int
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
-		if ev.Type == evRepo {
-			repoCount++
+		if ev.Type == evSection {
+			sectionCount++
 		}
 
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 0, repoCount)
+	assert.Equal(t, 1, sectionCount)
 }
 
 func TestWalkGhRepos_TopicWithRepos(t *testing.T) {

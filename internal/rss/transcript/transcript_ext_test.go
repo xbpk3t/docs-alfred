@@ -270,30 +270,6 @@ func TestDescriptionLinkProviderName(t *testing.T) {
 	assert.Equal(t, "description-link", NewDescriptionLinkProvider().Name())
 }
 
-func TestAudioTranscriptionProviderName(t *testing.T) {
-	p := NewAudioTranscriptionProvider("", "")
-	assert.Equal(t, "audio-asr", p.Name())
-}
-
-func TestAudioTranscriptionProviderDefaults(t *testing.T) {
-	p := NewAudioTranscriptionProvider("", "")
-	assert.Equal(t, "pt", p.CLIPath)
-	assert.Equal(t, "auto", p.Language)
-}
-
-func TestAudioTranscriptionProviderCustomValues(t *testing.T) {
-	p := NewAudioTranscriptionProvider("/usr/bin/pt", "zh")
-	assert.Equal(t, "/usr/bin/pt", p.CLIPath)
-	assert.Equal(t, "zh", p.Language)
-}
-
-func TestAudioTranscriptionProviderNoEnclosure(t *testing.T) {
-	p := NewAudioTranscriptionProvider("", "")
-	_, err := p.Fetch(context.Background(), &EpisodeRef{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no audio enclosure URL")
-}
-
 // --- RssTranscriptProvider tests ---
 
 func TestRssTranscriptProviderNoLinks(t *testing.T) {

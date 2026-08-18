@@ -561,7 +561,6 @@ func TestNewHuntCmdFlags(t *testing.T) {
 	assert.NotNil(t, cmd.Flags().Lookup("blocked-domain"))
 	assert.NotNil(t, cmd.Flags().Lookup("new-only"))
 	assert.NotNil(t, cmd.Flags().Lookup("dry-run"))
-	assert.NotNil(t, cmd.Flags().Lookup("send-mail"))
 }
 
 // ---------------------------------------------------------------------------

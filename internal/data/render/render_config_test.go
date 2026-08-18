@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
@@ -482,60 +481,4 @@ func TestProcessGithubDirDomain_Success(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(outDir, "gh.json"))
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "main-tool")
-}
-
-// ---------------------------------------------------------------------------
-// Legacy loadRenderConfigs / processRenderConfig (kept for potential reuse)
-// ---------------------------------------------------------------------------
-
-func TestProcessRenderConfigEmpty(t *testing.T) {
-	cfg := processRenderConfig(docsConfig{})
-	assert.Empty(t, cfg.Src)
-}
-
-func TestProcessRenderConfigWithJSON(t *testing.T) {
-	proc := newDocProcessor(fileTypeJSON)
-	proc.Dst = "output.json"
-
-	cfg := processRenderConfig(docsConfig{
-		Src:  "test",
-		JSON: proc,
-	})
-
-	assert.Equal(t, "test", cfg.Src)
-	assert.NotNil(t, cfg.JSON)
-	assert.Equal(t, "output.json", cfg.JSON.Dst)
-}
-
-func TestProcessRenderConfigWithYAML(t *testing.T) {
-	proc := newDocProcessor(fileTypeYAML)
-	proc.Dst = "output.yml"
-
-	cfg := processRenderConfig(docsConfig{
-		Src:  "test",
-		YAML: proc,
-	})
-
-	assert.Equal(t, "test", cfg.Src)
-	assert.NotNil(t, cfg.YAML)
-	assert.Equal(t, "output.yml", cfg.YAML.Dst)
-}
-
-func TestMarshalAndWriteGithubOutput_EmptyRepos(t *testing.T) {
-	tmpDir := t.TempDir()
-	dc := &docsConfig{Src: tmpDir, Cmd: "gh"}
-	proc := &docProcessor{Dst: tmpDir, fileType: fileTypeJSON}
-	allRepos := make(ghindex.ConfigRepos, 0)
-	err := dc.marshalAndWriteGithubOutput(allRepos, fileTypeJSON, proc)
-	require.NoError(t, err)
-}
-
-func TestMarshalAndWriteGithubOutput_JSONConversionError(t *testing.T) {
-	tmpDir := t.TempDir()
-	dc := &docsConfig{Src: tmpDir, Cmd: "gh"}
-	proc := &docProcessor{Dst: tmpDir, fileType: fileTypeJSON}
-	allRepos := make(ghindex.ConfigRepos, 0)
-	err := dc.marshalAndWriteGithubOutput(allRepos, fileTypeJSON, proc)
-	// Empty repos should succeed (empty array)
-	require.NoError(t, err)
 }

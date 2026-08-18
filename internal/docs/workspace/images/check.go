@@ -305,13 +305,6 @@ func collectTopicDirs(topics []ghdata.Topic, base string, dirs *[]string) {
 	}
 }
 
-func collectRepoTopicDirs(repo *ghdata.Repo, base string, dirs *[]string, useBase bool) {
-	_ = repo
-	_ = base
-	_ = dirs
-	_ = useBase
-}
-
 // collectExistingFilesAndDirs returns both directories and files in imagesDir.
 //
 //nolint:nonamedreturns // named returns preferred for readability here

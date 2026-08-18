@@ -136,62 +136,6 @@ func TestGetMaxAttempts(t *testing.T) {
 	}
 }
 
-func TestAiModelForWiki(t *testing.T) {
-	tests := []struct {
-		name string
-		want string
-		cfg  Config
-	}{
-		{
-			name: "wiki model set",
-			cfg:  Config{WikiConfig: WikiConfig{Ai: WikiAiConfig{Model: "wiki-model"}}},
-			want: "wiki-model",
-		},
-		{
-			name: "fallback to trns model",
-			cfg:  Config{TrnsConfig: TrnsConfig{Summary: TrnsSummaryConfig{Model: "trns-model"}}},
-			want: "trns-model",
-		},
-		{
-			name: "wiki takes priority",
-			cfg: Config{
-				WikiConfig: WikiConfig{Ai: WikiAiConfig{Model: "wiki-model"}},
-				TrnsConfig: TrnsConfig{Summary: TrnsSummaryConfig{Model: "trns-model"}},
-			},
-			want: "wiki-model",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.cfg.AiModelForWiki())
-		})
-	}
-}
-
-func TestAiBaseURLForWiki(t *testing.T) {
-	tests := []struct {
-		name string
-		want string
-		cfg  Config
-	}{
-		{
-			name: "wiki base URL set",
-			cfg:  Config{WikiConfig: WikiConfig{Ai: WikiAiConfig{BaseURL: "https://wiki.ai"}}},
-			want: "https://wiki.ai",
-		},
-		{
-			name: "fallback to trns base URL",
-			cfg:  Config{TrnsConfig: TrnsConfig{Summary: TrnsSummaryConfig{BaseURL: "https://trns.ai"}}},
-			want: "https://trns.ai",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.cfg.AiBaseURLForWiki())
-		})
-	}
-}
-
 func TestValidateForSend(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -38,9 +38,6 @@ env:
 trns:
   enabled: true
   defaultLimit: 10
-  asr:
-    enabled: false         # Enable ASR fallback via pt CLI
-    language: auto
   summary:
     enabled: true          # AI summary generation
     model: deepseek-v4-flash
@@ -72,14 +69,6 @@ hunt:
     - example.com
 
 # -- Wiki configuration --
-wiki:
-  wikiRootDir: wiki
-  ghTopicsDir: wiki/ghTopicsPath
-  ai:
-    model: gpt-4o
-    # baseUrl: https://api.openai.com/v1
-    # apiKey: (uses OPENAI_API_KEY env var by default)
-
 rss:
   - type: coding
     feeds:

@@ -168,7 +168,6 @@ func newHuntCmd() *cobra.Command {
 		perCat      int
 		newOnly     bool
 		dryRun      bool
-		sendMail    bool
 	}
 
 	cmd := &cobra.Command{
@@ -200,7 +199,6 @@ func newHuntCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&opts.blocked, "blocked-domain", nil, "Extra blocked domain")
 	cmd.Flags().BoolVar(&opts.newOnly, "new-only", false, "Only accept candidates not in state")
 	cmd.Flags().BoolVar(&opts.dryRun, "dry-run", false, "Write reports only")
-	cmd.Flags().BoolVar(&opts.sendMail, "send-mail", false, "Send HTML report through Resend")
 
 	return cmd
 }
@@ -210,7 +208,7 @@ func initHuntRun(opts *struct {
 	reportHTML, config, providers, reportMd, state, reportJSON string
 	category, blocked                                          []string
 	max, providerMax, seedLimit, perCat                        int
-	newOnly, dryRun, sendMail                                  bool
+	newOnly, dryRun                                            bool
 },
 	exaAPIKey, tavilyAPIKey, keenableAPIKey string,
 ) (*huntRunConfig, error) {
@@ -306,7 +304,7 @@ func runHunt(opts *struct {
 	reportHTML, config, providers, reportMd, state, reportJSON string
 	category, blocked                                          []string
 	max, providerMax, seedLimit, perCat                        int
-	newOnly, dryRun, sendMail                                  bool
+	newOnly, dryRun                                            bool
 },
 	exaAPIKey, tavilyAPIKey, keenableAPIKey string,
 	format string,

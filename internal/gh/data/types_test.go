@@ -46,23 +46,6 @@ func TestSectionFromMap_NilRecord(t *testing.T) {
 	assert.Equal(t, "tool", section.Type)
 }
 
-func TestRepoFromMap(t *testing.T) {
-	m := map[string]any{
-		"url": "https://github.com/owner/repo",
-		"des": "test",
-		"nix": "nix-value",
-		"doc": "doc-url",
-	}
-	repo := repoFromMap(m)
-	assert.Equal(t, "https://github.com/owner/repo", repo.URL)
-	require.NotNil(t, repo.Des)
-	assert.Equal(t, "test", *repo.Des)
-	require.NotNil(t, repo.Nix)
-	assert.Equal(t, "nix-value", *repo.Nix)
-	require.NotNil(t, repo.Doc)
-	assert.Equal(t, "doc-url", *repo.Doc)
-}
-
 func TestTopic_DirName(t *testing.T) {
 	tests := []struct {
 		name  string

@@ -12,10 +12,6 @@ const (
 const (
 	// DefaultRetryDelay 默认重试延迟时间.
 	DefaultRetryDelay = 5 * time.Second
-	// DefaultMaxRetries 默认最大重试次数.
-	DefaultMaxRetries = 3
-	// DefaultFeedLimit 默认Feed数量限制.
-	DefaultFeedLimit = 10
 	// DefaultFeedFetchConcurrency controls concurrent feed fetches per group.
 	DefaultFeedFetchConcurrency = 10
 	// DefaultHostFetchConcurrency is per-host in-flight when no hosts[] rule matches.
