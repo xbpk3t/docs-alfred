@@ -15,7 +15,18 @@ const (
 	TypeRepoEval ClassifyType = "review"
 	TypeDeepDive ClassifyType = "research"
 	TypeInbox    ClassifyType = "inbox"
+	// OKF v0.1 curated types (used by wiki check / stats alongside the
+	// pipeline types above). Single source of truth for the type set.
+	TypeBlog   ClassifyType = "blog"
+	TypeLog    ClassifyType = "log"
+	TypeDigest ClassifyType = "digest"
 )
+
+// KnownTypes is the full type set across pipeline + OKF curated types.
+var KnownTypes = []ClassifyType{
+	TypeRepoEval, TypeDeepDive, TypeInbox,
+	TypeBlog, TypeLog, TypeDigest,
+}
 
 // ClassifyItem holds the full classification result for a URL.
 type ClassifyItem struct {

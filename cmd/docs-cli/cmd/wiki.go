@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	workspaceuc "github.com/xbpk3t/docs-alfred/internal/docs/check"
 	wikiuc "github.com/xbpk3t/docs-alfred/internal/docs/ingest"
+	wikiaudit "github.com/xbpk3t/docs-alfred/internal/docs/wiki/audit"
 	wikicompact "github.com/xbpk3t/docs-alfred/internal/docs/wiki/compact"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -36,6 +37,7 @@ const (
 	wikiDigestCommandName  = "digest"
 	wikiAuditCommandName   = "audit"
 	wikiCheckCommandName   = "check"
+	wikiStatsCommandName   = "stats"
 	wikiCompactCommandName = "compact"
 )
 
@@ -61,6 +63,7 @@ and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 	cmd.AddCommand(newWikiDigestLocalCmd())
 	cmd.AddCommand(newWikiAuditCmd())
 	cmd.AddCommand(newWikiCheckCmd())
+	cmd.AddCommand(newWikiStatsCmd())
 	cmd.AddCommand(newWikiCompactCmd())
 
 	return cmd
@@ -253,6 +256,71 @@ type wikiCompactFlags struct {
 	createIssue      bool
 	dryRun           bool
 	skipAI           bool
+}
+
+func newWikiStatsCmd() *cobra.Command {
+	var flags struct {
+		config   string
+		wikiRoot string
+		format   string
+		top      int
+	}
+	cmd := &cobra.Command{
+		Use:   wikiStatsCommandName,
+		Short: "Wiki statistical overview (overview + research top N)",
+		Long: `Scan the wiki tree and print ordered record sections ("section" + "data" rows).
+
+Sections:
+  overview        files / md / size
+  research top<N> topics with the most type=research md files, descending
+
+Output formats:
+  tty   (default) — terminal render (go-pretty box tables)
+  md              — Markdown source tables (GFM)
+  json            — raw data contract (ordered keys, no rendering)
+`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+			root := wikiuc.ResolveWikiRoot(cfg)
+
+			stats, err := wikiaudit.RunStats(wikiaudit.StatsOptions{
+				WikiRoot: root,
+				TopN:     flags.top,
+				// ExcludeNames omitted → DefaultExcludeNames (operation artifacts).
+			})
+			if err != nil {
+				return err
+			}
+
+			switch flags.format {
+			case "json":
+				b, err := stats.JSON()
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(b))
+				return err
+			case "md":
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), stats.Markdown())
+				return err
+			case "tty", "":
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), stats.Terminal())
+				return err
+			default:
+				return fmt.Errorf("unsupported format %q (tty|md|json)", flags.format)
+			}
+		},
+	}
+	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path (wiki.yml)")
+	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
+	cmd.Flags().StringVar(&flags.format, "format", "tty", "Output format (tty|md|json) — json is the raw data contract")
+	cmd.Flags().IntVar(&flags.top, "top", 10, "Top N topics for the research section")
+
+	return cmd
 }
 
 func newWikiCompactCmd() *cobra.Command {

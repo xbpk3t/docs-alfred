@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/adrg/frontmatter"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
@@ -26,12 +27,13 @@ type wikiFrontmatter struct {
 }
 
 // validOKFTypes is the OKF v0.1 valid type set.
+// Single source of truth lives in internal/docs/wiki/types (ClassifyType).
+// Pipeline-only types (review/inbox) are NOT valid OKF types.
 var validOKFTypes = map[string]bool{
-	"blog": true,
-	// "blog-draft": true,
-	"log":      true,
-	"digest":   true,
-	"research": true,
+	string(wikitypes.TypeBlog):   true,
+	string(wikitypes.TypeLog):    true,
+	string(wikitypes.TypeDigest): true,
+	string(wikitypes.TypeDeepDive): true, // "research"
 }
 
 // RunWikiCheckOKF validates OKF v0.1 frontmatter compliance on all wiki .md files.

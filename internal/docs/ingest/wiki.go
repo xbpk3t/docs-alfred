@@ -67,7 +67,7 @@ func RunAddURLs(ctx context.Context, input AddInput) (*Result, error) {
 	if len(input.URLs) == 0 {
 		return nil, errors.New("at least one URL is required")
 	}
-	wikiRoot := resolveWikiRoot(input.Config)
+	wikiRoot := ResolveWikiRoot(input.Config)
 	if err := requireDir(wikiRoot, "wiki root"); err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 	if input.Config == nil {
 		return nil, errors.New("wiki config is required")
 	}
-	wikiRoot := resolveWikiRoot(input.Config)
+	wikiRoot := ResolveWikiRoot(input.Config)
 	if err := requireDir(wikiRoot, "wiki root"); err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func RunAudit(ctx context.Context, input AuditInput) (*AuditResult, error) {
 	if input.Config == nil {
 		return nil, errors.New("wiki config is required")
 	}
-	wikiRoot := resolveWikiRoot(input.Config)
+	wikiRoot := ResolveWikiRoot(input.Config)
 	if err := requireDir(wikiRoot, "wiki root"); err != nil {
 		return nil, err
 	}
@@ -189,7 +189,8 @@ func handledURLsByLine(results []URLResult) map[int][]string {
 	return processed
 }
 
-func resolveWikiRoot(cfg *Config) string {
+// ResolveWikiRoot returns the configured wiki root, or the default "wiki".
+func ResolveWikiRoot(cfg *Config) string {
 	if cfg.Wiki.WikiRoot != "" {
 		return cfg.Wiki.WikiRoot
 	}
@@ -257,7 +258,7 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 	if deps.classifier == nil {
 		deps.classifier = wikiclassify.NewClassifier(
 			newAIConfig(cfg),
-			resolveWikiRoot(cfg),
+			ResolveWikiRoot(cfg),
 			cfg.Wiki.GHTopicsURL,
 			wikiclassify.WithMaxContentSize(cfg.Wiki.MaxContentSize),
 		)
@@ -269,7 +270,7 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 		deps.inbox = serviceInboxStore{}
 	}
 	if deps.validTopicPaths == nil {
-		deps.validTopicPaths = wikiwrite.LoadValidTopicPaths(resolveWikiRoot(cfg), cfg.Wiki.GHTopicsURL)
+		deps.validTopicPaths = wikiwrite.LoadValidTopicPaths(ResolveWikiRoot(cfg), cfg.Wiki.GHTopicsURL)
 	}
 
 	return deps

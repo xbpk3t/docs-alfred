@@ -291,11 +291,11 @@ func TestRequireFileIsDir(t *testing.T) {
 // --- resolveWikiRoot ---
 
 func TestResolveWikiRootDefault(t *testing.T) {
-	assert.Equal(t, defaultWikiRoot, resolveWikiRoot(&Config{}))
+	assert.Equal(t, defaultWikiRoot, ResolveWikiRoot(&Config{}))
 }
 
 func TestResolveWikiRootExplicit(t *testing.T) {
-	assert.Equal(t, "/custom", resolveWikiRoot(&Config{Wiki: WikiConfig{WikiRoot: "/custom"}}))
+	assert.Equal(t, "/custom", ResolveWikiRoot(&Config{Wiki: WikiConfig{WikiRoot: "/custom"}}))
 }
 
 // --- newAIConfig ---

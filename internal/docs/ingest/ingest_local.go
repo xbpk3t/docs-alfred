@@ -33,7 +33,7 @@ func RunDigestLocal(ctx context.Context, input DigestLocalInput) (*Result, error
 	if input.Config == nil {
 		return nil, errors.New("wiki config is required")
 	}
-	wikiRoot := resolveWikiRoot(input.Config)
+	wikiRoot := ResolveWikiRoot(input.Config)
 	if err := requireDir(wikiRoot, "wiki root"); err != nil {
 		return nil, err
 	}
