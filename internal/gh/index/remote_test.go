@@ -35,6 +35,15 @@ func TestNewManager_AppendsGhYMLToBaseURL(t *testing.T) {
 	assert.Equal(t, "https://docs.lucc.dev/gh.yml", m.configURL)
 }
 
+func TestNewManager_AlfredUnsetVarPlaceholderFallsBack(t *testing.T) {
+	// Alfred passes the literal "{var:url}" text when the workflow variable
+	// is unset; the manager must fall back to the default rather than trying
+	// to fetch a bogus URL.
+	m := NewManager("", "{var:url}")
+	require.NotNil(t, m)
+	assert.Equal(t, DefaultConfigURL, m.configURL)
+}
+
 func TestSetTTL(t *testing.T) {
 	m := NewManager("", "")
 	m.SetTTL(1 * time.Hour)
@@ -167,6 +176,13 @@ func TestLoadWithCacheTTLUsesValidatedStaleCacheWhenRemoteFails(t *testing.T) {
 	assert.Equal(t, "https://github.com/acme/stale", result[0].URL)
 }
 
+func stubStarter(t *testing.T, fn func(m *Manager) error) {
+	t.Helper()
+	previousStarter := backgroundSyncStarter
+	t.Cleanup(func() { backgroundSyncStarter = previousStarter })
+	backgroundSyncStarter = fn
+}
+
 func TestLoadWithBackgroundSyncStartsProcessForStaleCache(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "gh.yml")
@@ -174,17 +190,14 @@ func TestLoadWithBackgroundSyncStartsProcessForStaleCache(t *testing.T) {
 	old := time.Now().Add(-2 * time.Hour)
 	require.NoError(t, os.Chtimes(configPath, old, old))
 
-	previousStarter := backgroundSyncStarter
-	t.Cleanup(func() { backgroundSyncStarter = previousStarter })
-
 	var called bool
-	backgroundSyncStarter = func(m *Manager) error {
+	stubStarter(t, func(m *Manager) error {
 		called = true
 		assert.Equal(t, configPath, m.configPath)
 		assert.Equal(t, "https://example.com/gh.yml", m.configURL)
 
 		return nil
-	}
+	})
 
 	m := NewManager(configPath, "https://example.com/gh.yml")
 	m.SetTTL(time.Hour)
@@ -203,11 +216,9 @@ func TestLoadWithBackgroundSyncUsesCacheWhenStarterFails(t *testing.T) {
 	old := time.Now().Add(-2 * time.Hour)
 	require.NoError(t, os.Chtimes(configPath, old, old))
 
-	previousStarter := backgroundSyncStarter
-	t.Cleanup(func() { backgroundSyncStarter = previousStarter })
-	backgroundSyncStarter = func(m *Manager) error {
+	stubStarter(t, func(m *Manager) error {
 		return errors.New("starter unavailable")
-	}
+	})
 
 	m := NewManager(configPath, "https://example.com/gh.yml")
 	m.SetTTL(time.Hour)
@@ -218,18 +229,36 @@ func TestLoadWithBackgroundSyncUsesCacheWhenStarterFails(t *testing.T) {
 	assert.Equal(t, "https://github.com/acme/cached", result[0].URL)
 }
 
+func TestLoadWithBackgroundSync_NoCacheSpawnsAndServesEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "gh.yml")
+
+	var called bool
+	stubStarter(t, func(m *Manager) error {
+		called = true
+		assert.Equal(t, configPath, m.configPath)
+
+		return nil
+	})
+
+	m := NewManager(configPath, "https://example.com/gh.yml")
+	require.NoError(t, m.LoadWithBackgroundSync())
+	assert.True(t, called, "starter should run for missing cache")
+
+	// Empty result served immediately; cache arrives later via background job.
+	assert.Empty(t, m.Filter("anything"))
+}
+
 func TestLoadWithBackgroundSync_FreshCache(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "gh.yml")
 	require.NoError(t, os.WriteFile(configPath, validRemoteConfigYAML("fresh"), 0644))
 
-	previousStarter := backgroundSyncStarter
-	t.Cleanup(func() { backgroundSyncStarter = previousStarter })
-	backgroundSyncStarter = func(m *Manager) error {
+	stubStarter(t, func(m *Manager) error {
 		t.Fatal("should not be called for fresh cache")
 
 		return nil
-	}
+	})
 
 	m := NewManager(configPath, "https://example.com/gh.yml")
 	m.SetTTL(24 * time.Hour)
@@ -320,10 +349,16 @@ func TestNewManager_EmptyPath(t *testing.T) {
 	assert.Equal(t, DefaultConfigPath, m.configPath)
 }
 
-func TestLoadWithBackgroundSync_NoCacheFallsBackToCacheTTL(t *testing.T) {
+func TestLoadWithBackgroundSync_NoCacheStarterFailFallsBackToBlockingSync(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "gh.yml")
-	// No cache file exists - should fall back to LoadWithCacheTTL
+	// No cache file exists. The background starter has been stubbed to fail,
+	// so LoadWithBackgroundSync must fall back to a blocking sync that
+	// fetches the remote and serves it immediately.
+
+	stubStarter(t, func(m *Manager) error {
+		return errors.New("starter unavailable")
+	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(validRemoteConfigYAML("remote"))
@@ -335,6 +370,10 @@ func TestLoadWithBackgroundSync_NoCacheFallsBackToCacheTTL(t *testing.T) {
 
 	result := m.Filter("remote")
 	require.Len(t, result, 1)
+
+	// The fetched config must have been written to the cache too.
+	_, err := os.Stat(configPath)
+	require.NoError(t, err)
 }
 
 func TestLoadFromFile_UnmarshalError(t *testing.T) {
@@ -355,16 +394,6 @@ func TestWriteCache_InvalidPath(t *testing.T) {
 	err := m.writeCache([]byte("data"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to write config cache")
-}
-
-func TestStartBackgroundSyncProcess_UsesRealExecutable(t *testing.T) {
-	// Test the actual startBackgroundSyncProcess function by calling it directly
-	// This will use os.Executable() to find the test binary and try to run it
-	// RunBackground doesn't wait for completion, so this should return nil
-	m := NewManager("/tmp/test-gh.yml", "https://example.com/gh.yml")
-	err := startBackgroundSyncProcess(m)
-	// It should not error since RunBackground is fire-and-forget
-	require.NoError(t, err)
 }
 
 func validRemoteConfigYAML(name string) []byte {

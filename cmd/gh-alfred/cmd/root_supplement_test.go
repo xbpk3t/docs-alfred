@@ -57,7 +57,10 @@ func TestExecuteRunsSuccessfully(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestSearchCmdRunE_ErrorNoCache(t *testing.T) {
+func TestSearchCmdRunE_NoCacheServesEmptyAlfredJSON(t *testing.T) {
+	// Keep the spawned background sync's PID file out of the real cache.
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -74,11 +77,14 @@ func TestSearchCmdRunE_ErrorNoCache(t *testing.T) {
 	})
 
 	err := root.Execute()
-	// The search error path writes Alfred JSON to stdout and returns nil.
+	// No cache: the search must not block on the remote; it spawns a
+	// background sync (which fails here against the 400 server) and serves
+	// an empty Alfred result list immediately.
 	require.NoError(t, err)
 
 	got := stdout()
-	require.Contains(t, got, "Alfred index unavailable")
+	require.Contains(t, got, `"items": []`)
+	require.NotContains(t, got, "Alfred index unavailable")
 }
 
 func TestSearchCmdRunE_SuccessFromCache(t *testing.T) {

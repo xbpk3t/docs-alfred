@@ -10,11 +10,19 @@ package cmdutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	gocmd "github.com/go-cmd/cmd"
+
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 // RunWithOutput executes a command and returns combined stdout+stderr.
@@ -76,14 +84,106 @@ func RunSeparate(ctx context.Context, name string, args ...string) ([]byte, []by
 		nil
 }
 
-// RunBackground starts a command in the background without waiting for
-// completion. The process continues running after the caller returns.
-// Use this for fire-and-forget scenarios like background syncs.
-func RunBackground(name string, args ...string) error {
-	c := gocmd.NewCmdOptions(gocmd.Options{Buffered: false}, name, args...)
-	c.Start() // non-blocking; channel returned but not read
+// ErrJobRunning is returned by RunBackground when a job with the same name
+// is already running. Callers can errors.Is on it to treat "already syncing"
+// as success instead of a failure.
+var ErrJobRunning = errors.New("background job already running")
+
+// executable is the binary spawned for background jobs: the current
+// executable resolved absolutely, so spawned syncs work regardless of PATH
+// (Alfred's runtime usually doesn't have the workflow binary on PATH).
+// Overridable in tests.
+var executable = func() string {
+	if p, err := os.Executable(); err == nil {
+		return p
+	}
+
+	return os.Args[0]
+}
+
+// RunBackground starts a named background job without waiting for
+// completion. The process continues running after the caller returns
+// (go-cmd sets Setpgid on darwin, so the child survives the parent).
+//
+// It spawns the current executable (executable()) with the given args.
+// Deduped by jobName via a PID file, mirroring awgo's RunInBackground
+// guard: calling twice with the same jobName while the first is still
+// running returns ErrJobRunning instead of spawning a second process.
+func RunBackground(jobName string, args ...string) error {
+	pidPath := jobPIDPath(jobName)
+	if pid, ok := readJobPID(pidPath); ok {
+		if isProcessAlive(pid) {
+			return fmt.Errorf("%w: %s with PID %d", ErrJobRunning, jobName, pid)
+		}
+		_ = os.Remove(pidPath) // stale PID file from a dead process
+	}
+
+	c := gocmd.NewCmdOptions(gocmd.Options{Buffered: false}, executable(), args...)
+	c.Start() // non-blocking; fire and forget
+
+	// gocmd's status channel only delivers its first value after the process
+	// has *finished*, so we can't wait on it. Status().PID is set as soon as
+	// exec.Cmd.Start() succeeds in run(); poll briefly for that race.
+	pid, err := waitForStartedPID(c)
+	if err != nil {
+		return err
+	}
+	if err := writeJobPID(pidPath, pid); err != nil {
+		return fmt.Errorf("write PID file %s: %w", pidPath, err)
+	}
 
 	return nil
+}
+
+// waitForStartedPID polls a started gocmd.Cmd until its child PID is known
+// (bounded, ~10 ticks of 5ms). On failure the child is stopped so a started
+// process never leaks.
+func waitForStartedPID(c *gocmd.Cmd) (int, error) {
+	var pid int
+	for i := 0; i < 10; i++ {
+		if pid = c.Status().PID; pid != 0 {
+			return pid, nil
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	_ = c.Stop()
+
+	return 0, fmt.Errorf("background job did not report a PID within 50ms")
+}
+
+// pidDir is resolved once per process; XDG_CACHE_HOME is fixed for the
+// process lifetime, so avoid a path join + env lookup on every keystroke.
+var pidDir = fileutil.CachePath("jobs")
+
+// jobPIDPath returns the PID file path for a named background job,
+// stored under the shared docs-alfred cache directory (mode 0600).
+func jobPIDPath(jobName string) string {
+	return filepath.Join(pidDir, jobName+".pid")
+}
+
+func readJobPID(path string) (int, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	// Reject garbage and out-of-range values before the syscall: macOS
+	// reports kill(maxInt, 0) as success, so a crash-residue PID file would
+	// otherwise look like a live job forever.
+	if err != nil || pid < 1 || pid > 10_000_000 {
+		return 0, false
+	}
+
+	return pid, true
+}
+
+func isProcessAlive(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
+func writeJobPID(path string, pid int) error {
+	return fileutil.AtomicWriteFile(path, []byte(strconv.Itoa(pid)), fileutil.FilePermPrivate)
 }
 
 // LookPath checks if a binary exists in PATH.

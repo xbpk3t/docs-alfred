@@ -2,6 +2,7 @@ package ghindex
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 const (
@@ -38,9 +40,7 @@ func NewManager(configPath, configURL string) *Manager {
 	if configPath == "" {
 		configPath = DefaultConfigPath
 	}
-	if configURL == "" {
-		configURL = DefaultConfigURL
-	}
+	configURL = sanitizeConfigURL(configURL)
 	configURL = normalizeConfigURL(configURL)
 
 	return &Manager{
@@ -53,6 +53,19 @@ func NewManager(configPath, configURL string) *Manager {
 func normalizeConfigURL(configURL string) string {
 	if strings.HasSuffix(configURL, "/") {
 		return configURL + "gh.yml"
+	}
+
+	return configURL
+}
+
+// sanitizeConfigURL repairs URL values that can reach the binary from
+// Alfred's {var:url} placeholder when the workflow variable is unset:
+// Alfred passes the literal placeholder text ("{var:url}") instead of an
+// empty string, so empty-string checks alone would miss it. Anything that
+// does not validate as an http(s) URL falls back to the default.
+func sanitizeConfigURL(configURL string) string {
+	if strings.Contains(configURL, "{var:") || urlutil.ValidateURL(configURL) != nil {
+		return DefaultConfigURL
 	}
 
 	return configURL
@@ -140,11 +153,22 @@ func (m *Manager) LoadWithCacheTTL() error {
 
 // LoadWithBackgroundSync loads config from cache immediately.
 // If the cache is stale, it triggers a background sync process (non-blocking).
-// If no cache exists, it falls back to blocking LoadWithCacheTTL.
+// If no cache exists, it spawns a background sync (non-blocking) and serves
+// the empty result immediately; only falls back to blocking LoadWithCacheTTL
+// when the background starter itself fails.
 func (m *Manager) LoadWithBackgroundSync() error {
 	info, err := os.Stat(m.configPath)
 	if os.IsNotExist(err) {
-		return m.LoadWithCacheTTL()
+		if err := backgroundSyncStarter(m); err != nil {
+			// A sync already running for this job is fine — it will write
+			// the cache; serve the empty result rather than blocking.
+			if !errors.Is(err, cmdutil.ErrJobRunning) {
+				slog.Warn("background sync unavailable, falling back to blocking sync", "error", err)
+				return m.LoadWithCacheTTL()
+			}
+		}
+
+		return nil
 	}
 
 	if time.Since(info.ModTime()) > m.maxAge {
@@ -157,12 +181,10 @@ func (m *Manager) LoadWithBackgroundSync() error {
 }
 
 func startBackgroundSyncProcess(m *Manager) error {
-	binaryPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("find current executable: %w", err)
-	}
-
-	return cmdutil.RunBackground(binaryPath, "sync", "--url", m.configURL, "--cache", m.configPath)
+	// Named job: deduped via PID file by cmdutil.RunBackground (which spawns
+	// the current executable), so repeated searches (e.g. during a fast
+	// Alfred typing session) won't stack syncs.
+	return cmdutil.RunBackground("gh-sync", "sync", "--url", m.configURL, "--cache", m.configPath)
 }
 
 func (m *Manager) loadFromFile() error {

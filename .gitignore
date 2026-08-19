@@ -127,8 +127,8 @@ AGENTS.md
 .devenv/
 
 # built Alfred workflow binaries (rebuilt by `task alfred`, `task devtools`)
-/gh-alfred/.workflow/gh-alfred
-/devtools/.workflow/devtools
+/cmd/gh-alfred/.workflow/gh-alfred
+/cmd/devtools/.workflow/devtools
 
 
 # APM dependencies
