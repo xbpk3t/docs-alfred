@@ -277,10 +277,6 @@ func pendingExtractFailureWrite(item *wikitypes.ClassifyItem, extraInfo string) 
 	}
 }
 
-func newPendingAIError(urlStr, message string) pendingURLWrite {
-	return pendingURLWrite{URL: urlStr, Kind: pendingAIError, Error: message}
-}
-
 func newPendingFetchFailure(urlStr string, failureType wikitypes.FailureKind, extraInfo string) pendingURLWrite {
 	return pendingURLWrite{URL: urlStr, Kind: pendingFetchFailure, FailureType: failureType, ExtraInfo: extraInfo}
 }

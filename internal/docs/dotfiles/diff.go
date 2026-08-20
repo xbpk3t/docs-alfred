@@ -30,16 +30,6 @@ type CrossPkg struct {
 	DFCats []string `json:"dfCats"`
 }
 
-func (d *NixDiff) Summary() map[string]any {
-	return map[string]any{
-		"ghOnly":           len(d.GhOnly),
-		"dfOnly":           len(d.DfOnly),
-		"crossCategory":    len(d.CrossCategory),
-		"falsePkgConflict": len(d.FalsePkgConflict),
-		"shared":           d.Shared,
-	}
-}
-
 // CatDiff holds the category-level diff result.
 type CatDiff struct {
 	Shared []string

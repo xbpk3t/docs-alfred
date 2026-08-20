@@ -413,12 +413,6 @@ func TestPendingExtractFailureWrite(t *testing.T) {
 	assert.Equal(t, "too short", p.ExtraInfo)
 }
 
-func TestNewPendingAIError(t *testing.T) {
-	p := newPendingAIError("https://example.com", "AI failed")
-	assert.Equal(t, pendingAIError, p.Kind)
-	assert.Equal(t, "AI failed", p.Error)
-}
-
 func TestNewPendingUnhandled(t *testing.T) {
 	p := newPendingUnhandled("https://example.com", "unknown error")
 	assert.Equal(t, pendingUnhandled, p.Kind)

@@ -314,11 +314,6 @@ func TestImagesCheckResultIssues(t *testing.T) {
 	}
 }
 
-func TestFormatImagesReport(t *testing.T) {
-	report := FormatImagesReport(&ImagesCheckResult{}, ImagesCheckInput{})
-	assert.NotEmpty(t, report)
-}
-
 func TestImagesCheckConfig(t *testing.T) {
 	input := ImagesCheckInput{
 		DataDir:   "/data",

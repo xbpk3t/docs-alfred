@@ -395,19 +395,3 @@ func TestFormatCompact(t *testing.T) {
 	assert.Contains(t, s, "categories shared=1 df-only=1 gh-only=1")
 	assert.Contains(t, s, "nix gh-only=1 df-only=1")
 }
-
-// --- NixDiff.Summary ---
-
-func TestNixDiffSummary(t *testing.T) {
-	d := &NixDiff{
-		GhOnly:        map[string][]string{"a": {}},
-		DfOnly:        map[string][]string{"b": {}, "c": {}},
-		CrossCategory: map[string]CrossPkg{"d": {}},
-		Shared:        5,
-	}
-	s := d.Summary()
-	assert.Equal(t, 1, s["ghOnly"])
-	assert.Equal(t, 2, s["dfOnly"])
-	assert.Equal(t, 1, s["crossCategory"])
-	assert.Equal(t, 5, s["shared"])
-}

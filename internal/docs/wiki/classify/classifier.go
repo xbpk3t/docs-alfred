@@ -9,7 +9,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/prompt"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -46,7 +45,6 @@ type Classifier struct {
 	WikiRoot       string
 	GhTopicsURL    string
 	catalog        []ghindex.TopicCandidate
-	CandidateLimit int
 	MinConfidence  float64
 	MaxContentSize int // max chars sent to AI; 0 defaults to 20000
 	catalogMu      sync.Mutex
@@ -55,11 +53,6 @@ type Classifier struct {
 
 // ClassifierOption customizes a classifier.
 type ClassifierOption func(*Classifier)
-
-// WithCandidateLimit sets the maximum remote topic candidates sent to AI.
-func WithCandidateLimit(limit int) ClassifierOption {
-	return func(c *Classifier) { c.CandidateLimit = limit }
-}
 
 // WithMaxContentSize sets the max character count sent to AI for content.
 func WithMaxContentSize(n int) ClassifierOption {
@@ -78,15 +71,11 @@ func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string, opts ..
 		chat:           ai.ChatContext,
 		WikiRoot:       wikiRoot,
 		GhTopicsURL:    ghTopicsURL,
-		CandidateLimit: 120,
 		MinConfidence:  0.30,
 		MaxContentSize: 20000,
 	}
 	for _, opt := range opts {
 		opt(c)
-	}
-	if c.CandidateLimit <= 0 {
-		c.CandidateLimit = 120
 	}
 	if c.MinConfidence <= 0 {
 		c.MinConfidence = 0.45
@@ -504,6 +493,121 @@ func ResolveTopicPathAmong(topicPath string, valid map[string]bool) (string, boo
 	return fuzzyMatchTopicPath(topicPath, cands)
 }
 
+// aiClassification holds the parsed classification result from the AI call.
+type aiClassification struct {
+	Summary           *types.StructuredSummary `json:"summary"`
+	Metadata          *types.EntryMetadata     `json:"metadata"`
+	TopicPath         string                   `json:"topicPath"`
+	WikiType          types.ClassifyType       `json:"wikiType"`
+	ContentType       string                   `json:"contentType"`
+	RejectReason      string                   `json:"rejectReason,omitempty"`
+	Confidence        float64                  `json:"confidence"`
+	NeedsManualReview bool                     `json:"needsManualReview"`
+}
+
+// buildMetaBlock builds the metadata codeblock body from an aiClassification.
+func buildMetaBlock(result *aiClassification) string {
+	if result.Metadata != nil {
+		kv := metadataToMap(result.Metadata)
+		if len(kv) > 0 {
+			var pairs []string
+			// Deterministic order: Type first, then alphabetical.
+			if v, ok := kv["Type"]; ok {
+				pairs = append(pairs, "Type: "+v)
+				delete(kv, "Type")
+			}
+			for k, v := range kv {
+				pairs = append(pairs, k+": "+v)
+			}
+
+			return strings.Join(pairs, "\n")
+		}
+	}
+
+	return ""
+}
+
+func metadataToMap(m *types.EntryMetadata) map[string]string {
+	if m == nil {
+		return nil
+	}
+	kv := make(map[string]string, 2)
+	for _, f := range [...][2]string{
+		{"Type", m.ContentType},
+		{"quality", m.Quality},
+		{"author", m.Author},
+		{"uncertainties", m.Uncertainties},
+		{"duration", m.Duration},
+		{"transcriptQuality", m.TranscriptQuality},
+		{"verdict", m.Verdict},
+		{"language", m.Language},
+	} {
+		if f[1] != "" {
+			kv[f[0]] = f[1]
+		}
+	}
+	if len(m.Tags) > 0 {
+		kv["tags"] = strings.Join(m.Tags, ", ")
+	}
+	if m.Stars > 0 {
+		kv["stars"] = strconv.Itoa(m.Stars)
+	}
+
+	return kv
+}
+
+// RenderStructuredSummary converts a types.StructuredSummary to markdown sections.
+// Iterates struct fields in order, using JSON tags as headings.
+// Add/remove fields in types.StructuredSummary — rendering adapts automatically.
+func RenderStructuredSummary(s *types.StructuredSummary) string {
+	if s == nil {
+		return ""
+	}
+
+	var b strings.Builder
+	v := reflect.ValueOf(*s)
+	t := v.Type()
+	for i := range t.NumField() {
+		field := t.Field(i)
+		key := jsonKey(&field)
+		if key == "" {
+			continue
+		}
+		fv := v.Field(i)
+		switch fv.Kind() {
+		case reflect.String:
+			s := fv.String()
+			if s == "" {
+				continue
+			}
+			fmt.Fprintf(&b, "#### %s\n%s\n\n", key, s)
+		case reflect.Slice:
+			if fv.Len() == 0 {
+				continue
+			}
+			fmt.Fprintf(&b, "#### %s\n", key)
+			for j := range fv.Len() {
+				fmt.Fprintf(&b, "- %s\n", fv.Index(j).String())
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+func jsonKey(f *reflect.StructField) string {
+	tag := f.Tag.Get("json")
+	if tag == "" || tag == "-" {
+		return ""
+	}
+	if comma := strings.IndexByte(tag, ','); comma >= 0 {
+		tag = tag[:comma]
+	}
+
+	return tag
+}
+
 // classifyOnlyResult holds the parsed JSON from the classify-only AI call.
 type classifyOnlyResult struct {
 	Summary           *types.StructuredSummary `json:"summary"`
@@ -816,304 +920,6 @@ func (c *Classifier) defaultGHTopicsLoader() ([]ghindex.TopicCandidate, error) {
 	return ghindex.RemoteTopicCatalog(cfg, c.GhTopicsURL)
 }
 
-func scanTopLevelCandidates(
-	wikiRoot string,
-	top os.DirEntry,
-	candidates []ghindex.TopicCandidate,
-) []ghindex.TopicCandidate {
-	if !top.IsDir() || strings.HasPrefix(top.Name(), ".") || top.Name() == "wiki-prototype" || top.Name() == "failed" {
-		return candidates
-	}
-	topPath := filepath.Join(wikiRoot, top.Name())
-	typeEntries, err := os.ReadDir(topPath)
-	if err != nil {
-		return candidates
-	}
-	for _, typ := range typeEntries {
-		candidates = scanTypeCandidates(topPath, top.Name(), typ, candidates)
-	}
-
-	return candidates
-}
-
-func scanTypeCandidates(
-	topPath,
-	topName string,
-	typ os.DirEntry,
-	candidates []ghindex.TopicCandidate,
-) []ghindex.TopicCandidate {
-	if !typ.IsDir() || strings.HasPrefix(typ.Name(), ".") {
-		return candidates
-	}
-	typePath := filepath.Join(topPath, typ.Name())
-	topics, err := os.ReadDir(typePath)
-	if err != nil {
-		return candidates
-	}
-	for _, topic := range topics {
-		if !topic.IsDir() || strings.HasPrefix(topic.Name(), ".") {
-			continue
-		}
-		topicPath := strings.Join([]string{topName, typ.Name(), topic.Name()}, "/")
-		candidates = append(candidates, ghindex.TopicCandidate{Path: topicPath, Display: topic.Name(), Source: "wiki"})
-	}
-
-	return candidates
-}
-
-func appendUniqueTopicCandidates(
-	candidates []ghindex.TopicCandidate,
-	seen map[string]bool,
-	items []ghindex.TopicCandidate,
-) []ghindex.TopicCandidate {
-	for _, item := range items {
-		item.Path = strings.TrimSpace(item.Path)
-		if item.Path == "" || seen[item.Path] {
-			continue
-		}
-		if err := ValidateRelativeWikiPath(string(filepath.Separator), item.Path); err != nil {
-			continue
-		}
-		seen[item.Path] = true
-		candidates = append(candidates, item)
-	}
-
-	return candidates
-}
-
-type candidateRank struct {
-	candidate ghindex.TopicCandidate
-	score     int
-	index     int
-}
-
-func rankTopicCandidates(
-	candidates []ghindex.TopicCandidate,
-	query string,
-	limit int,
-) []ghindex.TopicCandidate {
-	if limit <= 0 || len(candidates) <= limit {
-		return candidates
-	}
-	query = strings.ToLower(query)
-	ranks := make([]candidateRank, 0, len(candidates))
-	for i, candidate := range candidates {
-		score := scoreTopicCandidate(candidate, query)
-		ranks = append(ranks, candidateRank{candidate: candidate, score: score, index: i})
-	}
-	sort.SliceStable(ranks, func(i, j int) bool {
-		if ranks[i].score != ranks[j].score {
-			return ranks[i].score > ranks[j].score
-		}
-
-		return ranks[i].index < ranks[j].index
-	})
-
-	if ranks[0].score <= 0 && limit > 40 {
-		limit = 40
-	}
-	if len(ranks) < limit {
-		limit = len(ranks)
-	}
-
-	result := make([]ghindex.TopicCandidate, 0, limit)
-	for i := range limit {
-		result = append(result, ranks[i].candidate)
-	}
-
-	return result
-}
-
-func scoreTopicCandidate(candidate ghindex.TopicCandidate, query string) int {
-	target := strings.ToLower(candidate.Path + " " + candidate.Display)
-	var score int
-	for _, token := range topicTokens(target) {
-		if len(token) < 2 {
-			continue
-		}
-		if strings.Contains(query, token) {
-			score += len(token)
-		}
-	}
-	for _, token := range topicTokens(query) {
-		if len(token) < 3 {
-			continue
-		}
-		if strings.Contains(target, token) {
-			score += len(token)
-		}
-	}
-
-	return score
-}
-
-func topicTokens(s string) []string {
-	return strings.FieldsFunc(s, func(r rune) bool {
-		switch r {
-		case '/', '-', '_', '.', ',', ':', ';', '(', ')', '[', ']', '{', '}', ' ', '\t', '\n', '\r':
-			return true
-		default:
-			return false
-		}
-	})
-}
-
-func formatTopicCandidates(candidates []ghindex.TopicCandidate) string {
-	var lines []string
-	for _, candidate := range candidates {
-		display := strings.TrimSpace(candidate.Display)
-		if display != "" && display != candidate.Path {
-			lines = append(lines, fmt.Sprintf("- path: %s | title: %s | source: %s", candidate.Path, display, candidate.Source))
-
-			continue
-		}
-		lines = append(lines, fmt.Sprintf("- path: %s | source: %s", candidate.Path, candidate.Source))
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-type aiClassification struct {
-	Summary           *types.StructuredSummary `json:"summary"`
-	Metadata          *types.EntryMetadata     `json:"metadata"`
-	TopicPath         string                   `json:"topicPath"`
-	WikiType          types.ClassifyType       `json:"wikiType"`
-	ContentType       string                   `json:"contentType"`
-	RejectReason      string                   `json:"rejectReason,omitempty"`
-	Confidence        float64                  `json:"confidence"`
-	NeedsManualReview bool                     `json:"needsManualReview"`
-}
-
-// RenderStructuredSummary converts a types.StructuredSummary to markdown sections.
-// Iterates struct fields in order, using JSON tags as headings.
-// Add/remove fields in types.StructuredSummary — rendering adapts automatically.
-func RenderStructuredSummary(s *types.StructuredSummary) string {
-	if s == nil {
-		return ""
-	}
-
-	var b strings.Builder
-	v := reflect.ValueOf(*s)
-	t := v.Type()
-	for i := range t.NumField() {
-		field := t.Field(i)
-		key := jsonKey(&field)
-		if key == "" {
-			continue
-		}
-		fv := v.Field(i)
-		switch fv.Kind() {
-		case reflect.String:
-			s := fv.String()
-			if s == "" {
-				continue
-			}
-			fmt.Fprintf(&b, "#### %s\n%s\n\n", key, s)
-		case reflect.Slice:
-			if fv.Len() == 0 {
-				continue
-			}
-			fmt.Fprintf(&b, "#### %s\n", key)
-			for j := range fv.Len() {
-				fmt.Fprintf(&b, "- %s\n", fv.Index(j).String())
-			}
-			b.WriteString("\n")
-		}
-	}
-
-	return strings.TrimSpace(b.String())
-}
-
-func jsonKey(f *reflect.StructField) string {
-	tag := f.Tag.Get("json")
-	if tag == "" || tag == "-" {
-		return ""
-	}
-	if comma := strings.IndexByte(tag, ','); comma >= 0 {
-		tag = tag[:comma]
-	}
-
-	return tag
-}
-
-// renderMetadataCodeblock formats metadata into a markdown codeblock body.
-
-// buildMetaBlock builds the metadata codeblock body from an aiClassification.
-func buildMetaBlock(result *aiClassification) string {
-	if result.Metadata != nil {
-		kv := metadataToMap(result.Metadata)
-		if len(kv) > 0 {
-			var pairs []string
-			// Deterministic order: Type first, then alphabetical.
-			if v, ok := kv["Type"]; ok {
-				pairs = append(pairs, "Type: "+v)
-				delete(kv, "Type")
-			}
-			for k, v := range kv {
-				pairs = append(pairs, k+": "+v)
-			}
-
-			return strings.Join(pairs, "\n")
-		}
-	}
-
-	return ""
-}
-func metadataToMap(m *types.EntryMetadata) map[string]string {
-	if m == nil {
-		return nil
-	}
-	kv := make(map[string]string, 2)
-	for _, f := range [...][2]string{
-		{"Type", m.ContentType},
-		{"quality", m.Quality},
-		{"author", m.Author},
-		{"uncertainties", m.Uncertainties},
-		{"duration", m.Duration},
-		{"transcriptQuality", m.TranscriptQuality},
-		{"verdict", m.Verdict},
-		{"language", m.Language},
-	} {
-		if f[1] != "" {
-			kv[f[0]] = f[1]
-		}
-	}
-	if len(m.Tags) > 0 {
-		kv["tags"] = strings.Join(m.Tags, ", ")
-	}
-	if m.Stars > 0 {
-		kv["stars"] = strconv.Itoa(m.Stars)
-	}
-
-	return kv
-}
-
-func parseAIClassification(raw string) (*aiClassification, error) {
-	var result aiClassification
-	if err := json.Unmarshal([]byte(raw), &result); err != nil {
-		return nil, err
-	}
-
-	return &result, nil
-}
-
-func (c *Classifier) validateAIClassification(
-	result *aiClassification,
-	candidates []ghindex.TopicCandidate,
-	detectedContentType string,
-) (*types.ClassifyResult, error) {
-	// Shared path with ClassifyURL: recall-oriented NMR + no fake uncategorized path.
-	out := c.buildClassifyResult(result, detectedContentType, candidates, "")
-	if out == nil {
-		return nil, errors.New("classification result unavailable")
-	}
-	if out.RejectReason != "" {
-		return out, errors.New(out.RejectReason)
-	}
-
-	return out, nil
-}
-
 func (c *Classifier) validateAIClassificationBasics(result *aiClassification) error {
 	if result == nil {
 		return errors.New("classification result is nil")
@@ -1134,39 +940,9 @@ func (c *Classifier) validateAIClassificationBasics(result *aiClassification) er
 	return nil
 }
 
-func (c *Classifier) validateAIClassificationTopic(
-	result *aiClassification,
-	candidates []ghindex.TopicCandidate,
-) (string, error) {
-	topicPath, ok := c.resolveWritableTopicPath(result.TopicPath, candidates)
-	if !ok {
-		// No writable topic — caller routes to uncat via empty path + NMR.
-		return "", nil
-	}
-
-	return topicPath, nil
-}
-
 // validateTopicPathDepth ensures topicPath has exactly 3 segments (folder/type/topic).
 func ValidateTopicPathDepth(topicPath string) bool {
 	return strings.Count(topicPath, "/") == 2
-}
-
-// fallbackUncategorized is deprecated: do not invent a fake wiki path.
-// Kept as empty-string helper for tests/callers that still reference the name.
-func fallbackUncategorized(_ string, _ []ghindex.TopicCandidate) string {
-	return ""
-}
-
-func validateAIClassificationSummary(result *aiClassification) (*types.StructuredSummary, error) {
-	if result.Summary == nil {
-		return nil, errors.New("empty summary")
-	}
-	if strings.TrimSpace(result.Summary.Overview) == "" {
-		return nil, errors.New("empty summary")
-	}
-
-	return result.Summary, nil
 }
 
 func rejectedClassifyResult(result *aiClassification, detectedContentType string, rejectErr error) *types.ClassifyResult {
@@ -1279,33 +1055,6 @@ func truncate(s string, maxLen int) string {
 	return textutil.TruncateUTF8(s, maxLen)
 }
 
-// ClassifyContent classifies content to determine topic path.
-// This is a shared function that can be used by both wiki and ccx.
-// Topic candidates are loaded from data/gh (sibling of wiki root).
-func ClassifyContent(content, wikiRoot string, aiConfig *ai.ClientConfig) (string, error) {
-	classifier := NewClassifier(aiConfig, wikiRoot, ghindex.DefaultConfigURL)
-
-	// Truncate content for classification (use first 2000 chars for speed)
-	if len(content) > 2000 {
-		content = content[:2000]
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-	defer cancel()
-
-	result := classifier.ClassifyURL(ctx, "session-export", "Session Export", content)
-	if result == nil {
-		return "", errors.New("classification returned nil")
-	}
-
-	return result.TopicPath, nil
-}
-
-// FormatTopicCandidates formats topic candidates for prompt injection.
-func FormatTopicCandidates(candidates []ghindex.TopicCandidate) string {
-	return formatTopicCandidates(candidates)
-}
-
 // FormatTopicCandidatesGrouped formats topic candidates grouped by tag for progressive classification.
 // Output is hierarchical:
 //
@@ -1315,7 +1064,6 @@ func FormatTopicCandidates(candidates []ghindex.TopicCandidate) string {
 //	### algo
 //	  algo: 算法思维, 动态规划
 func FormatTopicCandidatesGrouped(candidates []ghindex.TopicCandidate) string {
-	_ = formatTopicCandidates // silence lint; template function kept for compatibility
 	// Group by tag → type → topics.
 	groups := make(map[string]map[string][]string)
 	var tagOrder []string

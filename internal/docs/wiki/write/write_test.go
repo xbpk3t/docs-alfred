@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -224,19 +223,6 @@ func TestFlushInboxKeepsUnhandledMarkdownLinkURL(t *testing.T) {
 	assert.Contains(t, string(data), "https://example.com/todo")
 }
 
-func TestBuildFailureEntryTruncatesUTF8Safely(t *testing.T) {
-	entry := buildFailureEntry(&types.ClassifyItem{
-		URL:     "https://example.com/a",
-		Title:   "A",
-		Summary: &types.StructuredSummary{Overview: strings.Repeat("你好", 400)},
-	}, "failed")
-
-	assert.True(t, utf8.ValidString(entry))
-	assert.Contains(t, entry, "...")
-}
-
-// --- lockPath ---
-
 func TestLockPathReturnsUnlockFunc(t *testing.T) {
 	unlock := lockPath(filepath.Join(t.TempDir(), "test.md"))
 	assert.NotNil(t, unlock)
@@ -378,36 +364,6 @@ func TestItemURLNotNil(t *testing.T) {
 
 // --- buildFailureEntry ---
 
-func TestBuildFailureEntryWithSummary(t *testing.T) {
-	entry := buildFailureEntry(&types.ClassifyItem{
-		URL:     "https://example.com",
-		Title:   "Test",
-		Summary: &types.StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
-	}, "reason")
-	assert.Contains(t, entry, "Test")
-	assert.Contains(t, entry, "https://example.com")
-	assert.Contains(t, entry, "reason")
-	assert.Contains(t, entry, "overview")
-}
-
-func TestBuildFailureEntryEmptyTitle(t *testing.T) {
-	entry := buildFailureEntry(&types.ClassifyItem{
-		URL:     "https://example.com",
-		Summary: &types.StructuredSummary{Overview: "overview"},
-	}, "reason")
-	assert.Contains(t, entry, "https://example.com")
-}
-
-func TestBuildFailureEntryNoSummary(t *testing.T) {
-	entry := buildFailureEntry(&types.ClassifyItem{
-		URL:   "https://example.com",
-		Title: "Test",
-	}, "reason")
-	assert.Contains(t, entry, "(无内容)")
-}
-
-// --- cleanFlushedInboxLine ---
-
 func TestCleanFlushedInboxLinePunctuationArtifacts(t *testing.T) {
 	assert.Equal(t, "- text", cleanFlushedInboxLine("  - , text  "))
 	assert.Equal(t, "- text", cleanFlushedInboxLine("  - . text  "))
@@ -512,31 +468,6 @@ func TestWriteSummaryWithMetadataBlock(t *testing.T) {
 }
 
 // --- appendToFile ---
-
-func TestAppendToFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.md")
-	require.NoError(t, os.WriteFile(path, []byte("existing"), 0o600))
-
-	err := appendToFile(path, " appended")
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Equal(t, "existing appended", string(data))
-}
-
-func TestAppendToFileCreatesNew(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "new.md")
-
-	err := appendToFile(path, "new content")
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Equal(t, "new content", string(data))
-}
-
-// --- types.FailureKind String ---
 
 func TestFailureKindString(t *testing.T) {
 	assert.Equal(t, "fetch", types.FailureFetch.String())

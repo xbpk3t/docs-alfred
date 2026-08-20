@@ -17,7 +17,6 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
-	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -453,45 +452,6 @@ func digestStageForFailure(failureType types.FailureKind) types.DigestStage {
 	default:
 		return types.StageClassify
 	}
-}
-
-func buildFailureEntry(item *types.ClassifyItem, extraInfo string) string {
-	title := item.Title
-	if title == "" {
-		title = item.URL
-	}
-
-	bodySnippet := classify.RenderStructuredSummary(item.Summary)
-	if bodySnippet == "" {
-		bodySnippet = "(无内容)"
-	}
-	bodySnippet = textutil.TruncateUTF8(bodySnippet, 500)
-
-	return fmt.Sprintf(`---
-
-## [%s](%s)
-
-### 失败原因
-%s
-
-### 内容片段
-%s
-
-`, title, item.URL, extraInfo, bodySnippet)
-}
-
-func appendToFile(path, content string) error {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileutil.FilePermPrivate)
-	if err != nil {
-		return fmt.Errorf("open failed file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	if _, err := f.WriteString(content); err != nil {
-		return fmt.Errorf("write failure entry: %w", err)
-	}
-
-	return nil
 }
 
 // parseSummaryFrontmatterResult holds the result of parsing.

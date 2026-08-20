@@ -88,11 +88,6 @@ func RunImagesCheck(input ImagesCheckInput) (*ImagesCheckResult, error) {
 	}, nil
 }
 
-// FormatImagesReport formats images check result for display.
-func FormatImagesReport(result *ImagesCheckResult, input ImagesCheckInput) string {
-	return imagesCheckResult(result).ReportResult(imagesCheckConfig(input))
-}
-
 // FormatImagesDetails formats non-status images check details for text output.
 func FormatImagesDetails(result *ImagesCheckResult, input ImagesCheckInput) string {
 	var out strings.Builder

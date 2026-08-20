@@ -3,8 +3,6 @@ package classify
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -34,61 +32,6 @@ func TestRenderPrompt(t *testing.T) {
 	assert.NotContains(t, prompt, "{{", "rendered prompt should not contain template marker")
 }
 
-func TestParseAIClassificationAcceptsJSONObject(t *testing.T) {
-	parsed, err := parseAIClassification(`{"topicPath":"ai/tool/demo","wikiType":"research","contentType":"text","summary":{"overview":"ok","keyPoints":["p1"],"worthNoting":"n"},"confidence":0.9}`)
-
-	require.NoError(t, err)
-	assert.Equal(t, "ai/tool/demo", parsed.TopicPath)
-	assert.Equal(t, types.TypeDeepDive, parsed.WikiType)
-}
-
-func TestParseAIClassificationRejectsInvalidStringEscapes(t *testing.T) {
-	_, err := parseAIClassification(`{"topicPath":"ai/tool/demo","wikiType":"research","contentType":"text","summary":{"overview":"1. ok \3. bad","keyPoints":["p1"],"worthNoting":"n"},"confidence":0.9}`)
-
-	require.Error(t, err)
-}
-
-func TestParseAIClassificationRejectsInvalidJSON(t *testing.T) {
-	_, err := parseAIClassification("not json")
-
-	require.Error(t, err)
-}
-
-func TestValidateAIClassificationFallsBackToUncategorized(t *testing.T) {
-	classifier := NewClassifier(nil, t.TempDir(), "", WithCandidateLimit(10))
-	result, err := classifier.validateAIClassification(&aiClassification{
-		TopicPath:   "ai/tool/missing",
-		WikiType:    types.TypeDeepDive,
-		ContentType: types.ContentText,
-		Summary:     &types.StructuredSummary{Overview: "test overview", KeyPoints: []string{"point"}, WorthNoting: "test note"},
-		Confidence:  0.9,
-	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, types.ContentText)
-
-	require.NoError(t, err)
-	assert.Empty(t, result.TopicPath)
-	assert.True(t, result.NeedsManualReview)
-	assert.Equal(t, types.RouteReasonInvalidTopicPath, result.RouteReason)
-	assert.Equal(t, "ai/tool/missing", result.SuggestedTopic)
-}
-
-func TestValidateAIClassificationRejectsLowConfidence(t *testing.T) {
-	classifier := NewClassifier(nil, t.TempDir(), "")
-	result, err := classifier.validateAIClassification(&aiClassification{
-		TopicPath:   "ai/tool/demo",
-		WikiType:    types.TypeDeepDive,
-		ContentType: types.ContentText,
-		Summary:     &types.StructuredSummary{Overview: "test overview", KeyPoints: []string{"point"}, WorthNoting: "test note"},
-		Confidence:  0.1,
-	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, types.ContentText)
-
-	// Low conf + good summary → uncat triage (not hard reject).
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.True(t, result.NeedsManualReview)
-	assert.Equal(t, types.RouteReasonNeedsManualReview, result.RouteReason)
-	assert.Equal(t, "ai/tool/demo", result.SuggestedTopic)
-}
-
 func TestRejectedClassifyResultPreservesDiagnostics(t *testing.T) {
 	result := rejectedClassifyResult(&aiClassification{
 		TopicPath:         "ai/tool/demo",
@@ -107,21 +50,6 @@ func TestRejectedClassifyResultPreservesDiagnostics(t *testing.T) {
 	assert.Equal(t, 0.42, result.Confidence)
 	assert.True(t, result.NeedsManualReview)
 	assert.Contains(t, result.RejectReason, assert.AnError.Error())
-}
-
-func TestValidateAIClassificationAcceptsCandidate(t *testing.T) {
-	classifier := NewClassifier(nil, t.TempDir(), "")
-	result, err := classifier.validateAIClassification(&aiClassification{
-		TopicPath:   "ai/tool/demo",
-		WikiType:    types.TypeDeepDive,
-		ContentType: types.ContentText,
-		Summary:     &types.StructuredSummary{Overview: "test overview", KeyPoints: []string{"point"}, WorthNoting: "test note"},
-		Confidence:  0.9,
-	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, types.ContentText)
-
-	require.NoError(t, err)
-	assert.Equal(t, "ai/tool/demo", result.TopicPath)
-	assert.Equal(t, types.ContentText, result.ContentType)
 }
 
 func TestClassificationCandidatesRetriesRemoteCatalogAfterFailure(t *testing.T) {
@@ -243,103 +171,6 @@ func TestValidateAIClassificationBasicsEmptyContentType(t *testing.T) {
 		Confidence: 0.9,
 	})
 	assert.NoError(t, err)
-}
-
-// --- validateAIClassificationSummary ---
-
-func TestValidateAIClassificationSummaryNil(t *testing.T) {
-	_, err := validateAIClassificationSummary(&aiClassification{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "empty summary")
-}
-
-func TestValidateAIClassificationSummaryEmptyOverview(t *testing.T) {
-	_, err := validateAIClassificationSummary(&aiClassification{
-		Summary: &types.StructuredSummary{Overview: "  "},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "empty summary")
-}
-
-func TestValidateAIClassificationSummaryValid(t *testing.T) {
-	summary, err := validateAIClassificationSummary(&aiClassification{
-		Summary: &types.StructuredSummary{Overview: "good overview", KeyPoints: []string{"point"}},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "good overview", summary.Overview)
-}
-
-// --- validateAIClassificationTopic ---
-
-func TestValidateAIClassificationTopicEmptyPath(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	topicPath, err := c.validateAIClassificationTopic(&aiClassification{
-		TopicPath: "",
-	}, nil)
-	require.NoError(t, err)
-	assert.Empty(t, topicPath)
-}
-
-func TestValidateAIClassificationTopicNone(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	topicPath, err := c.validateAIClassificationTopic(&aiClassification{
-		TopicPath: "none",
-	}, nil)
-	require.NoError(t, err)
-	assert.Empty(t, topicPath)
-}
-
-func TestValidateAIClassificationTopicInbox(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	topicPath, err := c.validateAIClassificationTopic(&aiClassification{
-		TopicPath: "inbox",
-	}, nil)
-	require.NoError(t, err)
-	assert.Empty(t, topicPath)
-}
-
-func TestValidateAIClassificationTopicValidCandidate(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	candidates := []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}
-	topicPath, err := c.validateAIClassificationTopic(&aiClassification{
-		TopicPath: "ai/tool/demo",
-	}, candidates)
-	require.NoError(t, err)
-	assert.Equal(t, "ai/tool/demo", topicPath)
-}
-
-func TestValidateAIClassificationTopicNotInCandidates(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	candidates := []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}
-	topicPath, err := c.validateAIClassificationTopic(&aiClassification{
-		TopicPath: "ai/tool/other",
-	}, candidates)
-	require.NoError(t, err)
-	assert.Empty(t, topicPath)
-}
-
-func TestValidateAIClassificationTopicInvalidPath(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	topicPath, err := c.validateAIClassificationTopic(&aiClassification{
-		TopicPath: "../escape",
-	}, nil)
-	require.NoError(t, err)
-	assert.Empty(t, topicPath)
-}
-
-// --- fallbackUncategorized ---
-
-func TestFallbackUncategorizedWithCandidates(t *testing.T) {
-	candidates := []ghindex.TopicCandidate{{Path: "zzz/ss/uncategorized"}}
-	assert.Empty(t, fallbackUncategorized("/wiki", candidates))
-}
-
-func TestFallbackUncategorizedWithoutCandidates(t *testing.T) {
-	assert.Empty(t, fallbackUncategorized("/wiki", nil))
-}
-
-func TestFallbackUncategorizedEmptyCandidates(t *testing.T) {
-	assert.Empty(t, fallbackUncategorized("/wiki", []ghindex.TopicCandidate{}))
 }
 
 // --- rejectedClassifyResult ---
@@ -498,104 +329,11 @@ func TestValidateClassifyResultInvalidMetadata(t *testing.T) {
 
 // --- NewClassifier with zero defaults ---
 
-func TestNewClassifierZeroCandidateLimit(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "", WithCandidateLimit(0))
-	assert.Equal(t, 120, c.CandidateLimit)
-}
 
 func TestNewClassifierZeroMinConfidence(t *testing.T) {
 	// MinConfidence <= 0 gets set to 0.45
 	c := NewClassifier(nil, t.TempDir(), "")
 	assert.Greater(t, c.MinConfidence, 0.0)
-}
-
-// --- appendUniqueTopicCandidates edge cases ---
-
-func TestAppendUniqueTopicCandidatesEmptyPath(t *testing.T) {
-	items := []ghindex.TopicCandidate{{Path: "  ", Display: "empty"}}
-	result := appendUniqueTopicCandidates(nil, make(map[string]bool), items)
-	assert.Empty(t, result)
-}
-
-func TestAppendUniqueTopicCandidatesDuplicatePath(t *testing.T) {
-	seen := map[string]bool{"ai/tool/demo": true}
-	items := []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}
-	result := appendUniqueTopicCandidates(nil, seen, items)
-	assert.Empty(t, result)
-}
-
-// --- validateAIClassification (full pipeline) ---
-
-func TestValidateAIClassificationManualReviewWithGoodContent(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	result, err := c.validateAIClassification(&aiClassification{
-		NeedsManualReview: true,
-		Summary:           &types.StructuredSummary{Overview: "good overview", KeyPoints: []string{"point"}},
-		WikiType:          types.TypeDeepDive,
-		Confidence:        0.9,
-	}, nil, types.ContentText)
-	require.NoError(t, err)
-	assert.True(t, result.NeedsManualReview)
-	assert.Empty(t, result.TopicPath)
-	assert.Equal(t, types.RouteReasonNoTopicMatch, result.RouteReason)
-}
-
-func TestValidateAIClassificationManualReviewPromotesValidTopic(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	result, err := c.validateAIClassification(&aiClassification{
-		TopicPath:         "ai/tool/demo",
-		NeedsManualReview: true,
-		Summary:           &types.StructuredSummary{Overview: "good overview", KeyPoints: []string{"point"}},
-		WikiType:          types.TypeInbox,
-		Confidence:        0.9,
-	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, types.ContentText)
-	require.NoError(t, err)
-	assert.False(t, result.NeedsManualReview)
-	assert.Equal(t, "ai/tool/demo", result.TopicPath)
-	assert.Equal(t, types.TypeDeepDive, result.WikiType)
-	assert.Equal(t, "ai/tool/demo", result.SuggestedTopic)
-}
-
-func TestValidateAIClassificationRejectReason(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	result, err := c.validateAIClassification(&aiClassification{
-		RejectReason: "content not suitable",
-		WikiType:     types.TypeDeepDive,
-		ContentType:  types.ContentText,
-		Confidence:   0.9,
-		Summary:      &types.StructuredSummary{Overview: "overview"},
-	}, nil, types.ContentText)
-	require.Error(t, err)
-	require.NotNil(t, result)
-	assert.Contains(t, result.RejectReason, "content not suitable")
-}
-
-func TestValidateAIClassificationEmptySummary(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	result, err := c.validateAIClassification(&aiClassification{
-		TopicPath:   "ai/tool/demo",
-		WikiType:    types.TypeDeepDive,
-		ContentType: types.ContentText,
-		Confidence:  0.9,
-		Summary:     nil,
-	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, types.ContentText)
-	require.Error(t, err)
-	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "unavailable")
-}
-
-func TestValidateAIClassificationWhitespaceOverview(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	result, err := c.validateAIClassification(&aiClassification{
-		TopicPath:   "ai/tool/demo",
-		WikiType:    types.TypeDeepDive,
-		ContentType: types.ContentText,
-		Confidence:  0.9,
-		Summary:     &types.StructuredSummary{Overview: "   "},
-	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, types.ContentText)
-	require.Error(t, err)
-	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "unavailable")
 }
 
 // --- ensureWithinWikiRoot ---
@@ -611,122 +349,6 @@ func TestEnsureWithinWikiRootTraversal(t *testing.T) {
 	err := ensureWithinWikiRoot(root, "../escape")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "path traversal")
-}
-
-// --- formatTopicCandidates with empty display ---
-
-func TestFormatTopicCandidatesEmptyDisplay(t *testing.T) {
-	candidates := []ghindex.TopicCandidate{
-		{Path: "ai/tool/demo", Display: "", Source: "wiki"},
-	}
-	result := formatTopicCandidates(candidates)
-	assert.Contains(t, result, "path: ai/tool/demo | source: wiki")
-	assert.NotContains(t, result, "title:")
-}
-
-// --- scanTypeCandidates edge cases ---
-
-func TestScanTypeCandidatesSkipsNonDir(t *testing.T) {
-	root := t.TempDir()
-	topDir := filepath.Join(root, "tech", "research")
-	require.NoError(t, os.MkdirAll(topDir, 0o700))
-	// Create a file (not directory) in the type level
-	require.NoError(t, os.WriteFile(filepath.Join(topDir, "file.txt"), []byte("content"), 0o600))
-
-	entries, err := os.ReadDir(topDir)
-	require.NoError(t, err)
-
-	var candidates []ghindex.TopicCandidate
-	for _, entry := range entries {
-		candidates = scanTypeCandidates(topDir, "tech", entry, candidates)
-	}
-	assert.Empty(t, candidates)
-}
-
-func TestScanTypeCandidatesSkipsHiddenDirs(t *testing.T) {
-	root := t.TempDir()
-	topDir := filepath.Join(root, "tech", "research")
-	require.NoError(t, os.MkdirAll(filepath.Join(topDir, ".hidden", "topic"), 0o700))
-
-	entries, err := os.ReadDir(topDir)
-	require.NoError(t, err)
-
-	var candidates []ghindex.TopicCandidate
-	for _, entry := range entries {
-		candidates = scanTypeCandidates(topDir, "tech", entry, candidates)
-	}
-	assert.Empty(t, candidates)
-}
-
-// --- scanTopLevelCandidates edge cases ---
-
-func TestScanTopLevelCandidatesSkipsHidden(t *testing.T) {
-	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, ".hidden", "type", "topic"), 0o700))
-
-	entries, err := os.ReadDir(root)
-	require.NoError(t, err)
-
-	var candidates []ghindex.TopicCandidate
-	for _, entry := range entries {
-		candidates = scanTopLevelCandidates(root, entry, candidates)
-	}
-	assert.Empty(t, candidates)
-}
-
-func TestScanTopLevelCandidatesSkipsWikiPrototype(t *testing.T) {
-	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "wiki-prototype", "type", "topic"), 0o700))
-
-	entries, err := os.ReadDir(root)
-	require.NoError(t, err)
-
-	var candidates []ghindex.TopicCandidate
-	for _, entry := range entries {
-		candidates = scanTopLevelCandidates(root, entry, candidates)
-	}
-	assert.Empty(t, candidates)
-}
-
-func TestScanTopLevelCandidatesSkipsFailed(t *testing.T) {
-	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "failed", "type", "topic"), 0o700))
-
-	entries, err := os.ReadDir(root)
-	require.NoError(t, err)
-
-	var candidates []ghindex.TopicCandidate
-	for _, entry := range entries {
-		candidates = scanTopLevelCandidates(root, entry, candidates)
-	}
-	assert.Empty(t, candidates)
-}
-
-// --- appendUniqueTopicCandidates edge cases ---
-
-func TestAppendUniqueTopicCandidatesInvalidPath(t *testing.T) {
-	items := []ghindex.TopicCandidate{{Path: "../escape"}}
-	result := appendUniqueTopicCandidates(nil, make(map[string]bool), items)
-	assert.Empty(t, result)
-}
-
-// --- rankTopicCandidates edge cases ---
-
-func TestRankTopicCandidatesLimitExceedsLength(t *testing.T) {
-	candidates := []ghindex.TopicCandidate{
-		{Path: "a/b/c", Display: "c"},
-	}
-	result := rankTopicCandidates(candidates, "c", 100)
-	assert.Len(t, result, 1)
-}
-
-// --- scoreTopicCandidate edge cases ---
-
-func TestScoreTopicCandidateShortTokens(t *testing.T) {
-	candidate := ghindex.TopicCandidate{Path: "a/b/c", Display: "c"}
-	// Single char tokens should not score
-	score := scoreTopicCandidate(candidate, "a b c")
-	assert.Equal(t, 0, score)
 }
 
 // --- renderPrompt edge cases ---
@@ -791,19 +413,6 @@ func TestDetectContentTypeEmptyURL(t *testing.T) {
 	assert.Equal(t, types.ContentText, fetch.DetectContentType(""))
 }
 
-func TestDetectContentTypeWhitespaceURL(t *testing.T) {
-	assert.Equal(t, types.ContentText, fetch.DetectContentType("  "))
-}
-
-// --- NewClassifier with negative CandidateLimit ---
-
-func TestNewClassifierNegativeCandidateLimit(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "", WithCandidateLimit(-1))
-	assert.Equal(t, 120, c.CandidateLimit)
-}
-
-// --- RenderStructuredSummary with only string fields ---
-
 func TestRenderStructuredSummaryOnlyOverview(t *testing.T) {
 	s := &types.StructuredSummary{
 		Overview: "just overview",
@@ -820,28 +429,6 @@ func TestRenderStructuredSummaryOnlyKeyPoints(t *testing.T) {
 	rendered := RenderStructuredSummary(s)
 	assert.Contains(t, rendered, "keyPoints")
 	assert.Contains(t, rendered, "- point 1")
-}
-
-// --- validateAIClassification with valid full result ---
-
-func TestValidateAIClassificationValidFullResult(t *testing.T) {
-	c := NewClassifier(nil, t.TempDir(), "")
-	result, err := c.validateAIClassification(&aiClassification{
-		TopicPath:   "ai/tool/demo",
-		WikiType:    types.TypeDeepDive,
-		ContentType: types.ContentText,
-		Confidence:  0.9,
-		Summary: &types.StructuredSummary{
-			Overview:    "overview",
-			KeyPoints:   []string{"point"},
-			WorthNoting: "note",
-		},
-	}, []ghindex.TopicCandidate{{Path: "ai/tool/demo"}}, types.ContentText)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, "ai/tool/demo", result.TopicPath)
-	assert.Equal(t, types.ContentText, result.ContentType)
-	assert.Equal(t, 0.9, result.Confidence)
 }
 
 // --- buildClassifyResult ---
@@ -1045,20 +632,6 @@ func TestResolveWritableTopicPathUsesFuzzy(t *testing.T) {
 	got, ok := c.resolveWritableTopicPath("kernel/NP/QUIC", cands)
 	require.True(t, ok)
 	assert.Equal(t, "kernel/HTTP/QUIC", got)
-}
-
-// --- scoreTopicCandidate ---
-
-func TestScoreTopicCandidateExactMatch(t *testing.T) {
-	candidate := ghindex.TopicCandidate{Path: "ai/tool/demo", Display: "demo"}
-	score := scoreTopicCandidate(candidate, "ai tool demo")
-	assert.Positive(t, score)
-}
-
-func TestScoreTopicCandidateNoMatch(t *testing.T) {
-	candidate := ghindex.TopicCandidate{Path: "xx/yy/zz", Display: "zz"}
-	score := scoreTopicCandidate(candidate, "completely different query")
-	assert.Equal(t, 0, score)
 }
 
 // --- verify pass (LUC-302) ---
