@@ -46,15 +46,6 @@ type Config struct {
 	ConfigRepos ConfigRepos `yaml:"config"`
 }
 
-func IsValid(repo *Repo) bool {
-	if repo == nil {
-		return false
-	}
-	_, ok := urlutil.GitHubOwnerRepo(repo.URL)
-
-	return ok
-}
-
 func FullName(repo *Repo) string {
 	if repo == nil {
 		return ""
@@ -89,12 +80,4 @@ func HasNix(repo *Repo) bool {
 	}
 
 	return strings.TrimSpace(*repo.Nix) != ""
-}
-
-func HasSubRepos(repo *Repo) bool {
-	return repo != nil && len(repo.Rel) > 0
-}
-
-func IsSubOrDepOrRelRepo(repo *Repo) bool {
-	return repo != nil && repo.IsRelatedRepo
 }

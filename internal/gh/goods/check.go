@@ -18,11 +18,6 @@ type CheckOptions struct {
 	IncludeHidden bool
 }
 
-// RunCheck validates goods YAML syntax and structure.
-func RunCheck(path string) (*CheckResult, error) {
-	return RunCheckWithOptions(path, CheckOptions{})
-}
-
 // RunCheckWithOptions validates goods YAML against the embedded goods JSON
 // Schema. No post-rule is needed: the schema enumerates all goods row keys
 // (additionalProperties false), requires name, and expresses the

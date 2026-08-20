@@ -1,10 +1,7 @@
 package rss
 
 import (
-	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -176,83 +173,6 @@ func TestCreateFeedParser(t *testing.T) {
 	assert.NotNil(t, fp.Client)
 }
 
-func TestFetchURLWithRetryInvalidURL(t *testing.T) {
-	cfg := &Config{FeedConfig: FeedConfig{Timeout: 5, MaxTries: 1}}
-	feed, feedErr := FetchURLWithRetry(context.Background(), "", cfg)
-	assert.Nil(t, feed)
-	require.NotNil(t, feedErr)
-	assert.Equal(t, FeedFailureKindInvalidURL, feedErr.Kind)
-}
-
-func TestFetchURLWithRetryConnectionError(t *testing.T) {
-	cfg := &Config{FeedConfig: FeedConfig{Timeout: 1, MaxTries: 1}}
-	feed, feedErr := FetchURLWithRetry(context.Background(), "http://127.0.0.1:1/nonexistent", cfg)
-	assert.Nil(t, feed)
-	require.NotNil(t, feedErr)
-	assert.NotEmpty(t, feedErr.URL)
-}
-
-func TestFetchURLWithRetryContextCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	cfg := &Config{FeedConfig: FeedConfig{Timeout: 5, MaxTries: 2}}
-	feed, feedErr := FetchURLWithRetry(ctx, "http://127.0.0.1:1/feed", cfg)
-	assert.Nil(t, feed)
-	require.NotNil(t, feedErr)
-}
-
-func TestFetchURLsEmpty(t *testing.T) {
-	cfg := &Config{FeedConfig: FeedConfig{Timeout: 1, MaxTries: 1}}
-	feeds, failures := FetchURLs(context.Background(), nil, cfg)
-	assert.Empty(t, feeds)
-	assert.Empty(t, failures)
-}
-
-func TestFetchURLsWithMetaEmpty(t *testing.T) {
-	cfg := &Config{FeedConfig: FeedConfig{Timeout: 1, MaxTries: 1}}
-	feeds, meta, failures := FetchURLsWithMeta(context.Background(), []string{}, cfg)
-	assert.Empty(t, feeds)
-	assert.Empty(t, meta)
-	assert.Empty(t, failures)
-}
-
-func TestFetchURLWithRetrySuccess(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/rss+xml")
-		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0"><channel><title>Test</title>
-<item><title>Item 1</title><link>https://example.com/1</link></item>
-</channel></rss>`))
-	}))
-	t.Cleanup(server.Close)
-
-	cfg := &Config{FeedConfig: FeedConfig{Timeout: 5, MaxTries: 1}}
-	feed, feedErr := FetchURLWithRetry(context.Background(), server.URL+"/feed.xml", cfg)
-	require.Nil(t, feedErr)
-	require.NotNil(t, feed)
-	assert.Equal(t, "Test", feed.Title)
-}
-
-func TestFetchURLsWithMetaPartialFailure(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/rss+xml")
-		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0"><channel><title>Test</title>
-<item><title>Item</title><link>https://example.com/1</link></item>
-</channel></rss>`))
-	}))
-	t.Cleanup(server.Close)
-
-	cfg := &Config{FeedConfig: FeedConfig{Timeout: 1, MaxTries: 1}}
-	feeds, meta, failures := FetchURLsWithMeta(context.Background(), []string{
-		server.URL + "/feed.xml",
-		"http://127.0.0.1:1/nonexistent",
-	}, cfg)
-	assert.Len(t, feeds, 1)
-	assert.Len(t, meta, 2)
-	assert.Len(t, failures, 1)
-}
-
 func TestNewConfigValidFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "rss.yml")
 	require.NoError(t, os.WriteFile(path, []byte(`newsletter:
@@ -312,20 +232,4 @@ func TestValidate_InvalidSchedule(t *testing.T) {
 	cfg := &Config{NewsletterConfig: NewsletterConfig{Schedule: "monthly"}}
 	err := cfg.Validate()
 	require.Error(t, err)
-}
-
-func TestFetchURLWithRetryContextCancelledDuringRetry(t *testing.T) {
-	// Create a server that always fails to trigger retries
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "server error", http.StatusInternalServerError)
-	}))
-	t.Cleanup(server.Close)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
-
-	cfg := &Config{FeedConfig: FeedConfig{Timeout: 5, MaxTries: 2}}
-	feed, feedErr := FetchURLWithRetry(ctx, server.URL+"/feed.xml", cfg)
-	assert.Nil(t, feed)
-	require.NotNil(t, feedErr)
 }

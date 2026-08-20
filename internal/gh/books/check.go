@@ -18,11 +18,6 @@ type CheckOptions struct {
 	IncludeHidden bool
 }
 
-// RunCheck validates books YAML syntax and structure.
-func RunCheck(path string) (*CheckResult, error) {
-	return RunCheckWithOptions(path, CheckOptions{})
-}
-
 // RunCheckWithOptions validates books YAML against the embedded books JSON
 // Schema (shared with ntl). No post-rule is needed: the schema enforces row
 // name, score range, enumerated row keys (additionalProperties false), and

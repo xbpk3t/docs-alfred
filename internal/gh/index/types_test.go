@@ -7,24 +7,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
-func TestRepo_IsValid(t *testing.T) {
-	tests := []struct {
-		name string
-		url  string
-		want bool
-	}{
-		{"valid github", "https://github.com/owner/repo", true},
-		{"invalid url", "https://example.com/owner/repo", false},
-		{"empty", "", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := &Repo{Repo: gh.Repo{URL: tt.url}}
-			assert.Equal(t, tt.want, IsValid(r))
-		})
-	}
-}
-
 func TestRepo_FullName(t *testing.T) {
 	tests := []struct {
 		name string
@@ -65,20 +47,4 @@ func TestRepo_HasNix(t *testing.T) {
 
 	r3 := &Repo{}
 	assert.False(t, HasNix(r3))
-}
-
-func TestRepo_HasSubRepos(t *testing.T) {
-	r1 := &Repo{Repo: gh.Repo{Rel: []gh.Repo{{URL: "https://github.com/a/b"}}}}
-	assert.True(t, HasSubRepos(r1))
-
-	r2 := &Repo{}
-	assert.False(t, HasSubRepos(r2))
-}
-
-func TestRepo_IsSubOrDepOrRelRepo(t *testing.T) {
-	r1 := &Repo{IsRelatedRepo: true}
-	assert.True(t, IsSubOrDepOrRelRepo(r1))
-
-	r2 := &Repo{}
-	assert.False(t, IsSubOrDepOrRelRepo(r2))
 }

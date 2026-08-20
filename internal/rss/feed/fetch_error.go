@@ -320,15 +320,6 @@ func isRiskControlMessage(msg string) bool {
 	)
 }
 
-// isRiskControlFetchError reports ban/风控 style failures that must not short-retry.
-func isRiskControlFetchError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	return inspectFetchError(err).RiskControl
-}
-
 // isFastRetryableFetchError is worth short backoff (timeouts, soft gateway errors).
 func isFastRetryableFetchError(err error) bool {
 	if err == nil {
@@ -336,14 +327,6 @@ func isFastRetryableFetchError(err error) bool {
 	}
 
 	return inspectFetchError(err).FastRetryable
-}
-
-func isHTTP5xxFetchError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	return inspectFetchError(err).Is5xx
 }
 
 func containsAny(s string, needles ...string) bool {

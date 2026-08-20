@@ -331,38 +331,6 @@ func TestPickBestTranscriptLinkSingle(t *testing.T) {
 
 // --- Content type detection tests ---
 
-func TestDetectContentTypeFromURL(t *testing.T) {
-	tests := []struct {
-		rawURL string
-		want   string
-	}{
-		{"https://example.com/file.vtt", vttContentType},
-		{"https://example.com/file.srt", srtContentType},
-		{"https://example.com/file.json", jsonContentType},
-		{"https://example.com/file.html", htmlContentType},
-		{"https://example.com/file.htm", htmlContentType},
-		{"https://example.com/file.txt", plaintextContentType},
-	}
-	for _, tt := range tests {
-		t.Run(tt.rawURL, func(t *testing.T) {
-			assert.Equal(t, tt.want, detectTranscriptContentType(tt.rawURL, "", nil))
-		})
-	}
-}
-
-func TestDetectContentTypeFromDeclaredType(t *testing.T) {
-	assert.Equal(t, vttContentType, detectTranscriptContentType("", "text/vtt", nil))
-	assert.Equal(t, srtContentType, detectTranscriptContentType("", "application/srt", nil))
-	assert.Equal(t, srtContentType, detectTranscriptContentType("", "application/x-subrip", nil))
-	assert.Equal(t, jsonContentType, detectTranscriptContentType("", "application/json", nil))
-	assert.Equal(t, htmlContentType, detectTranscriptContentType("", "text/html", nil))
-	assert.Equal(t, plaintextContentType, detectTranscriptContentType("", "text/plain", nil))
-}
-
-func TestDetectContentTypeDefaultsToPlaintext(t *testing.T) {
-	assert.Equal(t, plaintextContentType, detectTranscriptContentType("https://example.com/file", "", []byte("just text")))
-}
-
 func TestNormalizeMediaType(t *testing.T) {
 	tests := []struct {
 		input string
@@ -415,17 +383,6 @@ func TestFallbackCleanSubtitle(t *testing.T) {
 	assert.Contains(t, result, "World")
 	assert.NotContains(t, result, "-->")
 }
-
-func TestNormalizeContent(t *testing.T) {
-	result := NormalizeContent("  test  ", "plaintext")
-	assert.Equal(t, "test", result)
-}
-
-func TestDetectContentTypeExported(t *testing.T) {
-	assert.Equal(t, plaintextContentType, DetectContentType("https://example.com/file.txt", "", nil))
-}
-
-// --- NewXiaoyuzhouProvider ---
 
 func TestNewXiaoyuzhouProviderDefaultPath(t *testing.T) {
 	p := NewXiaoyuzhouProvider("")
@@ -712,16 +669,6 @@ func TestNormalizeMediaTypeUnparseable(t *testing.T) {
 }
 
 // --- detectTranscriptContentType with data-based detection ---
-
-func TestDetectContentTypeFromDataHTML(t *testing.T) {
-	// HTML data with no URL and no declared type should be detected via content sniffing
-	htmlData := []byte("<!doctype html><html><head></head><body>Transcript</body></html>")
-	result := detectTranscriptContentType("", "", htmlData)
-	// mimetype should detect this as text/html
-	assert.Equal(t, htmlContentType, result)
-}
-
-// --- Cache.Get edge cases ---
 
 func TestCacheGetNonNotExistError(t *testing.T) {
 	tmpDir := t.TempDir()

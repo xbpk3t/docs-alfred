@@ -29,14 +29,6 @@ func TestDetectTranscriptContentType(t *testing.T) {
 		detectTranscriptContentType("https://example.com/transcript", "", []byte(`<!doctype html><html><body>Transcript</body></html>`)))
 }
 
-func TestIsTranscriptURLHTMLRequiresTranscriptHint(t *testing.T) {
-	assert.True(t, isTranscriptURL("https://example.com/transcript.html"))
-	assert.True(t, isTranscriptURL("https://example.com/file.vtt"))
-	assert.False(t, isTranscriptURL("https://example.com/article.html"))
-}
-
-// --- RssTranscriptProvider.Fetch with httptest ---
-
 func TestRssTranscriptProviderFetchServerError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

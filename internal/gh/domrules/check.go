@@ -33,11 +33,6 @@ type CheckResult struct {
 	Issues []checkutil.Issue
 }
 
-// RunStructuredDataCheck validates all YAML files in a directory against domain rules.
-func RunStructuredDataCheck(targetDir, scope string) (*CheckResult, error) {
-	return RunStructuredDataCheckWithOptions(targetDir, scope, RunStructuredCheckOptions{})
-}
-
 // RunStructuredCheckOptions controls structured check behavior.
 type RunStructuredCheckOptions struct {
 	// IncludeHidden reports whether hidden (dot-prefixed) YAML files are checked.

@@ -37,11 +37,6 @@ func getMaxAttempts(cfg *Config) uint {
 	return uint(cfg.FeedConfig.MaxTries)
 }
 
-// FetchURLWithRetry 重试获取URL内容.
-func FetchURLWithRetry(ctx context.Context, rawURL string, cfg *Config) (*gofeed.Feed, *FeedError) {
-	return fetchURLWithRetry(ctx, rawURL, cfg, nil)
-}
-
 func fetchURLWithRetry(
 	ctx context.Context,
 	rawURL string,
@@ -207,13 +202,6 @@ type FetchResult struct {
 	Feed *gofeed.Feed
 	Err  *FeedError
 	URL  string
-}
-
-// FetchURLs 批量获取URLs，返回成功和失败的 feeds.
-func FetchURLs(ctx context.Context, urls []string, cfg *Config) ([]*gofeed.Feed, []*FeedError) {
-	allFeeds, _, failedFeeds := FetchURLsWithMeta(ctx, urls, cfg)
-
-	return allFeeds, failedFeeds
 }
 
 // FetchURLsWithMeta 批量获取URLs，同时返回每个请求的结果元信息.

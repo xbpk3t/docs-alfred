@@ -34,8 +34,6 @@ func TestResolveHostRuleExactMatch(t *testing.T) {
 }
 
 func TestIsRiskControlAndRetryClassification(t *testing.T) {
-	assert.True(t, isRiskControlFetchError(errors.New("gRPC status 2: -352")))
-	assert.True(t, isRiskControlFetchError(errors.New("Error: 风控校验失败")))
 	assert.False(t, isFastRetryableFetchError(errors.New("gRPC status 2: -352")))
 	assert.True(t, isFastRetryableFetchError(errors.New("http error: 503")))
 	assert.False(t, isFastRetryableFetchError(errors.New("http error: 404")))
@@ -43,7 +41,6 @@ func TestIsRiskControlAndRetryClassification(t *testing.T) {
 	// Typed gofeed.HTTPError path (no string scraping).
 	assert.True(t, isFastRetryableFetchError(gofeed.HTTPError{StatusCode: 503, Status: "503 Service Unavailable"}))
 	assert.False(t, isFastRetryableFetchError(gofeed.HTTPError{StatusCode: 404, Status: "404 Not Found"}))
-	assert.True(t, isHTTP5xxFetchError(gofeed.HTTPError{StatusCode: 500, Status: "500 Internal Server Error"}))
 }
 
 func TestShouldTripHostCircuit(t *testing.T) {

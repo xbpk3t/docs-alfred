@@ -144,11 +144,11 @@ func TestCheckFile_DiaryNilScore(t *testing.T) {
 	assertHasError(t, issues, true)
 }
 
-func TestRunStructuredDataCheck(t *testing.T) {
+func TestRunStructuredDataCheckWithOptions(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "diary.yml"), []byte("- date: 2024-01-01\n  review: good\n"), 0644))
 
-	result, err := RunStructuredDataCheck(tmpDir, "diary")
+	result, err := RunStructuredDataCheckWithOptions(tmpDir, "diary", RunStructuredCheckOptions{})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 }
@@ -157,7 +157,7 @@ func TestRunStructuredDataCheck_WithIssues(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "diary.yml"), []byte("- date: 2024-01-01\n  bogus: x\n"), 0644))
 
-	result, err := RunStructuredDataCheck(tmpDir, "diary")
+	result, err := RunStructuredDataCheckWithOptions(tmpDir, "diary", RunStructuredCheckOptions{})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.NotEmpty(t, result.Issues) // undefined 字段是 warn 级别

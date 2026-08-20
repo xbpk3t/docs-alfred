@@ -39,12 +39,6 @@ type CheckOptions struct {
 }
 
 // RunCheck validates all YAML files under ghRoot against the embedded gh
-// JSON Schema. Missing path returns a Go error; per-file YAML/shape problems
-// become Issues.
-func RunCheck(ghRoot string) (*CheckResult, error) {
-	return RunCheckWithOptions(ghRoot, CheckOptions{})
-}
-
 // RunCheckWithOptions validates gh YAML against the embedded gh JSON Schema,
 // optionally including hidden (dot-prefixed) files.
 func RunCheckWithOptions(ghRoot string, opts CheckOptions) (*CheckResult, error) {

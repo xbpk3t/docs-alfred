@@ -37,7 +37,7 @@ func checkBooksYAML(t *testing.T, content string) *CheckResult {
 	path := filepath.Join(dir, "books.test.yml")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
 
-	result, err := RunCheck(dir)
+	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
 
 	return result
@@ -93,7 +93,7 @@ func TestRunCheck_UndefinedField(t *testing.T) {
 
 func TestRunCheck_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
-	result, err := RunCheck(dir)
+	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Empty(t, result.Issues)
@@ -103,7 +103,7 @@ func TestRunCheck_InvalidYAML(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.yml"), []byte("invalid: [yaml:\n"), 0644))
 
-	result, err := RunCheck(dir)
+	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
 	assert.True(t, checkutil.HasErrors(result.Issues))
 	assert.Contains(t, joinedMsgs(result), "YAML parse error")
@@ -115,7 +115,7 @@ func TestRunCheck_IgnoresHiddenByDefault(t *testing.T) {
 - topics: []
 `), 0644))
 
-	result, err := RunCheck(dir)
+	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Issues)
 }
