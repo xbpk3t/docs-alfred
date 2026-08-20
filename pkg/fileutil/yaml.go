@@ -17,11 +17,6 @@ type ListOptions struct {
 	IncludeHidden bool
 }
 
-// IsYAMLFileName reports whether name is a visible .yml or .yaml file name.
-func IsYAMLFileName(name string) bool {
-	return isYAMLFileName(name, false)
-}
-
 // isYAMLFileName reports whether name is a .yml or .yaml file name.
 // When includeHidden is false, dot-prefixed files are excluded.
 func isYAMLFileName(name string, includeHidden bool) bool {

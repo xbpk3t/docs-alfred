@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -184,17 +183,6 @@ func isProcessAlive(pid int) bool {
 
 func writeJobPID(path string, pid int) error {
 	return fileutil.AtomicWriteFile(path, []byte(strconv.Itoa(pid)), fileutil.FilePermPrivate)
-}
-
-// LookPath checks if a binary exists in PATH.
-// Returns the full path and true if found.
-func LookPath(name string) (string, bool) {
-	path, err := exec.LookPath(name)
-	if err != nil {
-		return "", false
-	}
-
-	return path, true
 }
 
 // waitWithContext starts the command and waits for it to finish,

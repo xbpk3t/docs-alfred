@@ -30,7 +30,6 @@ type CheckResult struct {
 // HasErrors reports whether any issue was found.
 func (r *CheckResult) HasErrors() bool { return len(r.Issues) > 0 }
 
-
 // KnownNames returns the set of prompt names (frontmatter.name) present under
 // dir, hidden files excluded. Used to verify pl-* dependency references exist.
 func KnownNames(dir string) (map[string]bool, error) {
@@ -115,14 +114,6 @@ func CompileSchemaBytes(data []byte) (*jsonschema.Schema, error) {
 	return c.Compile("urn:prpt")
 }
 
-// CheckFile validates a single prompt file against the compiled schema.
-// known is the set of existing prompt names for dependency checks; pass nil to
-// skip the dangling-reference check. Callers that gate a side effect (e.g.
-// render) on conformance should treat a non-empty result as "do not proceed".
-func CheckFile(path string, sch *jsonschema.Schema, known map[string]bool) []Issue {
-	return checkFile(path, sch, known)
-}
-
 // checkFile validates one yml against the compiled JSON Schema, plus the
 // business rules that a JSON Schema cannot express (composite pipeline
 // presence, dangling dependencies, folded plain scalars).
@@ -176,7 +167,6 @@ func checkCompositeDeps(doc map[string]any, known map[string]bool, add func(form
 		}
 	}
 }
-
 
 // addFoldedScalarIssues flags multi-line plain (unquoted, unblocked) scalars:
 // YAML folds their line breaks into spaces, silently destroying the content

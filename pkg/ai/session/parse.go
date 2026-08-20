@@ -4,9 +4,7 @@ package session
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
-	"sort"
 	"strings"
 )
 
@@ -77,28 +75,6 @@ func Parse(path string) ([]Message, error) {
 	}
 
 	return messages, nil
-}
-
-// ParseAll parses multiple JSONL files and merges all messages sorted by timestamp.
-func ParseAll(paths []string) ([]Message, error) {
-	var all []Message
-	for _, p := range paths {
-		msgs, err := Parse(p)
-		if err != nil {
-			return nil, fmt.Errorf("parse %s: %w", p, err)
-		}
-		all = append(all, msgs...)
-	}
-
-	sort.Slice(all, func(i, j int) bool {
-		if all[i].Timestamp != all[j].Timestamp {
-			return all[i].Timestamp < all[j].Timestamp
-		}
-		// Stable tiebreaker: same-role stays together
-		return all[i].Role != roleAssistant && all[j].Role == roleAssistant
-	})
-
-	return all, nil
 }
 
 // --- event parsing -----------------------------------------------------------

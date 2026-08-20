@@ -76,32 +76,6 @@ func TestParse_NoEvents(t *testing.T) {
 	assert.Empty(t, messages)
 }
 
-func TestParseAll(t *testing.T) {
-	// Parse simple + meta-skip, verify messages are merged and sorted by timestamp
-	messages, err := ParseAll([]string{
-		"testdata/meta-skip.jsonl",
-		"testdata/simple.jsonl",
-	})
-	require.NoError(t, err)
-
-	// meta-skip: 2 messages (10:00:01, 10:00:05)
-	// simple: 2 messages (10:00:00, 10:00:05)
-	// merged: 4 messages sorted by timestamp
-	require.Len(t, messages, 4)
-
-	// The earliest message should be from simple.jsonl (10:00:00)
-	assert.Equal(t, "user", messages[0].Role)
-	assert.Contains(t, messages[0].Content, "帮我分析一下")
-	assert.Equal(t, "2026-06-21T10:00:00Z", messages[0].Timestamp)
-
-	// Then meta-skip user (10:00:01)
-	assert.Equal(t, "用户发送的真实消息", messages[1].Content)
-
-	// The last two are both at 10:00:05
-	assert.Equal(t, "2026-06-21T10:00:05Z", messages[2].Timestamp)
-	assert.Equal(t, "2026-06-21T10:00:05Z", messages[3].Timestamp)
-}
-
 func TestParse_FileNotFound(t *testing.T) {
 	_, err := Parse("testdata/nonexistent.jsonl")
 	require.Error(t, err)
@@ -159,12 +133,6 @@ func writeUserJSONL(t *testing.T, content string) string {
 	require.NoError(t, os.WriteFile(path, append(payload, '\n'), 0o600))
 
 	return path
-}
-
-func TestParseAll_FileNotFound(t *testing.T) {
-	_, err := ParseAll([]string{"testdata/nonexistent.jsonl"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parse")
 }
 
 func TestTryUnmarshalString_String(t *testing.T) {

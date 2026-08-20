@@ -215,17 +215,3 @@ func mustWriteTestPID(t *testing.T, pid string) string {
 
 	return path
 }
-
-// --- LookPath tests ---
-
-func TestLookPathExists(t *testing.T) {
-	path, found := LookPath("echo")
-	assert.True(t, found)
-	assert.NotEmpty(t, path)
-}
-
-func TestLookPathNotFound(t *testing.T) {
-	path, found := LookPath("nonexistent_command_xyz")
-	assert.False(t, found)
-	assert.Empty(t, path)
-}

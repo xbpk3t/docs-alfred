@@ -9,49 +9,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
-func TestFormatPlainIncludesLabels(t *testing.T) {
-	useTempRepoIconCache(t)
-	repos := ghindex.Repos{
-		{
-			Repo: gh.Repo{URL: "https://github.com/acme/tool", Des: strptr("A useful tool"), Doc: strptr("data/gh/tool")},
-			Tag:  "kernel",
-			Type: "tool",
-		},
-		{
-			Repo: gh.Repo{URL: "https://github.com/acme/simple"},
-		},
-	}
-
-	got := FormatPlain(repos, "https://docs.lucc.dev/")
-	assert.Contains(t, got, "repo: https://github.com/acme/tool")
-	assert.Contains(t, got, "desc: A useful tool")
-	assert.Contains(t, got, "doc: data/gh/tool")
-	assert.Contains(t, got, "docs: https://docs.lucc.dev/#/data/gh/tool")
-	assert.Contains(t, got, "type: kernel#tool")
-	assert.Contains(t, got, "repo: https://github.com/acme/simple")
-}
-
-func TestFormatPlainEmptyRepos(t *testing.T) {
-	got := FormatPlain(nil, "https://docs.lucc.dev/")
-	assert.Empty(t, got)
-}
-
-func TestFormatRofiIncludesFullNameAndDesc(t *testing.T) {
-	repos := ghindex.Repos{
-		{Repo: gh.Repo{URL: "https://github.com/acme/tool", Des: strptr("A tool")}},
-		{Repo: gh.Repo{URL: "https://github.com/acme/simple"}},
-	}
-
-	got := FormatRofi(repos)
-	assert.Contains(t, got, "acme/tool - A tool")
-	assert.Contains(t, got, "acme/simple")
-}
-
-func TestFormatRofiEmptyRepos(t *testing.T) {
-	got := FormatRofi(nil)
-	assert.Empty(t, got)
-}
-
 func TestFormatAlfredItemsNoDocNoNixNoQuery(t *testing.T) {
 	useTempRepoIconCache(t)
 	repos := ghindex.Repos{

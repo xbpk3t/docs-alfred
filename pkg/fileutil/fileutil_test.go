@@ -242,37 +242,6 @@ func TestPermissionConstants(t *testing.T) {
 
 // --- IsYAMLFileName tests ---
 
-func TestIsYAMLFileNameYml(t *testing.T) {
-	assert.True(t, IsYAMLFileName("file.yml"))
-}
-
-func TestIsYAMLFileNameYaml(t *testing.T) {
-	assert.True(t, IsYAMLFileName("file.yaml"))
-}
-
-func TestIsYAMLFileNameHidden(t *testing.T) {
-	assert.False(t, IsYAMLFileName(".hidden.yml"))
-}
-
-func TestIsYAMLFileNameOther(t *testing.T) {
-	assert.False(t, IsYAMLFileName("file.txt"))
-}
-
-func TestIsYAMLFileNameNoExt(t *testing.T) {
-	assert.False(t, IsYAMLFileName("file"))
-}
-
-func TestIsYAMLFileNamePath(t *testing.T) {
-	assert.True(t, IsYAMLFileName("/path/to/file.yaml"))
-}
-
-func TestIsYAMLFileNameCaseInsensitive(t *testing.T) {
-	assert.True(t, IsYAMLFileName("file.YAML"))
-	assert.True(t, IsYAMLFileName("file.YML"))
-}
-
-// --- Coverage edge cases ---
-
 func TestListYAMLFilesNonExistentDir(t *testing.T) {
 	_, err := ListYAMLFiles("/nonexistent/dir")
 	require.Error(t, err)
