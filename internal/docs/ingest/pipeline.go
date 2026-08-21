@@ -73,11 +73,11 @@ func prepareInboxEntry(
 	entry wikiwrite.InboxEntry,
 	inboxCfg inboxConfig,
 ) pendingURLWrite {
-	// Skip URLs already digested in a previous run: no fetch, no AI, no write.
-	// Handled stays true downstream so the inbox line is flushed like any other
-	// processed URL.
-	if deps.history != nil && deps.history.alreadyDigested(entry.URL) {
-		slog.Info("wiki digest: skip already digested URL", "url", entry.URL)
+	// Skip URLs already digested in a previous run, or duplicated elsewhere in
+	// this same batch: no fetch, no AI, no write. Handled stays true downstream
+	// so the inbox line is flushed like any other processed URL.
+	if deps.history != nil && deps.history.claimOrSeen(entry.URL) {
+		slog.Info("wiki digest: skip already digested or duplicate URL", "url", entry.URL)
 
 		return pendingURLWrite{URL: entry.URL, Kind: pendingSkip}
 	}

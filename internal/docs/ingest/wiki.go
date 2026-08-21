@@ -28,7 +28,7 @@ type dependencies struct {
 	inbox           inboxStore
 	validTopicPaths map[string]bool // loaded from ghindex for write-layer validation
 	// history holds previously digested URLs (from digest-success.jsonl).
-	// digest skips URLs found here; add does not consult it (re-digest entry).
+	// digest skips URLs found here; add skips them too unless --force re-digests.
 	history *digestHistory
 }
 
@@ -73,9 +73,24 @@ func RunAddURLs(ctx context.Context, input AddInput) (*Result, error) {
 	}
 
 	deps := resolveDependencies(input.Config, input.deps)
+	// wiki add also consults digest history so an already digested URL is skipped
+	// rather than written again. --force (input.Force) skips seeding the persisted
+	// history — re-digesting already seen URLs — but the per-run claim set below
+	// still collapses duplicates within this single call in every case.
+	if deps.history == nil {
+		deps.history = newDigestHistory()
+	}
+	if !input.Force {
+		deps.history.loadSuccesses(wikiRoot)
+	}
 	result := &Result{Name: "wiki add", WikiRoot: wikiRoot, DryRun: input.DryRun}
 
 	for _, urlStr := range input.URLs {
+		if deps.history.claimOrSeen(urlStr) {
+			slog.Info("wiki add: skip already digested or duplicate URL", "url", urlStr)
+			result.URLResults = append(result.URLResults, URLResult{URL: urlStr, Status: StatusSkipped, Handled: true})
+			continue
+		}
 		itemResult := processAddURL(ctx, deps, wikiRoot, urlStr, input.DryRun)
 		result.URLResults = append(result.URLResults, itemResult)
 	}

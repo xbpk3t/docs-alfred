@@ -505,14 +505,3 @@ func TestWikiRootCommand_ShowsHelpWithArgs(t *testing.T) {
 	err = wikiCmd.RunE(wikiCmd, nil)
 	require.NoError(t, err)
 }
-
-// --- digest-local command ---
-
-func TestDigestLocalCommand_RequiresFromDir(t *testing.T) {
-	digestLocal, _, err := newRootCmd().Find([]string{wikiCommandName, "digest-local"})
-	require.NoError(t, err)
-
-	err = digestLocal.RunE(digestLocal, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--from-dir is required")
-}

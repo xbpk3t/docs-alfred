@@ -305,16 +305,6 @@ func TestImagesCheckCommandFlags(t *testing.T) {
 }
 
 
-func TestWikiDigestLocalCommandFlags(t *testing.T) {
-	wikiCmd, _, err := newRootCmd().Find([]string{"wiki", "digest-local"})
-	require.NoError(t, err)
-
-	f := wikiCmd.Flags()
-	require.NotNil(t, f.Lookup("config"))
-	require.NotNil(t, f.Lookup("wiki-root"))
-	require.NotNil(t, f.Lookup("from-dir"))
-}
-
 func TestWikiCheckCommandFlags(t *testing.T) {
 	wikiCmd, _, err := newRootCmd().Find([]string{"wiki", "check"})
 	require.NoError(t, err)

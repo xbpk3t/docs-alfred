@@ -30,6 +30,7 @@ type wikiFlags struct {
 	maxContentSize int
 	dryRun         bool
 	changedOnly    bool
+	force          bool
 }
 
 const (
@@ -51,7 +52,7 @@ Uses AI to classify URLs by content type (video/audio/text), topic path,
 and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
-				return errors.New("use `docs-cli wiki add <urls...>`, `docs-cli wiki digest`, or `docs-cli wiki digest-local`")
+				return errors.New("use `docs-cli wiki add <urls...>` or `docs-cli wiki digest`")
 			}
 
 			return cmd.Help()
@@ -60,7 +61,6 @@ and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 
 	cmd.AddCommand(newWikiAddCmd())
 	cmd.AddCommand(newWikiDigestCmd())
-	cmd.AddCommand(newWikiDigestLocalCmd())
 	cmd.AddCommand(newWikiAuditCmd())
 	cmd.AddCommand(newWikiCheckCmd())
 	cmd.AddCommand(newWikiStatsCmd())
@@ -87,6 +87,7 @@ func newWikiAddCmd() *cobra.Command {
 				Config: cfg,
 				URLs:   args,
 				DryRun: flags.dryRun,
+				Force:  flags.force,
 			})
 			if err != nil {
 				return err
@@ -95,6 +96,7 @@ func newWikiAddCmd() *cobra.Command {
 			return writeWikiResult(result, output.GetFormat(cmd))
 		},
 	}
+	cmd.Flags().BoolVar(&flags.force, "force", false, "Re-digest explicitly given already digested URLs (default skips them)")
 	addWikiFlags(cmd, &flags)
 
 	return cmd
@@ -126,45 +128,6 @@ func newWikiDigestCmd() *cobra.Command {
 		},
 	}
 	addWikiFlags(cmd, &flags)
-
-	return cmd
-}
-
-func newWikiDigestLocalCmd() *cobra.Command {
-	var flags struct {
-		config   string
-		wikiRoot string
-		fromDir  string
-	}
-	cmd := &cobra.Command{
-		Use:   "digest-local",
-		Short: "Classify and summarize local transcript files into wiki (from --from-dir)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if flags.fromDir == "" {
-				return errors.New("--from-dir is required")
-			}
-			cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
-			if err != nil {
-				return fmt.Errorf("load config: %w", err)
-			}
-			resolveWikiAPIKey(cfg)
-
-			result, err := wikiuc.RunDigestLocal(context.Background(), wikiuc.DigestLocalInput{
-				Config:  cfg,
-				FromDir: flags.fromDir,
-			})
-			if err != nil {
-				return err
-			}
-
-			return writeWikiResult(result, "text")
-		},
-	}
-	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path")
-	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
-	cmd.Flags().StringVar(&flags.fromDir, "from-dir", "", "Local directory containing BVxxx_title/ transcript folders")
-	_ = cmd.MarkFlagRequired("from-dir")
 
 	return cmd
 }

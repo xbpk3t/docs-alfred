@@ -46,17 +46,18 @@ func TestLoadDigestHistorySkipsFailuresAndMalformed(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
 	h := loadDigestHistory(wikiRoot)
-	require.True(t, h.alreadyDigested("https://example.com/ok"))
-	// Failure entries are not remembered → retried.
-	require.False(t, h.alreadyDigested("https://example.com/bad"))
+	// Persisted success → already seen.
+	require.True(t, h.claimOrSeen("https://example.com/ok"))
+	// Failure entries are not remembered → treated as new (retried).
+	require.False(t, h.claimOrSeen("https://example.com/bad"))
 	// Tracking-param variant of a success merges to the same key.
-	require.True(t, h.alreadyDigested("https://example.com/with"))
+	require.True(t, h.claimOrSeen("https://example.com/with"))
 }
 
 func TestLoadDigestHistoryMissingFileYieldsEmpty(t *testing.T) {
 	h := loadDigestHistory(t.TempDir())
 	require.NotNil(t, h)
-	require.False(t, h.alreadyDigested("https://example.com/a"))
+	require.False(t, h.claimOrSeen("https://example.com/a"))
 }
 
 func TestDigestSkipsAlreadyDigestedURL(t *testing.T) {
@@ -161,8 +162,23 @@ func TestDigestDryRunSkipsWithoutFlushing(t *testing.T) {
 	require.Empty(t, deps.inbox.flushed)
 }
 
-func TestAddDoesNotConsultHistory(t *testing.T) {
-	// wiki add is the explicit re-digest entry — history must not block it.
+func TestAddSkipsAlreadyDigestedURL(t *testing.T) {
+	// wiki add now consults history: an already digested URL is skipped by default.
+	deps := newFakeDeps()
+	cfg := testConfig(t)
+	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{"https://example.com/again"})
+	// RunAddURLs resolves deps itself; history is loaded from the wiki root.
+
+	result, err := RunAddURLs(context.Background(), AddInput{Config: cfg, URLs: []string{"https://example.com/again"}, deps: deps.dependencies()})
+	require.NoError(t, err)
+	require.Len(t, result.URLResults, 1)
+	require.Equal(t, StatusSkipped, result.URLResults[0].Status)
+	// Must not write a skipped URL.
+	require.Empty(t, deps.writer.summaries)
+}
+
+func TestAddForceRedigestsAlreadyDigestedURL(t *testing.T) {
+	// --force opts into an explicit re-digest even though the URL is in history.
 	deps := newFakeDeps()
 	deps.fetcher.results["https://example.com/again"] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
 	deps.classifier.results["https://example.com/again"] = &wikitypes.ClassifyResult{
@@ -173,11 +189,63 @@ func TestAddDoesNotConsultHistory(t *testing.T) {
 	}
 	cfg := testConfig(t)
 	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{"https://example.com/again"})
-	// RunAddURLs resolves deps itself; give it the deps without history.
 
-	result, err := RunAddURLs(context.Background(), AddInput{Config: cfg, URLs: []string{"https://example.com/again"}, deps: deps.dependencies()})
+	result, err := RunAddURLs(context.Background(), AddInput{Config: cfg, URLs: []string{"https://example.com/again"}, Force: true, deps: deps.dependencies()})
 	require.NoError(t, err)
 	require.Len(t, result.URLResults, 1)
 	require.Equal(t, StatusSummaryWritten, result.URLResults[0].Status)
 	require.Len(t, deps.writer.summaries, 1)
+}
+
+func TestAddForceStillCollapsesDuplicatesWithinBatch(t *testing.T) {
+	// Duplicates within a single add call collapse even under --force: force only
+	// skips consulting persisted history (re-digest), never the in-run claim set.
+	url := "https://example.com/dup"
+	deps := newFakeDeps()
+	deps.fetcher.results[url] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results[url] = &wikitypes.ClassifyResult{
+		TopicPath:   "topic/path",
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentText,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
+	}
+	cfg := testConfig(t)
+	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{url})
+
+	result, err := RunAddURLs(context.Background(), AddInput{Config: cfg, URLs: []string{url, url}, Force: true, deps: deps.dependencies()})
+	require.NoError(t, err)
+	require.Len(t, result.URLResults, 2)
+	require.Equal(t, StatusSummaryWritten, result.URLResults[0].Status)
+	require.Equal(t, StatusSkipped, result.URLResults[1].Status)
+	require.Len(t, deps.writer.summaries, 1)
+}
+
+func TestDigestCollapsesDuplicateURLsWithinBatch(t *testing.T) {
+	// The same URL appears twice in one inbox.md — even on a fresh (empty)
+	// history it must be processed once and the duplicate collapsed to a skip,
+	// so no double fetch/write. Both inbox lines still flush.
+	url := "https://example.com/dup"
+	deps := newFakeDeps()
+	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: url, LineIndex: 1}, {URL: url, LineIndex: 2}}
+	deps.fetcher.results[url] = &wikitypes.ContentFetchResult{Title: "A", Body: "body"}
+	deps.classifier.results[url] = &wikitypes.ClassifyResult{
+		TopicPath:   "topic/path",
+		WikiType:    wikitypes.TypeDeepDive,
+		ContentType: wikitypes.ContentText,
+		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
+	}
+	cfg := testConfig(t)
+	// No success history — the duplicate here is intra-batch only.
+	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- "+url+"\n- "+url+"\n"), 0o600))
+	deps.history = loadDigestHistory(cfg.Wiki.WikiRoot)
+
+	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies()})
+	require.NoError(t, err)
+	require.Len(t, result.URLResults, 2)
+	require.Equal(t, StatusSummaryWritten, result.URLResults[0].Status)
+	require.Equal(t, StatusSkipped, result.URLResults[1].Status)
+	require.Len(t, deps.writer.summaries, 1)
+	require.Equal(t, 2, result.Flushed)
+	require.Equal(t, []string{url}, deps.inbox.flushed[1])
+	require.Equal(t, []string{url}, deps.inbox.flushed[2])
 }

@@ -13,6 +13,10 @@ type AddInput struct {
 	deps   *dependencies
 	URLs   []string
 	DryRun bool
+	// Force re-digests a URL even if it is already in success history. Without
+	// it, already digested URLs are skipped (status=skipped) rather than written
+	// again; duplicates within a single call always collapse.
+	Force bool
 }
 
 // DigestInput contains inputs for wiki digest processing.

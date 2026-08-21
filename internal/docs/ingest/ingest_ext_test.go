@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -1087,71 +1086,6 @@ func TestChangedMarkdownPathsFromGitGitError(t *testing.T) {
 	assert.Contains(t, err.Error(), "list changed wiki files")
 }
 
-// --- RunDigestLocal with non-dir entries (skip non-directory) ---
-
-func TestRunDigestLocalSkipsNonDirEntries(t *testing.T) {
-	cfg := testConfig(t)
-	deps := newFakeDeps()
-
-	fromDir := t.TempDir()
-	// Create a regular file (not a directory)
-	require.NoError(t, os.WriteFile(filepath.Join(fromDir, "not-a-dir.txt"), []byte("file"), 0o600))
-	// Create a valid subdirectory
-	subDir := filepath.Join(fromDir, "BV1abc123_Title")
-	require.NoError(t, os.MkdirAll(subDir, 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(subDir, "bv.txt"), []byte("BV1abc123"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(subDir, "title.txt"), []byte("Title"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(subDir, "transcript.md"), []byte(strings.Repeat("transcript content here. ", 50)), 0o600))
-	deps.classifier.results["https://www.bilibili.com/video/BV1abc123/"] = &wikitypes.ClassifyResult{
-		TopicPath:   "tech/ai",
-		WikiType:    wikitypes.TypeDeepDive,
-		ContentType: wikitypes.ContentVideo,
-		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
-	}
-
-	result, err := RunDigestLocal(context.Background(), DigestLocalInput{
-		Config:  cfg,
-		FromDir: fromDir,
-		deps:    deps.dependencies(),
-	})
-
-	require.NoError(t, err)
-	// Should have processed only the directory, not the file
-	assert.Len(t, result.URLResults, 1)
-	assert.Equal(t, StatusSummaryWritten, result.URLResults[0].Status)
-}
-
-// --- processLocalDir with classify failure (nil classifier, non-empty content, bilibili URL with >= 600 chars) ---
-
-func TestProcessLocalDirClassifierNilNonEmptyContent(t *testing.T) {
-	deps := newFakeDeps()
-	// No classifier result → nil
-
-	dir := t.TempDir()
-	wikiRoot := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "bv.txt"), []byte("BV1abc123"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "title.txt"), []byte("Title"), 0o600))
-	// >= 600 runes of non-whitespace content → passes video quality gate, then classifier nil → unhandled error
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "transcript.md"), []byte(strings.Repeat("real content for transcript. ", 30)), 0o600))
-
-	result := processLocalDir(context.Background(), deps.dependencies(), wikiRoot, dir)
-	assert.Equal(t, StatusUnhandledError, result.Status)
-	assert.Contains(t, result.Error, "classification failed")
-}
-
-// --- copyTranscriptToWiki MkdirAll and WriteFile errors ---
-
-func TestCopyTranscriptToWikiMkdirAllError(t *testing.T) {
-	srcDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "transcript.md"), []byte("data"), 0o600))
-	// Use a file as wikiRoot so MkdirAll fails
-	wikiRoot := filepath.Join(t.TempDir(), "file-as-root")
-	require.NoError(t, os.WriteFile(wikiRoot, []byte(""), 0o600))
-
-	err := copyTranscriptToWiki(srcDir, wikiRoot, "tech/ai", "BV1abc")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "create transcript dir")
-}
 
 // --- changedWikiGitRoots filepath.Abs error ---
 
