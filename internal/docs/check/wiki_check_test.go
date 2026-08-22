@@ -269,6 +269,147 @@ body
 			checkMsgs:  []string{"stray .md file at type level"},
 		},
 		{
+			name: "summary.md must be type digest",
+			rel:  "folder/type/topic/summary.md",
+			content: `---
+title: S
+date: 2026-06-17
+source: src
+type: research
+---
+body
+`,
+			wantIssues: 1,
+			checkMsgs:  []string{"type does not match file: folder/type/topic/summary.md must have type=digest (got research)"},
+		},
+		{
+			name: "summary.md with type digest passes",
+			rel:  "folder/type/topic/summary.md",
+			content: `---
+title: S
+date: 2026-06-17
+source: src
+type: digest
+---
+body
+`,
+			wantIssues: 0,
+		},
+		{
+			name: "log.md must be type log",
+			rel:  "folder/type/topic/log.md",
+			content: `---
+title: L
+date: 2026-06-17
+source: src
+type: research
+---
+body
+`,
+			wantIssues: 1,
+			checkMsgs:  []string{"type does not match file: folder/type/topic/log.md must have type=log (got research)"},
+		},
+		{
+			name: "log.md with type log passes",
+			rel:  "folder/type/topic/log.md",
+			content: `---
+title: L
+date: 2026-06-17
+source: src
+type: log
+---
+body
+`,
+			wantIssues: 0,
+		},
+		{
+			name: "nested blog file must be type blog",
+			rel:  "folder/type/topic/blog/2026-06-17-post.md",
+			content: `---
+title: B
+date: 2026-06-17
+source: src
+type: research
+---
+body
+`,
+			wantIssues: 1,
+			checkMsgs:  []string{"type does not match file: folder/type/topic/blog/2026-06-17-post.md must have type=blog (got research)"},
+		},
+		{
+			name: "nested blog file with type blog passes",
+			rel:  "folder/type/topic/blog/2026-06-17-post.md",
+			content: `---
+title: B
+date: 2026-06-17
+source: src
+type: blog
+---
+body
+`,
+			wantIssues: 0,
+		},
+		{
+			name: "deeply nested blog file checked",
+			rel:  "folder/type/topic/blog/twitter/scratch.md",
+			content: `---
+title: B
+date: 2026-06-17
+source: src
+type: research
+---
+body
+`,
+			wantIssues: 1,
+			checkMsgs:  []string{"type does not match file"},
+		},
+		{
+			name: "summary.md at root not allowed",
+			rel:  "summary.md",
+			content: `---
+title: S
+date: 2026-06-17
+source: src
+type: digest
+---
+body
+`,
+			wantIssues: 1,
+			checkMsgs:  []string{"summary.md only allowed at <tag>/<type>/<topic>/"},
+		},
+		{
+			name: "summary.md outside depth 3 not allowed",
+			rel:  "folder/type/topic/blog/summary.md",
+			content: `---
+type: digest
+---
+body
+`,
+			wantIssues: 1,
+			checkMsgs:  []string{"summary.md only allowed at <tag>/<type>/<topic>/"},
+		},
+		{
+			name: "log.md outside depth 3 not allowed",
+			rel:  "folder/type/topic/nested/log.md",
+			content: `---
+type: research
+---
+body
+`,
+			wantIssues: 1,
+			checkMsgs:  []string{"log.md only allowed at <tag>/<type>/<topic>/"},
+		},
+		{
+			name: "transcript artifact dir skipped even with bad file",
+			rel:  "folder/type/topic/transcript/raw-x.md",
+			content: `---
+type: research
+---
+body
+`,
+			wantIssues: 0,
+		},
+		{
 			name: "walk error unreadable file",
 			rel:  "folder/type/topic/unreadable.md",
 			content: `---

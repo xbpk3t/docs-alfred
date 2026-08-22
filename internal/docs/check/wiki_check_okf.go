@@ -30,9 +30,9 @@ type wikiFrontmatter struct {
 // Single source of truth lives in internal/docs/wiki/types (ClassifyType).
 // Pipeline-only types (review/inbox) are NOT valid OKF types.
 var validOKFTypes = map[string]bool{
-	string(wikitypes.TypeBlog):   true,
-	string(wikitypes.TypeLog):    true,
-	string(wikitypes.TypeDigest): true,
+	string(wikitypes.TypeBlog):     true,
+	string(wikitypes.TypeLog):      true,
+	string(wikitypes.TypeDigest):   true,
 	string(wikitypes.TypeDeepDive): true, // "research"
 }
 
@@ -56,20 +56,43 @@ func RunWikiCheckOKF(wikiRoot string) ([]checkutil.Issue, error) {
 			return nil
 		}
 		rel := slashRel(wikiRoot, path)
-		switch strings.Count(rel, "/") {
-		case 2:
+		// Transcript productions (…/transcript/*.md) are pipeline artifacts,
+		// not OKF wiki content: skip them entirely, check or stats.
+		if checkutil.HasSegmentDir(rel, wikitypes.ArtifactDir) {
+			return nil
+		}
+		depth := strings.Count(rel, "/")
+		base := d.Name()
+
+		// Fixed-name per-topic artifacts (summary.md / log.md) are only legal
+		// at exactly <tag>/<type>/<topic>/ (their declared depth). Anywhere
+		// else is a structural violation, not validated as content.
+		if art, ok := topicArtifacts[base]; ok && depth != art.depth {
+			issues = append(issues, checkutil.Issue{
+				File:     rel,
+				Severity: checkutil.SeverityError,
+				Message:  fmt.Sprintf("%s only allowed at <tag>/<type>/<topic>/: %s", base, rel),
+			})
+			return nil
+		}
+
+		switch {
+		case depth == 2:
 			// Stray .md file at type level — structural violation.
 			issues = append(issues, checkutil.Issue{
 				File:     rel,
 				Severity: checkutil.SeverityError,
 				Message:  "stray .md file at type level: " + rel,
 			})
-		case 3:
+		case depth == 3:
 			// Topic-level file — check OKF v0.1 frontmatter compliance.
 			issues = append(issues, checkFile(path, rel)...)
+		case depth > 3 && isBlogEntry(rel):
+			// A file under a blog/ dir is a blog entry, wherever it nests.
+			issues = append(issues, checkFile(path, rel)...)
 		default:
-			// Depth 0 (pipeline artifacts), 1 (category-level rogue),
-			// 4+ (nested subdirs like transcript/research) — skip.
+			// Depth 0/1 (pipeline artifacts, category-level rogue) and 4+
+			// non-blog nested subdirs (transcript/research/qa etc.) — skip.
 		}
 
 		return nil
@@ -110,6 +133,7 @@ func checkFile(path, rel string) []checkutil.Issue {
 	issues = append(issues, checkRequiredFields(&fm, rel)...)
 	issues = append(issues, checkDateFormat(fm.Date, rel)...)
 	issues = append(issues, checkTypeValidity(fm.Type, rel)...)
+	issues = append(issues, checkTypeConsistency(&fm, rel)...)
 
 	return issues
 }
@@ -178,6 +202,55 @@ func checkTypeValidity(typeVal, rel string) []checkutil.Issue {
 		}}
 	}
 
+	return nil
+}
+
+// topicArtifact is a fixed-name per-topic file: the only depth it may live at
+// and the OKF type its frontmatter must carry. Both the walk's placement rule
+// and the content binding derive from this single table, so a new per-topic
+// artifact can't drift between the two checks.
+type topicArtifact struct {
+	typ   wikitypes.ClassifyType
+	depth int
+}
+
+var topicArtifacts = map[string]topicArtifact{
+	"summary.md": {depth: 3, typ: wikitypes.TypeDigest},
+	"log.md":     {depth: 3, typ: wikitypes.TypeLog},
+}
+
+// isBlogEntry reports whether rel roots under a <topic>/blog/ directory.
+func isBlogEntry(rel string) bool { return checkutil.HasSegmentDir(rel, wikitypes.BlogDir) }
+
+// expectedTypeFor returns the frontmatter type the file's name/location
+// requires, or "" when there is no binding:
+//
+//	summary→digest, log→log, files under a blog/ dir→blog
+func expectedTypeFor(rel string) string {
+	if art, ok := topicArtifacts[filepath.Base(rel)]; ok {
+		return string(art.typ)
+	}
+	if isBlogEntry(rel) {
+		return string(wikitypes.TypeBlog)
+	}
+	return ""
+}
+
+// checkTypeConsistency enforces the name/location → type binding: summary.md
+// must be type=digest, log.md must be type=log, and every file under blog/
+// must be type=blog.
+func checkTypeConsistency(fm *wikiFrontmatter, rel string) []checkutil.Issue {
+	expected := expectedTypeFor(rel)
+	if expected == "" || strings.TrimSpace(fm.Type) == "" {
+		return nil
+	}
+	if fm.Type != expected {
+		return []checkutil.Issue{{
+			File:     rel,
+			Severity: checkutil.SeverityError,
+			Message:  fmt.Sprintf("type does not match file: %s must have type=%s (got %s)", rel, expected, fm.Type),
+		}}
+	}
 	return nil
 }
 

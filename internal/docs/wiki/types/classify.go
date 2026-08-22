@@ -22,6 +22,16 @@ const (
 	TypeDigest ClassifyType = "digest"
 )
 
+// ArtifactDir is the sub-directory (within a topic) that holds pipeline
+// artifact productions — transcript/ is the canonical case. Files under a
+// <topic>/<ArtifactDir>/ subtree are produced content, not OKF wiki entries.
+const ArtifactDir = "transcript"
+
+// BlogDir is the sub-directory (within a topic) that holds blog posts. Each is
+// a distinct concept from the TypeBlog entry type, even though they share the
+// "blog" spelling.
+const BlogDir = "blog"
+
 // KnownTypes is the full type set across pipeline + OKF curated types.
 var KnownTypes = []ClassifyType{
 	TypeRepoEval, TypeDeepDive, TypeInbox,

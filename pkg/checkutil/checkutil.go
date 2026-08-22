@@ -3,6 +3,7 @@ package checkutil
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -84,6 +85,22 @@ func HasErrors(issues []Issue) bool {
 		}
 	}
 
+	return false
+}
+
+// HasSegmentDir reports whether any parent directory segment of rel equals
+// name. rel is a slash-normalized path relative to the wiki root; files placed
+// directly at the root (no parent dir) return false.
+func HasSegmentDir(rel, name string) bool {
+	dir := path.Dir(rel)
+	if dir == "." {
+		return false
+	}
+	for _, seg := range strings.Split(dir, "/") {
+		if seg == name {
+			return true
+		}
+	}
 	return false
 }
 

@@ -33,9 +33,9 @@ func rowAsKV(r StatRow) kv {
 
 func TestRunStats_Overview(t *testing.T) {
 	root := makeWiki(t, map[string]string{
-		"AI/topic1/a.md":  researchFM,
-		"AI/topic2/b.md":  researchFM,
-		"sys/sys/c.md":    "# no frontmatter\n",
+		"AI/topic1/a.md":     researchFM,
+		"AI/topic2/b.md":     researchFM,
+		"sys/sys/c.md":       "# no frontmatter\n",
 		"digest-s.log.jsonl": "{}",
 	})
 	stats, err := RunStats(StatsOptions{WikiRoot: root, TopN: 10,
@@ -103,10 +103,12 @@ func TestRunStats_ResearchTopN_Cap(t *testing.T) {
 
 func TestRunStats_TypesSection(t *testing.T) {
 	root := makeWiki(t, map[string]string{
-		"a/r1.md":  researchFM,                 // research (enum)
-		"a/b1.md":  "---\ntype: blog\ntitle: t\ndate: 2026-01-01\nsource: s\n---\n\nx\n",   // blog (enum)
-		"a/t1.md":  "---\ntype: transcript\ntitle: t\ndate: 2026-01-01\nsource: s\n---\n\nx\n", // unknown
-		"a/n1.md":  "# no frontmatter\n",       // none
+		"a/r1.md":           researchFM,                                                                 // research (enum)
+		"a/b1.md":           "---\ntype: blog\ntitle: t\ndate: 2026-01-01\nsource: s\n---\n\nx\n",       // blog (enum)
+		"a/t1.md":           "---\ntype: transcript\ntitle: t\ndate: 2026-01-01\nsource: s\n---\n\nx\n", // artifact (explicit tag)
+		"a/transcript/x.md": "# raw transcript, no frontmatter\n",                                       // artifact (transcript/ dir)
+		"a/summary.md":      "---\ntype: digest\ntitle: s\ndate: 2026-01-01\nsource: s\n---\n\nx\n",     // digest (summary counted)
+		"a/n1.md":           "# no frontmatter\n",                                                       // none
 	})
 	stats, err := RunStats(StatsOptions{WikiRoot: root})
 	require.NoError(t, err)
@@ -124,15 +126,17 @@ func TestRunStats_TypesSection(t *testing.T) {
 	}
 	assert.Equal(t, 1, got["research"])
 	assert.Equal(t, 1, got["blog"])
-	assert.Equal(t, 1, got["transcript"]) // unknown type visible, not dropped
+	assert.Equal(t, 1, got["digest"])        // summary.md counted (was excluded before)
+	assert.NotContains(t, got, "transcript") // transcript is an artifact, not a content type
+	assert.Equal(t, 2, got["artifact"])      // explicit tag + transcript/ dir with no type
 	assert.Equal(t, 1, got["none"])
 }
 
 func TestRunStats_ExcludeNames(t *testing.T) {
 	// data.go / tmp.md misc
 	root := makeWiki(t, map[string]string{
-		"a/x.md":   researchFM,
-		"temp.md":  "# temp\n",
+		"a/x.md":       researchFM,
+		"temp.md":      "# temp\n",
 		"digest.jsonl": "{}\n",
 	})
 	stats, err := RunStats(StatsOptions{

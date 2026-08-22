@@ -13,6 +13,7 @@ import (
 	"github.com/adrg/frontmatter"
 	yaml "github.com/goccy/go-yaml"
 	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
+	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 )
 
@@ -47,8 +48,16 @@ var DefaultExcludeNames = []string{
 	"digest-classify-rejected.jsonl", "digest-extract-error.jsonl",
 	"digest-fetch-error.jsonl",
 	"temp.md", "inbox.md", "uncat.md", "success.md",
-	"summary.md", "archive-summary.md",
+	// summary.md is a per-topic digest page (type=digest) and IS part of the
+	// content census; archive-summary.md stays excluded as an aggregate rollup.
+	"archive-summary.md",
 }
+
+// transcriptArtifactType is the frontmatter type-tag the transcript pipeline
+// writes (equal to the artifact directory name). Transcript files are pipeline
+// artifacts, not OKF wiki content: never a valid entry type, censused
+// separately.
+const transcriptArtifactType = wikitypes.ArtifactDir
 
 // excludedWithDefault reports whether the file's base name is excluded,
 // using DefaultExcludeNames when the caller provided none.
@@ -90,6 +99,7 @@ func RunStats(opts StatsOptions) (Stats, error) {
 		// typeCounts: every frontmatter type seen (enum + unknown), so no
 		// file silently disappears from the stats (P0 blind spot).
 		typeCounts = make(map[string]int)
+		artifactN  int // md files that are pipeline artifacts (transcript), not content
 		noFM       int // md files without parseable type field
 		unreadable int // md files that failed to read/parse (degraded, not aborting)
 	)
@@ -123,13 +133,23 @@ func RunStats(opts StatsOptions) (Stats, error) {
 			unreadable++
 			return nil //nolint:nilerr // degraded: count it, keep walking
 		}
+		// Pipeline/artifact md (transcript productions) are not OKF content: a
+		// file sits under an artifact dir (e.g. transcript/) or is tagged type:
+		// transcript. `typ` is only non-empty when frontmatter parsed, so an
+		// untagged file is captured by the dir test below. Keep these out of
+		// the type census; report them as their own artifact bucket.
+		rel := slashRel(opts.WikiRoot, path)
+		if typ == transcriptArtifactType || checkutil.HasSegmentDir(rel, wikitypes.ArtifactDir) {
+			artifactN++
+			return nil
+		}
 		if !ok {
 			noFM++
 			return nil
 		}
 		typeCounts[typ]++
 		if typ == string(wikitypes.TypeDeepDive) {
-			researchByTopic[topicPath(opts.WikiRoot, path)]++
+			researchByTopic[topicDir(rel)]++
 			researchTotal++
 		}
 		return nil
@@ -140,7 +160,7 @@ func RunStats(opts StatsOptions) (Stats, error) {
 
 	stats := Stats{
 		overviewSection(files, mdN, bytesN),
-		typeSection(typeCounts, noFM, unreadable),
+		typeSection(typeCounts, artifactN, noFM, unreadable),
 		researchSection(researchByTopic, researchTotal, topN),
 	}
 	return stats, nil
@@ -166,14 +186,10 @@ func fileType(path string) (typ string, ok bool, err error) {
 	return fm.Type, true, nil
 }
 
-// topicPath returns the frontmatter topic path: the file's dir relative to
-// the wiki root, or "" for files at the root.
-func topicPath(wikiRoot, path string) string {
-	rel, err := filepath.Rel(wikiRoot, path)
-	if err != nil {
-		return ""
-	}
-	dir := filepath.ToSlash(filepath.Dir(rel))
+// topicDir returns the frontmatter topic path: rel's directory, or "" for
+// files at the root.
+func topicDir(rel string) string {
+	dir := filepath.Dir(rel)
 	if dir == "." {
 		return ""
 	}
@@ -195,8 +211,11 @@ func overviewSection(files, mdN int, bytesN int64) Section {
 
 // typeSection reports every frontmatter type count (enum values + any
 // unknown types) plus md files without a type field. Nothing is dropped.
-func typeSection(typeCounts map[string]int, noFM, unreadable int) Section {
+func typeSection(typeCounts map[string]int, artifactN, noFM, unreadable int) Section {
 	rows := []StatRow{}
+	if artifactN > 0 {
+		rows = append(rows, rowKV("type", "artifact", "count", fmt.Sprintf("%d", artifactN)))
+	}
 	for _, t := range wikitypes.KnownTypes {
 		if n := typeCounts[string(t)]; n > 0 {
 			rows = append(rows, rowKV("type", string(t), "count", fmt.Sprintf("%d", n)))
