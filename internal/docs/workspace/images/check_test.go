@@ -112,17 +112,10 @@ func TestCollectExistingFilesAndDirsSkipsHiddenEntries(t *testing.T) {
 func TestCollectExpectedImageDirsFromTypedGhData(t *testing.T) {
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "algo"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: go
-  topics:
-    - topic: root
-    - topic: no-pic
-  using:
-    url: https://github.com/acme/tool
-    topics:
-      - topic: using-topic
-  repo:
-    - url: https://github.com/acme/repo
-  record: []
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- topic: root
+  kind: type
+- topic: no-pic
+  kind: type
 `), 0644))
 
 	dirs, err := collectExpectedImageDirs(dataDir)
@@ -449,9 +442,8 @@ func TestRunImagesCheck_SkipsStructuralDirsWithoutDirectFiles(t *testing.T) {
 
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "algo"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: algo
-  topics:
-    - topic: scheduler
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "algo.yml"), []byte(`- topic: scheduler
+  kind: type
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -472,9 +464,8 @@ func TestRunImagesCheck_FlagsStructuralDirsWithDirectFiles(t *testing.T) {
 
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "algo"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "go.yml"), []byte(`- type: algo
-  topics:
-    - topic: scheduler
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "algo", "algo.yml"), []byte(`- topic: scheduler
+  kind: type
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -507,9 +498,8 @@ func TestRunImagesCheck_SkipsExpectedDirWithMissingParent(t *testing.T) {
 
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "db"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "db", "storage.yml"), []byte(`- type: redis
-  topics:
-    - topic: cache-problems
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "db", "redis.yml"), []byte(`- topic: cache-problems
+  kind: server
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -530,9 +520,8 @@ func TestRunImagesCheck_FlagsL2FilesInStructuralDir(t *testing.T) {
 
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "ai"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "ai", "skills.yml"), []byte(`- type: skills
-  topics:
-    - topic: sub-topic
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "ai", "skills.yml"), []byte(`- topic: sub-topic
+  kind: skill
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -550,9 +539,8 @@ func TestRunImagesCheck_NestedIntermediateDirsAllSkipped(t *testing.T) {
 
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "x"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "x", "deep.yml"), []byte(`- type: y
-  topics:
-    - topic: z
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "x", "y.yml"), []byte(`- topic: z
+  kind: type
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -572,9 +560,8 @@ func TestRunImagesCheck_ExpectedDirItselfNotExtra(t *testing.T) {
 
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "desktop"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "desktop", "browser.yml"), []byte(`- type: browser
-  topics:
-    - topic: desktop-browser
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "desktop", "browser.yml"), []byte(`- topic: desktop-browser
+  kind: desktop
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})
@@ -594,9 +581,8 @@ func TestRunImagesCheck_SingleDepthExpectedIsNotParent(t *testing.T) {
 
 	dataDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, "x"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "x", "single.yml"), []byte(`- type: single
-  topics:
-    - topic: a-topic
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "x", "single.yml"), []byte(`- topic: a-topic
+  kind: type
 `), 0644))
 
 	result, err := RunImagesCheck(CheckConfig{DataDir: dataDir, ImagesDir: dir})

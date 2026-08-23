@@ -5,13 +5,12 @@
   "description": "JSON Schema for data/goods YAML files (goods.*.yml). Field sets verified against all goods files including hidden .goods.*.yml. Topics are flat (one level, no recursion); there is no kind/repo/rel.",
   "type": "array",
   "items": {
-    "$ref": "#/$defs/section"
+    "$ref": "#/$defs/topic"
   },
   "$defs": {
     "section": {
       "type": "object",
       "required": [
-        "type",
         "topics"
       ],
       "additionalProperties": false,

@@ -408,7 +408,9 @@ func TestParseGhYAMLEntries_EmptyType(t *testing.T) {
 
 	entries, err := parseGhYAMLEntries(filepath.Join(dir, "test.yml"), dir)
 	require.NoError(t, err)
-	assert.Empty(t, entries) // empty type is skipped
+	// Empty/missing type falls back to the filename stem ("test").
+	require.Len(t, entries, 1)
+	assert.Equal(t, "test", entries[0].typeName)
 }
 
 func TestParseGhYAMLEntries_NoType(t *testing.T) {
@@ -419,7 +421,9 @@ func TestParseGhYAMLEntries_NoType(t *testing.T) {
 
 	entries, err := parseGhYAMLEntries(filepath.Join(dir, "test.yml"), dir)
 	require.NoError(t, err)
-	assert.Empty(t, entries)
+	// The type field is gone from the new layout; parse derives it from "test.yml".
+	require.Len(t, entries, 1)
+	assert.Equal(t, "test", entries[0].typeName)
 }
 
 func TestParseGhYAMLEntries_InvalidYAML(t *testing.T) {

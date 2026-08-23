@@ -11,24 +11,22 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
-// validBooksYAML follows the real books.*.yml section shape
-// (type → topics → table), shared with data/ntl.
+// validBooksYAML follows the real books.*.yml flat-topic shape: the root is a
+// bare list of topic objects (each with required `topic`), shared with data/ntl.
 const validBooksYAML = `---
-- type: 编程
-  topics:
-    - topic: Go
-      score: 5
-      table:
-        - name: 《Go 程序设计语言》
-          author: Donovan
-          publishAt: 2015
-          readAt: 2023-04-01
-          url: https://gopl.io
-      record:
-        - date: 2023-04-01
-          des: 读完。
-      qs:
-        - 有什么收获？
+- topic: Go
+  score: 5
+  table:
+    - name: 《Go 程序设计语言》
+      author: Donovan
+      publishAt: 2015
+      readAt: 2023-04-01
+      url: https://gopl.io
+  record:
+    - date: 2023-04-01
+      des: 读完。
+  qs:
+    - 有什么收获？
 `
 
 func checkBooksYAML(t *testing.T, content string) *CheckResult {
@@ -63,15 +61,14 @@ func TestRunCheck_ValidBooksStructure(t *testing.T) {
 	assert.Empty(t, result.Issues)
 }
 
-func TestRunCheck_MissingType(t *testing.T) {
+func TestRunCheck_MissingTopic(t *testing.T) {
 	result := checkBooksYAML(t, `---
-- topics:
-    - topic: x
-      table:
-        - name: 书
+- score: 5
+  table:
+    - name: 书
 `)
 	assert.True(t, checkutil.HasErrors(result.Issues))
-	assert.Contains(t, joinedMsgs(result), "missing property 'type'")
+	assert.Contains(t, joinedMsgs(result), "missing property 'topic'")
 }
 
 func TestRunCheck_TopLevelNotSequence(t *testing.T) {
@@ -82,10 +79,8 @@ func TestRunCheck_TopLevelNotSequence(t *testing.T) {
 
 func TestRunCheck_UndefinedField(t *testing.T) {
 	result := checkBooksYAML(t, `---
-- type: 编程
+- topic: x
   bogus_field: x
-  topics:
-    - topic: x
 `)
 	assert.NotEmpty(t, result.Issues)
 	assert.Contains(t, joinedMsgs(result), "additional properties 'bogus_field'")
@@ -112,7 +107,7 @@ func TestRunCheck_InvalidYAML(t *testing.T) {
 func TestRunCheck_IgnoresHiddenByDefault(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".hidden.yml"), []byte(`---
-- topics: []
+- topic: x
 `), 0644))
 
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
@@ -123,23 +118,21 @@ func TestRunCheck_IgnoresHiddenByDefault(t *testing.T) {
 func TestRunCheck_IncludeHiddenChecksHidden(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".hidden.yml"), []byte(`---
-- topics: []
+- score: 1
 `), 0644))
 
 	result, err := RunCheckWithOptions(dir, CheckOptions{IncludeHidden: true})
 	require.NoError(t, err)
 	require.True(t, checkutil.HasErrors(result.Issues))
-	assert.Contains(t, joinedMsgs(result), "missing property 'type'")
+	assert.Contains(t, joinedMsgs(result), "missing property 'topic'")
 	assert.Contains(t, result.Issues[0].File, ".hidden.yml")
 }
 
 func TestRunCheck_TableRowMissingName(t *testing.T) {
 	result := checkBooksYAML(t, `---
-- type: 编程
-  topics:
-    - topic: 技术
-      table:
-        - author: 某作者
+- topic: 技术
+  table:
+    - author: 某作者
 `)
 	assert.NotEmpty(t, result.Issues)
 	assert.Contains(t, joinedMsgs(result), "missing property 'name'")
@@ -147,12 +140,10 @@ func TestRunCheck_TableRowMissingName(t *testing.T) {
 
 func TestRunCheck_PublishAtIntValid(t *testing.T) {
 	result := checkBooksYAML(t, `---
-- type: 编程
-  topics:
-    - topic: 技术
-      table:
-        - name: 书
-          publishAt: 2026
+- topic: 技术
+  table:
+    - name: 书
+      publishAt: 2026
 `)
 	assert.Empty(t, result.Issues)
 }
@@ -160,12 +151,10 @@ func TestRunCheck_PublishAtIntValid(t *testing.T) {
 func TestRunCheck_PublishAtStringRejected(t *testing.T) {
 	// publishAt 已迁移为 integer：带引号的字符串会被拒绝。
 	result := checkBooksYAML(t, `---
-- type: 编程
-  topics:
-    - topic: 技术
-      table:
-        - name: 书
-          publishAt: "2026"
+- topic: 技术
+  table:
+    - name: 书
+      publishAt: "2026"
 `)
 	assert.NotEmpty(t, result.Issues)
 	assert.Contains(t, joinedMsgs(result), "got string, want integer")
@@ -174,12 +163,10 @@ func TestRunCheck_PublishAtStringRejected(t *testing.T) {
 func TestRunCheck_PublishAtOutOfRange(t *testing.T) {
 	// 999 低于 1000：schema 用 minimum 兜住旧正则 ^\d{4}$ 的语义。
 	result := checkBooksYAML(t, `---
-- type: 编程
-  topics:
-    - topic: 技术
-      table:
-        - name: 书
-          publishAt: 999
+- topic: 技术
+  table:
+    - name: 书
+      publishAt: 999
 `)
 	assert.NotEmpty(t, result.Issues)
 	assert.Contains(t, joinedMsgs(result), "minimum")
@@ -187,12 +174,10 @@ func TestRunCheck_PublishAtOutOfRange(t *testing.T) {
 
 func TestRunCheck_ReadAtBadPattern(t *testing.T) {
 	result := checkBooksYAML(t, `---
-- type: 编程
-  topics:
-    - topic: 技术
-      table:
-        - name: 书
-          readAt: 2024-13
+- topic: 技术
+  table:
+    - name: 书
+      readAt: 2024-13
 `)
 	assert.NotEmpty(t, result.Issues)
 	assert.Contains(t, joinedMsgs(result), "does not match pattern")
@@ -200,12 +185,10 @@ func TestRunCheck_ReadAtBadPattern(t *testing.T) {
 
 func TestRunCheck_URLBadPattern(t *testing.T) {
 	result := checkBooksYAML(t, `---
-- type: 编程
-  topics:
-    - topic: 技术
-      table:
-        - name: 书
-          url: not-a-url
+- topic: 技术
+  table:
+    - name: 书
+      url: not-a-url
 `)
 	assert.NotEmpty(t, result.Issues)
 	assert.Contains(t, joinedMsgs(result), "does not match pattern")
@@ -213,12 +196,10 @@ func TestRunCheck_URLBadPattern(t *testing.T) {
 
 func TestRunCheck_ScoreOutOfRange(t *testing.T) {
 	result := checkBooksYAML(t, `---
-- type: 编程
-  topics:
-    - topic: 技术
-      table:
-        - name: 书
-          score: 6
+- topic: 技术
+  table:
+    - name: 书
+      score: 6
 `)
 	assert.NotEmpty(t, result.Issues)
 	assert.Contains(t, joinedMsgs(result), "maximum")

@@ -163,6 +163,30 @@ func TestLoadConfigReposFromDir_SkipsNonDirEntries(t *testing.T) {
 	require.Len(t, repos, 1)
 }
 
+func TestLoadConfigReposFromDir_DerivesTypeFromFilename(t *testing.T) {
+	src := t.TempDir()
+	tagDir := filepath.Join(src, "kernel")
+	require.NoError(t, os.MkdirAll(tagDir, 0755))
+	// New layout: the file root is a flat topic array with no "type"/"topics";
+	// the section type comes from "infra.yml".
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "infra.yml"), []byte(`- topic: wireguard
+  kind: mech
+  repo:
+    - url: https://github.com/WireGuard/wireguard-go
+`), 0644))
+
+	repos, err := LoadConfigReposFromDir(src)
+	require.NoError(t, err)
+	require.Len(t, repos, 1)
+	assert.Equal(t, "kernel", repos[0].Tag)
+	assert.Equal(t, "infra", repos[0].Type)
+
+	// The derived type must feed the topic canonical path (tag/type/topic).
+	candidates := repos.TopicCatalog()
+	require.Len(t, candidates, 1)
+	assert.Equal(t, "kernel/infra/wireguard", candidates[0].Path)
+}
+
 func TestLoadConfigReposFromDir_RenderError(t *testing.T) {
 	src := t.TempDir()
 	tagDir := filepath.Join(src, "bad")

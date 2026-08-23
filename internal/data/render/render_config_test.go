@@ -64,7 +64,8 @@ func TestRunDomainRender_GHD(t *testing.T) {
 	src := filepath.Join(tmpDir, "data", "gh")
 	tagDir := filepath.Join(src, "dev")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "tool.yml"), []byte(`- type: tool
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "tool.yml"), []byte(`- topic: shell
+  kind: type
   repo:
     - url: https://github.com/acme/main-tool
       des: Main tool
@@ -98,24 +99,17 @@ func TestRunDomainRender_Goods(t *testing.T) {
 	src := filepath.Join(tmpDir, "data")
 	require.NoError(t, os.MkdirAll(src, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(src, "goods.yml"), []byte(`---
-- type: EDC
-  tag: goods
-  score: 3
-  topics:
-    - topic: earphones
-      score: 5
-      table:
-        - name: AirPods
-          brand: Apple
-          price: ¥998
-    - topic: multitool
-      table:
-        - name: MR-1098SL
-          brand: Mr.Green
-          price: ¥49
-  item:
-    - name: C50
-      price: ¥179
+- topic: earphones
+  score: 5
+  table:
+    - name: AirPods
+      brand: Apple
+      price: ¥998
+- topic: multitool
+  table:
+    - name: MR-1098SL
+      brand: Mr.Green
+      price: ¥49
 `), 0644))
 	outDir := filepath.Join(tmpDir, "out")
 
@@ -133,14 +127,9 @@ func TestRunDomainRender_Goods(t *testing.T) {
 
 	var decoded []map[string]any
 	require.NoError(t, json.Unmarshal(raw, &decoded))
-	require.Len(t, decoded, 1)
+	require.Len(t, decoded, 2)
 
-	topics, ok := decoded[0]["topics"].([]any)
-	require.True(t, ok)
-	require.Len(t, topics, 2)
-
-	earphones, ok := topics[0].(map[string]any)
-	require.True(t, ok)
+	earphones := decoded[0]
 	assert.Equal(t, "earphones", earphones["topic"])
 	assert.EqualValues(t, 5, earphones["score"])
 	table, ok := earphones["table"].([]any)
@@ -150,8 +139,7 @@ func TestRunDomainRender_Goods(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "AirPods", row["name"])
 
-	multitool, ok := topics[1].(map[string]any)
-	require.True(t, ok)
+	multitool := decoded[1]
 	assert.Equal(t, "multitool", multitool["topic"])
 	mTable, ok := multitool["table"].([]any)
 	require.True(t, ok)
@@ -186,7 +174,8 @@ func TestRunDomainRender_NixMetadata(t *testing.T) {
 
 	mainNix := "https://mynixos.com/nixpkgs/package/main-tool"
 	relatedNix := "https://mynixos.com/nixpkgs/package/related-tool"
-	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "tool.yml"), []byte(`- type: tool
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "tool.yml"), []byte(`- topic: tool
+  kind: type
   repo:
     - url: https://github.com/acme/main-tool
       des: Main tool
@@ -218,9 +207,16 @@ func TestRunDomainRender_NixMetadata(t *testing.T) {
 	require.NoError(t, err)
 	var jsonRepos []map[string]any
 	require.NoError(t, json.Unmarshal(jsonData, &jsonRepos))
-	jsonRepo, ok := jsonRepos[0]["repo"].([]any)
+	require.Len(t, jsonRepos, 1)
+	topics, ok := jsonRepos[0]["topics"].([]any)
 	require.True(t, ok)
-	mainRepo, ok := jsonRepo[0].(map[string]any)
+	require.Len(t, topics, 1)
+	topic, ok := topics[0].(map[string]any)
+	require.True(t, ok)
+	topicRepos, ok := topic["repo"].([]any)
+	require.True(t, ok)
+	require.NotEmpty(t, topicRepos)
+	mainRepo, ok := topicRepos[0].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, mainNix, mainRepo["nix"])
 }
@@ -467,7 +463,8 @@ func TestProcessGithubDirDomain_Success(t *testing.T) {
 	src := filepath.Join(tmpDir, "data", "gh")
 	tagDir := filepath.Join(src, "dev")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "tool.yml"), []byte(`- type: tool
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "tool.yml"), []byte(`- topic: shell
+  kind: type
   repo:
     - url: https://github.com/acme/main-tool
 `), 0644))

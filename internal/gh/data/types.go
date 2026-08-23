@@ -18,6 +18,13 @@ func sectionFromMap(m map[string]any) Section {
 	return section
 }
 
+func topicFromMap(m map[string]any) Topic {
+	var topic Topic
+	decodeYAMLMap(m, &topic)
+
+	return topic
+}
+
 func decodeYAMLMap(input, output any) {
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Result:  output,

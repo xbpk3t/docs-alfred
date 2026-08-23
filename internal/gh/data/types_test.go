@@ -7,6 +7,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func assertSectionType(t *testing.T, s Section, want string) {
+	t.Helper()
+	if want == "" {
+		assert.Nil(t, s.Type)
+
+		return
+	}
+	require.NotNil(t, s.Type)
+	assert.Equal(t, want, *s.Type)
+}
+
 func TestSectionFromMap(t *testing.T) {
 	m := map[string]any{
 		"type": "language",
@@ -18,7 +29,7 @@ func TestSectionFromMap(t *testing.T) {
 		},
 	}
 	section := sectionFromMap(m)
-	assert.Equal(t, "language", section.Type)
+	assertSectionType(t, section, "language")
 	assert.Len(t, section.Repo, 1)
 }
 
@@ -32,7 +43,7 @@ func TestSectionFromMap_Topics(t *testing.T) {
 		},
 	}
 	section := sectionFromMap(m)
-	assert.Equal(t, "tool", section.Type)
+	assertSectionType(t, section, "tool")
 	assert.Len(t, section.Topics, 1)
 	assert.Equal(t, "overview", section.Topics[0].Topic)
 }
@@ -43,7 +54,7 @@ func TestSectionFromMap_NilRecord(t *testing.T) {
 		"record": nil,
 	}
 	section := sectionFromMap(m)
-	assert.Equal(t, "tool", section.Type)
+	assertSectionType(t, section, "tool")
 }
 
 func TestTopic_DirName(t *testing.T) {
@@ -111,7 +122,7 @@ func TestSectionFromMap_TopicsNonSlice(t *testing.T) {
 		"topics": "not a slice",
 	}
 	section := sectionFromMap(m)
-	assert.Equal(t, "tool", section.Type)
+	assertSectionType(t, section, "tool")
 }
 
 func TestSectionFromMap_RepoEmptySlice(t *testing.T) {

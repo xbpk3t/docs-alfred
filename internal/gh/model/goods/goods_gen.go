@@ -5,7 +5,7 @@ package goods
 // JSON Schema for data/goods YAML files (goods.*.yml). Field sets verified against
 // all goods files including hidden .goods.*.yml. Topics are flat (one level, no
 // recursion); there is no kind/repo/rel.
-type GoodsSchemaJson []Section
+type GoodsSchemaJson []Topic
 
 type Record struct {
 	// Date corresponds to the JSON schema field "date".
@@ -31,7 +31,7 @@ type Section struct {
 	Topics []Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
 
 	// Type corresponds to the JSON schema field "type".
-	Type string `json:"type" yaml:"type" mapstructure:"type"`
+	Type *string `json:"type,omitempty,omitzero" yaml:"type,omitempty" mapstructure:"type,omitempty"`
 }
 
 // 商品项；key 严格枚举（additionalProperties false），行必有 name；endDate/endPrice/isUsing

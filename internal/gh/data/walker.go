@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
@@ -109,34 +110,47 @@ func processYAMLContent(content, relPath, filenameStem string, fn func(WalkerEve
 }
 
 // processYAMLDoc processes a single decoded YAML document.
+//
+// In the new data/gh layout a file's root is a flat topic array and the whole
+// file is one section (type derived from the file name). Each document therefore
+// becomes a single section event whose topics are the document's items. The
+// empty-topic (non-mapping) entries are skipped.
 func processYAMLDoc(doc any, relPath, filenameStem string, fn func(WalkerEvent) error, docIndex int) error {
 	items, ok := doc.([]any)
 	if !ok {
 		return fn(WalkerEvent{Type: evNotArray, File: relPath, DocIndex: docIndex})
 	}
 
-	for sectionIdx, item := range items {
-		section, ok := item.(map[string]any)
+	var topics []Topic
+	for _, item := range items {
+		m, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-
-		if err := emitSectionEvent(fn, relPath, filenameStem, sectionIdx, section); err != nil {
-			return fmt.Errorf("section %d in %s: %w", sectionIdx, relPath, err)
-		}
+		topics = append(topics, topicFromMap(m))
+	}
+	if len(topics) == 0 {
+		return nil
 	}
 
-	return nil
+	return emitSectionEvent(fn, relPath, filenameStem, topics)
 }
 
-// emitSectionEvent yields a section event for the given section map.
-func emitSectionEvent(fn func(WalkerEvent) error, relPath, filenameStem string, sectionIdx int, section map[string]any) error {
+// emitSectionEvent yields a section event. The section type is derived from the
+// file name stem (algo.yml → "algo"); its topics are the whole topic array. In
+// the flat layout a file is always a single section, so SectionIndex is 0.
+func emitSectionEvent(fn func(WalkerEvent) error, relPath, filenameStem string, topics []Topic) error {
+	derived := gh.TypeFromFilename(filenameStem)
+
 	return fn(WalkerEvent{
 		Type:         evSection,
 		File:         relPath,
 		FilenameStem: filenameStem,
-		SectionIndex: sectionIdx,
-		Section:      sectionFromMap(section),
+		SectionIndex: 0,
+		Section: Section{
+			Type:   &derived,
+			Topics: topics,
+		},
 	})
 }
 

@@ -7,7 +7,7 @@ package books
 // table of rows. 行级 key 严格枚举（additionalProperties false）：共享
 // name/author/score/publishAt/des/readAt/url/record/qs，ntl 另有 dict/cast；嵌套内容表
 // (row.table / row.topics) 保持 free-form。
-type BooksSchemaJson []Section
+type BooksSchemaJson []Topic
 
 type Record struct {
 	// Date corresponds to the JSON schema field "date".
@@ -33,7 +33,7 @@ type Section struct {
 	Topics []Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
 
 	// Type corresponds to the JSON schema field "type".
-	Type string `json:"type" yaml:"type" mapstructure:"type"`
+	Type *string `json:"type,omitempty,omitzero" yaml:"type,omitempty" mapstructure:"type,omitempty"`
 }
 
 type TableItem struct {

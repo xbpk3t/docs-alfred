@@ -5,7 +5,7 @@ package gh
 // JSON Schema for data/gh YAML files. Top-level list of sections; each section
 // carries a type plus optional repo/record/topics. Field sets derived from a data
 // audit; cross-field and cross-file business rules stay in Go.
-type GhSchemaJson []Section
+type GhSchemaJson []Topic
 
 type Record struct {
 	// Date corresponds to the JSON schema field "date".
@@ -71,7 +71,7 @@ type Section struct {
 	Topics []Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
 
 	// 本节主题（如 golang / mac / kernel）；自由字符串
-	Type string `json:"type" yaml:"type" mapstructure:"type"`
+	Type *string `json:"type,omitempty,omitzero" yaml:"type,omitempty" mapstructure:"type,omitempty"`
 }
 
 // 对比表项；内容异构（name/what/why/where/when/brand/price/lang 等），dynamic key 不做枚举

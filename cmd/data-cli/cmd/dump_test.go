@@ -12,18 +12,16 @@ import (
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 )
 
-const multiKindGhYAML = `- type: kernel
-  topics:
-    - topic: futex
-      kind: type
-    - topic: bpf-tools
-      kind: tools
-    - topic: draft-notes
-      kind: temp
-    - topic: page-cache
-      kind: mech
-    - topic: linux-repos
-      kind: repo
+const multiKindGhYAML = `- topic: futex
+  kind: type
+- topic: bpf-tools
+  kind: tools
+- topic: draft-notes
+  kind: temp
+- topic: page-cache
+  kind: mech
+- topic: linux-repos
+  kind: repo
 `
 
 func captureStdout(t *testing.T, fn func() error) (string, error) {

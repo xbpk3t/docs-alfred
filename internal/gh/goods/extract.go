@@ -61,38 +61,38 @@ func extractFileUsing(file string, out *modelgoods.UsingSchemaJson, types, topic
 		return fmt.Errorf("read goods file %s: %w", file, err)
 	}
 
-	goodsList, err := parser.NewParser[modelgoods.Section](data).ParseFlatten()
+	// New layout: each file is a flat topic array and the whole file is one
+	// type derived from the file name.
+	topicsList, err := parser.NewParser[modelgoods.Topic](data).WithFileName(filepath.Base(file)).ParseFlatten()
 	if err != nil {
 		return fmt.Errorf("parse goods file %s: %w", file, err)
 	}
 
-	for i := range goodsList {
-		g := &goodsList[i]
+	typeName := modelgoods.TypeFromFilename(filepath.Base(file))
 
-		ti, ok := types[g.Type]
+	ti, ok := types[typeName]
+	if !ok {
+		ti = len(*out)
+		types[typeName] = ti
+		// Empty non-nil slice so `topics` marshals as [] (not null) and stays
+		// valid against using.schema.json even for types with no in-use items.
+		*out = append(*out, modelgoods.UsingType{Type: typeName, Topics: []modelgoods.UsingTopic{}})
+	}
+
+	for j := range topicsList {
+		tp := &topicsList[j]
+		items := usingItemsFromTable(tp.Table)
+		if len(items) == 0 {
+			continue
+		}
+
+		pi, ok := topics[typeName+"\x00"+tp.Topic]
 		if !ok {
-			ti = len(*out)
-			types[g.Type] = ti
-			// Empty non-nil slice so `topics` marshals as [] (not null) and stays
-			// valid against using.schema.json even for types with no in-use items.
-			*out = append(*out, modelgoods.UsingType{Type: g.Type, Topics: []modelgoods.UsingTopic{}})
+			pi = len((*out)[ti].Topics)
+			topics[typeName+"\x00"+tp.Topic] = pi
+			(*out)[ti].Topics = append((*out)[ti].Topics, modelgoods.UsingTopic{Topic: tp.Topic})
 		}
-
-		for j := range g.Topics {
-			tp := &g.Topics[j]
-			items := usingItemsFromTable(tp.Table)
-			if len(items) == 0 {
-				continue
-			}
-
-			pi, ok := topics[g.Type+"\x00"+tp.Topic]
-			if !ok {
-				pi = len((*out)[ti].Topics)
-				topics[g.Type+"\x00"+tp.Topic] = pi
-				(*out)[ti].Topics = append((*out)[ti].Topics, modelgoods.UsingTopic{Topic: tp.Topic})
-			}
-			(*out)[ti].Topics[pi].Items = append((*out)[ti].Topics[pi].Items, items...)
-		}
+		(*out)[ti].Topics[pi].Items = append((*out)[ti].Topics[pi].Items, items...)
 	}
 
 	return nil

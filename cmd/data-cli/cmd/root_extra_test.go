@@ -29,15 +29,13 @@ func writeGhFiles(t *testing.T, files map[string]string) string {
 }
 
 // validGhYAML is minimal gh-format YAML that passes check validation.
-// kind tools does not require mdscc; section must have at least one topic.
-// Section-level record/zk are not part of the schema; records live on topics/repos.
-const validGhYAML = `- type: tool
-  topics:
-    - topic: overview
-      kind: tools
-      record:
-        - date: 2025-08-01
-          des: a note
+// The new data/gh layout is a flat topic array (type derived from the file
+// name). kind tools does not require mdscc.
+const validGhYAML = `- topic: overview
+  kind: tools
+  record:
+    - date: 2025-08-01
+      des: a note
   repo:
     - url: https://github.com/acme/tool
       des: a tool
@@ -103,11 +101,10 @@ func TestNewRenderCmdWithJSONFormat(t *testing.T) {
 
 func TestNewRenderCmdGoodsDomain(t *testing.T) {
 	goodsDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(goodsDir, "goods.yml"), []byte(`---
-- type: 耳机
-  tag: EDC
+	require.NoError(t, os.WriteFile(filepath.Join(goodsDir, "goods.耳机.yml"), []byte(`---
+- topic: 耳机
   score: 3
-  item:
+  table:
     - name: C50
       price: ¥179
 `), 0644))
@@ -139,10 +136,9 @@ func TestNewCheckCmdRunEGhValidData(t *testing.T) {
 }
 
 func TestNewCheckCmdRunEGhInvalidData(t *testing.T) {
-	// Missing kind is the check gh gate (date shape is out of scope).
-	ghDir := writeGhFiles(t, map[string]string{"tool.yml": `- type: tool
-  topics:
-    - topic: overview
+	// Invalid kind value is the check gh gate (date shape is out of scope).
+	ghDir := writeGhFiles(t, map[string]string{"tool.yml": `- topic: overview
+  kind: unset
 `})
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"check", "gh", "--path", ghDir})
@@ -176,8 +172,8 @@ func TestRunDomainCheckGhValidData(t *testing.T) {
 func TestCheckGoodsIncludeHiddenFlag(t *testing.T) {
 	goodsDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(goodsDir, ".hidden.yml"), []byte(`---
-- tag: goods
-  topics: []
+- topic: hidden
+  junk: 1
 `), 0o644))
 
 	cmd := newRootCmd()
@@ -193,10 +189,8 @@ func TestCheckGoodsIncludeHiddenFlag(t *testing.T) {
 }
 
 func TestRunDomainCheckGhInvalidKind(t *testing.T) {
-	ghDir := writeGhFiles(t, map[string]string{"tool.yml": `- type: tool
-  topics:
-    - topic: overview
-      kind: unset
+	ghDir := writeGhFiles(t, map[string]string{"tool.yml": `- topic: overview
+  kind: unset
 `})
 	err := runDomainCheck(data.DomainGH, ghDir, "", false)
 	require.Error(t, err)
@@ -236,8 +230,8 @@ func TestNewDedupCmdRunEGhNoDuplicates(t *testing.T) {
 func TestNewDedupCmdRunEGhWithDuplicates(t *testing.T) {
 	// GH duplicate check expects YAML files inside subdirectories of the target dir.
 	ghDir := writeGhFiles(t, map[string]string{
-		"dev/a.yml": "- type: a\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n",
-		"ops/b.yml": "- type: b\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n",
+		"dev/a.yml": "- topic: x\n  kind: repo\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n",
+		"ops/b.yml": "- topic: x\n  kind: repo\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n",
 	})
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"dedup", "gh", "--path", ghDir})
@@ -262,8 +256,8 @@ func TestRunDomainDedupGhNonexistentPath(t *testing.T) {
 func TestRunDomainDedupGhWithDuplicates(t *testing.T) {
 	// GH duplicate check expects YAML files inside subdirectories.
 	ghDir := writeGhFiles(t, map[string]string{
-		"dev/a.yml": "- type: a\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n",
-		"ops/b.yml": "- type: b\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n",
+		"dev/a.yml": "- topic: x\n  kind: repo\n  repo:\n    - url: https://github.com/acme/same\n      des: first\n",
+		"ops/b.yml": "- topic: x\n  kind: repo\n  repo:\n    - url: https://github.com/acme/same\n      des: second\n",
 	})
 	err := runDomainDedup(data.DomainGH, ghDir)
 	_ = err

@@ -9,6 +9,7 @@ import (
 	"github.com/samber/lo"
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 	modelbooks "github.com/xbpk3t/docs-alfred/internal/gh/model/books"
+	modelgh "github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
@@ -197,9 +198,14 @@ func parseGhYAMLEntries(yf, targetDir string) ([]ghEntry, error) {
 		relFile = yf
 	}
 
+	cfgType := modelgh.TypeFromFilename(filepath.Base(yf))
+
 	var entries []ghEntry
 	for i := range configs {
 		cfg := configs[i]
+		if cfg.Type == "" {
+			cfg.Type = cfgType
+		}
 		if cfg.Type == "" {
 			continue
 		}

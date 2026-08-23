@@ -9,10 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const validSplitSection = `- type: tool
-  topics:
-    - topic: devops
-      kind: type
+const validSplitSection = `- topic: devops
+  kind: type
   repo:
     - url: https://github.com/acme/tool
       des: Tool repository
@@ -37,12 +35,10 @@ func TestLocalTopicCatalog_FromSourceDir(t *testing.T) {
 
 func TestLocalTopicCatalog_ExcludesTemp(t *testing.T) {
 	src := t.TempDir()
-	writeSplitGH(t, src, "kernel", "mem.yml", `- type: mem
-  topics:
-    - topic: futex
-      kind: type
-    - topic: draft
-      kind: temp
+	writeSplitGH(t, src, "kernel", "mem.yml", `- topic: futex
+  kind: type
+- topic: draft
+  kind: temp
 `)
 
 	candidates, err := LocalTopicCatalog(LocalGHConfig{SourceDir: src})

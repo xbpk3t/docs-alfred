@@ -96,9 +96,11 @@ func TestWalkGhRepos_ValidData(t *testing.T) {
 
 func TestWalkGhRepos_NonMappingInSection(t *testing.T) {
 	tmpDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: language
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- topic: a
+  kind: mech
 - just a string
-- type: tool
+- topic: b
+  kind: type
 `), 0644))
 
 	var sectionCount int
@@ -110,7 +112,7 @@ func TestWalkGhRepos_NonMappingInSection(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 2, sectionCount) // two mapping sections
+	assert.Equal(t, 1, sectionCount) // the whole doc is bundled into one section
 }
 
 func TestWalkGhRepos_NonExistentDir(t *testing.T) {
@@ -160,15 +162,11 @@ func TestWalkGhRepos_SubDirs(t *testing.T) {
 
 func TestWalkerEvent_Fields(t *testing.T) {
 	tmpDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- type: language
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- topic: language
+  kind: type
   repo:
     - url: https://github.com/acme/tool
       des: test
-      topics:
-        - topic: overview
-          record:
-            - date: 2024-01-01
-              des: initial
   record: []
 `), 0644))
 
@@ -181,7 +179,7 @@ func TestWalkerEvent_Fields(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "language", ev.Section.Type)
+	assertSectionType(t, ev.Section, "go") // type derived from the file name
 	assert.Equal(t, "go", ev.FilenameStem)
 }
 
@@ -241,13 +239,11 @@ func TestWalkGhRepos_NilDoc(t *testing.T) {
 
 func TestWalkGhRepos_EmptySequenceItem(t *testing.T) {
 	tmpDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "mixed.yml"), []byte(`- type: valid
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.yml"), []byte(`- topic: valid
   repo:
     - url: https://github.com/a/b
-  record: []
 - "just a string"
-- type: also_valid
-  record: []
+- topic: next
 `), 0644))
 
 	var sectionCount int
@@ -259,8 +255,8 @@ func TestWalkGhRepos_EmptySequenceItem(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	// "just a string" is skipped (not a map), so 2 sections
-	assert.Equal(t, 2, sectionCount)
+	// "just a string" is skipped (not a map), the rest is one section
+	assert.Equal(t, 1, sectionCount)
 }
 
 func TestWalkGhRepos_EmptyCallbackError(t *testing.T) {
@@ -415,18 +411,16 @@ func TestWalkGhRepos_EmptyRepoList(t *testing.T) {
 
 func TestWalkGhRepos_TopicWithRepos(t *testing.T) {
 	tmpDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "llm.yml"), []byte(`- type: LLM
-  topics:
-    - topic: claude-code
-      repo:
-        - url: https://github.com/anthropics/claude-code
-          doc: https://code.claude.com/docs/
-        - url: https://github.com/openai/codex
-          doc: https://developers.openai.com/codex/config-reference
-      record:
-        - date: 2025-01-01
-          des: initial
-  record: []
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "llm.yml"), []byte(`- topic: claude-code
+  kind: type
+  repo:
+    - url: https://github.com/anthropics/claude-code
+      doc: https://code.claude.com/docs/
+    - url: https://github.com/openai/codex
+      doc: https://developers.openai.com/codex/config-reference
+  record:
+    - date: 2025-01-01
+      des: initial
 `), 0644))
 
 	var sectionEvents int
@@ -441,7 +435,9 @@ func TestWalkGhRepos_TopicWithRepos(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, sectionEvents)
-	assert.Equal(t, "LLM", section.Type)
+	assertSectionType(t, section, "llm") // derived from "llm.yml"
+	assert.Len(t, section.Topics, 1)
+	assert.Equal(t, "claude-code", section.Topics[0].Topic)
 }
 
 func TestWalkGhRepos_TopicWithRepos_RealFile(t *testing.T) {
@@ -466,6 +462,10 @@ func TestWalkGhRepos_TopicWithRepos_RealFile(t *testing.T) {
 	// Verify sections were parsed
 	assert.True(t, len(sections) > 0, "Expected to find sections in LLM.yml")
 	for _, section := range sections {
-		t.Logf("✓ Section: %s, Repos: %d", section.Type, len(section.Repo))
+		typeDesc := "<none>"
+		if section.Type != nil {
+			typeDesc = *section.Type
+		}
+		t.Logf("✓ Section: %s, Repos: %d", typeDesc, len(section.Repo))
 	}
 }

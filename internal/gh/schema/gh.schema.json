@@ -4,11 +4,11 @@
   "title": "gh",
   "description": "JSON Schema for data/gh YAML files. Top-level list of sections; each section carries a type plus optional repo/record/topics. Field sets derived from a data audit; cross-field and cross-file business rules stay in Go.",
   "type": "array",
-  "items": { "$ref": "#/$defs/section" },
+  "items": { "$ref": "#/$defs/topic" },
   "$defs": {
     "section": {
       "type": "object",
-      "required": ["type", "topics"],
+      "required": ["topics"],
       "additionalProperties": false,
       "properties": {
         "type": {

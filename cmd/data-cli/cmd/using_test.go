@@ -36,23 +36,21 @@ func decodeUsing(t *testing.T, raw string) []usingType {
 
 func TestNewGoodsUsingCmd_JSONShape(t *testing.T) {
 	goodsDir := writeGhFiles(t, map[string]string{
-		"goods.test.yml": `---
-- type: 耐用品
-  topics:
-    - topic: 收纳袋
-      table:
-        - name: 抽绳束口#防水#收纳袋（15D尼龙涂硅）
-          brand: 三峰出
-          price: "¥13"
-          isUsing: true
-        - name: 天纵被子收纳袋
-          price: ¥84
+		"goods.耐用品.yml": `---
+- topic: 收纳袋
+  table:
+    - name: 抽绳束口#防水#收纳袋（15D尼龙涂硅）
+      brand: 三峰出
+      price: "¥13"
+      isUsing: true
+    - name: 天纵被子收纳袋
+      price: ¥84
 
-    - topic: 速干浴巾
-      table:
-        - name: 速干浴巾 NH19Y001-J
-          brand: 挪客
-          isUsing: true
+- topic: 速干浴巾
+  table:
+    - name: 速干浴巾 NH19Y001-J
+      brand: 挪客
+      isUsing: true
 `,
 	})
 

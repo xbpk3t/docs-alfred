@@ -26,51 +26,51 @@ func writeGoodsFiles(t *testing.T, files map[string]string) string {
 	return dir
 }
 
-const sampleGoodsYAML = `---
-- type: 耐用品
-  topics:
-    - topic: 收纳袋
-      table:
-        - name: 抽绳束口#防水#收纳袋（15D尼龙涂硅）
-          brand: 三峰出
-          param: S码（12x28/15g）
-          price: "¥13"
-          isUsing: true
-        - name: 天纵被子收纳袋
-          brand: 天纵
-          price: ¥84
-          date: 2019-08-21
+// durableGoodsYAML / clothingGoodsYAML are new-type per-file layouts: each file
+// is one flat topic array and the type is derived from the file name.
+const durableGoodsYAML = `- topic: 收纳袋
+  table:
+    - name: 抽绳束口#防水#收纳袋（15D尼龙涂硅）
+      brand: 三峰出
+      param: S码（12x28/15g）
+      price: "¥13"
+      isUsing: true
+    - name: 天纵被子收纳袋
+      brand: 天纵
+      price: ¥84
+      date: 2019-08-21
+- topic: 速干浴巾
+  table:
+    - name: 速干浴巾 NH19Y001-J
+      brand: 挪客
+      price: ¥49
+      isUsing: true
+    - name: 雅棉全棉面巾
+      brand: 雅棉
+      price: ¥58.5
+`
 
-    - topic: 速干浴巾
-      table:
-        - name: 速干浴巾 NH19Y001-J
-          brand: 挪客
-          price: ¥49
-          isUsing: true
-        - name: 雅棉全棉面巾
-          brand: 雅棉
-          price: ¥58.5
-
-- type: 衣物
-  topics:
-    - topic: long-johns  # 秋裤
-      table:
-        - name: 250 base功能内衣
-          brand: 美利奴
-          price: ¥800
-        - name: HEATTECH系列秋裤
-          brand: 优衣库
-          price: ¥129
-          isUsing: true
-          des: 现在在穿
+const clothingGoodsYAML = `- topic: long-johns  # 秋裤
+  table:
+    - name: 250 base功能内衣
+      brand: 美利奴
+      price: ¥800
+    - name: HEATTECH系列秋裤
+      brand: 优衣库
+      price: ¥129
+      isUsing: true
+      des: 现在在穿
 `
 
 func TestExtractUsing_GroupsByTypeTopic(t *testing.T) {
-	dir := writeGoodsFiles(t, map[string]string{"goods.test.yml": sampleGoodsYAML})
+	dir := writeGoodsFiles(t, map[string]string{
+		"goods.耐用品.yml": durableGoodsYAML,
+		"goods.衣物.yml":  clothingGoodsYAML,
+	})
 
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
-	require.Len(t, out, 2) // 两个 type，无 tag 层
+	require.Len(t, out, 2) // 两个 type（由文件名派生）
 
 	// 耐用品 type
 	first := out[0]
@@ -96,13 +96,10 @@ func TestExtractUsing_GroupsByTypeTopic(t *testing.T) {
 }
 
 func TestExtractUsing_NoUsingItems(t *testing.T) {
-	dir := writeGoodsFiles(t, map[string]string{"goods.test.yml": `---
-- type: 耐用品
-  topics:
-    - topic: 收纳袋
-      table:
-        - name: 天纵被子收纳袋
-          price: ¥84
+	dir := writeGoodsFiles(t, map[string]string{"goods.耐用品.yml": `- topic: 收纳袋
+  table:
+    - name: 天纵被子收纳袋
+      price: ¥84
 `})
 
 	out, err := ExtractUsing(dir)
@@ -121,20 +118,18 @@ func TestExtractUsing_EmptyDir(t *testing.T) {
 // using.schema.json contract: the marshaled JSON must validate, including empty
 // types emitting `topics: []` rather than null.
 func TestExtractUsing_OutputValidatesAgainstSchema(t *testing.T) {
-	dir := writeGoodsFiles(t, map[string]string{"goods.test.yml": `---
-- type: 空类型
-  topics:
-    - topic: 无在用
-      table:
-        - name: 未使用
-- type: 在用类型
-  topics:
-    - topic: 收纳袋
-      table:
-        - name: 在用袋
-          isUsing: true
-          price: ¥13
-`})
+	dir := writeGoodsFiles(t, map[string]string{
+		"goods.空.yml": `- topic: 无在用
+  table:
+    - name: 未使用
+`,
+		"goods.在用.yml": `- topic: 收纳袋
+  table:
+    - name: 在用袋
+      isUsing: true
+      price: ¥13
+`,
+	})
 
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
@@ -157,38 +152,41 @@ func TestExtractUsing_NonExistentDir(t *testing.T) {
 
 func TestExtractUsing_MultipleFilesMergeTypes(t *testing.T) {
 	dir := writeGoodsFiles(t, map[string]string{
-		"goods.a.yml": sampleGoodsYAML,
-		"goods.b.yml": `---
-- type: 食品
-  topics:
-    - topic: 零食
-      table:
-        - name: 牛肉干
-          isUsing: true
+		"goods.aa.yml": durableGoodsYAML,
+		"goods.bb.yml": `- topic: 零食
+  table:
+    - name: 牛肉干
+      isUsing: true
 `,
+		"goods.cc.yml": clothingGoodsYAML,
 	})
 
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
-	require.Len(t, out, 3) // 耐用品/衣物/食品 三个 type 合并
+	require.Len(t, out, 3) // aa/bb/cc 三个 type 合并
 	types := map[string]bool{}
 	for _, tp := range out {
 		types[tp.Type] = true
 	}
 	assert.Len(t, types, 3)
+	for _, k := range []string{"aa", "bb", "cc"} {
+		assert.Contains(t, types, k)
+	}
 }
 
 func TestExtractUsing_IgnoreNonGoodsFiles(t *testing.T) {
 	dir := writeGoodsFiles(t, map[string]string{
-		"goods.test.yml":      sampleGoodsYAML,
-		"other.yml":           "- type: unrelated\n",
-		"sub/goods.inner.yml": sampleGoodsYAML,
+		"goods.test.yml":      durableGoodsYAML,
+		"other.yml":           "- topic: unrelated\n  table:\n    - name: x\n",
+		"sub/goods.inner.yml": durableGoodsYAML,
 	})
 
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
-	// 只读直接子目录的文件，sub/ 下文件忽略
-	require.Len(t, out, 2)
+	// 只读 goods.*.yml 且只读直接子目录；other.yml 不是 goods 命名（被忽略），
+	// sub/ 下文件忽略，故仅 goods.test.yml 一个 type。
+	require.Len(t, out, 1)
+	assert.Equal(t, "test", out[0].Type)
 }
 
 func TestUsingItemsFromTable(t *testing.T) {
@@ -235,15 +233,12 @@ func strPtr(s string) *string {
 func TestExtractUsing_NumericName(t *testing.T) {
 	// 数字形态 name（话费号码）由 goods.schema.json 强制为 string：未引号的纯
 	// 数字会被 check 拒绝，数据必须写成 "18616287252"，输出保持字符串。
-	dir := writeGoodsFiles(t, map[string]string{"goods.test.yml": `---
-- type: 虚拟物品
-  topics:
-    - topic: 话费
-      table:
-        - name: "18616287252"
-          brand: 话费
-          price: ¥8/月
-          isUsing: true
+	dir := writeGoodsFiles(t, map[string]string{"goods.虚拟.yml": `- topic: 话费
+  table:
+    - name: "18616287252"
+      brand: 话费
+      price: ¥8/月
+      isUsing: true
 `})
 
 	out, err := ExtractUsing(dir)
@@ -255,60 +250,57 @@ func TestExtractUsing_NumericName(t *testing.T) {
 }
 
 // TestExtractUsing_RealWorldShapes covers real goods.*.yml patterns:
-// block-scalar des (des: |), inline comments, mixed indent, multi-topic files.
+// block-scalar des, inline comments, mixed indent, multi-topic/type files.
 func TestExtractUsing_RealWorldShapes(t *testing.T) {
-	dir := writeGoodsFiles(t, map[string]string{"goods.real.yml": `---
-- type: 耐用品 # 耐用商品
-  topics:
-    - topic: 速干浴巾 # quick-dry-towel
-      table:
-        - name: 速干浴巾 NH19Y001-J
-          brand: 挪客
-          price: ¥49
-          date: 2022-06-09
-          isUsing: true
-          des: |
-            有啥用？
-            - 在家直接用来装衣服，或者脏衣袋用。
-            - 用来当枕头用。
+	dir := writeGoodsFiles(t, map[string]string{
+		"goods.耐用品.yml": `- topic: 速干浴巾         # quick-dry-towel
+  table:
+    - name: 速干浴巾 NH19Y001-J
+      brand: 挪客
+      price: ¥49
+      date: 2022-06-09
+      isUsing: true
+      des: |
+        有啥用？
+        - 在家直接用来装衣服，或者脏衣袋用。
+        - 用来当枕头用。
 
-        - name: 雅棉全棉面巾
-          brand: 雅棉
-          price: ¥58.5
+    - name: 雅棉全棉面巾
+      brand: 雅棉
+      price: ¥58.5
 
-    - topic: 收纳袋
-      table:
-        - name: 抽绳束口#防水#收纳袋（15D尼龙涂硅）
-          brand: 三峰出
-          param: S码（12x28/15g）
-          price: "¥13"
-          isUsing: true
-
-- type: 虚拟物品
-  topics:
-    - topic: membership  # 会员
-      table:
-        - name: 老乡鸡会员
-          price: ¥8/月
-        - name: 88VIP
-          price: ¥88/年
-          isUsing: true
-`})
+- topic: 收纳袋
+  table:
+    - name: 抽绳束口#防水#收纳袋（15D尼龙涂硅）
+      brand: 三峰出
+      param: S码（21*28/15g）
+      price: "¥13"
+      isUsing: true
+`,
+		"goods.虚拟物品.yml": `- topic: membership  # 会员
+  table:
+    - name: 老乡鸡会员
+      price: ¥8/月
+    - name: 88VIP
+      price: ¥88/年
+      isUsing: true
+`,
+	})
 
 	out, err := ExtractUsing(dir)
 	require.NoError(t, err)
 	require.Len(t, out, 2)
 
-	// 块标量 des 完整保留(含多行)
+	// 文件名 unicode 排序：耐(U+8010) < 虚(U+865A)，故 out[0]=耐用品
 	durs := out[0]
 	require.Len(t, durs.Topics, 2)
 	towel := durs.Topics[0]
 	require.Len(t, towel.Items, 1)
 	assert.Equal(t, "速干浴巾 NH19Y001-J", towel.Items[0].Name)
+	// 块标量 des 完整保留(含多行)
 	assert.Contains(t, strDeref(towel.Items[0].Des), "在家直接用来装衣服")
 	assert.Contains(t, strDeref(towel.Items[0].Des), "用来当枕头用")
 
-	// 注释和 # 不干扰提取
 	bags := durs.Topics[1]
 	require.Len(t, bags.Items, 1)
 	assert.Equal(t, "抽绳束口#防水#收纳袋（15D尼龙涂硅）", bags.Items[0].Name)
@@ -319,6 +311,3 @@ func TestExtractUsing_RealWorldShapes(t *testing.T) {
 	require.Len(t, virtual.Topics[0].Items, 1)
 	assert.Equal(t, "88VIP", virtual.Topics[0].Items[0].Name)
 }
-
-// boolTrue 已随 schema 严格化移除：goods.schema.json 强制 isUsing: boolean，
-// YAML 1.1 真值字符串（on/yes/y）会被 check 直接拒绝，无需运行时容错。

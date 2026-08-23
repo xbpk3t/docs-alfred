@@ -21,26 +21,27 @@ func writeYAML(t *testing.T, dir, name, content string) string {
 	return path
 }
 
-const validSection = `- type: tunnel
-  topics:
-    - topic: 内网穿透工具
-      kind: tools
-      repo:
-        - url: https://github.com/acme/frp
-          score: 5
-          des: frp
-          rel:
-            - url: https://github.com/acme/gofrp
-              des: go 实现
-      record:
-        - date: 2025-08-01
-          des: 初始化
-          score: 5
+// validFlat is a valid data/gh file under the flat-topic layout: the root is a
+// list of topics (kind/topic required) with no section wrapper and no
+// top-level "type" key.
+const validFlat = `- topic: 内网穿透工具
+  kind: tools
+  repo:
+    - url: https://github.com/acme/frp
+      score: 5
+      des: frp
+      rel:
+        - url: https://github.com/acme/gofrp
+          des: go 实现
+  record:
+    - date: 2025-08-01
+      des: 初始化
+      score: 5
 `
 
 func TestRunCheck_Valid(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, dir, "ok.yml", validSection)
+	writeYAML(t, dir, "ok.yml", validFlat)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
 	require.Empty(t, result.Issues)
@@ -48,10 +49,8 @@ func TestRunCheck_Valid(t *testing.T) {
 
 func TestRunCheck_ValidMech(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, dir, "ok.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: mech
+	writeYAML(t, dir, "ok.yml", `- topic: overview
+  kind: mech
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
@@ -59,19 +58,17 @@ func TestRunCheck_ValidMech(t *testing.T) {
 }
 
 func TestRunCheck_MdsccIsRejected(t *testing.T) {
-	// mdscc was removed from the data model (gh data commented it out); the
-	// shared schema must flag it as an unknown topic key.
+	// mdscc was removed from the data model; the shared schema must flag it as
+	// an unknown topic key.
 	dir := t.TempDir()
-	writeYAML(t, dir, "mdscc.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: mech
-      mdscc:
-        meta: m
-        derive: d
-        sol: s
-        cost: c
-        case: k
+	writeYAML(t, dir, "mdscc.yml", `- topic: overview
+  kind: mech
+  mdscc:
+    meta: m
+    derive: d
+    sol: s
+    cost: c
+    case: k
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
@@ -81,9 +78,7 @@ func TestRunCheck_MdsccIsRejected(t *testing.T) {
 
 func TestRunCheck_MissingKind(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, dir, "missing.yml", `- type: tool
-  topics:
-    - topic: overview
+	writeYAML(t, dir, "missing.yml", `- topic: overview
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
@@ -94,10 +89,8 @@ func TestRunCheck_MissingKind(t *testing.T) {
 
 func TestRunCheck_KindNotInEnum(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, dir, "bad.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: foobar
+	writeYAML(t, dir, "bad.yml", `- topic: overview
+  kind: foobar
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
@@ -107,9 +100,7 @@ func TestRunCheck_KindNotInEnum(t *testing.T) {
 
 func TestRunCheck_MissingTopicName(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, dir, "notopic.yml", `- type: tool
-  topics:
-    - kind: tools
+	writeYAML(t, dir, "notopic.yml", `- kind: tools
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
@@ -117,67 +108,38 @@ func TestRunCheck_MissingTopicName(t *testing.T) {
 	assert.Contains(t, result.Issues[0].Message, "missing property 'topic'")
 }
 
-func TestRunCheck_MissingType(t *testing.T) {
+func TestRunCheck_TypeImplicit(t *testing.T) {
+	// The new data/gh layout derives "type" from the file name; there is no
+	// top-level "type" key, so a plain topic list must validate.
 	dir := t.TempDir()
-	writeYAML(t, dir, "notype.yml", `- topics:
-    - topic: overview
-      kind: tools
+	writeYAML(t, dir, "notype.yml", `- topic: overview
+  kind: tools
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
-	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "missing property 'type'")
+	require.Empty(t, result.Issues)
 }
 
-func TestRunCheck_RepoOnlyNoTopics(t *testing.T) {
-	// topics is required on a section (min 1), matching the old gookit rule.
+func TestRunCheck_RepoOnlyNoTopic(t *testing.T) {
+	// A top-level item that carries only repos is not a valid topic: it must at
+	// least carry topic + kind.
 	dir := t.TempDir()
-	writeYAML(t, dir, "repo-only.yml", `- type: tool
-  repo:
+	writeYAML(t, dir, "repo-only.yml", `- repo:
     - url: https://github.com/acme/tool
       des: a tool
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "missing property 'topics'")
-}
-
-func TestRunCheck_TooManyTopics(t *testing.T) {
-	dir := t.TempDir()
-	var b strings.Builder
-	b.WriteString("- type: tool\n  topics:\n")
-	for i := 0; i < MaxTopicsPerSection+1; i++ {
-		fmt.Fprintf(&b, "    - topic: t%d\n      kind: tools\n", i)
-	}
-	writeYAML(t, dir, "many.yml", b.String())
-	result, err := RunCheckWithOptions(dir, CheckOptions{})
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "maxItems")
-}
-
-func TestRunCheck_ExactlyMaxTopics(t *testing.T) {
-	dir := t.TempDir()
-	var b strings.Builder
-	b.WriteString("- type: tool\n  topics:\n")
-	for i := 0; i < MaxTopicsPerSection; i++ {
-		fmt.Fprintf(&b, "    - topic: t%d\n      kind: tools\n", i)
-	}
-	writeYAML(t, dir, "max.yml", b.String())
-	result, err := RunCheckWithOptions(dir, CheckOptions{})
-	require.NoError(t, err)
-	require.Empty(t, result.Issues)
+	assert.Contains(t, result.Issues[0].Message, "missing properties 'topic'")
 }
 
 func TestRunCheck_UnknownKey(t *testing.T) {
-	// The new strictness: an undeclared key is an error (was ignored before).
+	// An undeclared topic key is an error.
 	dir := t.TempDir()
-	writeYAML(t, dir, "typo.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: tools
-      typoKey: 1
+	writeYAML(t, dir, "typo.yml", `- topic: overview
+  kind: tools
+  typoKey: 1
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
@@ -187,22 +149,20 @@ func TestRunCheck_UnknownKey(t *testing.T) {
 
 func TestRunCheck_NullValue(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, dir, "null.yml", `- type: tool
-  topics:
-    - topic: overview
-      kind: tools
-      what: null
+	writeYAML(t, dir, "null.yml", `- topic: overview
+  kind: tools
+  what: null
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Issues)
-	assert.Contains(t, result.Issues[0].Message, "got null")
+	assert.Contains(t, result.Issues[0].Message, "null")
 }
 
 func TestRunCheck_BadYAMLContinues(t *testing.T) {
 	dir := t.TempDir()
 	writeYAML(t, dir, "bad.yml", `not: a: list: [[[`)
-	writeYAML(t, dir, "sub/ok.yml", validSection)
+	writeYAML(t, dir, "sub/ok.yml", validFlat)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
 	require.Len(t, result.Issues, 1)
@@ -217,24 +177,41 @@ func TestRunCheck_NonexistentPath(t *testing.T) {
 
 func TestRunCheck_RecursiveNested(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, dir, "infra/tunnel.yml", validSection)
+	writeYAML(t, dir, "infra/tunnel.yml", validFlat)
+	result, err := RunCheckWithOptions(dir, CheckOptions{})
+	require.NoError(t, err)
+	require.Empty(t, result.Issues)
+}
+
+func baselineFlat(n int) string {
+	var b strings.Builder
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&b, "- topic: t%d\n  kind: tools\n", i)
+	}
+
+	return b.String()
+}
+
+func TestRunCheck_ManyTopics(t *testing.T) {
+	// The flat layout has no per-file topic cap; a file with > MaxTopicsPerSection
+	// topics must still validate.
+	dir := t.TempDir()
+	writeYAML(t, dir, "many.yml", baselineFlat(MaxTopicsPerSection+5))
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)
 	require.Empty(t, result.Issues)
 }
 
 func TestRunCheck_RelIsRepoObject(t *testing.T) {
-	// rel lives on repo (not topic); each entry must be a full repo object,
-	// so a bare-string rel must be rejected.
+	// rel lives on repo (not topic); each entry must be a full repo object, so a
+	// bare-string rel must be rejected.
 	dir := t.TempDir()
-	writeYAML(t, dir, "bad-rel.yml", `- type: tool
-  topics:
-    - topic: x
-      kind: tools
-      repo:
-        - url: https://github.com/acme/x
-          rel:
-            - https://github.com/acme/y
+	writeYAML(t, dir, "bad-rel.yml", `- topic: x
+  kind: tools
+  repo:
+    - url: https://github.com/acme/x
+      rel:
+        - https://github.com/acme/y
 `)
 	result, err := RunCheckWithOptions(dir, CheckOptions{})
 	require.NoError(t, err)

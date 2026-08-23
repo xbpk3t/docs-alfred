@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 
 	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
-	"github.com/xbpk3t/docs-alfred/pkg/render"
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
 
 // LoadConfigReposFromDir renders split data/gh YAML files into remote Alfred records.
@@ -38,29 +39,42 @@ func LoadConfigReposFromDir(src string) (ConfigRepos, error) {
 	return allRepos, nil
 }
 
+// loadConfigReposFromTagDir reads each YAML file under a tag directory and
+// yields one ConfigRepo per file (= one section). The new data/gh layout is a
+// flat topic array with no top-level "type"/"topics" keys: the section type is
+// derived from the file name (algo.yml→"algo") and the whole file becomes that
+// section's topics. The tag is injected from the directory name.
 func loadConfigReposFromTagDir(tag, dir string) (ConfigRepos, error) {
-	data, err := fileutil.ReadAndMergeYAMLFilesRecursive(dir, nil)
+	files, err := fileutil.ListYAMLFilesRecursive(dir)
 	if err != nil {
-		return nil, fmt.Errorf("read gh subdir %s error: %w", tag, err)
-	}
-	if len(data) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("list gh subdir %s error: %w", tag, err)
 	}
 
-	renderer := NewGithubYAMLRender(tag)
-	renderer.WithParseMode(render.ParseFlatten)
+	var allRepos ConfigRepos
+	for _, yf := range files {
+		data, err := os.ReadFile(yf)
+		if err != nil {
+			return nil, fmt.Errorf("read gh %s error: %w", yf, err)
+		}
 
-	content, err := renderer.Render(data)
-	if err != nil {
-		return nil, fmt.Errorf("render gh subdir %s error: %w", tag, err)
+		topics, err := parser.NewParser[gh.Topic](data).WithFileName(filepath.Base(yf)).ParseFlatten()
+		if err != nil {
+			return nil, fmt.Errorf("parse gh %s error: %w", yf, err)
+		}
+		if len(topics) == 0 {
+			continue
+		}
+
+		cfg := &ConfigRepo{
+			Tag:    tag,
+			Type:   gh.TypeFromFilename(filepath.Base(yf)),
+			Topics: topics,
+		}
+		normalizeConfigRepo(cfg)
+		allRepos = append(allRepos, cfg)
 	}
 
-	var repos ConfigRepos
-	if err := yaml.Unmarshal([]byte(content), &repos); err != nil {
-		return nil, fmt.Errorf("unmarshal gh subdir %s error: %w", tag, err)
-	}
-
-	return repos, nil
+	return allRepos, nil
 }
 
 // MarshalConfigReposYAML serializes Alfred records to the remote gh.yml shape.

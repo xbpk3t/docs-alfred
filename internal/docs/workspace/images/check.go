@@ -269,7 +269,7 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 		}
 
 		section := ev.Section
-		typeVal := section.Type
+		typeVal := section.TypeString()
 		if typeVal == "" {
 			return nil
 		}
