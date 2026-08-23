@@ -116,6 +116,69 @@ func TestRunGHDuplicateCheck_WithDuplicates(t *testing.T) {
 	assert.Len(t, report.URLDuplicates, 1, "should find duplicate URL")
 }
 
+func TestRunGHDuplicateCheck_TrailingSlashVariant(t *testing.T) {
+	// Same repo spelled with and without a trailing slash must be flagged as a
+	// duplicate — the original gh-alfred bug that surfaced tmc/langchaingo twice.
+	dir := t.TempDir()
+	tagDir := filepath.Join(dir, "AI")
+	require.NoError(t, os.MkdirAll(tagDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "agent.yml"), []byte(`
+- type: agent
+  topics:
+    - topic: agent-fwk
+      repo:
+        - url: https://github.com/tmc/langchaingo/
+    - topic: agent-infra
+      repo:
+        - url: https://github.com/tmc/langchaingo
+`), 0644))
+
+	report, err := RunGHDuplicateCheck(dir)
+	require.NoError(t, err)
+	require.NotNil(t, report)
+	require.Len(t, report.URLDuplicates, 1, "trailing-slash variant should be one duplicate")
+	assert.Equal(t, "https://github.com/tmc/langchaingo/", report.URLDuplicates[0].URL)
+	assert.Len(t, report.URLDuplicates[0].Entries, 2)
+}
+
+func TestRunGHDuplicateCheck_CaseFoldedOwnerRepo(t *testing.T) {
+	// Owner/name differing only in case must still be recognized as the same repo.
+	dir := t.TempDir()
+	tagDir := filepath.Join(dir, "dev")
+	require.NoError(t, os.MkdirAll(tagDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "go.yml"), []byte(`
+- type: language
+  repo:
+    - url: https://github.com/BerriAI/litellm
+    - url: https://github.com/berriai/LiteLLM/
+`), 0644))
+
+	report, err := RunGHDuplicateCheck(dir)
+	require.NoError(t, err)
+	require.NotNil(t, report)
+	require.Len(t, report.URLDuplicates, 1)
+	assert.Len(t, report.URLDuplicates[0].Entries, 2)
+}
+
+func TestGhRepoURLKey(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "github no slash", raw: "https://github.com/tmc/langchaingo", want: "tmc/langchaingo"},
+		{name: "github trailing slash", raw: "https://github.com/tmc/langchaingo/", want: "tmc/langchaingo"},
+		{name: "github case fold", raw: "HTTPS://GITHUB.COM/BerriAI/LiteLLM/", want: "berriai/litellm"},
+		{name: "non-github trims slash", raw: "https://example.com/a/b/", want: "https://example.com/a/b"},
+		{name: "non-github untouched", raw: "https://example.com/a/b", want: "https://example.com/a/b"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, ghRepoURLKey(tc.raw))
+		})
+	}
+}
+
 func TestRunGHDuplicateCheck_TopicAndSectionRepos(t *testing.T) {
 	// section.repo in one file + topics[].repo in another must both be collected.
 	dir := t.TempDir()

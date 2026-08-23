@@ -12,6 +12,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // DuplicateReport contains duplicate detection results.
@@ -231,15 +232,21 @@ func ghRepoRelation(repo *ghindex.Repo) string {
 	return "repo"
 }
 
-// groupURLDuplicates groups gh entries by URL and returns a report of duplicates.
+// groupURLDuplicates groups gh entries by a normalized repo key and returns a
+// report of duplicates.
+//
+// The group key is the GitHub owner/repo pair (case-folded) rather than the
+// raw URL, so variants that point at the same repo — e.g. a trailing slash
+// (https://github.com/tmc/langchaingo/ vs .../langchaingo) or a different URL
+// spelling — are collapsed into one group. The report's URL field keeps the
+// first-seen spelling so messages stay readable.
 func groupURLDuplicates(repoEntries []ghEntry) *DuplicateReport {
-	byURL := make(map[string][]ghEntry)
-	for _, e := range repoEntries {
-		byURL[e.url] = append(byURL[e.url], e)
-	}
+	byKey := lo.GroupBy(repoEntries, func(e ghEntry) string {
+		return ghRepoURLKey(e.url)
+	})
 
 	report := &DuplicateReport{}
-	for url, list := range byURL {
+	for _, list := range byKey {
 		if len(list) <= 1 {
 			continue
 		}
@@ -250,13 +257,26 @@ func groupURLDuplicates(repoEntries []ghEntry) *DuplicateReport {
 				URL:  e.url,
 			}
 		}
+		// list[0] is the first-seen spelling (lo.GroupBy preserves input order).
 		report.URLDuplicates = append(report.URLDuplicates, URLDupEntry{
-			URL:     url,
+			URL:     list[0].url,
 			Entries: entries,
 		})
 	}
 
 	return report
+}
+
+// ghRepoURLKey returns a canonical key used to detect that two gh repo URLs
+// refer to the same repository. For GitHub URLs it is the lowercase
+// owner/name; anything else is normalized per the shared URL dedup rules
+// (trailing slash, case, fragments, tracking params, …).
+func ghRepoURLKey(rawURL string) string {
+	if repo, ok := urlutil.GitHubOwnerRepo(rawURL); ok {
+		return strings.ToLower(repo.Owner + "/" + repo.Name)
+	}
+
+	return urlutil.NormalizeForDedup(rawURL)
 }
 
 func parseDomainFiles(targetDir string) ([]parsedItem, error) {
