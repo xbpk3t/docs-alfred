@@ -227,6 +227,7 @@ func newWikiStatsCmd() *cobra.Command {
 		wikiRoot string
 		format   string
 		top      int
+		tagTop   int
 	}
 	cmd := &cobra.Command{
 		Use:   wikiStatsCommandName,
@@ -259,6 +260,14 @@ Output formats:
 				return err
 			}
 
+			// Per-tag research breakdown (isolated: drop RunTagTypeStats + this
+			// append to remove the section entirely).
+			tagType, err := wikiaudit.RunTagTypeStats(root, flags.tagTop)
+			if err != nil {
+				return err
+			}
+			stats = append(stats, tagType...)
+
 			switch flags.format {
 			case "json":
 				b, err := stats.JSON()
@@ -282,6 +291,7 @@ Output formats:
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
 	cmd.Flags().StringVar(&flags.format, "format", "tty", "Output format (tty|md|json) — json is the raw data contract")
 	cmd.Flags().IntVar(&flags.top, "top", 10, "Top N topics for the research section")
+	cmd.Flags().IntVar(&flags.tagTop, "tag-top", 3, "Max type columns per tag in the research tag section (extra types are dropped)")
 
 	return cmd
 }
@@ -372,7 +382,7 @@ func buildCompactOptions(cfg *wikiuc.Config, flags *wikiCompactFlags) (*wikicomp
 	}
 
 	return &wikicompact.CompactOptions{
-		WikiRoot:         cfg.Wiki.WikiRoot,
+		WikiRoot: cfg.Wiki.WikiRoot,
 		WindowFn: func(now time.Time) (wikicompact.Window, bool, string) {
 			return wikicompact.ScheduleWindow(cfg.Compact.Schedule, now)
 		},
