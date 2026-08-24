@@ -194,30 +194,15 @@ type: research
 			checkMsgs:  []string{"invalid date format"},
 		},
 		{
-			name: "missing source",
+			name: "missing source is valid",
 			rel:  "folder/type/topic/no-source.md",
 			content: `---
 title: T
 date: 2026-06-17
-source: ""
 type: research
 ---
 `,
-			wantIssues: 1,
-			checkMsgs:  []string{"missing required field: source"},
-		},
-		{
-			name: "source empty YAML null",
-			rel:  "folder/type/topic/null-source.md",
-			content: `---
-title: T
-date: 2026-06-17
-source:
-type: research
----
-`,
-			wantIssues: 1,
-			checkMsgs:  []string{"missing required field: source"},
+			wantIssues: 0,
 		},
 		{
 			name: "bare root file skipped",
@@ -246,13 +231,13 @@ body
 			wantIssues: 0,
 		},
 		{
-			name: "empty frontmatter four missing fields",
+			name: "empty frontmatter three missing fields",
 			rel:  "folder/type/topic/empty-fm.md",
 			content: `---
 ---
 `,
-			wantIssues: 4,
-			checkMsgs:  []string{"title", "date", "source", "type"},
+			wantIssues: 3,
+			checkMsgs:  []string{"title", "date", "type"},
 		},
 		{
 			name: "stray depth-2 file flagged",

@@ -29,6 +29,7 @@ Subcommands:
   trns          Fetch transcript data for a source
   trns check    Check transcript availability
   hunt          Discover high-quality source URLs
+  curate        Curate an external seed list into rss2nl candidate entries
 
 Run "rss2nl <subcommand> --help" for more details.`,
 	}
@@ -38,6 +39,7 @@ Run "rss2nl <subcommand> --help" for more details.`,
 	rootCmd.AddCommand(newSendCmd())
 	rootCmd.AddCommand(newTrnsCmd())
 	rootCmd.AddCommand(newHuntCmd())
+	rootCmd.AddCommand(newCurateCmd())
 	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 

@@ -13,8 +13,9 @@ import (
 )
 
 // wikiFrontmatter represents the OKF v0.1 frontmatter fields expected in wiki .md files.
-// Session, Model, Issue, and Score are optional fields written by ccx session export
-// (or edited manually); they are parsed for forward-compat but are never required.
+// Source, Session, Model, Issue, and Score are optional fields written by the CLI
+// pipelines (ccx session export etc.) or edited manually; they are parsed for
+// forward-compat but are never required.
 type wikiFrontmatter struct {
 	Title   string `yaml:"title"`
 	Date    string `yaml:"date"`
@@ -138,7 +139,9 @@ func checkFile(path, rel string) []checkutil.Issue {
 	return issues
 }
 
-// checkRequiredFields checks that title, date, source, and type are all non-empty.
+// checkRequiredFields checks that title, date, and type are all non-empty.
+// Source is optional (forward-compat), like session/model: entries such as
+// hand-written notes, digests, or inbox seeds may not have a meaningful source.
 func checkRequiredFields(fm *wikiFrontmatter, rel string) []checkutil.Issue {
 	var issues []checkutil.Issue
 	if strings.TrimSpace(fm.Title) == "" {
@@ -153,13 +156,6 @@ func checkRequiredFields(fm *wikiFrontmatter, rel string) []checkutil.Issue {
 			File:     rel,
 			Severity: checkutil.SeverityError,
 			Message:  "missing required field: date",
-		})
-	}
-	if strings.TrimSpace(fm.Source) == "" {
-		issues = append(issues, checkutil.Issue{
-			File:     rel,
-			Severity: checkutil.SeverityError,
-			Message:  "missing required field: source",
 		})
 	}
 	if strings.TrimSpace(fm.Type) == "" {
