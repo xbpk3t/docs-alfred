@@ -3,8 +3,8 @@
 package books
 
 // JSON Schema for data/books YAML files (books.*.yml) 与 data/ntl YAML 文件
-// (movie/TV/music) 共用的内容收藏 schema。Sections carry type + topics; each topic holds a
-// table of rows. 行级 key 严格枚举（additionalProperties false）：共享
+// (movie/TV/music) 共用的内容收藏 schema。Root 是扁平的 topic 列表，每个 topic 持有一张 table 行。行级 key
+// 严格枚举（additionalProperties false）：共享
 // name/author/score/publishAt/des/readAt/url/record/qs，ntl 另有 dict/cast；嵌套内容表
 // (row.table / row.topics) 保持 free-form。
 type BooksSchemaJson []Topic
@@ -24,17 +24,6 @@ type Record struct {
 }
 
 type RecordDes *string
-
-type Section struct {
-	// Score corresponds to the JSON schema field "score".
-	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
-
-	// Topics corresponds to the JSON schema field "topics".
-	Topics []Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
-
-	// Type corresponds to the JSON schema field "type".
-	Type *string `json:"type,omitempty,omitzero" yaml:"type,omitempty" mapstructure:"type,omitempty"`
-}
 
 type TableItem struct {
 	// Author corresponds to the JSON schema field "author".

@@ -10,15 +10,7 @@ func (cr ConfigRepos) ToRepos() Repos {
 	var repos Repos
 
 	for _, config := range cr {
-		for i := range config.Repos {
-			config.Repos[i].Tag = config.Tag
-			if config.IsDotfiles != nil {
-				config.Repos[i].IsDotfiles = config.IsDotfiles
-			}
-			repos = append(repos, processRepo(config.Repos[i], config.Type)...)
-		}
-
-		// 处理 topic 内的 repos
+		// repos now live on topics only; there is no type-level repo list.
 		for i := range config.Topics {
 			repos = append(repos, processTopicRepos(&config.Topics[i], config.Tag, config.Type)...)
 		}

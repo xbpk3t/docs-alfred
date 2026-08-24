@@ -319,39 +319,36 @@ func parseDomainFiles(targetDir string) ([]parsedItem, error) {
 	return items, nil
 }
 
-// parseSectionRows extracts (name/author/url/score) rows from section-shaped
+// parseSectionRows extracts (name/author/url/score) rows from the flat books
 // YAML by recursing topics[].table[]. The decode target is generated from
-// books.schema.json (internal/gh/model/books), so the section shape stays in
+// books.schema.json (internal/gh/model/books), so the books shape stays in
 // lockstep with the schema instead of a hand-mirrored struct. Returns ok=false
-// when the file is not section-shaped (e.g. the legacy flat format): a flat
-// file parses as sections with no topics, which is treated as "not a section"
-// so the caller falls back to the flat parser.
+// when the file has no topic rows, so the caller falls back to the flat parser.
 func parseSectionRows(data []byte, fileName string) ([]parsedItem, bool) {
-	docs, err := parser.NewParser[[]modelbooks.Section](data).ParseMulti()
+	docs, err := parser.NewParser[[]modelbooks.Topic](data).ParseMulti()
 	if err != nil {
 		return nil, false
 	}
 
 	var items []parsedItem
+	// Only the topic-shaped layout (each topic holding a table of rows) counts
+	// as a section; bare top-level name/author rows fall back to the legacy flat
+	// parser below.
 	hasSection := false
 	for _, doc := range docs {
-		for _, sec := range doc {
-			if len(sec.Topics) > 0 {
+		for _, topic := range doc {
+			for _, row := range topic.Table {
 				hasSection = true
-			}
-			for _, topic := range sec.Topics {
-				for _, row := range topic.Table {
-					if row.Name == "" {
-						continue
-					}
-					items = append(items, parsedItem{
-						file:   fileName,
-						name:   row.Name,
-						author: derefStr(row.Author),
-						url:    derefStr(row.URL),
-						score:  derefInt(row.Score),
-					})
+				if row.Name == "" {
+					continue
 				}
+				items = append(items, parsedItem{
+					file:   fileName,
+					name:   row.Name,
+					author: derefStr(row.Author),
+					url:    derefStr(row.URL),
+					score:  derefInt(row.Score),
+				})
 			}
 		}
 	}

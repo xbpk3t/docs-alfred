@@ -2,41 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/xbpk3t/docs-alfred/main/internal/gh/schema/gh.schema.json",
   "title": "gh",
-  "description": "JSON Schema for data/gh YAML files. Top-level list of sections; each section carries a type plus optional repo/record/topics. Field sets derived from a data audit; cross-field and cross-file business rules stay in Go.",
+  "description": "JSON Schema for data/gh YAML files. Root is a flat topic list (one topic item per file entry); the section type is derived from the file name rather than stored. Field sets derived from a data audit; cross-field and cross-file business rules stay in Go.",
   "type": "array",
   "items": { "$ref": "#/$defs/topic" },
   "$defs": {
-    "section": {
-      "type": "object",
-      "required": ["topics"],
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "type": "string",
-          "minLength": 1,
-          "description": "本节主题（如 golang / mac / kernel）；自由字符串"
-        },
-        "isDotfiles": {
-          "type": "boolean",
-          "description": "本 section 是否 dotfiles 相关"
-        },
-        "score": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 5,
-          "description": "本 section 评分（0-5）"
-        },
-        "repo": { "type": "array", "items": { "$ref": "#/$defs/repo" } },
-        "topics": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/topic" },
-          "minItems": 1,
-          "maxItems": 30,
-          "description": "主题列表；必填且至少 1 项，上限 30"
-        }
-      }
-    },
-
     "topic": {
       "type": "object",
       "required": ["topic", "kind"],

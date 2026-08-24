@@ -23,17 +23,6 @@ type Record struct {
 
 type RecordDes *string
 
-type Section struct {
-	// Score corresponds to the JSON schema field "score".
-	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
-
-	// Topics corresponds to the JSON schema field "topics".
-	Topics []Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
-
-	// Type corresponds to the JSON schema field "type".
-	Type *string `json:"type,omitempty,omitzero" yaml:"type,omitempty" mapstructure:"type,omitempty"`
-}
-
 // 商品项；key 严格枚举（additionalProperties false），行必有 name；endDate/endPrice/isUsing
 // 均为可选生命周期字段
 type TableItem struct {

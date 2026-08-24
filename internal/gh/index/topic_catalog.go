@@ -41,7 +41,6 @@ func (cr ConfigRepos) TopicCatalogWithKinds(kinds []string) []TopicCandidate {
 		}
 		base := joinPath(cfg.Tag, cfg.Type)
 		candidates = appendTopicCandidates(candidates, seen, cfg.Topics, base, "gh:config", allow)
-		appendRepoTopicCandidates(&candidates, seen, cfg.Repos, cfg.Tag, cfg.Type, allow)
 	}
 
 	return candidates
@@ -73,27 +72,6 @@ func kindSet(kinds []string) map[string]struct{} {
 	}
 
 	return set
-}
-
-func appendRepoTopicCandidates(
-	candidates *[]TopicCandidate,
-	seen map[string]bool,
-	repos Repos,
-	tag,
-	typeName string,
-	allow map[string]struct{},
-) {
-	for _, repo := range repos {
-		if repo == nil {
-			continue
-		}
-		for i := range repo.Rel {
-			// rel entries are pure data-model repos; recurse through them as
-			// enriched repos carrying the same provenance as their parent.
-			rel := &Repo{Repo: repo.Rel[i], Tag: tag, Type: typeName}
-			appendRepoTopicCandidates(candidates, seen, Repos{rel}, tag, typeName, allow)
-		}
-	}
 }
 
 func appendTopicCandidates(

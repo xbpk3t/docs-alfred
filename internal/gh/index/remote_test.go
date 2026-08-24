@@ -399,8 +399,10 @@ func TestWriteCache_InvalidPath(t *testing.T) {
 func validRemoteConfigYAML(name string) []byte {
 	return []byte(`- type: tool
   tag: test
-  repo:
-    - url: https://github.com/acme/` + name + `
-      des: ` + name + ` repository
+  topics:
+    - topic: acme/` + name + `
+      repo:
+        - url: https://github.com/acme/` + name + `
+          des: ` + name + ` repository
 `)
 }

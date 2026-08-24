@@ -14,7 +14,6 @@ import (
 
 func TestBooksModel_MatchesSchema(t *testing.T) {
 	consistency.CheckDefs(t, schema.Books, map[string]any{
-		"section":   Section{},
 		"topic":     Topic{},
 		"record":    Record{},
 		"tableItem": TableItem{},

@@ -2,9 +2,10 @@
 
 package gh
 
-// JSON Schema for data/gh YAML files. Top-level list of sections; each section
-// carries a type plus optional repo/record/topics. Field sets derived from a data
-// audit; cross-field and cross-file business rules stay in Go.
+// JSON Schema for data/gh YAML files. Root is a flat topic list (one topic item
+// per file entry); the section type is derived from the file name rather than
+// stored. Field sets derived from a data audit; cross-field and cross-file
+// business rules stay in Go.
 type GhSchemaJson []Topic
 
 type Record struct {
@@ -56,23 +57,6 @@ type Repo struct {
 }
 
 type RepoDes *string
-
-type Section struct {
-	// 本 section 是否 dotfiles 相关
-	IsDotfiles *bool `json:"isDotfiles,omitempty,omitzero" yaml:"isDotfiles,omitempty" mapstructure:"isDotfiles,omitempty"`
-
-	// Repo corresponds to the JSON schema field "repo".
-	Repo []Repo `json:"repo,omitempty,omitzero" yaml:"repo,omitempty" mapstructure:"repo,omitempty"`
-
-	// 本 section 评分（0-5）
-	Score *int `json:"score,omitempty,omitzero" yaml:"score,omitempty" mapstructure:"score,omitempty"`
-
-	// 主题列表；必填且至少 1 项，上限 30
-	Topics []Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
-
-	// 本节主题（如 golang / mac / kernel）；自由字符串
-	Type *string `json:"type,omitempty,omitzero" yaml:"type,omitempty" mapstructure:"type,omitempty"`
-}
 
 // 对比表项；内容异构（name/what/why/where/when/brand/price/lang 等），dynamic key 不做枚举
 type TableItem map[string]interface{}

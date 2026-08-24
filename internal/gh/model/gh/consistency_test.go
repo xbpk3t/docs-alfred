@@ -14,7 +14,6 @@ import (
 
 func TestGhModel_MatchesSchema(t *testing.T) {
 	consistency.CheckDefs(t, schema.Gh, map[string]any{
-		"section":   Section{},
 		"topic":     Topic{},
 		"repo":      Repo{},
 		"record":    Record{},

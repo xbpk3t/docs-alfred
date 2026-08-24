@@ -43,9 +43,12 @@ func captureStderr(t *testing.T) func() string {
 // validGHYAML is a minimal valid gh.yml payload for testing.
 const validGHYAML = `- type: tool
   tag: dev
-  repo:
-    - url: https://github.com/acme/tool
-      des: "A test tool"
+  topics:
+    - topic: acme
+      kind: tools
+      repo:
+        - url: https://github.com/acme/tool
+          des: "A test tool"
 `
 
 func TestExecuteRunsSuccessfully(t *testing.T) {

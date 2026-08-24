@@ -4,7 +4,6 @@ import (
 	"path"
 
 	yaml "github.com/goccy/go-yaml"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
@@ -40,7 +39,6 @@ func (g *GithubYAMLRender) Render(data []byte) (string, error) {
 		if rc[i].Tag == "" {
 			rc[i].Tag = g.tag
 		}
-		normalizeConfigRepo(&rc[i])
 	}
 
 	// 将数据编码为YAML格式
@@ -50,44 +48,6 @@ func (g *GithubYAMLRender) Render(data []byte) (string, error) {
 	}
 
 	return string(result), nil
-}
-
-func normalizeConfigRepo(config *ConfigRepo) {
-	base := topicBase(config.Tag, config.Type)
-
-	normalizeTopics(config.Topics, base)
-	for _, repo := range config.Repos {
-		normalizeRepoTopics(repo, base, false)
-	}
-}
-
-func normalizeRepoTopics(repo *Repo, base string, useBase bool) {
-	if repo == nil {
-		return
-	}
-	_ = base
-	_ = useBase
-}
-
-func normalizeTopics(topics Topics, base string) {
-	for i := range topics {
-		normalizeTopic(&topics[i], base)
-	}
-}
-
-func normalizeTopic(topic *gh.Topic, base string) {
-	// 处理 topic 内的 repos（rel 遍历见 normalizeRepoTopics；此处为兼容保留）
-	for i := range topic.Repo {
-		normalizeRepoTopics(&Repo{Repo: topic.Repo[i]}, base, false)
-	}
-}
-
-func topicBase(tag, typeName string) string {
-	if tag == "" || typeName == "" {
-		return ""
-	}
-
-	return joinPath(tag, typeName)
 }
 
 func joinPath(parts ...string) string {

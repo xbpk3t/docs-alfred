@@ -1,6 +1,7 @@
 package datarender
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/gh/goods"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/parser"
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
@@ -57,6 +59,18 @@ func RunDomainRender(cfg DomainRenderConfig) (*DomainRenderResult, error) {
 
 	var outputFiles []string
 
+	// goods/books/ntl split by file into the frontend's `type`→`topics`
+	// catalog. Gather the entries once (a single tree walk + parse) and just
+	// re-marshal per format, so a `json,yaml` render doesn't re-read the data.
+	var catalogEntries []catalogEntry
+	if prefix, ok := catalogDomainPrefix(cfg.Domain); ok && isSourceDir {
+		entries, err := collectCatalogEntries(src, prefix)
+		if err != nil {
+			return nil, fmt.Errorf("process %s dir: %w", cfg.Domain, err)
+		}
+		catalogEntries = entries
+	}
+
 	for _, f := range formats {
 		f = strings.TrimSpace(f)
 		ft := normalizeFormat(f)
@@ -66,21 +80,43 @@ func RunDomainRender(cfg DomainRenderConfig) (*DomainRenderResult, error) {
 
 		proc := newDocProcessor(ft)
 		proc.Dst = cfg.OutDir
+		outputName := proc.getOutputFilename(src)
 
-		if cfg.Domain == "gh" && isSourceDir {
-			if err := processGithubDirDomain(src, ft, proc); err != nil {
-				return nil, fmt.Errorf("process gh dir: %w", err)
-			}
-		} else {
-			if err := proc.processFile(src, renderer); err != nil {
-				return nil, fmt.Errorf("process %s: %w", ft, err)
-			}
+		if err := renderFormat(cfg.Domain, isSourceDir, src, ft, renderer, proc, outputName, catalogEntries); err != nil {
+			return nil, err
 		}
 
-		outputFiles = append(outputFiles, filepath.Join(cfg.OutDir, proc.getOutputFilename(src)))
+		outputFiles = append(outputFiles, filepath.Join(cfg.OutDir, outputName))
 	}
 
 	return &DomainRenderResult{OutputFiles: outputFiles}, nil
+}
+
+// renderFormat renders a single format for the domain: gh dirs walk the tree,
+// grouped catalog domains emit the pre-gathered catalog, everything else is the
+// generic single-file path.
+func renderFormat(domain string, isSourceDir bool, src string, ft fileType, renderer render.Renderer, proc *docProcessor, outputName string, catalogEntries []catalogEntry) error {
+	switch {
+	case domain == "gh" && isSourceDir:
+		if err := processGithubDirDomain(src, ft, proc); err != nil {
+			return fmt.Errorf("process gh dir: %w", err)
+		}
+		return nil
+	case catalogEntries != nil:
+		content, err := marshalCatalog(catalogEntries, ft)
+		if err != nil {
+			return err
+		}
+		if err := proc.writeOutput(content, outputName); err != nil {
+			return fmt.Errorf("write %s: %w", outputName, err)
+		}
+		return nil
+	default:
+		if err := proc.processFile(src, renderer); err != nil {
+			return fmt.Errorf("process %s: %w", ft, err)
+		}
+		return nil
+	}
 }
 
 // createRendererForDomain returns the appropriate renderer for a domain.
@@ -140,6 +176,82 @@ func processGithubDirDomain(src string, ft fileType, proc *docProcessor) error {
 	}
 
 	return nil
+}
+
+// catalogDomainPrefix returns the file-name prefix used to derive a catalog
+// entry's type tag for the grouped domains, and whether the domain is grouped.
+// goods/books/ntl split by file into the frontend's `type`→`topics` catalog.
+func catalogDomainPrefix(domain string) (string, bool) {
+	switch domain {
+	case "goods":
+		return "goods.", true
+	case "books":
+		return "books.", true
+	case "ntl":
+		return "", true
+	default:
+		return "", false
+	}
+}
+
+// catalogEntry is one output `{type, topics}` group, matching the frontend
+// CatalogType contract consumed by the goods/books/media pages.
+type catalogEntry struct {
+	Type   string `json:"type" yaml:"type"`
+	Topics []any  `json:"topics" yaml:"topics"`
+}
+
+// collectCatalogEntries builds the grouped goods/books/ntl entries: one entry
+// per source file, typed by its file-name stem (goods.EDC.yml → "EDC"). It
+// keeps file boundaries so the `type` grouping survives, which the
+// single-stream path flattens away.
+func collectCatalogEntries(src, prefix string) ([]catalogEntry, error) {
+	files, err := fileutil.ListYAMLFilesRecursive(src)
+	if err != nil {
+		return nil, fmt.Errorf("list %s: %w", src, err)
+	}
+
+	entries := make([]catalogEntry, 0, len(files))
+	for _, yf := range files {
+		data, err := os.ReadFile(yf)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", yf, err)
+		}
+
+		topics, err := parser.NewParser[any](data).ParseFlatten()
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", yf, err)
+		}
+		if len(topics) == 0 {
+			continue
+		}
+
+		entries = append(entries, catalogEntry{
+			Type:   fileutil.TypeFromFilename(filepath.Base(yf), prefix),
+			Topics: topics,
+		})
+	}
+
+	return entries, nil
+}
+
+// marshalCatalog serializes catalog entries in the requested format. The data
+// is already decoded Go structs, so JSON is encoded directly rather than
+// round-tripped through YAML.
+func marshalCatalog(entries []catalogEntry, ft fileType) (string, error) {
+	if ft == fileTypeJSON {
+		data, err := json.Marshal(entries)
+		if err != nil {
+			return "", fmt.Errorf("marshal catalog json: %w", err)
+		}
+		return string(data), nil
+	}
+
+	data, err := yaml.Marshal(entries)
+	if err != nil {
+		return "", fmt.Errorf("marshal catalog %s: %w", ft, err)
+	}
+	return string(data), nil
 }
 
 // normalizeFormat converts user-facing format names to internal fileType.

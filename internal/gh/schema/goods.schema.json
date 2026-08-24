@@ -8,31 +8,6 @@
     "$ref": "#/$defs/topic"
   },
   "$defs": {
-    "section": {
-      "type": "object",
-      "required": [
-        "topics"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "type": "string",
-          "minLength": 1
-        },
-        "topics": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/topic"
-          },
-          "minItems": 1
-        },
-        "score": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 5
-        }
-      }
-    },
     "topic": {
       "type": "object",
       "required": [

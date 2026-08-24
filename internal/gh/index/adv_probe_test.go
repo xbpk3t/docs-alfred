@@ -16,24 +16,23 @@ func TestAdv_RoundTripWithNestedRel(t *testing.T) {
 	src := `- type: tool
   tag: kernel
   isDotfiles: true
-  repo:
-    - url: https://github.com/acme/main
-      des: main repo
-      nix: github:acme/main#main
-      zk: kernel-main
-      score: 4
-      record:
-        - date: "2025-01-01"
-          des: init
-      rel:
-        - url: https://github.com/acme/rel1
-          des: related one
-          rel:
-            - url: https://github.com/acme/rel1a
   topics:
     - topic: kernel-tools
       kind: tools
       repo:
+        - url: https://github.com/acme/main
+          des: main repo
+          nix: github:acme/main#main
+          zk: kernel-main
+          score: 4
+          record:
+            - date: "2025-01-01"
+              des: init
+          rel:
+            - url: https://github.com/acme/rel1
+              des: related one
+              rel:
+                - url: https://github.com/acme/rel1a
         - url: https://github.com/acme/topicrepo
           des: topic repo
 `

@@ -7,20 +7,12 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
-func TestTopicCatalogIncludesConfigRepoTopics(t *testing.T) {
+func TestTopicCatalogIncludesConfigTopicTopics(t *testing.T) {
 	repos := ConfigRepos{
 		{
 			Tag:    "kernel",
 			Type:   "tool",
 			Topics: Topics{{Topic: "Config Topic", Kind: "type"}},
-			Repos: Repos{
-				{
-					Repo: gh.Repo{
-						URL: "https://github.com/acme/main-repo",
-						Rel: []gh.Repo{{URL: "https://github.com/acme/related-repo"}},
-					},
-				},
-			},
 		},
 	}
 
@@ -99,13 +91,6 @@ func TestJoinPath(t *testing.T) {
 	}
 }
 
-func TestTopicBase(t *testing.T) {
-	assert.Equal(t, "tag/type", topicBase("tag", "type"))
-	assert.Empty(t, topicBase("", "type"))
-	assert.Empty(t, topicBase("tag", ""))
-	assert.Empty(t, topicBase("", ""))
-}
-
 func TestTopicDirName(t *testing.T) {
 	assert.Equal(t, "topic-name", (&gh.Topic{Topic: "topic-name"}).DirName())
 }
@@ -120,15 +105,6 @@ func TestTopicCatalog_EmptyRepos(t *testing.T) {
 	repos := ConfigRepos{}
 	catalog := repos.TopicCatalog()
 	assert.Empty(t, catalog)
-}
-
-func TestAppendRepoTopicCandidates_NilRepo(t *testing.T) {
-	var candidates []TopicCandidate
-	seen := make(map[string]bool)
-	repos := Repos{nil}
-	// Should not panic
-	appendRepoTopicCandidates(&candidates, seen, repos, "tag", "type", KindSet(DefaultTopicKinds))
-	assert.Empty(t, candidates)
 }
 
 func TestTopicCatalogExcludesTemp(t *testing.T) {

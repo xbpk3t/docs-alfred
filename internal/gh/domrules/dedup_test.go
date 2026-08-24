@@ -104,9 +104,12 @@ func TestRunGHDuplicateCheck_WithDuplicates(t *testing.T) {
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 	yamlContent := `
 - type: "language"
-  repo:
-    - url: "https://github.com/owner/repo"
-    - url: "https://github.com/owner/repo"
+  topics:
+    - topic: lang
+      kind: type
+      repo:
+        - url: "https://github.com/owner/repo"
+        - url: "https://github.com/owner/repo"
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "go.yml"), []byte(yamlContent), 0644))
 
@@ -148,9 +151,12 @@ func TestRunGHDuplicateCheck_CaseFoldedOwnerRepo(t *testing.T) {
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "go.yml"), []byte(`
 - type: language
-  repo:
-    - url: https://github.com/BerriAI/litellm
-    - url: https://github.com/berriai/LiteLLM/
+  topics:
+    - topic: llm
+      kind: type
+      repo:
+        - url: https://github.com/BerriAI/litellm
+        - url: https://github.com/berriai/LiteLLM/
 `), 0644))
 
 	report, err := RunGHDuplicateCheck(dir)
@@ -179,16 +185,20 @@ func TestGhRepoURLKey(t *testing.T) {
 	}
 }
 
-func TestRunGHDuplicateCheck_TopicAndSectionRepos(t *testing.T) {
-	// section.repo in one file + topics[].repo in another must both be collected.
+func TestRunGHDuplicateCheck_TopicReposAcrossFiles(t *testing.T) {
+	// The same topic.repo repeated across two files must be flagged. Repos live
+	// on topics now; there is no type-level repo list.
 	dir := t.TempDir()
 	tagDir := filepath.Join(dir, "AI")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "LLM.yml"), []byte(`
 - type: LLM
-  repo:
-    - url: https://github.com/BerriAI/litellm
+  topics:
+    - topic: llm-eval
+      kind: mech
+      repo:
+        - url: https://github.com/BerriAI/litellm
 `), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "agent.yml"), []byte(`
 - type: agent
@@ -294,9 +304,12 @@ func TestRunGHDuplicateCheck_RepoEntry(t *testing.T) {
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 	yamlContent := `
 - type: "language"
-  repo:
-    - url: "https://github.com/owner/repo"
-    - url: "https://github.com/owner/repo"
+  topics:
+    - topic: lang
+      kind: type
+      repo:
+        - url: "https://github.com/owner/repo"
+        - url: "https://github.com/owner/repo"
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "go.yml"), []byte(yamlContent), 0644))
 
@@ -402,8 +415,11 @@ func TestCollectGhRepoEntries_InvalidYAMLInSubdir(t *testing.T) {
 func TestParseGhYAMLEntries_EmptyType(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.yml"), []byte(`- type: ""
-  repo:
-    - url: https://github.com/a/b
+  topics:
+    - topic: x
+      kind: mech
+      repo:
+        - url: https://github.com/a/b
 `), 0644))
 
 	entries, err := parseGhYAMLEntries(filepath.Join(dir, "test.yml"), dir)
@@ -415,8 +431,10 @@ func TestParseGhYAMLEntries_EmptyType(t *testing.T) {
 
 func TestParseGhYAMLEntries_NoType(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.yml"), []byte(`- repo:
-    - url: https://github.com/a/b
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.yml"), []byte(`- topics:
+    - topic: x
+      repo:
+        - url: https://github.com/a/b
 `), 0644))
 
 	entries, err := parseGhYAMLEntries(filepath.Join(dir, "test.yml"), dir)

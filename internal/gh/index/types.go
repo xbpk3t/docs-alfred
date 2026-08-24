@@ -32,11 +32,9 @@ type Topics = []gh.Topic
 
 // ConfigRepo defines configuration repository structure.
 type ConfigRepo struct {
-	IsDotfiles *bool  `yaml:"isDotfiles,omitempty"`
-	Type       string `yaml:"type"`
-	Tag        string `yaml:"tag"`
-	Repos      Repos  `yaml:"repo"`
-	Topics     Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
+	Type   string `yaml:"type"`
+	Tag    string `yaml:"tag"`
+	Topics Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
 }
 
 type ConfigRepos []*ConfigRepo

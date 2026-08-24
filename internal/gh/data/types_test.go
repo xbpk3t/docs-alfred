@@ -7,54 +7,53 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func assertSectionType(t *testing.T, s Section, want string) {
-	t.Helper()
-	if want == "" {
-		assert.Nil(t, s.Type)
-
-		return
-	}
-	require.NotNil(t, s.Type)
-	assert.Equal(t, want, *s.Type)
-}
-
-func TestSectionFromMap(t *testing.T) {
+func TestTopicFromMap(t *testing.T) {
 	m := map[string]any{
-		"type": "language",
+		"topic": "overview",
+		"kind":  "tools",
 		"repo": []any{
 			map[string]any{
-				"url": "https://github.com/owner/repo",
-				"des": "test repo",
+				"url":   "https://github.com/owner/repo",
+				"score": 5,
 			},
 		},
 	}
-	section := sectionFromMap(m)
-	assertSectionType(t, section, "language")
-	assert.Len(t, section.Repo, 1)
+	topic := topicFromMap(m)
+	assert.Equal(t, "overview", topic.Topic)
+	assert.Equal(t, "tools", string(topic.Kind))
+	require.Len(t, topic.Repo, 1)
+	assert.Equal(t, "https://github.com/owner/repo", topic.Repo[0].URL)
+	require.NotNil(t, topic.Repo[0].Score)
+	assert.Equal(t, 5, *topic.Repo[0].Score)
 }
 
-func TestSectionFromMap_Topics(t *testing.T) {
+func TestTopicFromMap_NilRecord(t *testing.T) {
 	m := map[string]any{
-		"type": "tool",
-		"topics": []any{
-			map[string]any{
-				"topic": "overview",
-			},
-		},
-	}
-	section := sectionFromMap(m)
-	assertSectionType(t, section, "tool")
-	assert.Len(t, section.Topics, 1)
-	assert.Equal(t, "overview", section.Topics[0].Topic)
-}
-
-func TestSectionFromMap_NilRecord(t *testing.T) {
-	m := map[string]any{
-		"type":   "tool",
+		"topic":  "overview",
 		"record": nil,
 	}
-	section := sectionFromMap(m)
-	assertSectionType(t, section, "tool")
+	topic := topicFromMap(m)
+	assert.Equal(t, "overview", topic.Topic)
+	assert.Nil(t, topic.Record)
+}
+
+func TestTopicFromMap_RepoNonMappingItem(t *testing.T) {
+	// mapstructure decodes non-mapping repo items as empty Repo structs; the
+	// walker's processYAMLDoc filters non-mapping topic items out before
+	// yielding events, so real repos are unaffected at the event level.
+	m := map[string]any{
+		"topic": "overview",
+		"repo":  []any{"just a string", 42},
+	}
+	topic := topicFromMap(m)
+	require.Len(t, topic.Repo, 2)
+	assert.Empty(t, topic.Repo[0].URL)
+}
+
+func TestTopicFromMap_EmptyMap(t *testing.T) {
+	topic := topicFromMap(map[string]any{})
+	assert.Empty(t, topic.Topic)
+	assert.Empty(t, topic.Repo)
 }
 
 func TestTopic_DirName(t *testing.T) {
@@ -71,65 +70,4 @@ func TestTopic_DirName(t *testing.T) {
 			assert.Equal(t, tt.want, tt.topic.DirName())
 		})
 	}
-}
-
-func TestSectionFromMap_WithRepos(t *testing.T) {
-	m := map[string]any{
-		"type": "language",
-		"repo": []any{
-			map[string]any{
-				"url": "https://github.com/owner/repo1",
-				"des": "first repo",
-			},
-			map[string]any{
-				"url": "https://github.com/owner/repo2",
-				"des": "second repo",
-			},
-		},
-	}
-	section := sectionFromMap(m)
-	require.Len(t, section.Repo, 2)
-	assert.Equal(t, "https://github.com/owner/repo1", section.Repo[0].URL)
-	require.NotNil(t, section.Repo[0].Des)
-	assert.Equal(t, "first repo", *section.Repo[0].Des)
-	assert.Equal(t, "https://github.com/owner/repo2", section.Repo[1].URL)
-	require.NotNil(t, section.Repo[1].Des)
-	assert.Equal(t, "second repo", *section.Repo[1].Des)
-}
-
-func TestSectionFromMap_EmptyMap(t *testing.T) {
-	section := sectionFromMap(map[string]any{})
-	assert.Empty(t, section.Type)
-	assert.Empty(t, section.Repo)
-}
-
-func TestSectionFromMap_RepoNonMappingItem(t *testing.T) {
-	// mapstructure decodes non-mapping repo items as empty Repo structs; the
-	// walker's emitRepoEvents filters them out before yielding events, so real
-	// repos are unaffected.
-	m := map[string]any{
-		"type": "tool",
-		"repo": []any{"just a string", 42},
-	}
-	section := sectionFromMap(m)
-	assert.Len(t, section.Repo, 2)
-	assert.Empty(t, section.Repo[0].URL)
-}
-
-func TestSectionFromMap_TopicsNonSlice(t *testing.T) {
-	m := map[string]any{
-		"type":   "tool",
-		"topics": "not a slice",
-	}
-	section := sectionFromMap(m)
-	assertSectionType(t, section, "tool")
-}
-
-func TestSectionFromMap_RepoEmptySlice(t *testing.T) {
-	m := map[string]any{
-		"type": "tool",
-		"repo": []any{},
-	}
-	section := sectionFromMap(m)
-	assert.Empty(t, section.Repo)
 }

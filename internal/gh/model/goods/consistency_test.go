@@ -13,7 +13,6 @@ import (
 
 func TestGoodsModel_MatchesSchema(t *testing.T) {
 	consistency.CheckDefs(t, schema.Goods, map[string]any{
-		"section":   Section{},
 		"topic":     Topic{},
 		"record":    Record{},
 		"tableItem": TableItem{},

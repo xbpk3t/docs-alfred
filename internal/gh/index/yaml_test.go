@@ -6,7 +6,6 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 func TestGithubYAMLRenderParsesTopics(t *testing.T) {
@@ -16,9 +15,6 @@ func TestGithubYAMLRenderParsesTopics(t *testing.T) {
   topics:
     - topic: websocket
     - topic: explicit
-  repo:
-    - url: https://github.com/acme/main-repo.git
-      nix: github:acme/main-repo#main-repo
 `)
 
 	rendered, err := NewGithubYAMLRender("kernel").Render(input)
@@ -34,10 +30,6 @@ func TestGithubYAMLRenderParsesTopics(t *testing.T) {
 	require.Len(t, cfg.Topics, 2)
 	assert.Equal(t, "websocket", cfg.Topics[0].Topic)
 	assert.Equal(t, "explicit", cfg.Topics[1].Topic)
-
-	require.Len(t, cfg.Repos, 1)
-	require.NotNil(t, cfg.Repos[0].Nix)
-	assert.Equal(t, "github:acme/main-repo#main-repo", *cfg.Repos[0].Nix)
 }
 
 func TestGithubYAMLRender_InvalidInput(t *testing.T) {
@@ -57,34 +49,11 @@ func TestGithubYAMLRender_TagAlreadySet(t *testing.T) {
 	input := []byte(`---
 - type: tool
   tag: custom-tag
-  repo:
-    - url: https://github.com/acme/repo
 `)
 	r := NewGithubYAMLRender("default-tag")
 	rendered, err := r.Render(input)
 	require.NoError(t, err)
 	assert.Contains(t, rendered, "custom-tag")
-}
-
-func TestNormalizeRepoTopics_NilRepo(t *testing.T) {
-	// Should not panic
-	normalizeRepoTopics(nil, "base", false)
-}
-
-func TestNormalizeRepoTopics_EmptyURL(t *testing.T) {
-	repo := &Repo{
-		Repo: gh.Repo{URL: ""},
-	}
-	normalizeRepoTopics(repo, "base", false)
-	// Should not panic; empty repo name means return early
-}
-
-func TestNormalizeRepoTopics_UseBase(t *testing.T) {
-	repo := &Repo{
-		Repo: gh.Repo{URL: "https://github.com/acme/repo"},
-	}
-	normalizeRepoTopics(repo, "base", true)
-	// Should not panic
 }
 
 func TestGithubYAMLRender_GetCurrentFileName(t *testing.T) {

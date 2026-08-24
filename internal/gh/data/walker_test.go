@@ -179,7 +179,7 @@ func TestWalkerEvent_Fields(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assertSectionType(t, ev.Section, "go") // type derived from the file name
+	assert.Equal(t, "go", ev.SectionType) // type derived from the file name
 	assert.Equal(t, "go", ev.FilenameStem)
 }
 
@@ -424,20 +424,22 @@ func TestWalkGhRepos_TopicWithRepos(t *testing.T) {
 `), 0644))
 
 	var sectionEvents int
-	var section Section
+	var sectionType string
+	var topics []Topic
 	err := WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
 		if ev.Type == evSection {
 			sectionEvents++
-			section = ev.Section
+			sectionType = ev.SectionType
+			topics = ev.Topics
 		}
 
 		return nil
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, sectionEvents)
-	assertSectionType(t, section, "llm") // derived from "llm.yml"
-	assert.Len(t, section.Topics, 1)
-	assert.Equal(t, "claude-code", section.Topics[0].Topic)
+	assert.Equal(t, "llm", sectionType) // derived from "llm.yml"
+	require.Len(t, topics, 1)
+	assert.Equal(t, "claude-code", topics[0].Topic)
 }
 
 func TestWalkGhRepos_TopicWithRepos_RealFile(t *testing.T) {
@@ -450,10 +452,14 @@ func TestWalkGhRepos_TopicWithRepos_RealFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "LLM.yml"), data, 0644))
 
-	var sections []Section
+	var sections []walkerSection
 	err = WalkGhRepos(tmpDir, func(ev WalkerEvent) error {
 		if ev.Type == evSection {
-			sections = append(sections, ev.Section)
+			repos := 0
+			for i := range ev.Topics {
+				repos += len(ev.Topics[i].Repo)
+			}
+			sections = append(sections, walkerSection{typeTag: ev.SectionType, repoCount: repos})
 		}
 		return nil
 	})
@@ -461,11 +467,12 @@ func TestWalkGhRepos_TopicWithRepos_RealFile(t *testing.T) {
 
 	// Verify sections were parsed
 	assert.True(t, len(sections) > 0, "Expected to find sections in LLM.yml")
-	for _, section := range sections {
-		typeDesc := "<none>"
-		if section.Type != nil {
-			typeDesc = *section.Type
-		}
-		t.Logf("✓ Section: %s, Repos: %d", typeDesc, len(section.Repo))
+	for _, s := range sections {
+		t.Logf("✓ Section: %s, Repos: %d", s.typeTag, s.repoCount)
 	}
+}
+
+type walkerSection struct {
+	typeTag   string
+	repoCount int
 }

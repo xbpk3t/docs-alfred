@@ -79,11 +79,9 @@ func TestValidateConfigYAMLFile_NonExistent(t *testing.T) {
 func TestMarshalConfigReposYAML(t *testing.T) {
 	cr := ConfigRepos{
 		{
-			Type: "tool",
-			Tag:  "test",
-			Repos: Repos{
-				{Repo: gh.Repo{URL: "https://github.com/acme/tool", Des: strptr("test")}},
-			},
+			Type:   "tool",
+			Tag:    "test",
+			Topics: Topics{{Topic: "acme", Repo: []gh.Repo{{URL: "https://github.com/acme/tool", Des: strptr("test")}}}},
 		},
 	}
 	data, err := MarshalConfigReposYAML(cr)

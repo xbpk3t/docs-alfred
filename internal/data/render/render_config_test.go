@@ -98,7 +98,7 @@ func TestRunDomainRender_Goods(t *testing.T) {
 	tmpDir := t.TempDir()
 	src := filepath.Join(tmpDir, "data")
 	require.NoError(t, os.MkdirAll(src, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(src, "goods.yml"), []byte(`---
+	require.NoError(t, os.WriteFile(filepath.Join(src, "goods.EDC.yml"), []byte(`---
 - topic: earphones
   score: 5
   table:
@@ -127,19 +127,29 @@ func TestRunDomainRender_Goods(t *testing.T) {
 
 	var decoded []map[string]any
 	require.NoError(t, json.Unmarshal(raw, &decoded))
-	require.Len(t, decoded, 2)
+	// The catalog contract groups one file into a `{type, topics}` entry.
+	require.Len(t, decoded, 1)
 
-	earphones := decoded[0]
+	group := decoded[0]
+	assert.Equal(t, "EDC", group["type"]) // derived from goods.EDC.yml
+
+	topics, ok := group["topics"].([]any)
+	require.True(t, ok, "topics must survive render as a grouped list")
+	require.Len(t, topics, 2)
+
+	earphones, ok := topics[0].(map[string]any)
+	require.True(t, ok)
 	assert.Equal(t, "earphones", earphones["topic"])
 	assert.EqualValues(t, 5, earphones["score"])
 	table, ok := earphones["table"].([]any)
-	require.True(t, ok, "earphones.table must survive render; missing means the generated Topic model lacks a Table field")
+	require.True(t, ok, "earphones table must survive render; missing means the generated model lacks Table field")
 	require.Len(t, table, 1)
 	row, ok := table[0].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "AirPods", row["name"])
 
-	multitool := decoded[1]
+	multitool, ok := topics[1].(map[string]any)
+	require.True(t, ok)
 	assert.Equal(t, "multitool", multitool["topic"])
 	mTable, ok := multitool["table"].([]any)
 	require.True(t, ok)

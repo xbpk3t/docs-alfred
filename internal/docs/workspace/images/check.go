@@ -268,8 +268,7 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 			return nil
 		}
 
-		section := ev.Section
-		typeVal := section.TypeString()
+		typeVal := ev.SectionType
 		if typeVal == "" {
 			return nil
 		}
@@ -283,7 +282,7 @@ func collectExpectedImageDirs(dataDir string) ([]string, error) {
 		typeBase := tag + "/" + typeVal
 
 		// Collect section-level topic dirs
-		collectTopicDirs(section.Topics, typeBase, &dirs)
+		collectTopicDirs(ev.Topics, typeBase, &dirs)
 
 		return nil
 	})

@@ -11,11 +11,9 @@ import (
 func TestToRepos_BasicConversion(t *testing.T) {
 	cr := ConfigRepos{
 		{
-			Type: "tool",
-			Tag:  "kernel",
-			Repos: Repos{
-				{Repo: gh.Repo{URL: "https://github.com/acme/main-repo"}},
-			},
+			Type:   "tool",
+			Tag:    "kernel",
+			Topics: Topics{{Topic: "main", Repo: []gh.Repo{{URL: "https://github.com/acme/main-repo"}}}},
 		},
 	}
 
@@ -29,14 +27,10 @@ func TestToRepos_SubRepos(t *testing.T) {
 		{
 			Type: "tool",
 			Tag:  "kernel",
-			Repos: Repos{
-				{
-					Repo: gh.Repo{
-						URL: "https://github.com/acme/main",
-						Rel: []gh.Repo{{URL: "https://github.com/acme/related"}},
-					},
-				},
-			},
+			Topics: Topics{{
+				Topic: "main",
+				Repo:  []gh.Repo{{URL: "https://github.com/acme/main", Rel: []gh.Repo{{URL: "https://github.com/acme/related"}}}},
+			}},
 		},
 	}
 
@@ -56,11 +50,9 @@ func TestToRepos_SubRepos(t *testing.T) {
 func TestToRepos_InvalidURL(t *testing.T) {
 	cr := ConfigRepos{
 		{
-			Type: "tool",
-			Tag:  "kernel",
-			Repos: Repos{
-				{Repo: gh.Repo{URL: "not-a-github-url"}},
-			},
+			Type:   "tool",
+			Tag:    "kernel",
+			Topics: Topics{{Topic: "main", Repo: []gh.Repo{{URL: "not-a-github-url"}}}},
 		},
 	}
 
@@ -81,16 +73,9 @@ func TestProcessRepo_NilSubRepos(t *testing.T) {
 func TestToRepos_GitLabWithNix(t *testing.T) {
 	cr := ConfigRepos{
 		{
-			Type: "devops",
-			Tag:  "devops",
-			Repos: Repos{
-				{
-					Repo: gh.Repo{
-						URL: "https://gitlab.com/gitlab-org/cli",
-						Nix: strptr("https://mynixos.com/nixpkgs/package/glab"),
-					},
-				},
-			},
+			Type:   "devops",
+			Tag:    "devops",
+			Topics: Topics{{Topic: "cli", Repo: []gh.Repo{{URL: "https://gitlab.com/gitlab-org/cli", Nix: strptr("https://mynixos.com/nixpkgs/package/glab")}}}},
 		},
 	}
 

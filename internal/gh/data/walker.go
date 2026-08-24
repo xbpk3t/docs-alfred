@@ -24,14 +24,14 @@ const (
 
 // WalkerEvent types for the gh YAML walker.
 type WalkerEvent struct {
-	Section      Section
+	SectionType  string
 	Error        string
 	FilenameStem string
 	File         string
 	Content      string
 	Type         string
+	Topics       []Topic
 	DocIndex     int
-	SectionIndex int
 	LineCount    int
 }
 
@@ -138,19 +138,14 @@ func processYAMLDoc(doc any, relPath, filenameStem string, fn func(WalkerEvent) 
 
 // emitSectionEvent yields a section event. The section type is derived from the
 // file name stem (algo.yml → "algo"); its topics are the whole topic array. In
-// the flat layout a file is always a single section, so SectionIndex is 0.
+// the flat layout a file is always a single section.
 func emitSectionEvent(fn func(WalkerEvent) error, relPath, filenameStem string, topics []Topic) error {
-	derived := gh.TypeFromFilename(filenameStem)
-
 	return fn(WalkerEvent{
 		Type:         evSection,
 		File:         relPath,
 		FilenameStem: filenameStem,
-		SectionIndex: 0,
-		Section: Section{
-			Type:   &derived,
-			Topics: topics,
-		},
+		SectionType:  gh.TypeFromFilename(filenameStem),
+		Topics:       topics,
 	})
 }
 
