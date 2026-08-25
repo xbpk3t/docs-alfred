@@ -10,9 +10,7 @@
   "$defs": {
     "topic": {
       "type": "object",
-      "required": [
-        "topic"
-      ],
+      "required": ["topic"],
       "additionalProperties": false,
       "properties": {
         "topic": {
@@ -25,10 +23,7 @@
           "maximum": 5
         },
         "des": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "table": {
           "type": "array",
@@ -76,9 +71,7 @@
     },
     "record": {
       "type": "object",
-      "required": [
-        "date"
-      ],
+      "required": ["date"],
       "additionalProperties": false,
       "properties": {
         "date": {
@@ -86,10 +79,7 @@
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
         "des": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "score": {
           "type": "integer",
@@ -104,9 +94,7 @@
     },
     "tableItem": {
       "type": "object",
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "additionalProperties": false,
       "description": "商品项；key 严格枚举（additionalProperties false），行必有 name；endDate/endPrice/isUsing 均为可选生命周期字段",
       "properties": {
@@ -124,10 +112,7 @@
           "type": "string"
         },
         "des": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "date": {
           "type": "string",
@@ -163,9 +148,7 @@
         }
       },
       "dependentRequired": {
-        "endPrice": [
-          "endDate"
-        ]
+        "endPrice": ["endDate"]
       }
     }
   }

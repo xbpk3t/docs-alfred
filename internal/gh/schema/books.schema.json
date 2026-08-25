@@ -10,9 +10,7 @@
   "$defs": {
     "topic": {
       "type": "object",
-      "required": [
-        "topic"
-      ],
+      "required": ["topic"],
       "additionalProperties": false,
       "properties": {
         "topic": {
@@ -25,10 +23,7 @@
           "maximum": 5
         },
         "des": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "table": {
           "type": "array",
@@ -45,10 +40,7 @@
         "qs": {
           "type": "array",
           "items": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       }
@@ -62,10 +54,7 @@
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
         "des": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "score": {
           "type": "integer",
@@ -80,9 +69,7 @@
     },
     "tableItem": {
       "type": "object",
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -104,10 +91,7 @@
           "maximum": 9999
         },
         "des": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "readAt": {
           "type": "string",
@@ -120,10 +104,7 @@
         "qs": {
           "type": "array",
           "items": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
         "record": {

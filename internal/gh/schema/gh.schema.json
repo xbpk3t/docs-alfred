@@ -18,7 +18,10 @@
           "enum": ["mech", "type", "repo", "tools", "temp"],
           "description": "topic 类型；gh 必填"
         },
-        "des": { "type": ["string", "null"], "description": "topic 描述（goods 使用）" },
+        "des": {
+          "type": ["string", "null"],
+          "description": "topic 描述（goods 使用）"
+        },
         "repo": { "type": "array", "items": { "$ref": "#/$defs/repo" } },
         "record": { "type": "array", "items": { "$ref": "#/$defs/record" } },
         "table": { "type": "array", "items": { "$ref": "#/$defs/tableItem" } },
@@ -38,10 +41,10 @@
       "required": ["url"],
       "additionalProperties": false,
       "properties": {
-        "url": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "pattern": "^https?://" },
         "des": { "type": ["string", "null"] },
-        "nix": { "type": "string" },
-        "doc": { "type": "string" },
+        "nix": { "type": "string", "pattern": "^https?://" },
+        "doc": { "type": "string", "pattern": "^https?://" },
         "score": { "type": "integer", "minimum": 0, "maximum": 5 },
         "isDotfiles": { "type": "boolean" },
         "zk": { "type": "string" },
@@ -56,10 +59,10 @@
       "required": ["date"],
       "additionalProperties": false,
       "properties": {
-        "date": { "type": "string", "minLength": 1 },
+        "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
         "des": { "type": ["string", "null"] },
         "score": { "type": "integer", "minimum": 0, "maximum": 5 },
-        "url": { "type": "string" }
+        "url": { "type": "string", "pattern": "^https?://" }
       }
     },
 
