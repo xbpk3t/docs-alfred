@@ -301,13 +301,19 @@ func filterContainerDirs(extra, expectedDirs []string) []string {
 	return filtered
 }
 
-// buildWikiIssues creates error-severity issues for missing and extra wiki dirs.
+// buildWikiIssues creates issues for missing and extra wiki dirs.
+//
+// missing (data/gh YAML that has no wiki dir yet) is a normal in-progress
+// state: data → wiki is a one-way pipeline, so a not-yet-materialized dir must
+// never fail the check. It is surfaced as a warn so it stays visible in the
+// summary without tripping HasErrors. Only the mismatch direction (extra wiki
+// content without a backing YAML) is a hard error.
 func buildWikiIssues(missing, extra []string) []checkutil.Issue {
 	var issues []checkutil.Issue
 	for _, d := range missing {
 		issues = append(issues, checkutil.Issue{
 			File:     d,
-			Severity: checkutil.SeverityError,
+			Severity: checkutil.SeverityWarn,
 			Message:  "missing wiki dir: " + d,
 		})
 	}

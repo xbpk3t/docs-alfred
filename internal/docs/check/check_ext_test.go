@@ -152,7 +152,8 @@ func TestFilterContainerDirsEmpty(t *testing.T) {
 func TestBuildWikiIssues(t *testing.T) {
 	issues := buildWikiIssues([]string{"missing1"}, []string{"extra1"})
 	require.Len(t, issues, 2)
-	assert.Equal(t, checkutil.SeverityError, issues[0].Severity)
+	// missing dirs are a non-fatal in-progress state → warn, not error
+	assert.Equal(t, checkutil.SeverityWarn, issues[0].Severity)
 	assert.Contains(t, issues[0].Message, "missing wiki dir")
 	assert.Equal(t, checkutil.SeverityError, issues[1].Severity)
 	assert.Contains(t, issues[1].Message, "extra wiki dir")
