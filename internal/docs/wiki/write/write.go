@@ -121,7 +121,7 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 	}
 
 	topicDir := resolveTopicDir(item, opts)
-	summaryPath := filepath.Join(topicDir, "summary.md")
+	summaryPath := filepath.Join(topicDir, types.SummaryFile)
 	if opts.DryRun {
 		slog.Info("[DRY RUN] Would write summary", "path", summaryPath)
 
@@ -150,6 +150,13 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 	fm.BatchID = batchID
 	fm.Date = today
 	fm.Title = filepath.Base(item.TopicPath)
+	// A summary.md aggregates many entries, so its frontmatter type reflects its
+	// role (digest) — NOT the type of the individual item being digested. The
+	// per-entry type (research/blog/etc.) lives in the body entry metadata. Forcing
+	// digest here also self-heals files that were written with a per-entry type.
+	// Binding is shared with the checker via wikitypes.ArtifactTypeFor so the two
+	// sides can't drift.
+	fm.Type = string(types.ArtifactTypeFor(types.SummaryFile))
 
 	newBody := appendEntryBody(existingBody, dateHeading, entry)
 
@@ -221,7 +228,6 @@ func loadFrontmatter(summaryPath string, item *types.ClassifyItem, today, batchI
 		Title:     filepath.Base(item.TopicPath),
 		Date:      today,
 		Source:    "rss2nl-wiki",
-		Type:      string(item.Type),
 		BatchID:   batchID,
 		TotalURLs: 0,
 		Succeeded: 0,

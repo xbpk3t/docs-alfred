@@ -129,6 +129,51 @@ func TestWriteSummaryConcurrentSameTopicDoesNotLoseEntries(t *testing.T) {
 	}
 }
 
+func TestWriteSummaryForcesDigestTypeRegardlessOfItemType(t *testing.T) {
+	root := t.TempDir()
+	// A research (deep-dive) item must still yield a type=digest summary.md.
+	item := &types.ClassifyItem{
+		URL:       "https://example.com/a",
+		Title:     "A",
+		TopicPath: "topic/path",
+		Type:      types.TypeDeepDive,
+		Summary:   &types.StructuredSummary{Overview: "summary"},
+	}
+
+	path, err := WriteSummary(item, &WriteOptions{WikiRoot: root})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	parsed := parseSummaryFrontmatter(string(data))
+	require.NotNil(t, parsed)
+	assert.Equal(t, "digest", parsed.fm.Type)
+}
+
+func TestWriteSummarySelfHealsStaleNonDigestType(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "topic", "path")
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	summary := filepath.Join(dir, "summary.md")
+	require.NoError(t, os.WriteFile(summary, []byte("---\ntype: research\ntitle: s\ndate: 2026-01-01\nsource: s\n---\n\n## 2026-01-01\n\nold\n"), 0o600))
+
+	_, err := WriteSummary(&types.ClassifyItem{
+		URL:       "https://example.com/b",
+		Title:     "B",
+		TopicPath: "topic/path",
+		Type:      types.TypeDeepDive,
+		Summary:   &types.StructuredSummary{Overview: "summary"},
+	}, &WriteOptions{WikiRoot: root})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(summary)
+	require.NoError(t, err)
+	parsed := parseSummaryFrontmatter(string(data))
+	require.NotNil(t, parsed)
+	assert.Equal(t, "digest", parsed.fm.Type)
+	assert.Contains(t, string(data), "old") // existing body preserved
+}
+
 func TestParseInboxMarkdownLinksAndBareURLs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "inbox.md")
 	require.NoError(t, os.WriteFile(path, []byte(`- [tweet](https://t.co/abc)

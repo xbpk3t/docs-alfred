@@ -201,18 +201,18 @@ func checkTypeValidity(typeVal, rel string) []checkutil.Issue {
 	return nil
 }
 
-// topicArtifact is a fixed-name per-topic file: the only depth it may live at
-// and the OKF type its frontmatter must carry. Both the walk's placement rule
-// and the content binding derive from this single table, so a new per-topic
-// artifact can't drift between the two checks.
+// topicArtifact is a fixed-name per-topic file: the only depth it may live at.
+// The frontmatter type binding (name→OKF type) lives in
+// wikitypes.ArtifactTypeFor, shared with the write layer; only the structural
+// placement depth is a checker concern, so an artifact's depth can't drift
+// from its placement rule. The map keys on the same shared names.
 type topicArtifact struct {
-	typ   wikitypes.ClassifyType
 	depth int
 }
 
 var topicArtifacts = map[string]topicArtifact{
-	"summary.md": {depth: 3, typ: wikitypes.TypeDigest},
-	"log.md":     {depth: 3, typ: wikitypes.TypeLog},
+	wikitypes.SummaryFile: {depth: 3},
+	wikitypes.LogFile:     {depth: 3},
 }
 
 // isBlogEntry reports whether rel roots under a <topic>/blog/ directory.
@@ -223,8 +223,9 @@ func isBlogEntry(rel string) bool { return checkutil.HasSegmentDir(rel, wikitype
 //
 //	summary→digest, log→log, files under a blog/ dir→blog
 func expectedTypeFor(rel string) string {
-	if art, ok := topicArtifacts[filepath.Base(rel)]; ok {
-		return string(art.typ)
+	base := filepath.Base(rel)
+	if _, ok := topicArtifacts[base]; ok {
+		return string(wikitypes.ArtifactTypeFor(base))
 	}
 	if isBlogEntry(rel) {
 		return string(wikitypes.TypeBlog)
