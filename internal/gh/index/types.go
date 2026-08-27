@@ -19,6 +19,7 @@ type Repo struct {
 	Type          string `yaml:"type,omitempty"     json:"type,omitempty"`
 	TopicName     string `yaml:"-"                  json:"-"`
 	MainRepo      string `yaml:"-"                  json:"-"`
+	File          string `yaml:"-" json:"-"`
 	IsRelatedRepo bool   `yaml:"-"                  json:"-"`
 }
 
@@ -34,6 +35,7 @@ type Topics = []gh.Topic
 type ConfigRepo struct {
 	Type   string `yaml:"type"`
 	Tag    string `yaml:"tag"`
+	File   string `yaml:"-" json:"-"`
 	Topics Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
 }
 

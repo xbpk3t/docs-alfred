@@ -85,7 +85,7 @@ func TestRunGHDuplicateCheck_NoDuplicates(t *testing.T) {
 	tagDir := filepath.Join(dir, "dev")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 	yamlContent := `
-- type: "language"
+- topic: lang
   repo:
     - url: "https://github.com/owner/repo-a"
     - url: "https://github.com/owner/repo-b"
@@ -103,13 +103,11 @@ func TestRunGHDuplicateCheck_WithDuplicates(t *testing.T) {
 	tagDir := filepath.Join(dir, "dev")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 	yamlContent := `
-- type: "language"
-  topics:
-    - topic: lang
-      kind: type
-      repo:
-        - url: "https://github.com/owner/repo"
-        - url: "https://github.com/owner/repo"
+- topic: lang
+  kind: type
+  repo:
+    - url: "https://github.com/owner/repo"
+    - url: "https://github.com/owner/repo"
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "go.yml"), []byte(yamlContent), 0644))
 
@@ -126,14 +124,12 @@ func TestRunGHDuplicateCheck_TrailingSlashVariant(t *testing.T) {
 	tagDir := filepath.Join(dir, "AI")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "agent.yml"), []byte(`
-- type: agent
-  topics:
-    - topic: agent-fwk
-      repo:
-        - url: https://github.com/tmc/langchaingo/
-    - topic: agent-infra
-      repo:
-        - url: https://github.com/tmc/langchaingo
+- topic: agent-fwk
+  repo:
+    - url: https://github.com/tmc/langchaingo/
+- topic: agent-infra
+  repo:
+    - url: https://github.com/tmc/langchaingo
 `), 0644))
 
 	report, err := RunGHDuplicateCheck(dir)
@@ -150,13 +146,11 @@ func TestRunGHDuplicateCheck_CaseFoldedOwnerRepo(t *testing.T) {
 	tagDir := filepath.Join(dir, "dev")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "go.yml"), []byte(`
-- type: language
-  topics:
-    - topic: llm
-      kind: type
-      repo:
-        - url: https://github.com/BerriAI/litellm
-        - url: https://github.com/berriai/LiteLLM/
+- topic: llm
+  kind: type
+  repo:
+    - url: https://github.com/BerriAI/litellm
+    - url: https://github.com/berriai/LiteLLM/
 `), 0644))
 
 	report, err := RunGHDuplicateCheck(dir)
@@ -193,20 +187,16 @@ func TestRunGHDuplicateCheck_TopicReposAcrossFiles(t *testing.T) {
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "LLM.yml"), []byte(`
-- type: LLM
-  topics:
-    - topic: llm-eval
-      kind: mech
-      repo:
-        - url: https://github.com/BerriAI/litellm
+- topic: llm-eval
+  kind: mech
+  repo:
+    - url: https://github.com/BerriAI/litellm
 `), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "agent.yml"), []byte(`
-- type: agent
-  topics:
-    - topic: agent-deploy
-      kind: mech
-      repo:
-        - url: https://github.com/BerriAI/litellm
+- topic: agent-deploy
+  kind: mech
+  repo:
+    - url: https://github.com/BerriAI/litellm
 `), 0644))
 
 	report, err := RunGHDuplicateCheck(dir)
@@ -291,11 +281,10 @@ func TestRunDuplicateCheck_NameAuthorDuplicatesFiltered(t *testing.T) {
 }
 
 func TestRunGHDuplicateCheck_EmptyDir(t *testing.T) {
+	// A gh dir with no data is a failure (no repos to scan), not a silent pass.
 	dir := t.TempDir()
-	report, err := RunGHDuplicateCheck(dir)
-	require.NoError(t, err)
-	assert.NotNil(t, report)
-	assert.Empty(t, report.URLDuplicates)
+	_, err := RunGHDuplicateCheck(dir)
+	require.Error(t, err)
 }
 
 func TestRunGHDuplicateCheck_RepoEntry(t *testing.T) {
@@ -303,13 +292,11 @@ func TestRunGHDuplicateCheck_RepoEntry(t *testing.T) {
 	tagDir := filepath.Join(dir, "dev")
 	require.NoError(t, os.MkdirAll(tagDir, 0755))
 	yamlContent := `
-- type: "language"
-  topics:
-    - topic: lang
-      kind: type
-      repo:
-        - url: "https://github.com/owner/repo"
-        - url: "https://github.com/owner/repo"
+- topic: lang
+  kind: type
+  repo:
+    - url: "https://github.com/owner/repo"
+    - url: "https://github.com/owner/repo"
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "go.yml"), []byte(yamlContent), 0644))
 
@@ -381,74 +368,52 @@ func TestDuplicateReport_IssuesGhOnly(t *testing.T) {
 	assert.Contains(t, issues[0].Message, "重复 URL")
 }
 
-func TestCollectGhRepoEntries_SkipsHiddenDirs(t *testing.T) {
+func TestRunGHDuplicateCheck_RegressionPytorchTriple(t *testing.T) {
+	// Regression for the original bug: data/gh files use a flat "- topic:"
+	// layout, and pytorch/pytorch was listed 3x in one file yet dedup reported
+	// "passed". Now the loader is the same as index/render, so the triple must
+	// surface as a single duplicate with 3 locations.
 	dir := t.TempDir()
-	hiddenDir := filepath.Join(dir, ".hidden")
-	require.NoError(t, os.MkdirAll(hiddenDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(hiddenDir, "go.yml"), []byte(`- type: lang`), 0644))
+	tagDir := filepath.Join(dir, "AI")
+	require.NoError(t, os.MkdirAll(tagDir, 0755))
+	yamlContent := `- topic: llm-train
+  kind: mech
+  repo:
+    - url: https://github.com/huggingface/transformers
+    - url: https://github.com/pytorch/pytorch
+- topic: llm-arch
+  kind: mech
+  repo:
+    - url: https://github.com/pytorch/pytorch
+- topic: llm-serve
+  kind: mech
+  repo:
+    - url: https://github.com/pytorch/pytorch
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tagDir, "LLM-res.yml"), []byte(yamlContent), 0644))
 
-	entries, err := collectGhRepoEntries(dir)
+	report, err := RunGHDuplicateCheck(dir)
 	require.NoError(t, err)
-	assert.Empty(t, entries)
+	require.NotNil(t, report)
+	require.Len(t, report.URLDuplicates, 1, "pytorch listed 3x must be flagged")
+	dup := report.URLDuplicates[0]
+	assert.Equal(t, "https://github.com/pytorch/pytorch", dup.URL)
+	require.Len(t, dup.Entries, 3)
+	for _, e := range dup.Entries {
+		assert.Contains(t, e.File, "LLM-res.yml", "each duplicate should point at its source file")
+	}
 }
 
-func TestCollectGhRepoEntries_SkipsFiles(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("text"), 0644))
-
-	entries, err := collectGhRepoEntries(dir)
-	require.NoError(t, err)
-	assert.Empty(t, entries)
-}
-
-func TestCollectGhRepoEntries_InvalidYAMLInSubdir(t *testing.T) {
+func TestRunGHDuplicateCheck_InvalidYAMLFailsLoud(t *testing.T) {
+	// Unlike the old bespoke collector (which silently skipped parse errors),
+	// the shared loader errors on a broken file: broken data must not go
+	// undetected, because it means the whole repo set may be missing repos.
 	dir := t.TempDir()
 	subDir := filepath.Join(dir, "dev")
 	require.NoError(t, os.MkdirAll(subDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(subDir, "bad.yml"), []byte("invalid: [yaml:\n"), 0644))
 
-	entries, err := collectGhRepoEntries(dir)
-	require.NoError(t, err)
-	assert.Empty(t, entries) // parse errors are silently skipped
-}
-
-func TestParseGhYAMLEntries_EmptyType(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.yml"), []byte(`- type: ""
-  topics:
-    - topic: x
-      kind: mech
-      repo:
-        - url: https://github.com/a/b
-`), 0644))
-
-	entries, err := parseGhYAMLEntries(filepath.Join(dir, "test.yml"), dir)
-	require.NoError(t, err)
-	// Empty/missing type falls back to the filename stem ("test").
-	require.Len(t, entries, 1)
-	assert.Equal(t, "test", entries[0].typeName)
-}
-
-func TestParseGhYAMLEntries_NoType(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.yml"), []byte(`- topics:
-    - topic: x
-      repo:
-        - url: https://github.com/a/b
-`), 0644))
-
-	entries, err := parseGhYAMLEntries(filepath.Join(dir, "test.yml"), dir)
-	require.NoError(t, err)
-	// The type field is gone from the new layout; parse derives it from "test.yml".
-	require.Len(t, entries, 1)
-	assert.Equal(t, "test", entries[0].typeName)
-}
-
-func TestParseGhYAMLEntries_InvalidYAML(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.yml"), []byte("invalid: [yaml:\n"), 0644))
-
-	_, err := parseGhYAMLEntries(filepath.Join(dir, "bad.yml"), dir)
+	_, err := RunGHDuplicateCheck(dir)
 	require.Error(t, err)
 }
 

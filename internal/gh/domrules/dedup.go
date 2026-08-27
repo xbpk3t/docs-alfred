@@ -9,7 +9,6 @@ import (
 	"github.com/samber/lo"
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
 	modelbooks "github.com/xbpk3t/docs-alfred/internal/gh/model/books"
-	modelgh "github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
@@ -126,105 +125,18 @@ func groupByNameAuthor(items []parsedItem, urlMatchItems map[string]bool) []Name
 	return entries
 }
 
-// ghEntry represents a single repo entry extracted from a gh YAML file.
-type ghEntry struct {
-	file     string
-	typeName string
-	relation string
-	url      string
-}
-
 // RunGHDuplicateCheck detects duplicate URLs in data/gh YAML files.
-// It reuses ghindex.ConfigRepo + ToRepos() so section.repo, topics[].repo,
-// and related repos are collected with the same schema as render/export.
+// It reuses the exact loader that render/export/sync/dump use
+// (ghindex.LoadConfigReposFromDir → ConfigRepos.ToRepos), so the set of repos
+// considered is always the same as production indexing — there is no bespoke
+// parser that can drift from the real schema.
 func RunGHDuplicateCheck(targetDir string) (*DuplicateReport, error) {
-	repoEntries, err := collectGhRepoEntries(targetDir)
+	configs, err := ghindex.LoadConfigReposFromDir(targetDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load gh repos from %s: %w", targetDir, err)
 	}
 
-	return groupURLDuplicates(repoEntries), nil
-}
-
-// collectGhRepoEntries reads all gh YAML files and collects repo entries with URLs.
-func collectGhRepoEntries(targetDir string) ([]ghEntry, error) {
-	entries, err := os.ReadDir(targetDir)
-	if err != nil {
-		return nil, fmt.Errorf("read dir %s: %w", targetDir, err)
-	}
-
-	var repoEntries []ghEntry
-
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-
-		dirPath := filepath.Join(targetDir, entry.Name())
-		yamlFiles, err := fileutil.ListYAMLFiles(dirPath)
-		if err != nil {
-			continue
-		}
-
-		for _, yf := range yamlFiles {
-			fileEntries, err := parseGhYAMLEntries(yf, targetDir)
-			if err != nil {
-				// Skip unreadable/invalid files; other files still participate.
-				continue
-			}
-
-			repoEntries = append(repoEntries, fileEntries...)
-		}
-	}
-
-	return repoEntries, nil
-}
-
-// parseGhYAMLEntries extracts repo URL entries from a single gh YAML file using
-// the shared ConfigRepo model (section.repo + topics[].repo + rel).
-func parseGhYAMLEntries(yf, targetDir string) ([]ghEntry, error) {
-	data, err := os.ReadFile(yf)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", yf, err)
-	}
-
-	configs, err := parser.NewParser[ghindex.ConfigRepo](data).WithFileName(yf).ParseFlatten()
-	if err != nil {
-		return nil, fmt.Errorf("parse gh yaml %s: %w", yf, err)
-	}
-
-	relFile, err := filepath.Rel(targetDir, yf)
-	if err != nil {
-		relFile = yf
-	}
-
-	cfgType := modelgh.TypeFromFilename(filepath.Base(yf))
-
-	var entries []ghEntry
-	for i := range configs {
-		cfg := configs[i]
-		if cfg.Type == "" {
-			cfg.Type = cfgType
-		}
-		if cfg.Type == "" {
-			continue
-		}
-
-		// Flatten with the same path as render/export (includes topics and rel).
-		for _, repo := range (ghindex.ConfigRepos{&cfg}).ToRepos() {
-			if repo == nil || repo.URL == "" {
-				continue
-			}
-			entries = append(entries, ghEntry{
-				file:     relFile,
-				typeName: repo.Type,
-				relation: ghRepoRelation(repo),
-				url:      repo.URL,
-			})
-		}
-	}
-
-	return entries, nil
+	return groupURLDuplicates(configs.ToRepos(), targetDir), nil
 }
 
 func ghRepoRelation(repo *ghindex.Repo) string {
@@ -238,17 +150,37 @@ func ghRepoRelation(repo *ghindex.Repo) string {
 	return "repo"
 }
 
-// groupURLDuplicates groups gh entries by a normalized repo key and returns a
-// report of duplicates.
+// groupURLDuplicates groups gh repos by a normalized repo key and returns a
+// report of duplicates. It consumes the same enriched Repos the loader flattens
+// for render/export, so provenance (Type/TopicName/File) is read straight off
+// the model it already has.
 //
-// The group key is the GitHub owner/repo pair (case-folded) rather than the
+// The group key is the GitHub owner/name pair (case-insensitive) rather than the
 // raw URL, so variants that point at the same repo — e.g. a trailing slash
-// (https://github.com/tmc/langchaingo/ vs .../langchaingo) or a different URL
+// (https://github.com/tmc/lang/ vs .../lang) or a different URL
 // spelling — are collapsed into one group. The report's URL field keeps the
 // first-seen spelling so messages stay readable.
-func groupURLDuplicates(repoEntries []ghEntry) *DuplicateReport {
-	byKey := lo.GroupBy(repoEntries, func(e ghEntry) string {
-		return ghRepoURLKey(e.url)
+func groupURLDuplicates(repos ghindex.Repos, targetDir string) *DuplicateReport {
+	// Relativize File against targetDir once per source file (many repos share
+	// one file) so report locations read "AI/LLM-res.yml".
+	relCache := make(map[string]string)
+	rel := func(path string) string {
+		if r, ok := relCache[path]; ok {
+			return r
+		}
+		out := path
+		if rel, err := filepath.Rel(targetDir, path); err == nil {
+			out = rel
+		}
+		relCache[path] = out
+
+		return out
+	}
+
+	byKey := lo.GroupBy(lo.Filter(repos, func(repo *ghindex.Repo, _ int) bool {
+		return repo != nil && repo.URL != ""
+	}), func(repo *ghindex.Repo) string {
+		return ghRepoURLKey(repo.URL)
 	})
 
 	report := &DuplicateReport{}
@@ -257,15 +189,15 @@ func groupURLDuplicates(repoEntries []ghEntry) *DuplicateReport {
 			continue
 		}
 		entries := make([]ItemBrief, len(list))
-		for i, e := range list {
+		for i, repo := range list {
 			entries[i] = ItemBrief{
-				File: fmt.Sprintf("%s: %s (%s)", e.file, e.typeName, e.relation),
-				URL:  e.url,
+				File: fmt.Sprintf("%s: %s (%s)", rel(repo.File), repo.Type, ghRepoRelation(repo)),
+				URL:  repo.URL,
 			}
 		}
 		// list[0] is the first-seen spelling (lo.GroupBy preserves input order).
 		report.URLDuplicates = append(report.URLDuplicates, URLDupEntry{
-			URL:     list[0].url,
+			URL:     list[0].URL,
 			Entries: entries,
 		})
 	}

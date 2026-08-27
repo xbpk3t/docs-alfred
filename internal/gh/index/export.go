@@ -69,6 +69,7 @@ func loadConfigReposFromTagDir(tag, dir string) (ConfigRepos, error) {
 			Tag:    tag,
 			Type:   gh.TypeFromFilename(filepath.Base(yf)),
 			Topics: topics,
+			File:   yf,
 		}
 		allRepos = append(allRepos, cfg)
 	}
