@@ -100,6 +100,7 @@ type TrnsConfig struct {
 // TrnsSummaryConfig AI 摘要配置.
 type TrnsSummaryConfig struct {
 	Model    string `yaml:"model,omitempty"`
+	Effort   string `yaml:"effort,omitempty"`
 	BaseURL  string `yaml:"baseUrl,omitempty"`
 	Language string `yaml:"language,omitempty"`
 	Enabled  bool   `yaml:"enabled,omitempty"`

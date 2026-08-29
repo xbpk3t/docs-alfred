@@ -42,6 +42,8 @@ type MorningConfig struct {
 // so all linear2nl AI calls bypass Cloudflare 524 upstream timeouts.
 type AIConfig struct {
 	Model    string        `default:"deepseek-v4-flash" koanf:"model"`
+	// Effort: empty = shared pkg/ai default (LLM_EFFORT, else "max").
+	Effort   string        `koanf:"effort"`
 	Language string        `default:"zh"                koanf:"language"`
 	APIKey   string        `koanf:"apiKey"`
 	BaseURL  string        `koanf:"baseURL"`

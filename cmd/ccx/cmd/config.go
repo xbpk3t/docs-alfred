@@ -22,6 +22,8 @@ type exportAIConfig struct {
 	APIKey  string `yaml:"apiKey"`
 	BaseURL string `default:"https://api.lucc.dev/v1" yaml:"baseUrl"`
 	Model   string `default:"deepseek-v4-flash"       yaml:"model"`
+	// Effort: empty = shared pkg/ai default (LLM_EFFORT, else "max").
+	Effort string `yaml:"effort"`
 }
 
 type exportConfigOverrides struct {
@@ -70,19 +72,29 @@ func buildAIConfig(cfg *exportConfig) *ai.ClientConfig {
 	resolved := ai.DefaultConfig()
 	resolved.Timeout = 200 * time.Second
 	resolved.Streaming = true
-	if cfg != nil {
-		if cfg.AI.APIKey != "" {
-			resolved.APIKey = cfg.AI.APIKey
-		}
-		if cfg.AI.BaseURL != "" {
-			resolved.BaseURL = cfg.AI.BaseURL
-		}
-		if cfg.AI.Model != "" {
-			resolved.Model = cfg.AI.Model
-		}
-	}
+	applyAIConfigOverrides(cfg, resolved)
 
 	return resolved
+}
+
+// applyAIConfigOverrides copies set override fields from the export config onto
+// the resolved AI client config. cfg may be nil (dry-run path).
+func applyAIConfigOverrides(cfg *exportConfig, resolved *ai.ClientConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.AI.APIKey != "" {
+		resolved.APIKey = cfg.AI.APIKey
+	}
+	if cfg.AI.BaseURL != "" {
+		resolved.BaseURL = cfg.AI.BaseURL
+	}
+	if cfg.AI.Model != "" {
+		resolved.Model = cfg.AI.Model
+	}
+	if cfg.AI.Effort != "" {
+		resolved.Effort = cfg.AI.Effort
+	}
 }
 
 func defaultExportConfig() exportConfig {

@@ -22,6 +22,7 @@ import (
 type Config struct {
 	KnownAliases      map[string]string  `yaml:"knownAliases,omitempty"`
 	Model             string             `yaml:"model,omitempty"`
+	Effort            string             `yaml:"effort,omitempty"`
 	BaseURL           string             `yaml:"baseUrl,omitempty"`
 	HostRules         []rss.FeedHostRule `yaml:"hostRules,omitempty"`
 	MaxCandidates     int                `yaml:"maxCandidates,omitempty"`
@@ -60,8 +61,8 @@ func Defaults() *Config {
 		AIRetries:         defaultAIRetries,
 		AIRetryInitialMs:  int(defaultAIRetryBackoff / time.Millisecond),
 		AIRetryBudget:     defaultAIRetryBudget,
-		Model:             os.Getenv("LLM_MODEL"),
-		BaseURL:           os.Getenv("OPENAI_BASE_URL"),
+		// Model/Effort/BaseURL are filled from env by applyModelDefaults (via
+		// pkg/ai.DefaultConfig), the single owner of that env story.
 	}
 }
 
@@ -117,12 +118,19 @@ func applyGateDefaults(cfg *Config) {
 }
 
 // applyModelDefaults falls back to pkg/ai's env defaults exactly like the rest
-// of the repo, so MAF talks to the same endpoint as langchain does.
+// of the repo, so MAF talks to the same endpoint/effort as langchain does.
+// pkg/ai.DefaultConfig is the single owner of the env story (LLM_MODEL /
+// LLM_EFFORT / OPENAI_BASE_URL); Defaults() deliberately leaves these empty and
+// lets this pass fill them, so env wiring lives in one place.
 func applyModelDefaults(cfg *Config) {
+	d := ai.DefaultConfig()
 	if cfg.Model == "" {
-		cfg.Model = ai.DefaultConfig().Model
+		cfg.Model = d.Model
+	}
+	if cfg.Effort == "" {
+		cfg.Effort = d.Effort
 	}
 	if cfg.BaseURL == "" {
-		cfg.BaseURL = ai.DefaultConfig().BaseURL
+		cfg.BaseURL = d.BaseURL
 	}
 }

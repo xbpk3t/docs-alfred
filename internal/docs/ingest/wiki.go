@@ -299,6 +299,9 @@ func newAIConfig(cfg *Config) *ai.ClientConfig {
 	ac.APIKey = cfg.AI.APIKey
 	ac.BaseURL = cfg.AI.BaseURL
 	ac.Model = cfg.AI.Model
+	if cfg.AI.Effort != "" {
+		ac.Effort = cfg.AI.Effort
+	}
 	ac.Temperature = cfg.AI.Temperature
 	return ac
 }

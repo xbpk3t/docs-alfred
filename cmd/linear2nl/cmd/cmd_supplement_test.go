@@ -122,14 +122,14 @@ func TestBuildEveningHTMLEmpty(t *testing.T) {
 func TestBuildPerIssueReviewsAINotConfigured(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: ""})
+	aiClient := internal.NewAIProvider(&internal.AIConfig{APIKey: ""})
 
 	result := buildPerIssueReviews(aiClient, nil)
 	assert.Nil(t, result)
 }
 
 func TestBuildPerIssueReviewsEmptyDetails(t *testing.T) {
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: "sk-test"})
+	aiClient := internal.NewAIProvider(&internal.AIConfig{APIKey: "sk-test"})
 	result := buildPerIssueReviews(aiClient, nil)
 	assert.Nil(t, result)
 }
@@ -137,7 +137,7 @@ func TestBuildPerIssueReviewsEmptyDetails(t *testing.T) {
 func TestBuildEveningSummaryNilResult(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: ""})
+	aiClient := internal.NewAIProvider(&internal.AIConfig{APIKey: ""})
 
 	completedViews := []internal.IssueView{{Identifier: "LUC-1"}}
 	changeViews := []internal.StateChangeView{{IssueIdentifier: "LUC-2"}}
@@ -327,7 +327,7 @@ func TestBuildPerIssueReviewsAIValidResponse(t *testing.T) {
 	srv := mockOpenAIChatServer(responseJSON)
 	t.Cleanup(srv.Close)
 
-	aiClient := internal.NewAIProvider(internal.AIConfig{
+	aiClient := internal.NewAIProvider(&internal.AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL + "/v1",
 		Model:   "test",
@@ -348,7 +348,7 @@ func TestBuildPerIssueReviewsAIEmptyResponse(t *testing.T) {
 	srv := mockOpenAIChatServer("")
 	t.Cleanup(srv.Close)
 
-	aiClient := internal.NewAIProvider(internal.AIConfig{
+	aiClient := internal.NewAIProvider(&internal.AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL + "/v1",
 		Model:   "test",
@@ -367,7 +367,7 @@ func TestBuildPerIssueReviewsAIInvalidJSON(t *testing.T) {
 	srv := mockOpenAIChatServer("not json")
 	t.Cleanup(srv.Close)
 
-	aiClient := internal.NewAIProvider(internal.AIConfig{
+	aiClient := internal.NewAIProvider(&internal.AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL + "/v1",
 		Model:   "test",
@@ -387,7 +387,7 @@ func TestBuildEveningSummaryWithAIReviewResult(t *testing.T) {
 	srv := mockOpenAIChatServer(responseJSON)
 	t.Cleanup(srv.Close)
 
-	aiClient := internal.NewAIProvider(internal.AIConfig{
+	aiClient := internal.NewAIProvider(&internal.AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL + "/v1",
 		Model:   "test",
@@ -435,7 +435,6 @@ func TestToIssueDetailsEmpty(t *testing.T) {
 	details := toIssueDetails(nil)
 	assert.Empty(t, details)
 }
-
 
 // mockOpenAIChatServer returns an OpenAI-compatible chat/completions server.
 // Supports streaming (pkg/ai default) and non-streaming JSON responses.
@@ -490,14 +489,14 @@ func TestBuildMorningPlanAINotConfigured(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: ""})
+	aiClient := internal.NewAIProvider(&internal.AIConfig{APIKey: ""})
 
 	plans := buildMorningPlan(aiClient, nil)
 	assert.Nil(t, plans)
 }
 
 func TestBuildMorningPlanEmptyDetails(t *testing.T) {
-	aiClient := internal.NewAIProvider(internal.AIConfig{APIKey: "sk-test"})
+	aiClient := internal.NewAIProvider(&internal.AIConfig{APIKey: "sk-test"})
 	plans := buildMorningPlan(aiClient, nil)
 	assert.Nil(t, plans)
 }
@@ -507,7 +506,7 @@ func TestBuildMorningPlanAIValidResponse(t *testing.T) {
 	srv := mockOpenAIChatServer(responseJSON)
 	t.Cleanup(srv.Close)
 
-	aiClient := internal.NewAIProvider(internal.AIConfig{
+	aiClient := internal.NewAIProvider(&internal.AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL + "/v1",
 		Model:   "test",
@@ -528,7 +527,7 @@ func TestBuildMorningPlanAIEmptyResponse(t *testing.T) {
 	srv := mockOpenAIChatServer("")
 	t.Cleanup(srv.Close)
 
-	aiClient := internal.NewAIProvider(internal.AIConfig{
+	aiClient := internal.NewAIProvider(&internal.AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL + "/v1",
 		Model:   "test",
@@ -547,7 +546,7 @@ func TestBuildMorningPlanAIInvalidJSON(t *testing.T) {
 	srv := mockOpenAIChatServer("not json")
 	t.Cleanup(srv.Close)
 
-	aiClient := internal.NewAIProvider(internal.AIConfig{
+	aiClient := internal.NewAIProvider(&internal.AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL + "/v1",
 		Model:   "test",
@@ -687,8 +686,8 @@ func TestQueryEveningDataEmptyResults(t *testing.T) {
 	}
 
 	srv := eveningMockServer(t, map[string]func() any{
-		"AssignedIssues":          emptyNodes,
-		"StateChanges":            emptyNodes,
+		"AssignedIssues":           emptyNodes,
+		"StateChanges":             emptyNodes,
 		"UpdatedIssuesWithDetails": emptyNodes,
 	})
 	t.Cleanup(srv.Close)
@@ -782,8 +781,8 @@ func TestMergeLinearDataPartialMerge(t *testing.T) {
 	mergeLinearData(gh, li)
 
 	assert.Equal(t, "Linear desc", gh.Description)
-	assert.Equal(t, "open", gh.StateName)    // preserved
-	assert.Equal(t, "Eng", gh.TeamName)      // replaced
+	assert.Equal(t, "open", gh.StateName) // preserved
+	assert.Equal(t, "Eng", gh.TeamName)   // replaced
 }
 
 // --- renderGitHubReviewPrompt tests ---
@@ -935,8 +934,8 @@ func linearIssueMockServer(t *testing.T, identifier, description string, comment
 	t.Helper()
 
 	type commentNode struct {
-		Body      string   `json:"body"`
-		CreatedAt string   `json:"createdAt"`
+		Body      string `json:"body"`
+		CreatedAt string `json:"createdAt"`
 		User      struct {
 			Name string `json:"name"`
 		} `json:"user"`
@@ -947,7 +946,9 @@ func linearIssueMockServer(t *testing.T, identifier, description string, comment
 		nodes[i] = commentNode{
 			Body:      c.Body,
 			CreatedAt: c.CreatedAt,
-			User:      struct{ Name string `json:"name"` }{Name: c.UserName},
+			User: struct {
+				Name string `json:"name"`
+			}{Name: c.UserName},
 		}
 	}
 
@@ -1076,16 +1077,16 @@ func TestEnrichFromLinearIDExtractionEdgeCases(t *testing.T) {
 			wantID: "LUC-99",
 		},
 		{
-			name:   "no ID anywhere",
-			body:   "Just a regular issue",
+			name: "no ID anywhere",
+			body: "Just a regular issue",
 			comments: []internal.GitHubReviewComment{
 				{Body: "Regular comment"},
 			},
 			wantID: "",
 		},
 		{
-			name:   "body takes precedence",
-			body:   "ENG-100",
+			name: "body takes precedence",
+			body: "ENG-100",
 			comments: []internal.GitHubReviewComment{
 				{Body: "OPS-200"},
 			},
@@ -1201,7 +1202,7 @@ func TestBuildMorningPlanMultipleIssues(t *testing.T) {
 	srv := mockOpenAIChatServer(responseJSON)
 	t.Cleanup(srv.Close)
 
-	aiClient := internal.NewAIProvider(internal.AIConfig{
+	aiClient := internal.NewAIProvider(&internal.AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL + "/v1",
 		Model:   "test",

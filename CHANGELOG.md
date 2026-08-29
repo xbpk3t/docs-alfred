@@ -3,6 +3,106 @@ title: CHANGELOG
 description: 记录架构级重要变更
 ---
 
+## Unreleased
+
+### skx 单 skill + 子命令路由与 schema 校验 [2026-08-16]
+
+[`5ffde58`](https://github.com/xbpk3t/docs-alfred/commit/5ffde5846ede14585da88747d190600e10611c4b)
+（关联 [`be74bf1`](https://github.com/xbpk3t/docs-alfred/commit/be74bf1f80e0dd49100a5f9a8db88b7c8e271f61)
+[`daf3cda`](https://github.com/xbpk3t/docs-alfred/commit/daf3cdab59b9228cdf861461ad1d52b0deb06faf)
+[`7c56615`](https://github.com/xbpk3t/docs-alfred/commit/7c5661579ee9cdadc9b99836bda6cbeaf04a37e4)
+[`08c1027`](https://github.com/xbpk3t/docs-alfred/commit/08c10275aaf2f1e99c3021f6989b9082ff6d4d58)
+[`900a95b`](https://github.com/xbpk3t/docs-alfred/commit/900a95ba4c641c70f5a504e0e2c70e24375123ea)
+[`175376c`](https://github.com/xbpk3t/docs-alfred/commit/175376ccc2430ad26f44d7eeee235223e091c99a)
+[`dafa25d`](https://github.com/xbpk3t/docs-alfred/commit/dafa25d613f93abfd1c032fc4de78c9c2aedd335)）
+
+把散落在 `.claude/projects` JSONL 与 Alfred snippets 里的高频手写 prompt 收束为单一 skill
++ 子命令路由，沉淀进 dotfiles 的 Nix 配置。
+
+- 路由与内容解耦：每个 `references/*.md` 写 `abbr` frontmatter，`gen-aliases.nu`
+  扫描生成 `aliases.json`，随 Nix rebuild 同步，新增 prompt 只需加文件 + 一行 abbr
+- 路由必经处埋点写 `zzz-stats.jsonl` 做频次统计，捕获率近 100%（不依赖 AI 事后记录）
+- prompt 间交叉引用用 `[filepath](filepath)` 链接而非 abbr，避免 loop hell；`.xxx.md`
+  约定为「不可路由但可被路径引用」
+- prpt schema 内嵌并用 JSON Schema 校验依赖；`dafa25d` 移除误加的
+  `.worktrees/skx-render` gitlink
+
+
+### data-cli goods using 提取命令 [2026-08-12]
+
+[`0fef932`](https://github.com/xbpk3t/docs-alfred/commit/0fef9326a26b2dd0ece7e8b6f4e5014dbd1ac992)
+（关联 [`2946020`](https://github.com/xbpk3t/docs-alfred/commit/29460205ac52f373fe6233ade99207a9072af6e5)
+[`b2c73a0`](https://github.com/xbpk3t/docs-alfred/commit/b2c73a08db0b10950ff5e1e54986daf2f2a020da)）
+
+给 `goods` 实体补 `goods using` 命令，提取 `table[].isUsing == true` 的在用 goods，
+作为 AI 做 minst/购买决策的数据基础（`topic.using` 已废弃）。
+
+- 命令形态 `data-cli goods using`（entity-action），输出四层嵌套
+  `tag→types→topics→items` 且保留 `tag: goods`，对齐 `dump gh` 便于未来并入 gh
+- 真实数据 smoke test 跑出 3 个真实缺陷并修复：纯数字 `name` 被 goccy 类型推断
+  成 int 而丢、YAML 1.1 真值 `on/yes/y` 被漏判、`url/source` 误塞 `extra`（RTL 不对称）
+- 提取层用 `yaml.Node.String()` 保真而非类型化反推，贯穿「不静默丢数据」原则
+
+
+### ccx export 文件名改用中文标题 [2026-08-12]
+
+[`b064441`](https://github.com/xbpk3t/docs-alfred/commit/b0644416b8e436a27d83ebdde792ccda13626199)
+
+`ccx session export` 原本用 `gosimple/slug` 把中文标题转成拼音 slug，改为直接用
+`title` 做文件名（macOS/APFS 原生支持 Unicode 文件名）。
+
+- 新增 `sanitizeFilename`：替换非法字符 `/\:*?"<>|`、去首尾点防 `.`/`..` 路径逃逸与
+  `.foo` 隐藏文件、`strings.Fields` 折叠空白、去控制字符、50 字截断、空回退 `untitled`
+- 删除 `EngTitle`/`trimEngTitle`/`slugTitle`/`titleComponentsFromTitle` 链路；ASCII
+  标题同样保留原文（含空格），不再转 `-` slug
+- 保留 `pkg/textutil.SlugFilename`（仍在 go.mod 依赖）以最小改动原则不碰无关包
+
+
+### export 用会话名派生标题、移除 fallback 横跳 [2026-08-09]
+
+[`ddc9047`](https://github.com/xbpk3t/docs-alfred/commit/ddc9047c8daff328cce56d99eaf41cba5c85186f)
+（关联 [`07876a6`](https://github.com/xbpk3t/docs-alfred/commit/07876a665a499a05afe9817cac3dfdca3a3d0765)（移除 classify/title fallback）
+[`db710b3`](https://github.com/xbpk3t/docs-alfred/commit/db710b320a3a4601767616ec5b1aac572aa0a34a)（落 wiki root）
+[`cd6ac13`](https://github.com/xbpk3t/docs-alfred/commit/cd6ac13e962c96488e076ebed41ab1c4bf8ef8c5)（从 custom-title 事件解析名））
+
+ccx export 在「AI 分类失败要不要 fallback、fallback 到哪」之间反复横跳。根因是失败
+语义没分型（结构/语义/内容/无内容被压进一个函数一个出口）。
+
+- 标题改为从会话名单源派生：cc 取最新 `ai-title`、codex 取 `threads.title`（免费、
+  确定性、无 AI 依赖），AI 只负责 `topicPath`，消除「AI 挂掉整次 export 全毁」耦合
+- 失败语义分型消除单出口横跳：`session name` 缺失则报错退出；`topic` 失败落 wiki root
+- `SessionRef` 加 `Title` 后超 64B，三个函数从值传参改指针传参修 `hugeParam`
+
+
+### ghcheck 校验 topic.kind [2026-07-24]
+
+[`3a4fd2e`](https://github.com/xbpk3t/docs-alfred/commit/3a4fd2e942c17d80080e9f24790e0a524e8003db)
+
+为 recall 训练体系补门禁：新增 `ghcheck` 包校验 `data/gh` 的 `topic.kind` 合法枚举
+（mechanism/type/repo/tools/howto/temp 六值，`unset`/非法/缺失均 error）。
+
+- 支撑 3w3h + mdscc 双切 schema：按 kind 限写骨架（只有 mechanism/type 必写），
+  inventory 类（tools/howto/temp）禁止写，规避 YAML 顶层键笛卡尔积爆炸
+- 草稿态（标注允许 `unset`）与门禁态（check 不允许 `unset`）分两阶段，不矛盾
+
+
+### session export 增加 provenance 元数据 [2026-07-24]
+
+[`cc9bda0`](https://github.com/xbpk3t/docs-alfred/commit/cc9bda061051840adbf028f7021cce45181273e5)
+
+`ccx session export` 的 frontmatter 增加可追溯元数据，建立
+`issue → agent loop → session → wiki` 可复现索引链路。
+
+- 新增 `session`（必写）、`model`/`issue`（可选 omitempty）、`score`（默认 0 写死，
+  不能 omitempty 否则静默丢失）四字段
+- `model` 跨 agent 用不同 JSONPath：Claude Code 取 `assistant.message.model`、
+  Codex 取 `turn_context.payload.model`，过滤偶发 `<synthetic>`
+- 复现目标定为「Index + jump」（跳转索引）而非「时间机器」，故砍掉 cwd/git 等本机
+  隐私字段；新字段只登记可选、不进 OKF required，老文件前向兼容
+
+
+---
+
 ## v3.0.0 [2026-06-24]
 
 ### 补全测试覆盖 [2026-06-23]

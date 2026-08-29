@@ -177,6 +177,9 @@ func setupSummarizer(cfg *rss.Config) *transcript.Summarizer {
 	if cfg.TrnsConfig.Summary.Model != "" {
 		aiCfg.Model = cfg.TrnsConfig.Summary.Model
 	}
+	if cfg.TrnsConfig.Summary.Effort != "" {
+		aiCfg.Effort = cfg.TrnsConfig.Summary.Effort
+	}
 	if baseURL := configuredSummaryBaseURL(cfg); baseURL != "" {
 		aiCfg.BaseURL = baseURL
 	}

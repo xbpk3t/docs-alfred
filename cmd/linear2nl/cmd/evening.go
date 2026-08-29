@@ -24,7 +24,7 @@ func newEveningCmd() *cobra.Command {
 func runEvening(cfg *internal.Config, dryRun bool) error {
 	ctx := context.Background()
 	client := linear.NewClient(cfg.Linear.APIKey, cfg.Linear.TeamKeys)
-	aiClient := internal.NewAIProvider(cfg.AI)
+	aiClient := internal.NewAIProvider(&cfg.AI)
 
 	todayStart := carbon.Yesterday().StartOfDay().StdTime()
 

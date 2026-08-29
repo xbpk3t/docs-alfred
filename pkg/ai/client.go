@@ -3,232 +3,272 @@ package ai
 import (
 	"context"
 	"errors"
-	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
 	"time"
 
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
+	mafagent "github.com/microsoft/agent-framework-go/agent"
+	"github.com/microsoft/agent-framework-go/provider/openaiprovider"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/shared"
 )
+
+// defaultBaseURL is the gateway endpoint shared across all CLI defaults. The
+// literal lives here once; config loaders and ClientPool.Get fall back to it.
+const defaultBaseURL = "https://api.lucc.dev/v1"
+
+// ClientPool reuses one openai.Client per (endpoint, key) instead of rebuilding
+// its HTTP transport + connection pool on every call. Digest/loop call sites fan
+// out many AI calls; openai-client values are safe for concurrent use, so a
+// handful of long-lived clients beat per-URL client churn. openai.NewClient
+// builds its own transport (with a response-header timeout) when none is given,
+// and idle connections are reclaimed at process exit, so no Close/drain
+// machinery is needed here.
+type ClientPool struct {
+	clients map[clientKey]openai.Client
+	mu      sync.Mutex
+}
+
+// clientKey identifies the endpoint/credentials pair that determines a client.
+type clientKey struct {
+	baseURL string
+	apiKey  string
+}
+
+// defaultPool is the process-wide pool used by NewOpenAIClient.
+var defaultPool = &ClientPool{clients: map[clientKey]openai.Client{}}
+
+// Get returns the cached client for cfg, building and caching one on first use.
+func (p *ClientPool) Get(cfg *ClientConfig) openai.Client {
+	base := cfg.BaseURL
+	if base == "" {
+		base = defaultBaseURL
+	}
+	key := clientKey{baseURL: base, apiKey: lookupKey(cfg.APIKey)}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if c, ok := p.clients[key]; ok {
+		return c
+	}
+	c := openai.NewClient(
+		option.WithAPIKey(key.apiKey),
+		option.WithBaseURL(base),
+		option.WithMaxRetries(0),
+	)
+	p.clients[key] = c
+	return c
+}
 
 // DefaultAITimeout is the fallback call deadline when no Timeout is configured.
 // 60s is generous enough for short prompts (linear2nl, rss2nl) without making
 // hangs unbearable. Wiki digest uses its own perURLTimeout ctx; ccx sets 200s.
+//
+// Note: the MAF path here is NON-streaming. Reasoning / long-thinking models
+// (deepseek-v4-flash at effort=max) can take far longer than 60s; callers that
+// need headroom must set ClientConfig.Timeout.
 const DefaultAITimeout = 60 * time.Second
 
-// Role constants for chat messages.
+// DefaultEffort is the reasoning depth used when a caller sets no explicit
+// effort. openai-go's highest tier is "max" (ReasoningEffortMax).
+const DefaultEffort = string(shared.ReasoningEffortMax)
+
+// Role constants (kept for callers passing explicit system/user roles; the MAF
+// helpers route a separate system/instructions string).
 const (
-	RoleUser      = "user"
-	RoleSystem    = "system"
-	RoleAssistant = "assistant"
+	RoleUser   = "user"
+	RoleSystem = "system"
 )
 
-// ClientConfig holds the AI client configuration.
+// ClientConfig holds the AI client configuration (MAF / openai-go backed).
 type ClientConfig struct {
-	APIKey      string
-	BaseURL     string
-	Model       string
-	Timeout     time.Duration // call deadline; 0 uses DefaultAITimeout
-	Temperature float64       // sampling temperature; 0 uses API default
-	Streaming   bool          // SSE streaming (bypasses Cloudflare 524 timeout)
+	APIKey  string
+	BaseURL string
+	Model   string
+	// Effort is the reasoning-effort tier sent as `reasoning_effort`. Empty
+	// falls back to DefaultEffort ("max"). Recognized: none, minimal, low,
+	// medium, high, xhigh, max.
+	Effort string
+	// Timeout is the per-call deadline; 0 uses DefaultAITimeout.
+	Timeout time.Duration
+	// Temperature sampling; 0 leaves the API default. Kept for signature
+	// compat; deepseek reasoning models largely ignore it.
+	Temperature float64
+	// Streaming is intentionally IGNORED on the MAF path: chat-completions via
+	// this gateway runs non-streaming with an explicit deadline, matching the
+	// proven curate pattern (avoids Cloudflare 524 + SDK-retry fights).
+	Streaming bool
 }
 
-// Message represents a chat message.
+// Message is a single chat message, retained as a neutral carrier.
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// ChatRequest is the request body for chat completions.
-type ChatRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-}
-
-// ChatResponse is the response body from chat completions.
-type ChatResponse struct {
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
-	Choices []struct {
-		Message struct {
-			Content          string `json:"content"`
-			ReasoningContent string `json:"reasoning_content,omitempty"`
-		} `json:"message"`
-	} `json:"choices"`
-}
-
-// DefaultConfig creates a client config from environment variables.
-// LLM_AxonHub is a fallback API key (same as TS behavior), NOT a model name.
-// Streaming is enabled by default — it bypasses Cloudflare 524 upstream timeouts.
-func DefaultConfig() *ClientConfig {
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" {
-		apiKey = os.Getenv("LLM_AxonHub")
-	}
-
-	cfg := &ClientConfig{
-		APIKey:    apiKey,
-		BaseURL:   os.Getenv("OPENAI_BASE_URL"),
-		Model:     os.Getenv("LLM_MODEL"),
-		Streaming: true,
-	}
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = "https://api.lucc.dev/v1"
-	}
-	if cfg.Model == "" {
-		cfg.Model = "deepseek-v4-flash"
-	}
-
-	return cfg
-}
-
-// ConfigWithOverrides creates a client config with explicit overrides.
-// Env vars still take precedence over provided values.
-func ConfigWithOverrides(apiKey, baseURL, model string) *ClientConfig {
-	cfg := DefaultConfig()
-	if apiKey != "" {
-		cfg.APIKey = apiKey
-	}
-	if baseURL != "" {
-		cfg.BaseURL = baseURL
-	}
-	if model != "" {
-		cfg.Model = model
-	}
-
-	return cfg
-}
-
-// Chat sends a chat completion request and returns the response content.
-// Handles DeepSeek's non-standard `reasoning_content` field.
-func Chat(cfg *ClientConfig, messages []Message) (string, error) {
-	return ChatContext(context.Background(), cfg, messages)
-}
-
-// ChatContext sends a chat completion request with caller-controlled context.
-// Handles DeepSeek's non-standard `reasoning_content` field.
-func ChatContext(ctx context.Context, cfg *ClientConfig, messages []Message) (string, error) {
-	if cfg.APIKey == "" {
-		return "", errors.New("OPENAI_API_KEY not set")
-	}
-
-	timeout := resolveTimeout(cfg.Timeout)
-	ctx, cancel := ensureDeadline(ctx, timeout)
-	defer cancel()
-
-	// Streaming uses http.Client with no timeout — the ctx deadline governs
-	// lifetime. Non-streaming sets the HTTP timeout to the resolved value.
-	httpTimeout := timeout
-	if cfg.Streaming {
-		httpTimeout = 0
-	}
-
-	model, err := openai.New(
-		openai.WithToken(cfg.APIKey),
-		openai.WithBaseURL(cfg.BaseURL),
-		openai.WithModel(cfg.Model),
-		openai.WithHTTPClient(&http.Client{Timeout: httpTimeout}),
-	)
-	if err != nil {
-		return "", fmt.Errorf("create AI client: %w", err)
-	}
-
-	callOptions := []llms.CallOption{}
-	if cfg.Model != "" {
-		callOptions = append(callOptions, llms.WithModel(cfg.Model))
-	}
-	if cfg.Temperature > 0 {
-		callOptions = append(callOptions, llms.WithTemperature(cfg.Temperature))
-	}
-	if cfg.Streaming {
-		// Streaming bypasses Cloudflare's ~100s upstream timeout.
-		// A no-op StreamingFunc tells langchaingo to set stream=true;
-		// combineStreamingChatResponse collects both content and
-		// reasoning_content deltas into the final response.
-		callOptions = append(callOptions, llms.WithStreamingFunc(func(_ context.Context, _ []byte) error {
-			return nil
-		}))
-	}
-
-	resp, err := model.GenerateContent(ctx, toLLMSMessages(messages), callOptions...)
-	if err != nil {
-		if isEmptyResponseError(err) {
-			return "", errors.New("no choices returned")
-		}
-
-		return "", fmt.Errorf("generate content: %w", err)
-	}
-
-	return extractContentAndValidate(resp)
-}
-
-// resolveTimeout resolves cfg.Timeout to a concrete duration.
-func resolveTimeout(t time.Duration) time.Duration {
-	if t > 0 {
-		return t
-	}
-	return DefaultAITimeout
-}
-
-// ensureDeadline wraps ctx with a timeout only when ctx has none.
-// This prevents hangs when streaming is on and the caller uses
-// context.Background() without a deadline. Caller must defer cancel().
-func ensureDeadline(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
-	if _, ok := ctx.Deadline(); ok {
-		return ctx, func() {}
-	}
-	return context.WithTimeout(ctx, d)
-}
-
-// extractContentAndValidate validates the AI response and returns the content.
-func extractContentAndValidate(resp *llms.ContentResponse) (string, error) {
-	if resp == nil || len(resp.Choices) == 0 {
-		return "", errors.New("no choices returned")
-	}
-
-	content := extractChoiceContent(resp.Choices[0])
-	if content == "" {
-		return "", errors.New("empty response from AI model")
-	}
-
-	return content, nil
-}
-
-// extractChoiceContent returns the model's final response content.
-// reasoning_content is the model's internal thinking and MUST NOT be used
-// as the response — it's not structured output, it's the chain-of-thought.
-func extractChoiceContent(choice *llms.ContentChoice) string {
-	if choice.Content != "" {
-		return choice.Content
-	}
-
-	return ""
-}
-
-func isEmptyResponseError(err error) bool {
-	return errors.Is(err, openai.ErrEmptyResponse) || err.Error() == "empty response"
-}
-
-func toLLMSMessages(messages []Message) []llms.MessageContent {
-	converted := make([]llms.MessageContent, 0, len(messages))
-	for _, msg := range messages {
-		converted = append(converted, llms.TextParts(toLLMSRole(msg.Role), msg.Content))
-	}
-
-	return converted
-}
-
-func toLLMSRole(role string) llms.ChatMessageType {
-	switch role {
-	case RoleSystem:
-		return llms.ChatMessageTypeSystem
-	case RoleAssistant:
-		return llms.ChatMessageTypeAI
-	case RoleUser:
-		return llms.ChatMessageTypeHuman
+// EffortEnum maps a user-supplied effort string onto an openai-go tier.
+// "" returns shared.ReasoningEffort("") (zero value = not set).
+func EffortEnum(e string) shared.ReasoningEffort {
+	switch strings.ToLower(strings.TrimSpace(e)) {
+	case "max":
+		return shared.ReasoningEffortMax
+	case "xhigh":
+		return shared.ReasoningEffortXhigh
+	case "high":
+		return shared.ReasoningEffortHigh
+	case "medium":
+		return shared.ReasoningEffortMedium
+	case "low":
+		return shared.ReasoningEffortLow
+	case "minimal":
+		return shared.ReasoningEffortMinimal
+	case "none":
+		return shared.ReasoningEffortNone
 	default:
-		return llms.ChatMessageTypeGeneric
+		return ""
 	}
+}
+
+// NewOpenAIClient builds the OpenAI-compatible client for the SAME endpoint &
+// credentials as the rest of the repo, from the shared process-wide ClientPool
+// (one cached client per endpoint/key). option.WithMaxRetries(0) disables the
+// SDK's own retry so retry/backoff is owned by a single explicit place (run in
+// run.go, used by ChatContext and curate alike); the SDK would otherwise ignore
+// a Retry-After>1min and fight our per-attempt timeout on slow reasoning
+// models.
+func NewOpenAIClient(cfg *ClientConfig) openai.Client {
+	return defaultPool.Get(cfg)
+}
+
+// lookupKey returns cfgKey when set, else the project env fallbacks.
+func lookupKey(cfgKey string) string {
+	if cfgKey != "" {
+		return cfgKey
+	}
+	if k := os.Getenv("OPENAI_API_KEY"); k != "" {
+		return k
+	}
+	return os.Getenv("LLM_AxonHub")
+}
+
+// NewChatAgent builds a Chat-Completions-backed MAF agent (pattern validated in
+// internal/rss/curate). instructions become the system prompt.
+func NewChatAgent(cfg *ClientConfig, name, instructions string) *mafagent.Agent {
+	return openaiprovider.NewChatCompletionsAgent(
+		NewOpenAIClient(cfg),
+		openaiprovider.AgentConfig{
+			Model:        cfg.Model,
+			Instructions: instructions,
+			Config: mafagent.Config{
+				Name: name,
+			},
+		},
+	)
+}
+
+// UseEffort returns an agent run option carrying `reasoning_effort`. It is the
+// single place effort is normalized: trimmed, lowercased, mapped to an
+// openai-go tier (via EffortEnum), and defaulted to DefaultEffort when unset.
+func UseEffort(effort string) mafagent.Option {
+	e := strings.TrimSpace(effort)
+	if e == "" {
+		e = DefaultEffort
+	}
+	return openaiprovider.ChatCompletionNewParams(openai.ChatCompletionNewParams{
+		ReasoningEffort: EffortEnum(e),
+	})
+}
+
+// errors surfaced to callers; wrapped with context by runText.
+var (
+	errNoAPIKey = errors.New("OPENAI_API_KEY / LLM_AxonHub not set")
+	errEmpty    = errors.New("empty response from AI model")
+)
+
+// ChatContext performs a single non-streaming chat call with caller-provided
+// context, applying cfg.Effort (default "max" — single owner in pkg/ai) and a
+// bounded timeout/retry. This is the one public MAF-backed bridge; every
+// current AI call site routes through it.
+func ChatContext(ctx context.Context, cfg *ClientConfig, messages []Message) (string, error) {
+	if cfg == nil {
+		return "", errors.New("nil AI config")
+	}
+	if lookupKey(cfg.APIKey) == "" {
+		return "", errNoAPIKey
+	}
+	system, user := splitSystem(messages)
+	return runTextContext(ctx, cfg, system, user)
+}
+
+// splitSystem pulls the first system message aside; the rest join to user text.
+func splitSystem(messages []Message) (system, user string) {
+	var buf strings.Builder
+	for _, m := range messages {
+		if m.Role == RoleSystem {
+			if system == "" {
+				system = m.Content
+			}
+			continue
+		}
+		if buf.Len() > 0 {
+			buf.WriteString("\n")
+		}
+		buf.WriteString(m.Content)
+	}
+	return system, buf.String()
+}
+
+// RetryAfter reads a Retry-After header (seconds) off a typed *openai.Error,
+// returned by Cloudflare for the 524/529 it wants you to back off for.
+func RetryAfter(err error) time.Duration {
+	var apiErr *openai.Error
+	if errors.As(err, &apiErr) && apiErr.Response != nil {
+		if ra := apiErr.Response.Header.Get("Retry-After"); ra != "" {
+			if s, perr := strconv.Atoi(ra); perr == nil && s > 0 {
+				return time.Duration(s) * time.Second
+			}
+		}
+	}
+	return 0
+}
+
+// IsRetryable reports whether err is a transient status/transport error worth
+// retrying: 408/429/any 5xx (incl. Cloudflare 52x like 524) and closed/EOF
+// transport. Our per-attempt context deadline and the caller's own context are
+// NOT retried (that is the caller's contract; re-running on expiry would stall
+// the loop repeatedly on slow reasoning calls). Shared by every AI caller.
+//
+
+func IsRetryable(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
+		return false
+	}
+	var apiErr *openai.Error
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == http.StatusRequestTimeout ||
+			apiErr.StatusCode == http.StatusTooManyRequests ||
+			apiErr.StatusCode >= 500
+	}
+	var nerr net.Error
+	if errors.As(err, &nerr) {
+		return nerr.Timeout()
+	}
+	// Sentinel transport/stream errors (matched by identity and description, as a
+	// premature EOF surfaces differently depending on wrapping).
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "unexpected EOF") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "TLS handshake") ||
+		strings.Contains(msg, "i/o timeout")
 }

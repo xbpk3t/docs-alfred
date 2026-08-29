@@ -104,7 +104,7 @@ func TestChatReturnsEmptyWithoutAPIKey(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 
-	p := NewAIProvider(AIConfig{APIKey: ""})
+	p := NewAIProvider(&AIConfig{APIKey: ""})
 	require.False(t, p.IsConfigured())
 
 	got := p.chat("hello")
@@ -120,7 +120,7 @@ func TestChatErrorPath(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 
-	p := NewAIProvider(AIConfig{
+	p := NewAIProvider(&AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL,
 		Model:   "test-model",
@@ -138,7 +138,7 @@ func TestChatSuccessPath(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 
-	p := NewAIProvider(AIConfig{
+	p := NewAIProvider(&AIConfig{
 		APIKey:  "sk-test",
 		BaseURL: srv.URL,
 		Model:   "test-model",
@@ -152,7 +152,7 @@ func TestChatSuccessPath(t *testing.T) {
 // --- renderPrompt tests ---
 
 func TestRenderPromptPlanTemplate(t *testing.T) {
-	p := NewAIProvider(AIConfig{Language: "en"})
+	p := NewAIProvider(&AIConfig{Language: "en"})
 
 	prompt, err := p.renderPrompt("prompts/plan.txt", planPromptData{
 		Lang: "en",
@@ -180,7 +180,7 @@ func TestRenderPromptPlanTemplate(t *testing.T) {
 }
 
 func TestRenderPromptSummaryTemplate(t *testing.T) {
-	p := NewAIProvider(AIConfig{Language: "en"})
+	p := NewAIProvider(&AIConfig{Language: "en"})
 
 	prompt, err := p.renderPrompt("prompts/summary.txt", summaryPromptData{
 		Lang: "en",
@@ -206,7 +206,7 @@ func TestRenderPromptSummaryTemplate(t *testing.T) {
 }
 
 func TestRenderPromptWithEmptyIssues(t *testing.T) {
-	p := NewAIProvider(AIConfig{Language: "zh"})
+	p := NewAIProvider(&AIConfig{Language: "zh"})
 
 	t.Run("plan", func(t *testing.T) {
 		prompt, err := p.renderPrompt("prompts/plan.txt", planPromptData{
@@ -234,7 +234,7 @@ func TestMorningPlanRenderPromptError(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 
-	p := NewAIProvider(AIConfig{Language: "en"})
+	p := NewAIProvider(&AIConfig{Language: "en"})
 	p.prompts = embed.FS{} // empty FS: ParseFS will fail
 
 	got := p.MorningPlan([]IssueDetail{{Identifier: "LUC-1", Title: "Task"}})
@@ -245,7 +245,7 @@ func TestEveningDeepReviewRenderPromptError(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 
-	p := NewAIProvider(AIConfig{Language: "en"})
+	p := NewAIProvider(&AIConfig{Language: "en"})
 	p.prompts = embed.FS{}
 
 	got := p.EveningDeepReview([]IssueDetail{{Identifier: "LUC-1", Title: "Task"}})
@@ -261,7 +261,7 @@ func TestMorningPlanWithMockAPI(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 
-	p := NewAIProvider(AIConfig{
+	p := NewAIProvider(&AIConfig{
 		APIKey:   "sk-test",
 		BaseURL:  srv.URL,
 		Model:    "test-model",
@@ -285,7 +285,7 @@ func TestEveningDeepReviewWithMockAPI(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
 
-	p := NewAIProvider(AIConfig{
+	p := NewAIProvider(&AIConfig{
 		APIKey:   "sk-test",
 		BaseURL:  srv.URL,
 		Model:    "test-model",
@@ -312,7 +312,7 @@ func TestIsConfiguredWithEnvAPIKey(t *testing.T) {
 		t.Setenv("OPENAI_API_KEY", "sk-from-env")
 		t.Setenv("LLM_AxonHub", "")
 
-		p := NewAIProvider(AIConfig{APIKey: ""})
+		p := NewAIProvider(&AIConfig{APIKey: ""})
 		assert.True(t, p.IsConfigured(), "should pick up API key from env")
 	})
 
@@ -320,7 +320,7 @@ func TestIsConfiguredWithEnvAPIKey(t *testing.T) {
 		t.Setenv("OPENAI_API_KEY", "")
 		t.Setenv("LLM_AxonHub", "sk-from-axonhub")
 
-		p := NewAIProvider(AIConfig{APIKey: ""})
+		p := NewAIProvider(&AIConfig{APIKey: ""})
 		assert.True(t, p.IsConfigured(), "should pick up LLM_AxonHub fallback")
 	})
 
@@ -328,18 +328,18 @@ func TestIsConfiguredWithEnvAPIKey(t *testing.T) {
 		t.Setenv("OPENAI_API_KEY", "sk-env")
 		t.Setenv("LLM_AxonHub", "")
 
-		p := NewAIProvider(AIConfig{APIKey: "sk-explicit"})
+		p := NewAIProvider(&AIConfig{APIKey: "sk-explicit"})
 		assert.True(t, p.IsConfigured())
 		assert.Equal(t, "sk-explicit", p.clientCfg.APIKey)
 	})
 }
 
 func TestNewAIProviderDefaultLanguage(t *testing.T) {
-	p := NewAIProvider(AIConfig{})
+	p := NewAIProvider(&AIConfig{})
 	assert.Equal(t, "zh", p.lang, "default language should be zh")
 }
 
 func TestNewAIProviderCustomLanguage(t *testing.T) {
-	p := NewAIProvider(AIConfig{Language: "en"})
+	p := NewAIProvider(&AIConfig{Language: "en"})
 	assert.Equal(t, "en", p.lang)
 }

@@ -8,27 +8,27 @@ import (
 )
 
 func TestNewAIProviderSetsLang(t *testing.T) {
-	p := NewAIProvider(AIConfig{Language: "en"})
+	p := NewAIProvider(&AIConfig{Language: "en"})
 	assert.Equal(t, "en", p.lang)
 
-	p2 := NewAIProvider(AIConfig{})
+	p2 := NewAIProvider(&AIConfig{})
 	assert.Equal(t, "zh", p2.lang)
 }
 
 func TestIsConfigured(t *testing.T) {
-	p := NewAIProvider(AIConfig{APIKey: "sk-test"})
+	p := NewAIProvider(&AIConfig{APIKey: "sk-test"})
 	assert.True(t, p.IsConfigured())
 
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
-	p2 := NewAIProvider(AIConfig{APIKey: ""})
+	p2 := NewAIProvider(&AIConfig{APIKey: ""})
 	assert.False(t, p2.IsConfigured())
 }
 
 func TestMorningPlanReturnsEmptyWithoutKey(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
-	p := NewAIProvider(AIConfig{APIKey: ""})
+	p := NewAIProvider(&AIConfig{APIKey: ""})
 	got := p.MorningPlan([]IssueDetail{{Identifier: "LUC-1", Title: "Task"}})
 	assert.Empty(t, got)
 }
@@ -36,13 +36,13 @@ func TestMorningPlanReturnsEmptyWithoutKey(t *testing.T) {
 func TestEveningDeepReviewReturnsEmptyWithoutKey(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("LLM_AxonHub", "")
-	p := NewAIProvider(AIConfig{APIKey: ""})
+	p := NewAIProvider(&AIConfig{APIKey: ""})
 	got := p.EveningDeepReview([]IssueDetail{{Identifier: "LUC-1", Title: "Task"}})
 	assert.Empty(t, got)
 }
 
 func TestRenderPromptWithValidTemplate(t *testing.T) {
-	p := NewAIProvider(AIConfig{Language: "en"})
+	p := NewAIProvider(&AIConfig{Language: "en"})
 	prompt, err := p.renderPrompt("prompts/plan.txt", planPromptData{
 		Lang: "en",
 		Issues: []IssueDetail{
@@ -55,7 +55,7 @@ func TestRenderPromptWithValidTemplate(t *testing.T) {
 }
 
 func TestRenderPromptWithInvalidTemplate(t *testing.T) {
-	p := NewAIProvider(AIConfig{})
+	p := NewAIProvider(&AIConfig{})
 	_, err := p.renderPrompt("prompts/nonexistent.txt", nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "parse prompt")

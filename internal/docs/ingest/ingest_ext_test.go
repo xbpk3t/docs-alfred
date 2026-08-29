@@ -300,6 +300,7 @@ func TestResolveWikiRootExplicit(t *testing.T) {
 // --- newAIConfig ---
 
 func TestNewAIConfig(t *testing.T) {
+	t.Setenv("LLM_EFFORT", "")
 	cfg := &Config{
 		AI: AIConfig{
 			APIKey:      "key",
@@ -314,6 +315,12 @@ func TestNewAIConfig(t *testing.T) {
 	assert.Equal(t, "model", ac.Model)
 	assert.Equal(t, 0.5, ac.Temperature)
 	assert.True(t, ac.Streaming, "inherits DefaultConfig streaming even without YAML field")
+	assert.Empty(t, ac.Effort, "empty AIConfig.Effort left unset; pkg/ai defaults to max at call time")
+}
+
+func TestNewAIConfigEffortWired(t *testing.T) {
+	ac := newAIConfig(&Config{AI: AIConfig{APIKey: "k", Effort: "high"}})
+	assert.Equal(t, "high", ac.Effort, "AIConfig.Effort must flow into the client config")
 }
 
 // --- Error types ---

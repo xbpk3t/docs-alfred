@@ -85,11 +85,15 @@ type wikiMediaConfig struct {
 }
 
 // AIConfig contains AI model settings.
-// Streaming is owned by pkg/ai.DefaultConfig (true by default); not a YAML knob.
+// Streaming is owned by pkg/ai (ignored on the MAF path); not a YAML knob.
 type AIConfig struct {
 	APIKey      string  `yaml:"apiKey"`
 	Model       string  `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
 	BaseURL     string  `default:"https://api.lucc.dev/v1" validate:"required|url" yaml:"baseUrl"`
+	// Effort is the reasoning-effort tier, a peer of model. Empty falls to the
+	// shared pkg/ai default (LLM_EFFORT env, else "max"); no struct default so an
+	// unset YAML value doesn't override LLM_EFFORT. Recognized: low/medium/high/xhigh/max.
+	Effort      string  `yaml:"effort"`
 	Temperature float64 `default:"0.3"                     yaml:"temperature"`
 }
 

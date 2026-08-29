@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/xbpk3t/docs-alfred/main/cmd/skx/schema/prpt.schema.json",
   "title": "prpt",
-  "description": "JSON Schema for zzz prompt YAML files (references/**/*.yml)。唯一 source of truth（模板 prpt.yml 已并入本 schema 的描述）。\n顶层 section：frontmatter / what / gate / constraint / input / workflow / output / self-check / hint。\n- prompts 直接以 .yml 形态被 route/Read，无渲染层。\n- composite 用 workflow 组织阶段；phase 的 steps 里可用 {kind: prompt, name} 串行调度其他 prompt（sub-agent）。\n- 调度纪律（ledger）见 SKILL.md；`skx check` 校验本 schema；`skx graph` 看依赖/环。",
+  "description": "JSON Schema for zzz prompt YAML files (references/**/*.yml)。唯一 source of truth（模板 prpt.yml 已并入本 schema 的描述）。\n顶层 section：frontmatter / what / gate / constraint / input / workflow / output / self-check / hint。\n- prompts 直接以 .yml 形态被 route/Read，无渲染层。\n- composite 用 workflow 组织阶段；phase 的 steps 里可用 {kind: prompt, name} 串行调度其他 prompt（sub-agent）。\n- 调度纪律（ledger）见 SKILL.md；`skx check` 校验本 schema；`skx graph` 看依赖/环（避免 loop hell，环检测由 cli 处理）。",
   "type": "object",
   "properties": {
     "frontmatter": {
@@ -80,7 +80,7 @@
 
     "input": {
       "type": "object",
-      "description": "(可选) 输入参数声明",
+      "description": "(可选) 输入要求/参数声明",
       "properties": {
         "source": {
           "type": "string",
@@ -97,7 +97,7 @@
 
     "workflow": {
       "type": "array",
-      "description": "(composite 必填；atom 可选) 阶段化流程。phase 的 steps 里可用 {kind: prompt, name} 串行调度其他 prompt（起 sub-agent）。适用性/并入规则放 constraint 与 output。",
+      "description": "(composite 必填；atom 可选) 阶段化流程（复杂 prompt 用）。phase 的 steps 里可用 {kind: prompt, name} 串行调度其他 prompt（起 sub-agent）。适用性/并入规则放 constraint 与 output。",
       "items": {
         "type": "object",
         "properties": {
@@ -109,7 +109,7 @@
           "desc": { "type": "string", "description": "(可选) 做什么" },
           "steps": {
             "type": "array",
-            "description": "(可选) 该 phase 内的微观动作：string=普通操作；{kind: prompt, name}=串行调度其他 prompt（sub-agent，纪律见 SKILL.md ledger）",
+            "description": "(可选) 该 phase 内的微观动作：string=普通操作；{kind: prompt, name}=串行调度其他 prompt（sub-agent，纪律见 SKILL.md ledger）；父 agent 只编排汇总。",
             "items": {
               "oneOf": [
                 { "type": "string", "description": "普通操作（默认 kind）" },
@@ -134,7 +134,7 @@
 
     "output": {
       "type": "object",
-      "description": "(可选，但强烈建议) 输出契约：产出什么形态 + 产出物落不落盘；含各 dispatch 步产物并入位置",
+      "description": "(可选，但强烈建议；高频) 输出契约：产出什么形态 + 产出物落不落盘；含各 dispatch 步产物并入位置",
       "properties": {
         "format": {
           "type": "string",
@@ -184,7 +184,7 @@
 
     "hint": {
       "type": "array",
-      "description": "(可选) 条件式推进/下一步提示；交付时建议给出。每项 {if, then}：if=触发条件，then=建议动作（recall/deepen/write/skip…）。旧 string 形式已废弃。",
+      "description": "(可选；高频；交付必给) 条件式推进/下一步提示。每项 {if, then}：if=触发条件，then=建议动作（recall/deepen/write/skip…）。旧 string 形式已废弃。",
       "items": {
         "type": "object",
         "properties": {

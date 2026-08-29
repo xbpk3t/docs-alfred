@@ -21,7 +21,7 @@ func newMorningCmd() *cobra.Command {
 func runMorning(cfg *internal.Config, dryRun bool) error {
 	ctx := context.Background()
 	client := linear.NewClient(cfg.Linear.APIKey, cfg.Linear.TeamKeys)
-	aiClient := internal.NewAIProvider(cfg.AI)
+	aiClient := internal.NewAIProvider(&cfg.AI)
 
 	details, err := client.GetActiveIssuesWithDetails(ctx)
 	if err != nil {
