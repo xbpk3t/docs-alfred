@@ -2,7 +2,8 @@ package curate
 
 import (
 	"context"
-	"sync"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // chunkItems splits items into consecutive slices of at most size. A non-
@@ -38,29 +39,12 @@ func runBounded(ctx context.Context, n, limit int, fn func(context.Context, int)
 	if limit <= 0 || limit > n {
 		limit = n
 	}
-	sem := make(chan struct{}, limit)
-	errs := make([]error, n)
-	var wg sync.WaitGroup
+	var g errgroup.Group
+	g.SetLimit(limit)
 	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-			case <-ctx.Done():
-				errs[i] = ctx.Err()
-				return
-			}
-			errs[i] = fn(ctx, i)
-		}(i)
+		g.Go(func() error {
+			return fn(ctx, i)
+		})
 	}
-	wg.Wait()
-	for _, e := range errs {
-		if e != nil {
-			return e
-		}
-	}
-
-	return nil
+	return g.Wait()
 }

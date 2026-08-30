@@ -832,31 +832,8 @@ func buildTavilyQuery(category string, seedURLs, recentTopics []string) string {
 		"Prefer engineering blogs, authors, newsletters, project homepages. "+
 		"Avoid RSS feeds, individual articles, SEO farms, social feeds, marketing pages, known domains.", category)
 
-	for _, seedURL := range seedURLs {
-		var suffix string
-		if strings.Contains(query, " Seeds: ") {
-			suffix = ", " + seedURL
-		} else {
-			suffix = " Seeds: " + seedURL
-		}
-		if len(query)+len(suffix) > maxLen {
-			break
-		}
-		query += suffix
-	}
-
-	for _, topic := range recentTopics {
-		var suffix string
-		if strings.Contains(query, " Recent: ") {
-			suffix = "; " + topic
-		} else {
-			suffix = " Recent: " + topic
-		}
-		if len(query)+len(suffix) > maxLen {
-			break
-		}
-		query += suffix
-	}
+	query = appendBlocked(query, ", ", " Seeds: ", seedURLs, maxLen)
+	query = appendBlocked(query, "; ", " Recent: ", recentTopics, maxLen)
 
 	return trimToMaxLength(query, maxLen)
 }
@@ -868,6 +845,20 @@ func trimToMaxLength(s string, maxLen int) string {
 	}
 
 	return s[:max(maxLen-3, 0)] + "..."
+}
+
+// appendBlocked appends items to query using sep/firstSep as delimiters,
+// stopping when maxLen would be exceeded.
+func appendBlocked(query, sep, firstSep string, items []string, maxLen int) string {
+	for _, item := range items {
+		suffix := firstSep + item
+		firstSep = sep
+		if len(query)+len(suffix) > maxLen {
+			break
+		}
+		query += suffix
+	}
+	return query
 }
 
 // -- Candidate classification (matching TS provider-utils.ts) --

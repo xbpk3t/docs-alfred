@@ -2,7 +2,6 @@ package datarender
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -136,13 +135,12 @@ func createRendererForDomain(domain string) (render.Renderer, error) {
 		parseMode = render.ParseSingle
 	}
 
-	type parseModeRenderer interface {
+	type parseModeSetter interface {
 		WithParseMode(mode render.ParseMode)
 	}
-
-	r, ok := renderer.(parseModeRenderer)
+	r, ok := renderer.(parseModeSetter)
 	if !ok {
-		return nil, errors.New("renderer does not support parse mode configuration")
+		return nil, fmt.Errorf("renderer %T does not support parse mode configuration", renderer)
 	}
 	r.WithParseMode(parseMode)
 
@@ -345,26 +343,9 @@ func (p *docProcessor) processFile(src string, renderer render.Renderer) error {
 
 func (p *docProcessor) readInput(src string, isDir bool) ([]byte, error) {
 	if isDir {
-		return p.readAndMergeFiles(src)
+		return fileutil.ReadAndMergeYAMLFilesRecursive(src, p.setCurrentFile)
 	}
-
-	return p.readSingleFile(src)
-}
-
-func (p *docProcessor) readSingleFile(src string) ([]byte, error) {
-	if isDir(src) {
-		return []byte(""), errors.New("stat path error")
-	}
-
 	return fileutil.ReadSingleFile(src, p.setCurrentFile)
-}
-
-func (p *docProcessor) readAndMergeFiles(src string) ([]byte, error) {
-	if !isDir(src) {
-		return []byte(""), errors.New("stat path error")
-	}
-
-	return fileutil.ReadAndMergeYAMLFilesRecursive(src, p.setCurrentFile)
 }
 
 func isDir(path string) bool {

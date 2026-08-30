@@ -11,7 +11,6 @@ var (
 	_ Formatter = (*AlfredFormatter)(nil)
 	_ Formatter = (*PlainFormatter)(nil)
 	_ Formatter = (*RawFormatter)(nil)
-	_ Formatter = (*RofiFormatter)(nil)
 )
 
 // GetFormatter returns the appropriate formatter based on the format string.
@@ -21,8 +20,6 @@ func GetFormatter(format string) Formatter {
 		return &AlfredFormatter{}
 	case "raw", "json":
 		return &RawFormatter{}
-	case "rofi":
-		return &RofiFormatter{}
 	default:
 		return &PlainFormatter{}
 	}

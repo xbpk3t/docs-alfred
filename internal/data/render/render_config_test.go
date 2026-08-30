@@ -299,33 +299,6 @@ func TestIsDir(t *testing.T) {
 	assert.False(t, isDir("/tmp/nonexistent-dir-99999"))
 }
 
-func TestReadSingleFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.yml"), []byte("- name: test\n"), 0644))
-
-	p := newDocProcessor(fileTypeYAML)
-	p.Dst = tmpDir
-	data, err := p.readSingleFile(filepath.Join(tmpDir, "test.yml"))
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "test")
-}
-
-func TestReadSingleFile_IsDir(t *testing.T) {
-	tmpDir := t.TempDir()
-	p := newDocProcessor(fileTypeYAML)
-	_, err := p.readSingleFile(tmpDir)
-	require.Error(t, err)
-}
-
-func TestReadAndMergeFiles_NotDir(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.yml"), []byte("- name: test\n"), 0644))
-
-	p := newDocProcessor(fileTypeYAML)
-	_, err := p.readAndMergeFiles(filepath.Join(tmpDir, "test.yml"))
-	require.Error(t, err)
-}
-
 func TestReadInput_SingleFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.yml"), []byte("- name: test\n"), 0644))

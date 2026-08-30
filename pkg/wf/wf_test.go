@@ -16,7 +16,6 @@ func TestGetFormatter(t *testing.T) {
 	}{
 		{name: "alfred", format: "alfred", want: "*wf.AlfredFormatter"},
 		{name: "raw", format: "raw", want: "*wf.RawFormatter"},
-		{name: "rofi", format: "rofi", want: "*wf.RofiFormatter"},
 		{name: "plain default", format: "plain", want: "*wf.PlainFormatter"},
 		{name: "empty falls back to plain", format: "", want: "*wf.PlainFormatter"},
 		{name: "unknown falls back to plain", format: "unknown", want: "*wf.PlainFormatter"},
@@ -39,8 +38,6 @@ func typeName(f Formatter) string {
 		return "*wf.PlainFormatter"
 	case *RawFormatter:
 		return "*wf.RawFormatter"
-	case *RofiFormatter:
-		return "*wf.RofiFormatter"
 	default:
 		return "unknown"
 	}
@@ -245,61 +242,6 @@ func TestRawFormatterFormatStruct(t *testing.T) {
 	assert.Contains(t, out, `"name": "test"`)
 }
 
-// --- RofiFormatter tests ---
-
-func TestRofiFormatterFormatString(t *testing.T) {
-	f := &RofiFormatter{}
-	out, err := f.Format("hello")
-	require.NoError(t, err)
-	assert.Equal(t, "hello", out)
-}
-
-func TestRofiFormatterFormatStringSlice(t *testing.T) {
-	f := &RofiFormatter{}
-	out, err := f.Format([]string{"a", "b", "c"})
-	require.NoError(t, err)
-	assert.Equal(t, "a\nb\nc", out)
-}
-
-func TestRofiFormatterFormatAlfredItems(t *testing.T) {
-	f := &RofiFormatter{}
-	items := []AlfredItem{
-		{Title: "first"},
-		{Title: "second"},
-	}
-	out, err := f.Format(items)
-	require.NoError(t, err)
-	assert.Equal(t, "first\nsecond", out)
-}
-
-func TestRofiFormatterFormatDefault(t *testing.T) {
-	f := &RofiFormatter{}
-	out, err := f.Format(map[string]string{"key": "value"})
-	require.NoError(t, err)
-	assert.Contains(t, out, `"key"`)
-}
-
-func TestRofiFormatterFormatEmptyString(t *testing.T) {
-	f := &RofiFormatter{}
-	out, err := f.Format("")
-	require.NoError(t, err)
-	assert.Empty(t, out)
-}
-
-func TestRofiFormatterFormatEmptySlice(t *testing.T) {
-	f := &RofiFormatter{}
-	out, err := f.Format([]string{})
-	require.NoError(t, err)
-	assert.Empty(t, out)
-}
-
-func TestRofiFormatterFormatEmptyAlfredItems(t *testing.T) {
-	f := &RofiFormatter{}
-	out, err := f.Format([]AlfredItem{})
-	require.NoError(t, err)
-	assert.Empty(t, out)
-}
-
 // --- Error path tests ---
 
 func TestAlfredFormatterFormatUnmarshalableType(t *testing.T) {
@@ -310,12 +252,6 @@ func TestAlfredFormatterFormatUnmarshalableType(t *testing.T) {
 
 func TestRawFormatterFormatUnmarshalableType(t *testing.T) {
 	f := &RawFormatter{}
-	_, err := f.Format(make(chan int))
-	require.Error(t, err)
-}
-
-func TestRofiFormatterFormatUnmarshalableType(t *testing.T) {
-	f := &RofiFormatter{}
 	_, err := f.Format(make(chan int))
 	require.Error(t, err)
 }

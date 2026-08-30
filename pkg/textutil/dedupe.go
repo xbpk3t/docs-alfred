@@ -74,29 +74,9 @@ func collapseExactDouble(content string) (string, bool) {
 }
 
 func splitKeepNonEmptyBlocks(content string) []string {
-	raw := strings.Split(content, "\n")
-	var blocks []string
-	var cur []string
-	flush := func() {
-		if len(cur) == 0 {
-			return
-		}
-		b := strings.TrimSpace(strings.Join(cur, "\n"))
-		if b != "" {
-			blocks = append(blocks, b)
-		}
-		cur = cur[:0]
-	}
-	for _, line := range raw {
-		if strings.TrimSpace(line) == "" {
-			flush()
-			continue
-		}
-		cur = append(cur, line)
-	}
-	flush()
-
-	return blocks
+	return strings.FieldsFunc(content, func(r rune) bool {
+		return r == '\n'
+	})
 }
 
 // FirstLineTitle picks a short title candidate from free text (first non-empty line,

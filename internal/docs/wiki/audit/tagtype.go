@@ -68,7 +68,7 @@ func recordDirType(counts map[string]map[string]int, rel string) {
 	if counts[tag] == nil {
 		counts[tag] = map[string]int{}
 	}
-	counts[tag][typ] += 0
+	counts[tag][typ] = 0
 }
 
 // recordType counts a single md file into the right tag/type bucket if it is

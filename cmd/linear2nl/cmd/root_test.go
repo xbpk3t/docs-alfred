@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"io"
 	"os"
 	"testing"
 
@@ -160,25 +159,6 @@ func TestExportMarkdownWritesFile(t *testing.T) {
 	assert.Contains(t, md, "LUC-1 Task 1")
 	assert.Contains(t, md, "A description")
 	assert.Contains(t, md, "nice")
-}
-
-func captureStdout(t *testing.T) func() string {
-	t.Helper()
-
-	original := os.Stdout
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-	os.Stdout = w
-
-	return func() string {
-		require.NoError(t, w.Close())
-		os.Stdout = original
-		data, err := io.ReadAll(r)
-		require.NoError(t, err)
-		require.NoError(t, r.Close())
-
-		return string(data)
-	}
 }
 
 func TestToIssueViewsFromDetails(t *testing.T) {

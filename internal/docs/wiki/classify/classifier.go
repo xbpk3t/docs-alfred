@@ -609,16 +609,8 @@ func jsonKey(f *reflect.StructField) string {
 }
 
 // classifyOnlyResult holds the parsed JSON from the classify-only AI call.
-type classifyOnlyResult struct {
-	Summary           *types.StructuredSummary `json:"summary"`
-	Metadata          *types.EntryMetadata     `json:"metadata"`
-	TopicPath         string                   `json:"topicPath"`
-	WikiType          types.ClassifyType       `json:"wikiType"`
-	ContentType       string                   `json:"contentType"`
-	RejectReason      string                   `json:"rejectReason,omitempty"`
-	Confidence        float64                  `json:"confidence"`
-	NeedsManualReview bool                     `json:"needsManualReview"`
-}
+// It shares the same shape as aiClassification and can be used interchangeably.
+type classifyOnlyResult = aiClassification
 
 // classifyOnly runs the AI classification call with retry.
 // Retries on AI call failure, JSON parse failure, or validation failure.
@@ -630,10 +622,10 @@ func (c *Classifier) classifyOnly(
 ) (*aiClassification, error) {
 	promptText, err := prompt.Render("classify-json.txt", &promptData{
 		CandidateTree: FormatTopicCandidatesGrouped(candidates),
-		Title:         truncate(title, 200),
+		Title:         textutil.TruncateUTF8(title, 200),
 		URL:           urlStr,
 		ContentType:   contentType,
-		Content:       truncate(content, maxLen),
+		Content:       textutil.TruncateUTF8(content, maxLen),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("render classify prompt: %w", err)
@@ -656,16 +648,7 @@ func (c *Classifier) classifyOnly(
 				return fmt.Errorf("validate classify result: %w", e)
 			}
 
-			result = &aiClassification{
-				TopicPath:         parsed.TopicPath,
-				WikiType:          parsed.WikiType,
-				ContentType:       parsed.ContentType,
-				Summary:           parsed.Summary,
-				Metadata:          parsed.Metadata,
-				Confidence:        parsed.Confidence,
-				NeedsManualReview: parsed.NeedsManualReview,
-				RejectReason:      parsed.RejectReason,
-			}
+			result = parsed
 			return nil
 		},
 		retry.Attempts(3),
@@ -751,11 +734,11 @@ func (c *Classifier) runVerify(
 	}
 	promptText, err := prompt.Render("verify-simple.txt", &verifyPromptData{
 		URL:         urlStr,
-		Title:       truncate(title, 200),
+		Title:       textutil.TruncateUTF8(title, 200),
 		ContentType: contentType,
-		Overview:    truncate(overview, 1500),
+		Overview:    textutil.TruncateUTF8(overview, 1500),
 		KeyPoints:   keyPoints,
-		Content:     truncate(content, verifyMax),
+		Content:     textutil.TruncateUTF8(content, verifyMax),
 	})
 	if err != nil {
 		return "", fmt.Errorf("render verify prompt: %w", err)
@@ -1051,9 +1034,6 @@ func ensureWithinWikiRoot(wikiRoot, relativePath string) error {
 // ErrClassificationUnavailable is returned when AI classification is not available.
 var ErrClassificationUnavailable = errors.New("classification unavailable")
 
-func truncate(s string, maxLen int) string {
-	return textutil.TruncateUTF8(s, maxLen)
-}
 
 // FormatTopicCandidatesGrouped formats topic candidates grouped by tag for progressive classification.
 // Output is hierarchical:

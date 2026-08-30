@@ -13,6 +13,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/fetch"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/prompt"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
+	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 )
@@ -87,7 +88,7 @@ func TestClassificationCandidatesReturnsErrorWhenRemoteUnavailable(t *testing.T)
 }
 
 func TestTruncateKeepsUTF8Valid(t *testing.T) {
-	result := truncate(strings.Repeat("你好", 20), 5)
+	result := textutil.TruncateUTF8(strings.Repeat("你好", 20), 5)
 
 	assert.True(t, utf8.ValidString(result))
 	assert.Equal(t, "你...", result)

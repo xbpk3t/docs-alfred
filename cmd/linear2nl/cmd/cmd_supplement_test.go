@@ -477,12 +477,6 @@ func mockOpenAIChatServer(content string) *httptest.Server {
 	}))
 }
 
-func jsonMarshalString(s string) string {
-	b, _ := json.Marshal(s)
-
-	return string(b)
-}
-
 // --- buildMorningPlan tests ---
 
 func TestBuildMorningPlanAINotConfigured(t *testing.T) {

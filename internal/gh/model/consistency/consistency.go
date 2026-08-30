@@ -7,6 +7,7 @@ package consistency
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -87,15 +88,7 @@ func sortedKeys[V any](m map[string]V) []string {
 }
 
 func equal(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(a, b)
 }
 
 // fieldByYAMLTags maps each struct field's yaml tag name to its reflect.Type.

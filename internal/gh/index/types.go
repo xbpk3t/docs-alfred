@@ -7,8 +7,6 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
-const GhURL = "https://github.com/"
-
 // Repo is the enriched repository type: the schema-generated data model
 // (gh.Repo) plus runtime provenance fields set during indexing (which
 // config/topic/rel a repo came from). Provenance is index-layer only; it is
