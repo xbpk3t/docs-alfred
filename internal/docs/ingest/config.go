@@ -40,6 +40,8 @@ type CompactConfig struct {
 	// week, … The CLI skips runs whose current week index is not a multiple
 	// of schedule, so actions may trigger daily — only in-window runs send.
 	Schedule int `default:"1" yaml:"schedule" validate:"gte:1"`
+	// TopN is how many top-ranked 清零 candidates are surfaced per run.
+	TopN int `default:"10" yaml:"topN" validate:"gte:1"`
 }
 
 // CompactSendConfig groups dual-delivery channel parameters.
@@ -87,9 +89,9 @@ type wikiMediaConfig struct {
 // AIConfig contains AI model settings.
 // Streaming is owned by pkg/ai (ignored on the MAF path); not a YAML knob.
 type AIConfig struct {
-	APIKey      string  `yaml:"apiKey"`
-	Model       string  `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
-	BaseURL     string  `default:"https://api.lucc.dev/v1" validate:"required|url" yaml:"baseUrl"`
+	APIKey  string `yaml:"apiKey"`
+	Model   string `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
+	BaseURL string `default:"https://api.lucc.dev/v1" validate:"required|url" yaml:"baseUrl"`
 	// Effort is the reasoning-effort tier, a peer of model. Empty falls to the
 	// shared pkg/ai default (LLM_EFFORT env, else "max"); no struct default so an
 	// unset YAML value doesn't override LLM_EFFORT. Recognized: low/medium/high/xhigh/max.

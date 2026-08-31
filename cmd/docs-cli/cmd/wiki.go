@@ -14,7 +14,6 @@ import (
 	wikiuc "github.com/xbpk3t/docs-alfred/internal/docs/ingest"
 	wikiaudit "github.com/xbpk3t/docs-alfred/internal/docs/wiki/audit"
 	wikicompact "github.com/xbpk3t/docs-alfred/internal/docs/wiki/compact"
-	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	"github.com/xbpk3t/docs-alfred/pkg/mail"
@@ -208,17 +207,12 @@ func newWikiCheckCmd() *cobra.Command {
 }
 
 type wikiCompactFlags struct {
-	config           string
-	wikiRoot         string
-	model            string
-	topHot           int
-	bulkLogThreshold int
-	minDeltaChars    int
-	minDeltaLines    int
-	sendMail         bool
-	createIssue      bool
-	dryRun           bool
-	skipAI           bool
+	config      string
+	wikiRoot    string
+	top         int
+	sendMail    bool
+	createIssue bool
+	dryRun      bool
 }
 
 func newWikiStatsCmd() *cobra.Command {
@@ -300,19 +294,18 @@ func newWikiCompactCmd() *cobra.Command {
 	var flags wikiCompactFlags
 	cmd := &cobra.Command{
 		Use:   wikiCompactCommandName,
-		Short: "Scheduled compact notice: hot log topics → AI → optional Resend + Linear",
-		Long: `Identify hot wiki topics (substantive committed log.md edits in the schedule window),
-ask AI whether a type:blog compact is warranted, and optionally deliver notices via Resend and/or a new Linear issue.
-Topics must clear the heat gate (≥2 distinct edit days ∧ ≥2 commits, OR ≥2000 Δchars) to reach AI; AI is asked
-to judge "is there a publishable blog" (default no), and duplicate/cooled topics are hard-excluded. When nothing
-clears (all no / all rejected), the run is skipped with zero side effects.
+		Short: "Scheduled 清零: rank the whole wiki census → optional Resend + Linear",
+		Long: `Rank the entire current wiki state (audit.TopicMetrics census) by a deterministic
+清零 score and surface the top-N topics as promote/clear candidates, delivering the
+report via Resend and/or a new Linear issue. 每周清零: the current full state IS this
+week's batch — no git log, no AI, no log.md heat. A run fires on the schedule day
+(Saturday) of an eligible week, controlled by compact.schedule (default 1 = weekly,
+2 = every other week); any other day is skipped with zero side effects.
 
-Schedule is week-based, controlled by compact.schedule in the config (default 1 = weekly, 2 = every other week). A run fires only on the schedule day (Saturday) of an eligible week; any other day is skipped with zero side effects — actions may trigger daily and the CLI decides whether to run.
-
-This command never writes blog or log.md. Compact still means you write type:blog manually.
+This command never writes blog or log.md — promote / clear / write type:blog yourself.
 
 Default is dry print (no side effects). Pass --send-mail (RESEND_TOKEN + compact.send.resend.mailTo) and/or --create-issue (LINEAR_API_KEY + compact.send.linear.teamKey).
-Brand from compact.title (From, mail subject prefix, issue title). Each run always creates a new Linear issue ({title} [YYYY-MM-DD]); no dedup against open issues.`,
+Top-N candidates from compact.topN (default 10). Brand from compact.title (From, mail subject prefix, issue title). Each run always creates a new Linear issue ({title} [YYYY-MM-DD]); no dedup against open issues.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWikiCompact(cmd, &flags)
@@ -320,15 +313,10 @@ Brand from compact.title (From, mail subject prefix, issue title). Each run alwa
 	}
 	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path (wiki.yml)")
 	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
-	cmd.Flags().IntVar(&flags.topHot, "top-hot", 10, "Max gate-passed hot topics to send to AI")
-	cmd.Flags().IntVar(&flags.bulkLogThreshold, "bulk-log-threshold", 10, "Ignore commits touching this many log.md paths")
-	cmd.Flags().IntVar(&flags.minDeltaChars, "min-delta-chars", 40, "Min non-whitespace char delta for substantive edit")
-	cmd.Flags().IntVar(&flags.minDeltaLines, "min-delta-lines", 2, "Min non-empty line ± for substantive edit")
+	cmd.Flags().IntVar(&flags.top, "top", 0, "Top-N 清零 candidates (overrides compact.topN)")
 	cmd.Flags().BoolVar(&flags.sendMail, "send-mail", false, "Send Resend email")
 	cmd.Flags().BoolVar(&flags.createIssue, "create-issue", false, "Create a new Linear issue with the compact report")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Print result; do not send mail or create issue")
-	cmd.Flags().BoolVar(&flags.skipAI, "skip-ai", false, "Skip AI (hot list only; for offline debug)")
-	cmd.Flags().StringVar(&flags.model, "model", "", "AI model override")
 
 	return cmd
 }
@@ -337,10 +325,6 @@ func runWikiCompact(cmd *cobra.Command, flags *wikiCompactFlags) error {
 	cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
-	}
-	resolveWikiAPIKey(cfg)
-	if flags.model != "" {
-		cfg.AI.Model = flags.model
 	}
 
 	opts, err := buildCompactOptions(cfg, flags)
@@ -356,13 +340,7 @@ func runWikiCompact(cmd *cobra.Command, flags *wikiCompactFlags) error {
 		}
 		return printErr
 	}
-	if err != nil {
-		return err
-	}
-	if result != nil && result.SoftError != nil {
-		return result.SoftError
-	}
-	return nil
+	return err
 }
 
 func buildCompactOptions(cfg *wikiuc.Config, flags *wikiCompactFlags) (*wikicompact.CompactOptions, error) {
@@ -376,26 +354,21 @@ func buildCompactOptions(cfg *wikiuc.Config, flags *wikiCompactFlags) (*wikicomp
 		return nil, err
 	}
 
-	aiCfg := ai.ConfigWithOverrides(cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Model)
-	if cfg.AI.Temperature > 0 {
-		aiCfg.Temperature = cfg.AI.Temperature
+	topN := cfg.Compact.TopN
+	if flags.top > 0 {
+		topN = flags.top
 	}
 
 	return &wikicompact.CompactOptions{
 		WikiRoot: cfg.Wiki.WikiRoot,
-		WindowFn: func(now time.Time) (wikicompact.Window, bool, string) {
+		WindowFn: func(now time.Time) (bool, string) {
 			return wikicompact.ScheduleWindow(cfg.Compact.Schedule, now)
 		},
-		TopHot:           flags.topHot,
-		BulkLogThreshold: flags.bulkLogThreshold,
-		MinDeltaChars:    flags.minDeltaChars,
-		MinDeltaLines:    flags.minDeltaLines,
-		SendMail:         flags.sendMail,
-		CreateIssue:      flags.createIssue,
-		DryRun:           flags.dryRun,
-		SkipAI:           flags.skipAI,
-		Title:            wikicompact.CompactBrand(cfg.Compact.Title),
-		AI:               aiCfg,
+		TopN:        topN,
+		SendMail:    flags.sendMail,
+		CreateIssue: flags.createIssue,
+		DryRun:      flags.dryRun,
+		Title:       wikicompact.CompactBrand(cfg.Compact.Title),
 		Mail: wikicompact.MailConfig{
 			Token:  token,
 			MailTo: mailTo,

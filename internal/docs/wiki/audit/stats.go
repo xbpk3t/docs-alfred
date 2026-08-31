@@ -205,7 +205,7 @@ func overviewSection(files, mdN int, bytesN int64) Section {
 	return newSection("overview",
 		rowKV("metric", "files", "value", fmt.Sprintf("%d", files)),
 		rowKV("metric", "md", "value", fmt.Sprintf("%d", mdN)),
-		rowKV("metric", "size", "value", humanBytes(bytesN)),
+		rowKV("metric", "size", "value", HumanBytes(bytesN)),
 	)
 }
 
@@ -275,8 +275,8 @@ func rowKV(pairs ...string) StatRow {
 	return out
 }
 
-// humanBytes formats a byte count as a human-readable string.
-func humanBytes(n int64) string {
+// HumanBytes formats a byte count as a human-readable string.
+func HumanBytes(n int64) string {
 	const unit = 1024
 	if n < unit {
 		return fmt.Sprintf("%d B", n)
