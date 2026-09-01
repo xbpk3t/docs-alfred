@@ -1,5 +1,7 @@
 package domrules
 
+import "fmt"
+
 // DomainSpec defines the default behavior for a data domain.
 type DomainSpec struct {
 	Domain          DataDomain
@@ -37,6 +39,20 @@ func SpecForDomain(domain DataDomain) (DomainSpec, bool) {
 	}
 
 	return DomainSpec{}, false
+}
+
+// DomainDefaultPath resolves a domain's data path to override when given,
+// otherwise falling back to the domain's DefaultPath.
+func DomainDefaultPath(domain DataDomain, override string) (string, error) {
+	spec, ok := SpecForDomain(domain)
+	if !ok {
+		return "", fmt.Errorf("unknown data domain %q", domain)
+	}
+	if override != "" {
+		return override, nil
+	}
+
+	return spec.DefaultPath, nil
 }
 
 // ResolveScope determines the actual RuleScope. Only diary uses the structured

@@ -251,6 +251,49 @@ func TestExtractUsing_NumericName(t *testing.T) {
 
 // TestExtractUsing_RealWorldShapes covers real goods.*.yml patterns:
 // block-scalar des, inline comments, mixed indent, multi-topic/type files.
+// TestExtractAll_FullTopics verifies goods dump keeps every item and full topic
+// content (topic-level record/qs plus per-item record/score/isUsing) grouped by
+// type, with no isUsing filter.
+func TestExtractAll_FullTopics(t *testing.T) {
+	dir := writeGoodsFiles(t, map[string]string{
+		"goods.耐用品.yml": `- topic: 收纳袋
+  record:
+    - date: 2024-12-06
+      des: 分开收纳
+  qs:
+    - 怎么收纳？
+  table:
+    - name: 抽绳束口收纳袋
+      isUsing: true
+      score: 5
+    - name: 天纵被子收纳袋
+      isUsing: false
+      record:
+        - date: 2024-12-04
+          des: 扔掉
+`,
+	})
+
+	out, err := ExtractAll(dir)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Equal(t, "耐用品", out[0].Type)
+	require.Len(t, out[0].Topics, 1)
+
+	tp := out[0].Topics[0]
+	require.Equal(t, "收纳袋", tp.Topic)
+	// topic 级 record/qs 完整保留
+	require.Len(t, tp.Record, 1)
+	require.Equal(t, "分开收纳", strDeref(tp.Record[0].Des))
+	require.Equal(t, []string{"怎么收纳？"}, tp.Qs)
+	// item 级完整保留：非 using 也在、record/score 不丢
+	require.Len(t, tp.Table, 2)
+	require.Equal(t, true, *tp.Table[0].IsUsing)
+	require.Equal(t, 5, *tp.Table[0].Score)
+	require.Equal(t, false, *tp.Table[1].IsUsing)
+	require.Equal(t, "扔掉", strDeref(tp.Table[1].Record[0].Des))
+}
+
 func TestExtractUsing_RealWorldShapes(t *testing.T) {
 	dir := writeGoodsFiles(t, map[string]string{
 		"goods.耐用品.yml": `- topic: 速干浴巾         # quick-dry-towel

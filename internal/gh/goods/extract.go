@@ -11,6 +11,55 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/parser"
 )
 
+// AllSchemaJson is the full goods dump view: every topic in the goods domain,
+// grouped by type (derived from file name). Unlike UsingSchemaJson, no row is
+// dropped, so audits can read per-item fields (record/score/des/isUsing) and
+// topic-level record/des/qs that the using projection omits.
+type AllSchemaJSON []AllType
+
+// AllType is the full content of one goods type (one or more goods.*.yml files).
+type AllType struct {
+	Type   string             `json:"type" yaml:"type" mapstructure:"type"`
+	Topics []modelgoods.Topic `json:"topics" yaml:"topics" mapstructure:"topics"`
+}
+
+// ExtractAll reads all goods YAML files under dir and returns every topic with
+// its full content, grouped by type → topic. Files are parsed as flattened
+// multi-document YAML (same shape as data/gh); the type is derived from the
+// file name. Rows are never dropped and no field is projected away.
+func ExtractAll(dir string) (AllSchemaJSON, error) {
+	files, err := fileutil.ListYAMLFiles(dir)
+	if err != nil {
+		return nil, fmt.Errorf("list goods files %s: %w", dir, err)
+	}
+
+	var out AllSchemaJSON
+	typeIndex := make(map[string]int)
+	for _, file := range files {
+		if !isGoodsFileName(file) {
+			continue
+		}
+
+		topics, typeName, err := parseGoodsFile(file)
+		if err != nil {
+			return nil, err
+		}
+		if len(topics) == 0 {
+			continue
+		}
+
+		ti, ok := typeIndex[typeName]
+		if !ok {
+			ti = len(out)
+			typeIndex[typeName] = ti
+			out = append(out, AllType{Type: typeName})
+		}
+		out[ti].Topics = append(out[ti].Topics, topics...)
+	}
+
+	return out, nil
+}
+
 // ExtractUsing reads all goods YAML files under dir and returns items with
 // isUsing: true, grouped by type → topic. Files are parsed as flattened
 // multi-document YAML (same shape as data/gh). Only rows that declare isUsing
@@ -52,23 +101,33 @@ func isGoodsFileName(file string) bool {
 		(strings.HasSuffix(lower, ".yml") || strings.HasSuffix(lower, ".yaml"))
 }
 
+// parseGoodsFile reads one goods YAML file and returns its flattened topics and
+// the type derived from the file name. Shared by ExtractAll and ExtractUsing so
+// the per-file parse pipeline lives in one place.
+func parseGoodsFile(file string) ([]modelgoods.Topic, string, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, "", fmt.Errorf("read goods file %s: %w", file, err)
+	}
+
+	topics, err := parser.NewParser[modelgoods.Topic](data).WithFileName(filepath.Base(file)).ParseFlatten()
+	if err != nil {
+		return nil, "", fmt.Errorf("parse goods file %s: %w", file, err)
+	}
+
+	return topics, modelgoods.TypeFromFilename(filepath.Base(file)), nil
+}
+
 // extractFileUsing parses one goods YAML file and merges its in-use items into out.
 // types/topics maps track index positions so items from separate files merge
 // into the same type/topic buckets.
 func extractFileUsing(file string, out *modelgoods.UsingSchemaJson, types, topics map[string]int) error {
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return fmt.Errorf("read goods file %s: %w", file, err)
-	}
-
 	// New layout: each file is a flat topic array and the whole file is one
 	// type derived from the file name.
-	topicsList, err := parser.NewParser[modelgoods.Topic](data).WithFileName(filepath.Base(file)).ParseFlatten()
+	topicsList, typeName, err := parseGoodsFile(file)
 	if err != nil {
-		return fmt.Errorf("parse goods file %s: %w", file, err)
+		return err
 	}
-
-	typeName := modelgoods.TypeFromFilename(filepath.Base(file))
 
 	ti, ok := types[typeName]
 	if !ok {

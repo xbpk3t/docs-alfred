@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	ghindex "github.com/xbpk3t/docs-alfred/internal/gh/index"
+	gh "github.com/xbpk3t/docs-alfred/internal/gh/model/gh"
 )
 
 const multiKindGhYAML = `- topic: futex
@@ -99,7 +100,7 @@ func TestRunDomainDumpDefaultExcludesTemp(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"kernel/k.yml": multiKindGhYAML})
 
 	out, err := captureStdout(t, func() error {
-		return runDomainDump(data.DomainGH, ghDir, "")
+		return runDomainDump(data.DomainGH, ghDir, "", topicSel{})
 	})
 	require.NoError(t, err)
 
@@ -112,12 +113,46 @@ func TestRunDomainDumpKindsCustom(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"kernel/k.yml": multiKindGhYAML})
 
 	out, err := captureStdout(t, func() error {
-		return runDomainDump(data.DomainGH, ghDir, "tools,temp")
+		return runDomainDump(data.DomainGH, ghDir, "tools,temp", topicSel{})
 	})
 	require.NoError(t, err)
 
 	topics := allTopics(decodeDump(t, out))
 	assert.ElementsMatch(t, []string{"bpf-tools", "draft-notes"}, topics)
+}
+
+// TestDumpTopic_WholeTopic verifies --topic emits the full topic content
+// (record/des/qs/table), narrowed by type, not just its name.
+func TestDumpTopic_WholeTopic(t *testing.T) {
+	ghDir := writeGhFiles(t, map[string]string{"zzz/ss.yml": `- topic: goods
+  kind: type
+  record:
+    - date: 2026-08-12
+      score: 2
+      des: 基准
+  qs:
+    - 怎么判断
+`})
+
+	out, err := captureStdout(t, func() error {
+		return runDomainDump(data.DomainGH, ghDir, "", topicSel{Type: "ss", Topic: "goods"})
+	})
+	require.NoError(t, err)
+
+	var got gh.Topic
+	require.NoError(t, json.Unmarshal([]byte(out), &got))
+	require.Equal(t, "goods", got.Topic)
+	require.Len(t, got.Record, 1)
+	require.Equal(t, 2, *got.Record[0].Score)
+	require.Equal(t, []string{"怎么判断"}, got.Qs)
+}
+
+func TestDumpTopic_NotFound(t *testing.T) {
+	ghDir := writeGhFiles(t, map[string]string{"zzz/ss.yml": "- topic: other\n  kind: type\n"})
+
+	err := runDomainDump(data.DomainGH, ghDir, "", topicSel{Topic: "missing"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestNewDumpCmdKindsFlag(t *testing.T) {
