@@ -61,6 +61,13 @@ func RunTagTypeStats(root string, typeLimit int) ([]Section, error) {
 // recordDirType seeds a (tag, type) bucket with 0 so the type still appears as
 // a column even when it holds no research files.
 func recordDirType(counts map[string]map[string]int, rel string) {
+	// Seed only a true second-level type dir (tag/type, exactly one slash).
+	// Deeper dirs (tag/type/topic/...) live inside a type, are walked after
+	// that type's files, and would re-seed the bucket to 0 — wiping research
+	// counts already accumulated from earlier-visited files.
+	if strings.Count(rel, "/") != 1 {
+		return
+	}
 	tag, typ, ok := tagTypeSegs(rel)
 	if !ok {
 		return
