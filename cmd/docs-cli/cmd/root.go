@@ -29,6 +29,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newImagesCmd())
 	rootCmd.AddCommand(newDotfilesCmd())
 	rootCmd.AddCommand(newWikiCmd())
+	rootCmd.AddCommand(newBlogCmd())
 	rootCmd.AddCommand(schema.SchemaCmd(rootCmd))
 
 	rootCmd.SetHelpCommand(&cobra.Command{Hidden: true})

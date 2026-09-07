@@ -308,35 +308,21 @@ body
 			wantIssues: 0,
 		},
 		{
-			name: "nested blog file must be type blog",
+			name: "nested blog dir skipped (blog moved out of wiki)",
 			rel:  "folder/type/topic/blog/2026-06-17-post.md",
 			content: `---
 title: B
 date: 2026-06-17
 source: src
 type: research
----
-body
-`,
-			wantIssues: 1,
-			checkMsgs:  []string{"type does not match file: folder/type/topic/blog/2026-06-17-post.md must have type=blog (got research)"},
-		},
-		{
-			name: "nested blog file with type blog passes",
-			rel:  "folder/type/topic/blog/2026-06-17-post.md",
-			content: `---
-title: B
-date: 2026-06-17
-source: src
-type: blog
 ---
 body
 `,
 			wantIssues: 0,
 		},
 		{
-			name: "deeply nested blog file checked",
-			rel:  "folder/type/topic/blog/twitter/scratch.md",
+			name: "deeply nested non-blog dir skipped",
+			rel:  "folder/type/topic/nested/twitter/scratch.md",
 			content: `---
 title: B
 date: 2026-06-17
@@ -345,8 +331,7 @@ type: research
 ---
 body
 `,
-			wantIssues: 1,
-			checkMsgs:  []string{"type does not match file"},
+			wantIssues: 0,
 		},
 		{
 			name: "summary.md at root not allowed",

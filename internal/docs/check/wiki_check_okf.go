@@ -1,6 +1,7 @@
 package workspaceops
 
 import (
+	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
@@ -77,23 +78,20 @@ func RunWikiCheckOKF(wikiRoot string) ([]checkutil.Issue, error) {
 			return nil
 		}
 
-		switch {
-		case depth == 2:
+		switch depth {
+		case 2:
 			// Stray .md file at type level — structural violation.
 			issues = append(issues, checkutil.Issue{
 				File:     rel,
 				Severity: checkutil.SeverityError,
 				Message:  "stray .md file at type level: " + rel,
 			})
-		case depth == 3:
+		case 3:
 			// Topic-level file — check OKF v0.1 frontmatter compliance.
-			issues = append(issues, checkFile(path, rel)...)
-		case depth > 3 && isBlogEntry(rel):
-			// A file under a blog/ dir is a blog entry, wherever it nests.
 			issues = append(issues, checkFile(path, rel)...)
 		default:
 			// Depth 0/1 (pipeline artifacts, category-level rogue) and 4+
-			// non-blog nested subdirs (transcript/research/qa etc.) — skip.
+			// nested subdirs (transcript/research/qa etc.) — skip.
 		}
 
 		return nil
@@ -104,6 +102,14 @@ func RunWikiCheckOKF(wikiRoot string) ([]checkutil.Issue, error) {
 
 // checkFile validates OKF frontmatter in a single wiki .md file.
 func checkFile(path, rel string) []checkutil.Issue {
+	return checkOKFFile(path, rel, expectedTypeFor)
+}
+
+// checkOKFFile validates OKF v0.1 frontmatter in a single .md file, enforcing
+// the name/location → type binding that expectedType derives ("" → no binding).
+// Shared by the wiki checker (summary→digest, log→log) and the blog checker
+// (every post → blog), so the OKF field rules live in one place.
+func checkOKFFile(path, rel string, expectedType func(string) string) []checkutil.Issue {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return []checkutil.Issue{{
@@ -114,7 +120,7 @@ func checkFile(path, rel string) []checkutil.Issue {
 	}
 
 	var fm wikiFrontmatter
-	body, err := frontmatter.Parse(strings.NewReader(string(data)), &fm)
+	body, err := frontmatter.Parse(bytes.NewReader(data), &fm)
 	if err != nil {
 		return []checkutil.Issue{{
 			File:     rel,
@@ -134,7 +140,13 @@ func checkFile(path, rel string) []checkutil.Issue {
 	issues = append(issues, checkRequiredFields(&fm, rel)...)
 	issues = append(issues, checkDateFormat(fm.Date, rel)...)
 	issues = append(issues, checkTypeValidity(fm.Type, rel)...)
-	issues = append(issues, checkTypeConsistency(&fm, rel)...)
+	if expected := expectedType(rel); expected != "" && strings.TrimSpace(fm.Type) != "" && fm.Type != expected {
+		issues = append(issues, checkutil.Issue{
+			File:     rel,
+			Severity: checkutil.SeverityError,
+			Message:  fmt.Sprintf("type does not match file: %s must have type=%s (got %s)", rel, expected, fm.Type),
+		})
+	}
 
 	return issues
 }
@@ -215,40 +227,16 @@ var topicArtifacts = map[string]topicArtifact{
 	wikitypes.LogFile:     {depth: 3},
 }
 
-// isBlogEntry reports whether rel roots under a <topic>/blog/ directory.
-func isBlogEntry(rel string) bool { return checkutil.HasSegmentDir(rel, wikitypes.BlogDir) }
-
 // expectedTypeFor returns the frontmatter type the file's name/location
 // requires, or "" when there is no binding:
 //
-//	summary→digest, log→log, files under a blog/ dir→blog
+//	summary→digest, log→log
 func expectedTypeFor(rel string) string {
 	base := filepath.Base(rel)
 	if _, ok := topicArtifacts[base]; ok {
 		return string(wikitypes.ArtifactTypeFor(base))
 	}
-	if isBlogEntry(rel) {
-		return string(wikitypes.TypeBlog)
-	}
 	return ""
-}
-
-// checkTypeConsistency enforces the name/location → type binding: summary.md
-// must be type=digest, log.md must be type=log, and every file under blog/
-// must be type=blog.
-func checkTypeConsistency(fm *wikiFrontmatter, rel string) []checkutil.Issue {
-	expected := expectedTypeFor(rel)
-	if expected == "" || strings.TrimSpace(fm.Type) == "" {
-		return nil
-	}
-	if fm.Type != expected {
-		return []checkutil.Issue{{
-			File:     rel,
-			Severity: checkutil.SeverityError,
-			Message:  fmt.Sprintf("type does not match file: %s must have type=%s (got %s)", rel, expected, fm.Type),
-		}}
-	}
-	return nil
 }
 
 // slashRel returns a relative path with forward slashes.

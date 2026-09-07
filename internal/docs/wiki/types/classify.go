@@ -27,10 +27,10 @@ const (
 // <topic>/<ArtifactDir>/ subtree are produced content, not OKF wiki entries.
 const ArtifactDir = "transcript"
 
-// BlogDir is the sub-directory (within a topic) that holds blog posts. Each is
-// a distinct concept from the TypeBlog entry type, even though they share the
-// "blog" spelling.
-const BlogDir = "blog"
+// BlogArtifactDir is the sub-directory of a blog tree that holds build
+// artifacts (public/redirects.json) rather than posts; files under it are
+// skipped by the blog checker.
+const BlogArtifactDir = "public"
 
 // Fixed-name per-topic artifact files and the OKF type their frontmatter MUST
 // carry. This single binding is shared by the write layer (which creates these

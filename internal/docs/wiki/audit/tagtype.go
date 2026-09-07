@@ -59,21 +59,20 @@ func RunTagTypeStats(root string, typeLimit int) ([]Section, error) {
 }
 
 // recordDirType seeds a (tag, type) bucket with 0 so the type still appears as
-// a column even when it holds no research files.
+// a column even when it holds no research files. Seeding is first-visit-wins:
+// a nested dir (tag/type/topic/...) maps to the same bucket as its parent type
+// dir and must not re-zero research counts already accumulated from files
+// walked earlier.
 func recordDirType(counts map[string]map[string]int, rel string) {
-	// Seed only a true second-level type dir (tag/type, exactly one slash).
-	// Deeper dirs (tag/type/topic/...) live inside a type, are walked after
-	// that type's files, and would re-seed the bucket to 0 — wiping research
-	// counts already accumulated from earlier-visited files.
-	if strings.Count(rel, "/") != 1 {
-		return
-	}
 	tag, typ, ok := tagTypeSegs(rel)
 	if !ok {
 		return
 	}
 	if counts[tag] == nil {
 		counts[tag] = map[string]int{}
+	}
+	if _, seen := counts[tag][typ]; seen {
+		return
 	}
 	counts[tag][typ] = 0
 }
