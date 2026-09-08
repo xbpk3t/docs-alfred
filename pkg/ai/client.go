@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	mafagent "github.com/microsoft/agent-framework-go/agent"
 	"github.com/microsoft/agent-framework-go/provider/openaiprovider"
 	"github.com/openai/openai-go/v3"
@@ -45,6 +46,14 @@ type clientKey struct {
 // defaultPool is the process-wide pool used by NewOpenAIClient.
 var defaultPool = &ClientPool{clients: map[clientKey]openai.Client{}}
 
+// opencodeSession is a process-wide stable ID sent as x-opencode-session.
+// The OpenCode Go provider ("Console Go") rejects requests without it
+// (400 MissingSessionID), it needs a session header for routing. One random
+// ID per process satisfies the router; per-call IDs would be equally valid.
+// ponytail: constant per process, not per conversation — per-conversation IDs
+// would only help prompt caching, which one-shot classify calls don't need.
+var opencodeSession = uuid.NewString()
+
 // Get returns the cached client for cfg, building and caching one on first use.
 func (p *ClientPool) Get(cfg *ClientConfig) openai.Client {
 	base := cfg.BaseURL
@@ -61,6 +70,7 @@ func (p *ClientPool) Get(cfg *ClientConfig) openai.Client {
 		option.WithAPIKey(key.apiKey),
 		option.WithBaseURL(base),
 		option.WithMaxRetries(0),
+		option.WithHeader("x-opencode-session", opencodeSession),
 	)
 	p.clients[key] = c
 	return c
