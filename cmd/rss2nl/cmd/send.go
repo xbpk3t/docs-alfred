@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	carbon "github.com/dromara/carbon/v2"
@@ -103,6 +104,8 @@ type NewsletterService struct {
 	feedPublishFreq map[string]string // feed URL → items/month freq string
 	trnsOut         string
 	failedFeeds     []*rss.FeedError
+
+	metaMu sync.Mutex // guards feedLastUpdated/feedPublishFreq (written from concurrent fetch goroutines)
 }
 
 // NewNewsletterService 创建新闻通讯服务.
@@ -294,13 +297,16 @@ func (s *NewsletterService) processSingleFeed(ctx context.Context, feedGroup rss
 
 	// Record last updated time and publish frequency for each feed
 	for _, r := range fetchMeta {
-		if r.Feed != nil && len(r.Feed.Items) > 0 {
-			latest := getFeedLatestTime(r.Feed)
-			if !latest.IsZero() {
-				s.feedLastUpdated[r.URL] = carboninit.In(latest).ToDateString()
-			}
-			s.feedPublishFreq[r.URL] = calcPublishFreq(r.Feed)
+		if r.Feed == nil || len(r.Feed.Items) == 0 {
+			continue
 		}
+		latest := getFeedLatestTime(r.Feed)
+		s.metaMu.Lock()
+		if !latest.IsZero() {
+			s.feedLastUpdated[r.URL] = carboninit.In(latest).ToDateString()
+		}
+		s.feedPublishFreq[r.URL] = calcPublishFreq(r.Feed)
+		s.metaMu.Unlock()
 	}
 
 	if len(allFeeds) == 0 {
