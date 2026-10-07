@@ -122,3 +122,34 @@ func TestEngineIdempotentOverSample(t *testing.T) {
 	b := NormalizeForDedup("https://example.com?b=2&a=1")
 	require.Equal(t, a, b, "same params in different order must share a key")
 }
+
+// TestStripTrackingKeepsContentParams verifies the tracking strip used on
+// ingest paths: host-scoped tracking params go, guarded content params stay,
+// and the URL shape is otherwise untouched (no canonicalization).
+func TestStripTrackingKeepsContentParams(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{
+			"https://www.bilibili.com/video/BV1BMdzB1EVX?spm_id_from=333.1387.favlist.content.click",
+			"https://www.bilibili.com/video/BV1BMdzB1EVX",
+		},
+		{
+			"https://example.com/post?utm_source=x&bvid=BV1xx411c7mD",
+			"https://example.com/post?bvid=BV1xx411c7mD",
+		},
+		{
+			// Fragment and param order survive: StripTracking is not a canonicalizer.
+			"https://example.com/post?q=golang#section",
+			"https://example.com/post?q=golang#section",
+		},
+		{
+			"https://example.com/post",
+			"https://example.com/post",
+		},
+	}
+	for _, tc := range cases {
+		require.Equal(t, tc.want, StripTracking(tc.in))
+	}
+}

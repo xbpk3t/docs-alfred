@@ -690,6 +690,25 @@ printf '# Zhihu Content\n\nSome content from zhihu.\n'
 	require.NotNil(t, result)
 }
 
+// The zhihu question route carries `--limit N` in the route table; the driver
+// must forward it verbatim to the opencli binary.
+func TestOpenCLIDriverZhihuArgsIncludeLimit(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	script := `#!/bin/sh
+printf '%s\n' "$@"
+`
+	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o755))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := driver.FetchContent(context.Background(), "https://www.zhihu.com/question/35129528", types.ContentText)
+	require.NotNil(t, result)
+	assert.Equal(t, "", result.Error)
+	assert.Contains(t, result.Body, "--limit")
+	assert.Contains(t, result.Body, "5")
+}
+
 // --- appendBilibiliTranscript with enough lines but short content ---
 
 func TestAppendBilibiliTranscriptShortLines(t *testing.T) {
@@ -816,4 +835,90 @@ esac
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000, MediaEnabled: true})
 	result := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", types.ContentVideo)
 	require.NotNil(t, result)
+}
+
+// --- openCLIDriver.runOpenCLI retry (browser-bridge refusals) ---
+
+// fakeOpenCLI installs a fake `opencli` on PATH that fails with errText for the
+// first failN calls, then prints a markdown body. It returns the path of the
+// file counting invocations.
+func fakeOpenCLI(t *testing.T, failN int, errText string) string {
+	t.Helper()
+
+	binDir := t.TempDir()
+	counter := filepath.Join(binDir, "count")
+	script := fmt.Sprintf(`#!/bin/sh
+n=0
+[ -f "$OPENCLI_TEST_COUNT" ] && n=$(cat "$OPENCLI_TEST_COUNT")
+n=$((n + 1))
+printf '%%s' "$n" > "$OPENCLI_TEST_COUNT"
+if [ "$n" -le %d ]; then
+  printf 'ok: false\nerror:\n  code: UNKNOWN\n  message: %s\n' >&2
+  exit 1
+fi
+printf '# Title\n\nbody content\n'
+`, failN, errText)
+
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "opencli"), []byte(script), 0o700))
+	t.Setenv("OPENCLI_TEST_COUNT", counter)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	return counter
+}
+
+func countInvocations(t *testing.T, counter string) string {
+	t.Helper()
+
+	data, err := os.ReadFile(counter)
+	require.NoError(t, err)
+
+	return strings.TrimSpace(string(data))
+}
+
+func zeroNavRetryBackoff(t *testing.T) {
+	t.Helper()
+
+	restore := navRetryBackoff
+	navRetryBackoff = 0
+	t.Cleanup(func() { navRetryBackoff = restore })
+}
+
+func TestRunOpenCLIRetriesNavigationRejected(t *testing.T) {
+	zeroNavRetryBackoff(t)
+	counter := fakeOpenCLI(t, 2, "Navigation rejected.")
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 1000})
+
+	result := driver.runOpenCLI(context.Background(), "web", []string{"read", "--url", "https://example.com"})
+
+	require.Empty(t, result.Error)
+	assert.Contains(t, result.Body, "body content")
+	assert.Equal(t, "3", countInvocations(t, counter), "two refusals then a success")
+}
+
+func TestRunOpenCLIGivesUpAfterNavigationRetries(t *testing.T) {
+	zeroNavRetryBackoff(t)
+	counter := fakeOpenCLI(t, 99, "Navigation rejected.")
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 1000})
+
+	result := driver.runOpenCLI(context.Background(), "web", []string{"read", "--url", "https://example.com"})
+
+	assert.Contains(t, result.Error, "Navigation rejected")
+	assert.Equal(t, "3", countInvocations(t, counter), "1 initial attempt + 2 retries")
+}
+
+func TestRunOpenCLIDoesNotRetryOtherFailures(t *testing.T) {
+	zeroNavRetryBackoff(t)
+	counter := fakeOpenCLI(t, 99, "EMPTY_RESULT")
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 1000})
+
+	result := driver.runOpenCLI(context.Background(), "web", []string{"read", "--url", "https://example.com"})
+
+	assert.Contains(t, result.Error, "EMPTY_RESULT")
+	assert.Equal(t, "1", countInvocations(t, counter), "non-transient failures are not retried")
+}
+
+func TestIsNavigationRejected(t *testing.T) {
+	assert.True(t, isNavigationRejected("opencli: exec opencli: exit 1: ok: false\n  message: Navigation rejected."))
+	assert.False(t, isNavigationRejected("opencli: exec opencli: exit 1: ok: false\n  message: EMPTY_RESULT"))
+	assert.False(t, isNavigationRejected(""))
 }

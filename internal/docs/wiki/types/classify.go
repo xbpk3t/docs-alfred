@@ -103,6 +103,17 @@ type StructuredSummary struct {
 	KeyQuotes        []string `json:"keyQuotes,omitempty"`
 	KeyPoints        []string `json:"keyPoints"                  validate:"required|min_len:1"`
 	ActionableAdvice []string `json:"actionableAdvice,omitempty"`
+	// Answers holds per-answer points for qna units (zhihu.com/question).
+	// article units never set it; rendering skips it when empty.
+	Answers []AnswerPoint `json:"answers,omitempty"`
+}
+
+// AnswerPoint is one answer inside a qna digest: author + vote count + the
+// distilled core point. From the prompt's per-answer extraction.
+type AnswerPoint struct {
+	Author string `json:"author,omitempty"`
+	Point  string `json:"point,omitempty"`
+	Votes  int    `json:"votes,omitempty"`
 }
 
 // EntryMetadata holds additional metadata fields from AI classification.

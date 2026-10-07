@@ -13,24 +13,27 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/fetch"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/prompt"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
-	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
+	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 )
 
 func TestRenderPrompt(t *testing.T) {
-	prompt, err := prompt.Render("classify-json.txt", &promptData{
+	promptData := &promptData{
 		Title:         "A title",
 		URL:           "https://example.com/post",
 		Content:       "A summary",
 		CandidateTree: "- path: ai/tool/demo | title: Demo | source: test",
-	})
-	require.NoError(t, err, "prompt.Render() error")
-
-	for _, want := range []string{"A title", "https://example.com/post", "A summary"} {
-		assert.Contains(t, prompt, want, "rendered prompt should contain %q", want)
 	}
-	assert.NotContains(t, prompt, "{{", "rendered prompt should not contain template marker")
+	for _, name := range []string{"classify-json.txt", "qna-summary.txt"} {
+		prompt, err := prompt.Render(name, promptData)
+		require.NoError(t, err, "prompt.Render() error")
+
+		for _, want := range []string{"A title", "https://example.com/post", "A summary"} {
+			assert.Contains(t, prompt, want, "rendered prompt should contain %q", want)
+		}
+		assert.NotContains(t, prompt, "{{", "rendered prompt should not contain template marker")
+	}
 }
 
 func TestRejectedClassifyResultPreservesDiagnostics(t *testing.T) {
@@ -329,7 +332,6 @@ func TestValidateClassifyResultInvalidMetadata(t *testing.T) {
 }
 
 // --- NewClassifier with zero defaults ---
-
 
 func TestNewClassifierZeroMinConfidence(t *testing.T) {
 	// MinConfidence <= 0 gets set to 0.45
@@ -758,4 +760,36 @@ func TestPromptRenderVerifySimple(t *testing.T) {
 	assert.Contains(t, out, "https://example.com")
 	assert.Contains(t, out, "assertions")
 	assert.Contains(t, out, "body")
+}
+
+// --- qna unit: prompt registry and answers rendering ---
+
+func TestPromptForUnit(t *testing.T) {
+	assert.Equal(t, "classify-json.txt", promptForUnit(types.UnitArticle))
+	assert.Equal(t, "qna-summary.txt", promptForUnit(types.UnitQnA))
+	assert.Equal(t, "classify-json.txt", promptForUnit(types.UnitType("unknown")))
+}
+
+func TestRenderStructuredSummaryAnswers(t *testing.T) {
+	s := &types.StructuredSummary{
+		Overview:  "overview",
+		KeyPoints: []string{"point"},
+		Answers: []types.AnswerPoint{
+			{Author: "A先生", Votes: 1024, Point: "观点一"},
+			{Author: "B", Point: "观点二"},
+		},
+	}
+	rendered := RenderStructuredSummary(s)
+	assert.Contains(t, rendered, "answers")
+	assert.Contains(t, rendered, "author: A先生; votes: 1024; point: 观点一")
+	assert.Contains(t, rendered, "author: B; votes: 0; point: 观点二")
+}
+
+func TestRenderStructuredSummaryAnswersEmptySkips(t *testing.T) {
+	s := &types.StructuredSummary{
+		Overview:  "overview",
+		KeyPoints: []string{"point"},
+	}
+	rendered := RenderStructuredSummary(s)
+	assert.NotContains(t, rendered, "answers")
 }

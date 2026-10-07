@@ -103,15 +103,14 @@ func TestCommandForURL_hackernews(t *testing.T) {
 func TestCommandForURL_zhihuQuestion(t *testing.T) {
 	adapter, args := CommandForURL("https://www.zhihu.com/question/35129528")
 	assert.Equal(t, "zhihu", adapter)
-	require.GreaterOrEqual(t, len(args), 2)
-	assert.Equal(t, "35129528", args[1])
+	assert.Equal(t, []string{"question", "35129528", "--format", "md", "--limit", "5"}, args)
 }
 
 func TestCommandForURL_zhihuAnswer(t *testing.T) {
 	adapter, args := CommandForURL("https://www.zhihu.com/question/35129528/answer/123456789")
 	assert.Equal(t, "zhihu", adapter)
-	require.GreaterOrEqual(t, len(args), 2)
-	assert.Equal(t, "35129528", args[1])
+	// Answer URLs route to the same question command; limit applies.
+	assert.Equal(t, []string{"question", "35129528", "--format", "md", "--limit", "5"}, args)
 }
 
 func TestCommandForURL_zhuanlan(t *testing.T) {
@@ -267,7 +266,16 @@ func TestIsNumeric(t *testing.T) {
 func TestCommandForURL_zhihuNoQuestionID(t *testing.T) {
 	adapter, args := CommandForURL("https://www.zhihu.com/hot")
 	assert.Equal(t, "zhihu", adapter)
-	// Without a valid question ID, args should fall through to generic format with full URL
+	// Without a valid question ID, args should fall through to generic format with full URL.
+	// The limit knob must NOT be injected into non-question zhihu URLs.
 	require.GreaterOrEqual(t, len(args), 2)
 	assert.Equal(t, "https://www.zhihu.com/hot", args[1])
+	assert.NotContains(t, args, "--limit")
+}
+
+// limit 0 must omit the flag entirely (the branch guards `r.limit > 0`).
+func TestArgsForRoute_zhihuLimitZero(t *testing.T) {
+	args := argsForRoute(route{adapter: AdapterZhihu, subcmd: "question", limit: 0},
+		"https://www.zhihu.com/question/123/answer/456")
+	assert.Equal(t, []string{"question", "123", "--format", "md"}, args)
 }

@@ -18,10 +18,9 @@ import (
 // case, or a trailing slash compare equal. Content-bearing query parameters
 // are preserved.
 //
-// It layers the ClearURLs engine (host-scoped tracking-param stripping,
-// redirection expansion, raw rewrites) on top of Normalize, which then handles
-// scheme/host case folding, default-port removal, dot-segment removal, fragment
-// removal, duplicate-slash removal, query sorting, and trailing-slash trimming.
+// It layers StripTracking on top of Normalize, which then handles scheme/host
+// case folding, default-port removal, dot-segment removal, fragment removal,
+// duplicate-slash removal, query sorting, and trailing-slash trimming.
 func NormalizeForDedup(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -30,7 +29,7 @@ func NormalizeForDedup(rawURL string) string {
 
 	// Apply the host-scoped ClearURLs engine first; it may rewrite the URL to
 	// a different (real) host, so re-parse before canonicalizing.
-	cleaned := cleanURL(rawURL)
+	cleaned := StripTracking(rawURL)
 	parsed, err := url.Parse(cleaned)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		parsed = u

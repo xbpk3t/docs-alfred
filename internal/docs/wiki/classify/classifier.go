@@ -586,14 +586,36 @@ func RenderStructuredSummary(s *types.StructuredSummary) string {
 				continue
 			}
 			fmt.Fprintf(&b, "#### %s\n", key)
-			for j := range fv.Len() {
-				fmt.Fprintf(&b, "- %s\n", fv.Index(j).String())
-			}
+			renderSliceElements(&b, key, fv, s)
 			b.WriteString("\n")
 		}
 	}
 
 	return strings.TrimSpace(b.String())
+}
+
+// renderSliceElements writes one line per slice element: qna answers as
+// "author: …; votes: N; point: …" (JSON-tagged fields joined), everything else
+// as a plain string per element.
+func renderSliceElements(b *strings.Builder, key string, fv reflect.Value, s *types.StructuredSummary) {
+	if key == "answers" {
+		for _, a := range s.Answers {
+			parts := make([]string, 0, 3)
+			if a.Author != "" {
+				parts = append(parts, "author: "+a.Author)
+			}
+			parts = append(parts, "votes: "+strconv.Itoa(a.Votes))
+			if a.Point != "" {
+				parts = append(parts, "point: "+a.Point)
+			}
+			fmt.Fprintf(b, "- %s\n", strings.Join(parts, "; "))
+		}
+
+		return
+	}
+	for j := range fv.Len() {
+		fmt.Fprintf(b, "- %s\n", fv.Index(j).String())
+	}
 }
 
 func jsonKey(f *reflect.StructField) string {
@@ -614,13 +636,25 @@ type classifyOnlyResult = aiClassification
 
 // classifyOnly runs the AI classification call with retry.
 // Retries on AI call failure, JSON parse failure, or validation failure.
+// promptForUnit maps a URL's processing unit to its prompt template.
+// The registry is declarative: add a unit → add a row here + a .txt in
+// prompt/prompts. Both templates share the same JSON output schema.
+func promptForUnit(unit types.UnitType) string {
+	switch unit {
+	case types.UnitQnA:
+		return "qna-summary.txt"
+	default:
+		return "classify-json.txt"
+	}
+}
+
 func (c *Classifier) classifyOnly(
 	ctx context.Context,
 	urlStr, title, contentType, content string,
 	candidates []ghindex.TopicCandidate,
 	maxLen int,
 ) (*aiClassification, error) {
-	promptText, err := prompt.Render("classify-json.txt", &promptData{
+	promptText, err := prompt.Render(promptForUnit(types.DetectUnit(urlStr)), &promptData{
 		CandidateTree: FormatTopicCandidatesGrouped(candidates),
 		Title:         textutil.TruncateUTF8(title, 200),
 		URL:           urlStr,
@@ -1033,7 +1067,6 @@ func ensureWithinWikiRoot(wikiRoot, relativePath string) error {
 
 // ErrClassificationUnavailable is returned when AI classification is not available.
 var ErrClassificationUnavailable = errors.New("classification unavailable")
-
 
 // FormatTopicCandidatesGrouped formats topic candidates grouped by tag for progressive classification.
 // Output is hierarchical:

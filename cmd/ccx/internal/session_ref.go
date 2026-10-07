@@ -216,6 +216,9 @@ func lookupCodexRolloutPath(statePath, sessionID string) (string, error) {
 }
 
 func requireFile(path string) error {
+	// #nosec G703 -- path is built from this user's own HOME/env/flag input and
+	// is only stat'ed (never written, never served to another process); the
+	// same justification as write.go's nosec on AtomicWriteFile.
 	info, err := os.Stat(filepath.Clean(path))
 	if err != nil {
 		return err
@@ -288,9 +291,9 @@ func discoverCodexStatePath() string {
 			continue
 		}
 		candidates = append(candidates, candidate{
-				info: info,
-				path: filepath.Join(base, e.Name()),
-			})
+			info: info,
+			path: filepath.Join(base, e.Name()),
+		})
 	}
 
 	if len(candidates) == 0 {

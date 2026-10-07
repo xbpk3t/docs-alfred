@@ -534,8 +534,14 @@ func appendInboxEntry(entries []InboxEntry, seen map[string]bool, raw string, li
 	return append(entries, InboxEntry{URL: cleaned, LineIndex: lineIndex})
 }
 
+// cleanInboxURL strips host-scoped tracking params (utm_*, spm_id_from, ...)
+// via the ClearURLs engine, then keeps only absolute HTTP(S) URLs. Fetch,
+// digest logs and the wiki `URL:` line all carry this cleaned form; content
+// params (?v=, ?bvid=, ...) are guarded and survive.
 func cleanInboxURL(raw string) string {
-	return urlutil.CleanHTTPURL(raw)
+	// StripTracking is total: a stripped "" can only come from raw == "",
+	// which CleanHTTPURL handles identically.
+	return urlutil.CleanHTTPURL(urlutil.StripTracking(raw))
 }
 
 // InboxEntry represents a URL found in inbox.md.
@@ -595,7 +601,9 @@ func flushInboxLine(line string, handled map[string]bool) string {
 	flushed := false
 	for _, v := range slices.Backward(refs) {
 		ref := v
-		if !handled[ref.Normalized] {
+		// Match on the tracking-insensitive key: inbox lines carry the raw URL
+		// while handled URLs come from parsed entries, which are stripped.
+		if !handled[urlutil.NormalizeForDedup(ref.URL)] {
 			unhandled++
 
 			continue

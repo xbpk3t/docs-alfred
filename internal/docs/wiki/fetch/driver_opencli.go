@@ -3,12 +3,14 @@ package fetch
 import (
 	"context"
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/avast/retry-go/v4"
 	yaml "github.com/goccy/go-yaml"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/opencli"
@@ -62,23 +64,39 @@ func (d *openCLIDriver) FetchContent(ctx context.Context, urlStr, contentType st
 func (d *openCLIDriver) fetchWithAdapter(ctx context.Context, rawURL string) *types.ContentFetchResult {
 	subcommand, extraArgs := opencli.CommandForURL(rawURL)
 
-	// weixin download saves article content to a local file (not stdout),
-	// so we need a special path: save to /tmp, parse the saved path from
-	// the YAML output, then read the file content as the fetch result.
-	if subcommand == "weixin" {
+	// Per-adapter driver behavior lives in this switch; the route table only
+	// maps domains to adapters. A new domain with special handling = one
+	// table row + one case here.
+	switch subcommand {
+	case opencli.AdapterWeixin:
+		// weixin download saves to a local file (not stdout): parse the
+		// saved path from YAML output, then read that file as the result.
 		return d.fetchWeixinArticle(ctx, rawURL)
-	}
+	case opencli.AdapterBilibili, opencli.AdapterYoutube:
+		// These adapters return metadata only; merge the transcript from a
+		// second run so the AI has actual content to summarize.
+		return d.dispatchMedia(ctx, subcommand, extraArgs, rawURL)
+	default:
+		result := d.runOpenCLI(ctx, subcommand, extraArgs)
+		result.SourceURL = rawURL
 
+		return result
+	}
+}
+
+// dispatchMedia runs the adapter command and merges a transcript run for
+// media adapters that expose only metadata (bilibili, youtube).
+func (d *openCLIDriver) dispatchMedia(ctx context.Context, subcommand string, extraArgs []string, rawURL string) *types.ContentFetchResult {
 	result := d.runOpenCLI(ctx, subcommand, extraArgs)
 	result.SourceURL = rawURL
 
-	// For bilibili, `bilibili video` only returns metadata (title, stats, description)
-	// without transcript. Run `bilibili subtitle <bvid>` separately and merge the
-	// transcript content into the body so the AI has actual content to summarize.
-	if subcommand == "bilibili" && result.Error == "" && result.Body != "" {
-		d.appendBilibiliTranscript(ctx, result, rawURL)
+	if result.Error != "" || result.Body == "" {
+		return result
 	}
-	if subcommand == "youtube" && result.Error == "" && result.Body != "" {
+	switch subcommand {
+	case opencli.AdapterBilibili:
+		d.appendBilibiliTranscript(ctx, result, rawURL)
+	case opencli.AdapterYoutube:
 		d.appendYoutubeTranscript(ctx, result, rawURL)
 	}
 
@@ -277,7 +295,52 @@ func firstSavedPath(entries []weixinDownloadEntry) string {
 	return ""
 }
 
+// navRetryAttempts is the number of retries after a browser-bridge refusal.
+const navRetryAttempts = 2
+
+// navRetryBackoff is the base delay between navigation retries; tests shrink it.
+var navRetryBackoff = 2 * time.Second
+
+// runOpenCLI runs an opencli subcommand and retries transient browser-bridge
+// refusals. opencli drives a single shared browser tab, so a batch of
+// concurrent fetches makes Chrome reject some navigations ("Navigation
+// rejected." from the tabs API). Retrying keeps a collision from being
+// recorded as a permanent fetch failure for a perfectly good URL.
 func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extraArgs []string) *types.ContentFetchResult {
+	var last *types.ContentFetchResult
+	err := retry.Do(
+		func() error {
+			r := d.runOpenCLIOnce(ctx, subcommand, extraArgs)
+			last = r
+			if isNavigationRejected(r.Error) {
+				return fmt.Errorf("%s", r.Error)
+			}
+
+			return nil
+		},
+		retry.Attempts(navRetryAttempts+1),
+		retry.Delay(navRetryBackoff),
+		retry.DelayType(retry.BackOffDelay),
+		retry.Context(ctx),
+		retry.LastErrorOnly(true),
+	)
+	if err != nil {
+		slog.Warn("opencli navigation rejected, final retry", "subcommand", subcommand, "url", strings.Join(extraArgs, " "))
+		if last == nil {
+			last = &types.ContentFetchResult{Error: err.Error()}
+		}
+	}
+
+	return last
+}
+
+// isNavigationRejected reports whether opencli failed because the browser
+// refused to navigate the automation tab, which is transient.
+func isNavigationRejected(errText string) bool {
+	return strings.Contains(errText, "Navigation rejected")
+}
+
+func (d *openCLIDriver) runOpenCLIOnce(ctx context.Context, subcommand string, extraArgs []string) *types.ContentFetchResult {
 	args := append([]string{subcommand}, extraArgs...)
 	stdout, stderr, err := cmdutil.RunSeparate(ctx, "opencli", args...)
 	if err != nil {

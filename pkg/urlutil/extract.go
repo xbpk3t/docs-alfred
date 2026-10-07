@@ -273,7 +273,8 @@ func looksLikeDomainURL(candidate string) bool {
 	return strings.Contains(first, ".")
 }
 
-// NormalizeSet returns a set of cleaned, normalized HTTP(S) URLs.
+// NormalizeSet returns a set of cleaned, normalized HTTP(S) URLs. Keys ignore
+// tracking parameters, so a URL and its stripped form map to the same entry.
 func NormalizeSet(urls []string) map[string]bool {
 	set := make(map[string]bool, len(urls))
 	for _, raw := range urls {
@@ -281,7 +282,7 @@ func NormalizeSet(urls []string) map[string]bool {
 		if cleaned == "" {
 			continue
 		}
-		set[Normalize(cleaned)] = true
+		set[NormalizeForDedup(cleaned)] = true
 	}
 
 	return set

@@ -749,3 +749,32 @@ func TestExtractInboxLineURLRefsBareAndMarkdownOrder(t *testing.T) {
 	assert.Equal(t, "https://example.com/a", refs[0].URL)
 	assert.Equal(t, "https://example.com/b", refs[1].URL)
 }
+
+// --- inbox tracking-param stripping ---
+
+func TestParseInboxStripsTrackingParams(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.md")
+	require.NoError(t, os.WriteFile(path, []byte(`- [video](https://www.bilibili.com/video/BV1BMdzB1EVX?spm_id_from=333.1387.favlist.content.click)
+- https://example.com/post?utm_source=feed&bvid=BV1xx411c7mD
+`), 0o600))
+
+	entries, err := ParseInbox(path)
+
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	assert.Equal(t, "https://www.bilibili.com/video/BV1BMdzB1EVX", entries[0].URL)
+	assert.Equal(t, "https://example.com/post?bvid=BV1xx411c7mD", entries[1].URL)
+}
+
+func TestFlushInboxMatchesStrippedHandledURL(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.md")
+	require.NoError(t, os.WriteFile(path, []byte("- https://example.com/post?utm_source=feed\n"), 0o600))
+
+	// Handled URLs come from parsed entries, i.e. already stripped; the inbox
+	// line still carries the raw URL.
+	require.NoError(t, FlushInbox(path, map[int][]string{0: {"https://example.com/post"}}))
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Empty(t, string(data))
+}

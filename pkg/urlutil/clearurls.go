@@ -182,11 +182,16 @@ func anyMatch(res []*regexp.Regexp, s string) bool {
 	return false
 }
 
-// cleanURL applies the ClearURLs engine to a full URL: host-scoped matching,
-// redirection expansion (bounded), query-parameter stripping, and raw URL
-// rewrites. Guard content params are never stripped. Returns the (possibly
-// different-host) cleaned URL string.
-func cleanURL(rawURL string) string {
+// StripTracking removes host-scoped tracking parameters (utm_*, spm_id_from,
+// fbclid, ...) from rawURL using the embedded ClearURLs rules: host-scoped
+// matching, bounded redirection expansion, query-parameter stripping, and raw
+// URL rewrites. Guard content params (?v=, ?bvid=, ?q=, ...) and everything
+// else — path, fragment, param order — are left as-is, so the result is still
+// usable as a fetch or display URL.
+//
+// Unlike NormalizeForDedup it does no canonicalization: use this when the
+// cleaned URL is consumed, that one when it is only compared.
+func StripTracking(rawURL string) string {
 	cur := rawURL
 	for depth := 0; depth <= maxRedirectDepth; depth++ {
 		next := cleanOnce(cur)
@@ -201,8 +206,9 @@ func cleanURL(rawURL string) string {
 }
 
 // cleanOnce runs every provider once against cur. A redirection match returns
-// the rewritten target immediately (e.g. google /url → real host), and cleanURL
-// re-runs until reaching a fixed point or exhausting maxRedirectDepth.
+// the rewritten target immediately (e.g. google /url → real host), and
+// StripTracking re-runs until reaching a fixed point or exhausting
+// maxRedirectDepth.
 func cleanOnce(cur string) string {
 	parsed, err := url.Parse(cur)
 	if err != nil {
@@ -222,7 +228,7 @@ func cleanOnce(cur string) string {
 			if dec, derr := url.QueryUnescape(m); derr == nil {
 				m = dec
 			}
-			return m // cleanURL's loop will re-run this new URL
+			return m // StripTracking's loop will re-run this new URL
 		}
 		// Parameter stripping.
 		q := parsed.Query()
