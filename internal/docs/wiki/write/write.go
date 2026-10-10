@@ -38,6 +38,10 @@ type WriteOptions struct {
 	WikiRoot        string
 	BatchID         string
 	DryRun          bool
+	// IsAggr switches the digest output layout (wiki.isAggr): entries go to one
+	// <date>-summary.md at the wiki root, grouped by topic path, instead of
+	// per-topic summary.md files grouped by date.
+	IsAggr bool
 }
 
 var pathLocks = struct {
@@ -120,8 +124,24 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 		return outPath, err
 	}
 
-	topicDir := resolveTopicDir(item, opts)
-	summaryPath := filepath.Join(topicDir, types.SummaryFile)
+	today := carbon.Now().ToDateString()
+	batchID := opts.BatchID
+	if batchID == "" {
+		batchID = "wiki-" + today
+	}
+
+	// Aggregate mode (wiki.isAggr) collects the day's entries into one
+	// <date>-summary.md at the wiki root, grouped by topic path. The default
+	// per-topic mode writes <topic>/summary.md, grouped by date.
+	summaryPath := filepath.Join(resolveTopicDir(item, opts), types.SummaryFile)
+	sectionHeading := "## " + today
+	fmTitle := filepath.Base(item.TopicPath)
+	if opts.IsAggr {
+		summaryPath = filepath.Join(opts.WikiRoot, today+"-summary.md")
+		sectionHeading = "## " + item.TopicPath
+		fmTitle = batchID
+	}
+
 	if opts.DryRun {
 		slog.Info("[DRY RUN] Would write summary", "path", summaryPath)
 
@@ -130,18 +150,6 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 	unlock := lockPath(summaryPath)
 	defer unlock()
 
-	if err := fileutil.EnsureDir(topicDir); err != nil {
-		return "", fmt.Errorf("create topic dir: %w", err)
-	}
-
-	today := carbon.Now().ToDateString()
-	dateHeading := "## " + today
-
-	batchID := opts.BatchID
-	if batchID == "" {
-		batchID = "wiki-" + today
-	}
-
 	entry := buildEntry(item)
 	fm, existingBody := loadFrontmatter(summaryPath, item, today, batchID)
 
@@ -149,7 +157,7 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 	fm.Succeeded++
 	fm.BatchID = batchID
 	fm.Date = today
-	fm.Title = filepath.Base(item.TopicPath)
+	fm.Title = fmTitle
 	// A summary.md aggregates many entries, so its frontmatter type reflects its
 	// role (digest) — NOT the type of the individual item being digested. The
 	// per-entry type (research/blog/etc.) lives in the body entry metadata. Forcing
@@ -158,7 +166,7 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 	// sides can't drift.
 	fm.Type = string(types.ArtifactTypeFor(types.SummaryFile))
 
-	newBody := appendEntryBody(existingBody, dateHeading, entry)
+	newBody := appendEntryBody(existingBody, sectionHeading, entry)
 
 	content := renderContent(fm, newBody)
 
@@ -210,8 +218,13 @@ func buildEntry(item *types.ClassifyItem) string {
 		title = item.URL
 	}
 
-	// Build codeblock metadata section. URL is always the first field.
+	// Build codeblock metadata section. URL is always the first field; topic
+	// follows it so an entry stays self-locating when it is cut out of an
+	// aggregate <date>-summary.md.
 	metaBlock := fmt.Sprintf("URL: %s\n", item.URL)
+	if item.TopicPath != "" {
+		metaBlock += fmt.Sprintf("topic: %s\n", item.TopicPath)
+	}
 	if item.MetadataBlock != "" {
 		metaBlock += item.MetadataBlock
 	} else {
@@ -248,24 +261,47 @@ func loadFrontmatter(summaryPath string, item *types.ClassifyItem, today, batchI
 	return
 }
 
-func appendEntryBody(existingBody, dateHeading, entry string) string {
-	if strings.Contains(existingBody, dateHeading) {
-		return appendEntryToExistingDateSection(existingBody, dateHeading, entry)
+func appendEntryBody(existingBody, sectionHeading, entry string) string {
+	if merged, ok := appendEntryToExistingSection(existingBody, sectionHeading, entry); ok {
+		return merged
 	}
 	insertPos := strings.Index(existingBody, "\n## ")
 	if insertPos >= 0 {
-		return fmt.Sprintf("%s\n%s\n\n%s\n%s", existingBody[:insertPos], dateHeading, entry, existingBody[insertPos:])
+		return fmt.Sprintf("%s\n%s\n\n%s\n%s", existingBody[:insertPos], sectionHeading, entry, existingBody[insertPos:])
 	}
 
-	return fmt.Sprintf("%s%s\n\n%s\n", existingBody, dateHeading, entry)
+	return fmt.Sprintf("%s%s\n\n%s\n", existingBody, sectionHeading, entry)
 }
 
-func appendEntryToExistingDateSection(existingBody, dateHeading, entry string) string {
-	dateStart := strings.Index(existingBody, dateHeading)
-	if dateStart < 0 {
-		return existingBody
+// sectionBodyStart returns the offset just past the "## <heading>" line whose
+// text matches heading exactly, or -1 when no such section exists.
+//
+// The match must be line-exact, not a substring: topic paths nest (## AI/agent
+// is a prefix of ## AI/agent/agent-fwk), so a substring search would append
+// entries into the wrong section in aggregate mode.
+func sectionBodyStart(body, heading string) int {
+	if i := strings.Index(body, "\n"+heading+"\n"); i >= 0 {
+		return i + len(heading) + 2
 	}
-	sectionStart := dateStart + len(dateHeading)
+	if strings.HasPrefix(body, heading+"\n") {
+		return len(heading) + 1
+	}
+	// Heading as the final line without a trailing newline (emptied section).
+	if body == heading || strings.HasSuffix(body, "\n"+heading) {
+		return len(body)
+	}
+
+	return -1
+}
+
+// appendEntryToExistingSection inserts entry at the end of the section whose
+// "## <sectionHeading>" line exists in existingBody. ok is false when no such
+// section exists, in which case existingBody is returned unchanged.
+func appendEntryToExistingSection(existingBody, sectionHeading, entry string) (string, bool) {
+	sectionStart := sectionBodyStart(existingBody, sectionHeading)
+	if sectionStart < 0 {
+		return existingBody, false
+	}
 	nextHeadingRel := strings.Index(existingBody[sectionStart:], "\n## ")
 	insertPos := len(existingBody)
 	if nextHeadingRel >= 0 {
@@ -275,10 +311,10 @@ func appendEntryToExistingDateSection(existingBody, dateHeading, entry string) s
 	prefix := strings.TrimRight(existingBody[:insertPos], "\n")
 	suffix := existingBody[insertPos:]
 	if strings.TrimSpace(suffix) == "" {
-		return fmt.Sprintf("%s\n\n%s\n", prefix, entry)
+		return fmt.Sprintf("%s\n\n%s\n", prefix, entry), true
 	}
 
-	return fmt.Sprintf("%s\n\n%s\n%s", prefix, entry, suffix)
+	return fmt.Sprintf("%s\n\n%s\n%s", prefix, entry, suffix), true
 }
 
 func renderContent(fm *SummaryFrontmatter, body string) string {
@@ -428,8 +464,8 @@ func appendToDateSectionAndWrite(path, dateHeading, entry string) error {
 	}
 
 	var newContent string
-	if strings.Contains(existing.String(), dateHeading) {
-		newContent = appendEntryToExistingDateSection(existing.String(), dateHeading, entry)
+	if merged, ok := appendEntryToExistingSection(existing.String(), dateHeading, entry); ok {
+		newContent = merged
 	} else if existing.Len() > 0 {
 		newContent = fmt.Sprintf("%s\n%s\n\n%s\n", strings.TrimRight(existing.String(), "\n"), dateHeading, entry)
 	} else {

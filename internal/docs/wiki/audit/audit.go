@@ -29,6 +29,7 @@ var canonicalSectionHeadings = map[string]bool{
 // validCodeblockFields are the allowed fields in summary codeblocks.
 var validCodeblockFields = map[string]bool{
 	"URL":               true,
+	"topic":             true,
 	"Type":              true,
 	"tags":              true,
 	"quality":           true,

@@ -30,6 +30,9 @@ type dependencies struct {
 	// history holds previously digested URLs (from digest-success.jsonl).
 	// digest skips URLs found here; add skips them too unless --force re-digests.
 	history *digestHistory
+	// isAggr mirrors wiki.isAggr: digest entries land in one <date>-summary.md
+	// at the wiki root instead of per-topic summary.md files.
+	isAggr bool
 }
 
 type fetcher interface {
@@ -287,6 +290,7 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 	if deps.validTopicPaths == nil {
 		deps.validTopicPaths = wikiwrite.LoadValidTopicPaths(ResolveWikiRoot(cfg), cfg.Wiki.GHTopicsURL)
 	}
+	deps.isAggr = cfg.Wiki.IsAggr
 
 	return deps
 }

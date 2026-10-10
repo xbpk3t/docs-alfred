@@ -2,15 +2,16 @@ package write
 
 import (
 	"fmt"
-	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
+	carbon "github.com/dromara/carbon/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -174,6 +175,102 @@ func TestWriteSummarySelfHealsStaleNonDigestType(t *testing.T) {
 	assert.Contains(t, string(data), "old") // existing body preserved
 }
 
+// writeSummaryT writes one digest entry and returns the summary path.
+func writeSummaryT(t *testing.T, opts *WriteOptions, url, topic string) string {
+	t.Helper()
+
+	path, err := WriteSummary(&types.ClassifyItem{
+		URL:       url,
+		Title:     "entry " + topic,
+		TopicPath: topic,
+		Type:      types.TypeDeepDive,
+		Summary:   &types.StructuredSummary{Overview: "summary"},
+	}, opts)
+	require.NoError(t, err, "write %s", url)
+
+	return path
+}
+
+func TestWriteSummaryTopicModeKeepsDateHeading(t *testing.T) {
+	root := t.TempDir()
+	today := carbon.Now().ToDateString()
+
+	path := writeSummaryT(t, &WriteOptions{WikiRoot: root}, "https://example.com/a", "topic/path")
+	assert.Equal(t, filepath.Join(root, "topic", "path", "summary.md"), path)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "\n## "+today+"\n")
+	assert.Contains(t, string(data), "topic: topic/path\n")
+}
+
+// --- aggregate mode (wiki.isAggr) ---
+
+func TestWriteSummaryAggregateModeGroupsByTopic(t *testing.T) {
+	root := t.TempDir()
+	today := carbon.Now().ToDateString()
+	opts := &WriteOptions{WikiRoot: root, IsAggr: true}
+
+	writeSummaryT(t, opts, "https://example.com/a", "AI/agent")
+	writeSummaryT(t, opts, "https://example.com/b", "db/RDB")
+	writeSummaryT(t, opts, "https://example.com/c", "AI/agent")
+
+	path := filepath.Join(root, today+"-summary.md")
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	// One file for the whole day; no per-topic dirs are created.
+	_, err = os.Stat(filepath.Join(root, "AI"))
+	assert.True(t, os.IsNotExist(err))
+
+	parsed := parseSummaryFrontmatter(string(data))
+	require.NotNil(t, parsed)
+	assert.Equal(t, 3, parsed.fm.TotalURLs)
+	assert.Equal(t, 3, parsed.fm.Succeeded)
+	assert.Equal(t, "wiki-"+today, parsed.fm.Title)
+
+	// One section per topic; same-topic entries merge under it across runs.
+	body := string(data)
+	assert.Equal(t, 1, strings.Count(body, "\n## AI/agent\n"))
+	assert.Equal(t, 1, strings.Count(body, "\n## db/RDB\n"))
+	assert.Equal(t, 2, strings.Count(body, "topic: AI/agent\n"))
+	for _, u := range []string{"https://example.com/a", "https://example.com/b", "https://example.com/c"} {
+		assert.Equal(t, 1, strings.Count(body, u))
+	}
+}
+
+func TestWriteSummaryAggregateModeNestedTopicDoesNotCollide(t *testing.T) {
+	root := t.TempDir()
+	opts := &WriteOptions{WikiRoot: root, IsAggr: true}
+
+	writeSummaryT(t, opts, "https://example.com/parent", "AI/agent")
+	writeSummaryT(t, opts, "https://example.com/child", "AI/agent/agent-fwk")
+	writeSummaryT(t, opts, "https://example.com/parent2", "AI/agent")
+
+	data, err := os.ReadFile(filepath.Join(root, carbon.Now().ToDateString()+"-summary.md"))
+	require.NoError(t, err)
+
+	// Parent and child each own exactly one section; the parent's second entry
+	// must not land in the child's section (prefix collision).
+	body := string(data)
+	assert.Equal(t, 1, strings.Count(body, "\n## AI/agent\n"))
+	assert.Equal(t, 1, strings.Count(body, "\n## AI/agent/agent-fwk\n"))
+	assert.Equal(t, 2, strings.Count(body, "topic: AI/agent\n"))
+	assert.Equal(t, 1, strings.Count(body, "topic: AI/agent/agent-fwk\n"))
+
+	heading := "\n## AI/agent\n"
+	start := strings.Index(body, heading)
+	require.Greater(t, start, -1)
+	rest := body[start+len(heading):]
+	parentSection := rest
+	if end := strings.Index(rest, "\n## "); end >= 0 {
+		parentSection = rest[:end]
+	}
+	assert.Contains(t, parentSection, "https://example.com/parent")
+	assert.Contains(t, parentSection, "https://example.com/parent2")
+	assert.NotContains(t, parentSection, "https://example.com/child")
+}
+
 func TestParseInboxMarkdownLinksAndBareURLs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "inbox.md")
 	require.NoError(t, os.WriteFile(path, []byte(`- [tweet](https://t.co/abc)
@@ -333,28 +430,47 @@ func TestLoadFrontmatterNewFile(t *testing.T) {
 	assert.Empty(t, body)
 }
 
-// --- appendEntryToExistingDateSection ---
+// --- appendEntryToExistingSection ---
 
-func TestAppendEntryToExistingDateSectionMissingDate(t *testing.T) {
+func TestAppendEntryToExistingSectionMissingSection(t *testing.T) {
 	existing := "## 2026-06-19\n\n### Old Entry\n"
-	result := appendEntryToExistingDateSection(existing, "## 2026-06-20", "### New Entry")
-	// Date heading not found, returns existing unchanged
+	result, ok := appendEntryToExistingSection(existing, "## 2026-06-20", "### New Entry")
+	// Section heading not found, returns existing unchanged
+	assert.False(t, ok)
 	assert.Equal(t, existing, result)
 }
 
-func TestAppendEntryToExistingDateSectionWithNextHeading(t *testing.T) {
+func TestAppendEntryToExistingSectionWithNextHeading(t *testing.T) {
 	existing := "## 2026-06-20\n\n### Old Entry\n\n## 2026-06-19\n\nolder"
-	result := appendEntryToExistingDateSection(existing, "## 2026-06-20", "### New Entry")
+	result, ok := appendEntryToExistingSection(existing, "## 2026-06-20", "### New Entry")
+	require.True(t, ok)
 	assert.Contains(t, result, "### Old Entry")
 	assert.Contains(t, result, "### New Entry")
 	assert.Contains(t, result, "## 2026-06-19")
 }
 
-func TestAppendEntryToExistingDateSectionAtEnd(t *testing.T) {
+func TestAppendEntryToExistingSectionAtEnd(t *testing.T) {
 	existing := "## 2026-06-20\n\n### Old Entry\n"
-	result := appendEntryToExistingDateSection(existing, "## 2026-06-20", "### New Entry")
+	result, ok := appendEntryToExistingSection(existing, "## 2026-06-20", "### New Entry")
+	require.True(t, ok)
 	assert.Contains(t, result, "### Old Entry")
 	assert.Contains(t, result, "### New Entry")
+}
+
+func TestSectionBodyStartRequiresExactHeadingLine(t *testing.T) {
+	body := "## AI/agent/agent-fwk\n\n### Entry\n"
+	// Nested topic paths share prefixes: the parent heading must not match the
+	// child's section.
+	assert.Equal(t, -1, sectionBodyStart(body, "## AI/agent"))
+	assert.Greater(t, sectionBodyStart(body, "## AI/agent/agent-fwk"), 0)
+	assert.Greater(t, sectionBodyStart("## AI/agent\n\n### Entry\n", "## AI/agent"), 0)
+}
+
+func TestSectionBodyStartHeadingAtEndWithoutNewline(t *testing.T) {
+	// Hand-edited files may lack a trailing newline; the final heading line
+	// still identifies its (empty) section.
+	assert.Equal(t, len("## AI/agent"), sectionBodyStart("## AI/agent", "## AI/agent"))
+	assert.Equal(t, len("body\n## AI/agent"), sectionBodyStart("body\n## AI/agent", "## AI/agent"))
 }
 
 // --- appendToDateSectionAndWrite ---

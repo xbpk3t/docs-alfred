@@ -39,6 +39,7 @@ func newWriteOpts(deps *dependencies, wikiRoot string, dryRun bool) *wikiwrite.W
 		WikiRoot:        wikiRoot,
 		DryRun:          dryRun,
 		ValidTopicPaths: deps.validTopicPaths,
+		IsAggr:          deps.isAggr,
 	}
 }
 
