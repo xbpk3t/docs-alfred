@@ -40,7 +40,14 @@ type fetcher interface {
 }
 
 type classifier interface {
-	ClassifyURL(ctx context.Context, urlStr, title, content string) *wikitypes.ClassifyResult
+	// ClassifyURLInTopic classifies one page. A zero pin lets the AI choose the
+	// topic; a set pin (child posts of a multi-item page) inherits the
+	// container's archive location instead.
+	ClassifyURLInTopic(
+		ctx context.Context,
+		urlStr, title, content string,
+		pin wikiclassify.TopicPin,
+	) *wikitypes.ClassifyResult
 }
 
 type writer interface {
@@ -94,8 +101,7 @@ func RunAddURLs(ctx context.Context, input AddInput) (*Result, error) {
 			result.URLResults = append(result.URLResults, URLResult{URL: urlStr, Status: StatusSkipped, Handled: true})
 			continue
 		}
-		itemResult := processAddURL(ctx, deps, wikiRoot, urlStr, input.DryRun)
-		result.URLResults = append(result.URLResults, itemResult)
+		result.URLResults = append(result.URLResults, processAddURL(ctx, deps, wikiRoot, urlStr, input.DryRun)...)
 	}
 
 	return result, nil

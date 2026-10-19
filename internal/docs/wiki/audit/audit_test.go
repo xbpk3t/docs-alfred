@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 )
 
@@ -278,6 +280,48 @@ func TestAuditCanonicalHeadingsNonHeadingLines(t *testing.T) {
 	lines := []string{"# Title", "Some text", "## Section"}
 	issues := auditCanonicalHeadings("test.md", lines)
 	assert.Empty(t, issues)
+}
+
+// The allowlist is derived from StructuredSummary, so it can never fall behind
+// a field rename or addition the way the hand-kept list did.
+func TestCanonicalSectionHeadingsDerivedFromStruct(t *testing.T) {
+	names := wikitypes.SummarySectionHeadings()
+	require.NotEmpty(t, names)
+	require.Len(t, canonicalSectionHeadings, len(names))
+	for _, n := range names {
+		assert.True(t, canonicalSectionHeadings[n], "heading %q missing from the allowlist", n)
+	}
+}
+
+// A fully-populated summary must render exactly the allowlisted heading set:
+// no field silently unrenderable, no heading outside the allowlist.
+func TestCanonicalSectionHeadingsMatchRenderedHeadings(t *testing.T) {
+	rendered := wikiclassify.RenderStructuredSummary(&wikitypes.StructuredSummary{
+		Overview:         "overview",
+		Detail:           "detail",
+		WorthNoting:      "worthNoting",
+		Verify:           "verify",
+		KeyQuotes:        []string{"quote"},
+		KeyPoints:        []string{"point"},
+		ActionableAdvice: []string{"advice"},
+	})
+
+	var got []string
+	for _, line := range strings.Split(rendered, "\n") {
+		if heading, ok := strings.CutPrefix(line, "#### "); ok {
+			got = append(got, heading)
+		}
+	}
+	assert.Equal(t, summarySectionHeadings, got)
+}
+
+// An answer is its own entry now, so the summary carries no per-answer list:
+// the old #### answers heading is a fossil and must be reported.
+func TestAuditCanonicalHeadingsRejectsRemovedAnswersField(t *testing.T) {
+	issues := auditCanonicalHeadings("test.md", []string{"#### answers"})
+	require.Len(t, issues, 1)
+	assert.Contains(t, issues[0].Message, "non-canonical section heading: #### answers")
+	assert.Contains(t, issues[0].Message, "overview", "the message lists the derived allowlist")
 }
 
 // --- auditCodeblockFields ---

@@ -6,15 +6,6 @@ import (
 	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 )
 
-type fetchFailureError struct {
-	failureType wikitypes.FailureKind
-	message     string
-}
-
-func (e *fetchFailureError) Error() string {
-	return e.message
-}
-
 // classifyRetryError is returned when a transient classifcation failure occurs
 // (AI timeout, rate limit, invalid response) that may succeed on retry.
 type classifyRetryError struct {

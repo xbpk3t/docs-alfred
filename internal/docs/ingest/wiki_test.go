@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
 	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
@@ -519,10 +520,31 @@ func (f *fakeFetcher) FetchContent(_ context.Context, urlStr, _ string) *wikityp
 
 type fakeClassifier struct {
 	results map[string]*wikitypes.ClassifyResult
+	// pins records the pin each URL was classified under, so tests can assert
+	// that child posts inherit their container's topic.
+	pins map[string]wikiclassify.TopicPin
 }
 
-func (f *fakeClassifier) ClassifyURL(_ context.Context, urlStr, _, _ string) *wikitypes.ClassifyResult {
+func (f *fakeClassifier) ClassifyURLInTopic(
+	_ context.Context,
+	urlStr, _, _ string,
+	pin wikiclassify.TopicPin,
+) *wikitypes.ClassifyResult {
+	if f.pins == nil {
+		f.pins = map[string]wikiclassify.TopicPin{}
+	}
+	f.pins[urlStr] = pin
+
 	return f.results[urlStr]
+}
+
+// onlyPending asserts a fetch produced exactly one pending entry and returns it.
+// Multi-item pages produce several; those tests index the slice directly.
+func onlyPending(t *testing.T, pending []pendingURLWrite) pendingURLWrite {
+	t.Helper()
+	require.Len(t, pending, 1)
+
+	return pending[0]
 }
 
 type fakeWriter struct {

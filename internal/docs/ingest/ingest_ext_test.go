@@ -325,11 +325,6 @@ func TestNewAIConfigEffortWired(t *testing.T) {
 
 // --- Error types ---
 
-func TestFetchFailureError(t *testing.T) {
-	e := &fetchFailureError{failureType: wikitypes.FailureFetch, message: "fetch failed"}
-	assert.Equal(t, "fetch failed", e.Error())
-}
-
 func TestClassifyRetryError(t *testing.T) {
 	e := &classifyRetryError{message: "AI timeout"}
 	assert.Equal(t, "AI timeout", e.Error())
@@ -651,11 +646,9 @@ func TestPrepareURLAttemptNilFetchResult(t *testing.T) {
 	deps.fetcher.results["https://example.com/a"] = nil
 	deps.fetcher.returnNil = true
 
-	_, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
-	require.Error(t, err)
-	var fetchErr *fetchFailureError
-	assert.ErrorAs(t, err, &fetchErr)
-	assert.Equal(t, wikitypes.FailureFetch, fetchErr.failureType)
+	pending := onlyPending(t, prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a"))
+	assert.Equal(t, pendingFetchFailure, pending.Kind)
+	assert.Equal(t, wikitypes.FailureFetch, pending.FailureType)
 }
 
 func TestPrepareURLAttemptEmptyFetchResultError(t *testing.T) {
@@ -665,10 +658,9 @@ func TestPrepareURLAttemptEmptyFetchResultError(t *testing.T) {
 		FailureKind: wikitypes.FailureFetch,
 	}
 
-	_, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
-	require.Error(t, err)
-	var fetchErr *fetchFailureError
-	assert.ErrorAs(t, err, &fetchErr)
+	pending := onlyPending(t, prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a"))
+	assert.Equal(t, pendingFetchFailure, pending.Kind)
+	assert.Equal(t, wikitypes.FailureFetch, pending.FailureType)
 }
 
 func TestPrepareURLAttemptVideoContentTooShort(t *testing.T) {
@@ -678,8 +670,7 @@ func TestPrepareURLAttemptVideoContentTooShort(t *testing.T) {
 		Body:  "short", // < 600 runes
 	}
 
-	result, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://www.bilibili.com/video/BV1abc/")
-	require.NoError(t, err)
+	result := onlyPending(t, prepareURLAttempt(context.Background(), deps.dependencies(), "https://www.bilibili.com/video/BV1abc/"))
 	assert.Equal(t, pendingExtractFailure, result.Kind)
 	assert.Contains(t, result.ExtraInfo, "too short")
 }
@@ -692,8 +683,7 @@ func TestPrepareURLAttemptNilClassifierEmptyContent(t *testing.T) {
 	}
 	// No classifier result set → returns nil
 
-	result, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
-	require.NoError(t, err)
+	result := onlyPending(t, prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a"))
 	assert.Equal(t, pendingExtractFailure, result.Kind)
 	assert.Contains(t, result.ExtraInfo, "empty content")
 }
@@ -706,8 +696,7 @@ func TestPrepareURLAttemptNilClassifierNonEmptyContent(t *testing.T) {
 	}
 	// No classifier result → AI unavailable pending (handled failure, not unhandled err)
 
-	pending, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
-	require.NoError(t, err)
+	pending := onlyPending(t, prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a"))
 	assert.Equal(t, pendingAIError, pending.Kind)
 	assert.Contains(t, pending.Error, "AI classify unavailable")
 }
@@ -724,8 +713,7 @@ func TestPrepareURLAttemptClassifyFailure(t *testing.T) {
 		RejectReason: "low quality",
 	}
 
-	result, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
-	require.NoError(t, err)
+	result := onlyPending(t, prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a"))
 	assert.Equal(t, pendingClassifyFailure, result.Kind)
 }
 
@@ -740,7 +728,7 @@ func TestPrepareInboxEntryFetchFailureError(t *testing.T) {
 
 	entry := wikiwrite.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
 	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second}
-	result := prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg)
+	result := onlyPending(t, prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg))
 	assert.Equal(t, pendingFetchFailure, result.Kind)
 	assert.Equal(t, wikitypes.FailureResolve, result.FailureType)
 }
@@ -755,7 +743,7 @@ func TestPrepareInboxEntryClassifyRetryError(t *testing.T) {
 
 	entry := wikiwrite.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
 	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second}
-	result := prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg)
+	result := onlyPending(t, prepareInboxEntry(context.Background(), deps.dependencies(), entry, inboxCfg))
 	assert.Equal(t, pendingAIError, result.Kind)
 	assert.Contains(t, result.Error, "AI classify unavailable")
 	assert.Nil(t, result.Item)
@@ -770,9 +758,10 @@ func TestProcessAddURLFetchFailure(t *testing.T) {
 		FailureKind: wikitypes.FailureResolve,
 	}
 
-	result := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
-	assert.Equal(t, StatusFailureWritten, result.Status)
-	assert.Equal(t, wikitypes.FailureResolve, result.FailureType)
+	results := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
+	require.Len(t, results, 1)
+	assert.Equal(t, StatusFailureWritten, results[0].Status)
+	assert.Equal(t, wikitypes.FailureResolve, results[0].FailureType)
 }
 
 func TestProcessAddURLUnhandledError(t *testing.T) {
@@ -780,9 +769,10 @@ func TestProcessAddURLUnhandledError(t *testing.T) {
 	deps.fetcher.results["https://example.com/a"] = nil
 	deps.fetcher.returnNil = true
 
-	result := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
-	// nil fetch result → fetchFailureError → writePendingURL → failure written
-	assert.Equal(t, StatusFailureWritten, result.Status)
+	results := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
+	// nil fetch result → fetch failure pending → writePendingURL → failure written
+	require.Len(t, results, 1)
+	assert.Equal(t, StatusFailureWritten, results[0].Status)
 }
 
 // --- writeClassifyFailure ---
@@ -1018,8 +1008,7 @@ func TestPrepareURLAttemptTitleFallback(t *testing.T) {
 		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 
-	result, err := prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a")
-	require.NoError(t, err)
+	result := onlyPending(t, prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a"))
 	assert.NotNil(t, result.Item)
 	assert.Equal(t, "https://example.com/a", result.Item.Title)
 }
@@ -1034,10 +1023,11 @@ func TestProcessAddURLUnhandledClassifyRetryError(t *testing.T) {
 	}
 	// No classifier result → AI failure JSONL (handled), not unhandled
 
-	result := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
-	assert.Equal(t, StatusFailureWritten, result.Status)
-	assert.True(t, result.Handled)
-	assert.Equal(t, wikitypes.FailureAI, result.FailureType)
+	results := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
+	require.Len(t, results, 1)
+	assert.Equal(t, StatusFailureWritten, results[0].Status)
+	assert.True(t, results[0].Handled)
+	assert.Equal(t, wikitypes.FailureAI, results[0].FailureType)
 }
 
 // --- RunDigest no entries handled (unhandled error) ---
@@ -1051,7 +1041,7 @@ func TestRunDigestNoEntriesHandled(t *testing.T) {
 
 	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies()})
 	require.NoError(t, err)
-	// fetchFailureError from nil result is retryable; after retries, it writes a failure entry (Handled=true)
+	// A nil fetch result writes a failure entry (Handled=true) and still flushes the line
 	assert.True(t, result.OK())
 	assert.Equal(t, 1, result.Flushed)
 }
@@ -1092,7 +1082,6 @@ func TestChangedMarkdownPathsFromGitGitError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "list changed wiki files")
 }
-
 
 // --- changedWikiGitRoots filepath.Abs error ---
 

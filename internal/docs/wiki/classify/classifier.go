@@ -93,6 +93,17 @@ func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string, opts ..
 // (text/media only; repo skips — reserved for vs pathway).
 // Returns nil if classification is unavailable (graceful degradation).
 func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content string) *types.ClassifyResult {
+	return c.ClassifyURLInTopic(ctx, urlStr, title, content, TopicPin{})
+}
+
+// ClassifyURLInTopic classifies a child post that inherits its container's
+// archive location instead of choosing one (a zhihu answer inside a question
+// thread). A zero pin keeps the normal choose-your-own-topic behavior.
+func (c *Classifier) ClassifyURLInTopic(
+	ctx context.Context,
+	urlStr, title, content string,
+	pin TopicPin,
+) *types.ClassifyResult {
 	contentType := fetch.DetectContentType(strings.ToLower(urlStr))
 	if strings.TrimSpace(content) == "" {
 		slog.Warn("Classification skipped for empty content", "url", urlStr)
@@ -110,14 +121,20 @@ func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content str
 		return nil
 	}
 
-	candidates, err := c.classificationCandidates(ctx, urlStr, title, content)
-	if err != nil {
-		slog.Warn("Classification candidates unavailable", "url", urlStr, "error", err)
-	}
-	if len(candidates) == 0 {
-		slog.Warn("Classification skipped with no topic candidates", "url", urlStr)
+	// A pinned post already knows where it goes, so it needs no catalog: an
+	// outage must not turn every child of a thread into a classify failure.
+	var candidates []ghindex.TopicCandidate
+	if !pin.IsSet() {
+		var err error
+		candidates, err = c.classificationCandidates(ctx, urlStr, title, content)
+		if err != nil {
+			slog.Warn("Classification candidates unavailable", "url", urlStr, "error", err)
+		}
+		if len(candidates) == 0 {
+			slog.Warn("Classification skipped with no topic candidates", "url", urlStr)
 
-		return nil
+			return nil
+		}
 	}
 
 	maxLen := c.MaxContentSize
@@ -125,19 +142,47 @@ func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content str
 		maxLen = 20000
 	}
 
-	// Single-step classification using classify-json.txt which returns both
+	unit := types.DetectUnit(urlStr)
+
+	// Single-step classification using the unit's prompt, which returns both
 	// classification (topic, type, metadata) and structured summary.
-	classified, err := c.classifyOnly(ctx, urlStr, title, contentType, content, candidates, maxLen)
+	classified, err := c.classifyOnly(ctx, urlStr, unit, title, contentType, content, candidates, maxLen, pin)
 	if err != nil {
 		slog.Warn("AI classification failed", "url", urlStr, "error", err)
 
 		return nil
 	}
+	pin.applyTo(classified)
 
 	// Light verify pass: never blocks digest success.
-	c.maybeVerify(ctx, classified, urlStr, title, contentType, content, maxLen)
+	c.maybeVerify(ctx, classified, unit, pin.IsSet(), urlStr, title, contentType, content, maxLen)
 
 	return c.buildClassifyResult(classified, contentType, candidates, urlStr)
+}
+
+// TopicPin pins the archive location of a child post to its container's
+// classification. The zero value means "choose your own topic".
+type TopicPin struct {
+	TopicPath string
+	WikiType  types.ClassifyType
+}
+
+// IsSet reports whether the pin carries a usable archive location.
+func (p TopicPin) IsSet() bool {
+	return strings.TrimSpace(p.TopicPath) != "" && p.WikiType != ""
+}
+
+// applyTo overwrites the AI's topic/type choice with the pin. The pinned path
+// was already resolved against the catalog by the container's own
+// classification, so re-deriving it from model output — which could paraphrase
+// it or invent "none" — would only lose information.
+func (p TopicPin) applyTo(classified *aiClassification) {
+	if !p.IsSet() || classified == nil {
+		return
+	}
+
+	classified.TopicPath = p.TopicPath
+	classified.WikiType = p.WikiType
 }
 
 // buildClassifyResult processes the AI classification result and builds a types.ClassifyResult.
@@ -569,7 +614,7 @@ func RenderStructuredSummary(s *types.StructuredSummary) string {
 	t := v.Type()
 	for i := range t.NumField() {
 		field := t.Field(i)
-		key := jsonKey(&field)
+		key := types.JSONFieldName(field.Tag)
 		if key == "" {
 			continue
 		}
@@ -586,7 +631,7 @@ func RenderStructuredSummary(s *types.StructuredSummary) string {
 				continue
 			}
 			fmt.Fprintf(&b, "#### %s\n", key)
-			renderSliceElements(&b, key, fv, s)
+			renderSliceElements(&b, fv)
 			b.WriteString("\n")
 		}
 	}
@@ -594,72 +639,53 @@ func RenderStructuredSummary(s *types.StructuredSummary) string {
 	return strings.TrimSpace(b.String())
 }
 
-// renderSliceElements writes one line per slice element: qna answers as
-// "author: …; votes: N; point: …" (JSON-tagged fields joined), everything else
-// as a plain string per element.
-func renderSliceElements(b *strings.Builder, key string, fv reflect.Value, s *types.StructuredSummary) {
-	if key == "answers" {
-		for _, a := range s.Answers {
-			parts := make([]string, 0, 3)
-			if a.Author != "" {
-				parts = append(parts, "author: "+a.Author)
-			}
-			parts = append(parts, "votes: "+strconv.Itoa(a.Votes))
-			if a.Point != "" {
-				parts = append(parts, "point: "+a.Point)
-			}
-			fmt.Fprintf(b, "- %s\n", strings.Join(parts, "; "))
-		}
-
-		return
-	}
+// renderSliceElements writes one line per slice element.
+func renderSliceElements(b *strings.Builder, fv reflect.Value) {
 	for j := range fv.Len() {
 		fmt.Fprintf(b, "- %s\n", fv.Index(j).String())
 	}
-}
-
-func jsonKey(f *reflect.StructField) string {
-	tag := f.Tag.Get("json")
-	if tag == "" || tag == "-" {
-		return ""
-	}
-	if comma := strings.IndexByte(tag, ','); comma >= 0 {
-		tag = tag[:comma]
-	}
-
-	return tag
 }
 
 // classifyOnlyResult holds the parsed JSON from the classify-only AI call.
 // It shares the same shape as aiClassification and can be used interchangeably.
 type classifyOnlyResult = aiClassification
 
-// classifyOnly runs the AI classification call with retry.
-// Retries on AI call failure, JSON parse failure, or validation failure.
 // promptForUnit maps a URL's processing unit to its prompt template.
 // The registry is declarative: add a unit → add a row here + a .txt in
-// prompt/prompts. Both templates share the same JSON output schema.
+// prompt/prompts. Every template shares the same JSON output schema; the
+// answer template pins topicPath/wikiType from promptData instead of choosing.
 func promptForUnit(unit types.UnitType) string {
 	switch unit {
 	case types.UnitQnA:
 		return "qna-summary.txt"
+	case types.UnitAnswer:
+		return "answer-summary.txt"
 	default:
 		return "classify-json.txt"
 	}
 }
 
+// classifyOnly runs the AI classification call with retry.
+// Retries on AI call failure, JSON parse failure, or validation failure.
 func (c *Classifier) classifyOnly(
 	ctx context.Context,
-	urlStr, title, contentType, content string,
+	urlStr string,
+	unit types.UnitType,
+	title, contentType, content string,
 	candidates []ghindex.TopicCandidate,
 	maxLen int,
+	pin TopicPin,
 ) (*aiClassification, error) {
-	promptText, err := prompt.Render(promptForUnit(types.DetectUnit(urlStr)), &promptData{
+	// A pinned post renders its template against the pin, so it has no
+	// candidates to render; the template's {{if .TopicPath}} skips the block.
+	promptText, err := prompt.Render(promptForUnit(unit), &promptData{
 		CandidateTree: FormatTopicCandidatesGrouped(candidates),
 		Title:         textutil.TruncateUTF8(title, 200),
 		URL:           urlStr,
 		ContentType:   contentType,
 		Content:       textutil.TruncateUTF8(content, maxLen),
+		TopicPath:     pin.TopicPath,
+		WikiType:      string(pin.WikiType),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("render classify prompt: %w", err)
@@ -706,9 +732,15 @@ type verifyPromptData struct {
 
 // shouldSkipVerify reports whether the light verify pass should be skipped.
 // Repo reviews are reserved for the vs pathway (zzz/repo/vs); digest verify
-// targets text/media technical content.
-func shouldSkipVerify(classified *aiClassification) bool {
+// targets text/media technical content. A pinned child post skips too: its
+// thread's synthesis entry already runs verify, and that is where
+// cross-answer contradictions surface. The predicate is child-ness, not the
+// URL's shape — a standalone answer permalink has no synthesis to defer to.
+func shouldSkipVerify(classified *aiClassification, pinned bool) bool {
 	if classified == nil {
+		return true
+	}
+	if pinned {
 		return true
 	}
 	if classified.Metadata != nil && classified.Metadata.ContentType == types.DisplayTypeRepo {
@@ -726,11 +758,13 @@ func shouldSkipVerify(classified *aiClassification) bool {
 func (c *Classifier) maybeVerify(
 	ctx context.Context,
 	classified *aiClassification,
+	unit types.UnitType,
+	pinned bool,
 	urlStr, title, contentType, content string,
 	maxLen int,
 ) {
-	if shouldSkipVerify(classified) {
-		slog.Debug("verify pass skipped", "url", urlStr, "reason", "repo_or_review")
+	if shouldSkipVerify(classified, pinned) {
+		slog.Debug("verify pass skipped", "url", urlStr, "reason", "repo_review_or_pinned_child", "unit", unit)
 		return
 	}
 	if classified.Summary == nil {

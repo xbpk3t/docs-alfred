@@ -1,5 +1,10 @@
 package types
 
+import (
+	"reflect"
+	"strings"
+)
+
 // RouteReason values explain why an item went to uncat.md (or related routes).
 const (
 	RouteReasonNeedsManualReview = "needs_manual_review"
@@ -66,15 +71,16 @@ var KnownTypes = []ClassifyType{
 
 // ClassifyItem holds the full classification result for a URL.
 type ClassifyItem struct {
+	Summary           *StructuredSummary `json:"summary"`
 	URL               string             `json:"url"`
 	Title             string             `json:"title"`
 	ContentType       string             `json:"contentType"`
 	TopicPath         string             `json:"topicPath"`
 	Type              ClassifyType       `json:"type"`
-	Summary           *StructuredSummary `json:"summary"`
 	MetadataBlock     string             `json:"metadataBlock,omitempty"`
 	SuggestedTopic    string             `json:"suggestedTopic,omitempty"`
 	RouteReason       string             `json:"routeReason,omitempty"`
+	TranscriptURL     string             `json:"transcriptUrl,omitempty"`
 	Confidence        float64            `json:"confidence,omitempty"`
 	NeedsManualReview bool               `json:"needsManualReview,omitempty"`
 }
@@ -94,7 +100,9 @@ type ClassifyResult struct {
 }
 
 // StructuredSummary holds the AI-generated summary broken into sections.
-// Field order controls #### heading order in RenderStructuredSummary.
+// Field order controls #### heading order in RenderStructuredSummary, and the
+// json tags are the single source of truth for the heading set the audit
+// checker allows (see audit.canonicalSectionHeadings).
 type StructuredSummary struct {
 	Overview         string   `json:"overview"                   validate:"required"`
 	Detail           string   `json:"detail,omitempty"`
@@ -103,17 +111,37 @@ type StructuredSummary struct {
 	KeyQuotes        []string `json:"keyQuotes,omitempty"`
 	KeyPoints        []string `json:"keyPoints"                  validate:"required|min_len:1"`
 	ActionableAdvice []string `json:"actionableAdvice,omitempty"`
-	// Answers holds per-answer points for qna units (zhihu.com/question).
-	// article units never set it; rendering skips it when empty.
-	Answers []AnswerPoint `json:"answers,omitempty"`
 }
 
-// AnswerPoint is one answer inside a qna digest: author + vote count + the
-// distilled core point. From the prompt's per-answer extraction.
-type AnswerPoint struct {
-	Author string `json:"author,omitempty"`
-	Point  string `json:"point,omitempty"`
-	Votes  int    `json:"votes,omitempty"`
+// SummarySectionHeadings returns the #### heading names a StructuredSummary can
+// render, in field order. The struct is the single source of truth for the
+// section set — the renderer writes one heading per non-empty json-tagged
+// field, so the audit checker derives its allowlist from here instead of
+// keeping a second list that drifts.
+func SummarySectionHeadings() []string {
+	t := reflect.TypeOf(StructuredSummary{})
+	out := make([]string, 0, t.NumField())
+	for i := range t.NumField() {
+		if name := JSONFieldName(t.Field(i).Tag); name != "" {
+			out = append(out, name)
+		}
+	}
+
+	return out
+}
+
+// JSONFieldName returns the name in a json struct tag, or "" when the tag is
+// absent or explicitly skipped ("-"). It is the one definition of "struct tag →
+// section name", shared by the summary renderer (which emits the heading) and
+// SummarySectionHeadings (which allowlists it), so the two cannot disagree
+// about what a field renders as.
+func JSONFieldName(tag reflect.StructTag) string {
+	name, _, _ := strings.Cut(tag.Get("json"), ",")
+	if name == "-" {
+		return ""
+	}
+
+	return name
 }
 
 // EntryMetadata holds additional metadata fields from AI classification.

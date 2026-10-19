@@ -692,21 +692,123 @@ printf '# Zhihu Content\n\nSome content from zhihu.\n'
 
 // The zhihu question route carries `--limit N` in the route table; the driver
 // must forward it verbatim to the opencli binary.
-func TestOpenCLIDriverZhihuArgsIncludeLimit(t *testing.T) {
+// zhihuFakeOpenCLI installs a fake opencli that records its argument vector to
+// <dir>/args and answers the two zhihu subcommands with YAML payloads.
+func zhihuFakeOpenCLI(t *testing.T) string {
+	t.Helper()
+
 	binDir := t.TempDir()
+	argsFile := filepath.Join(binDir, "args")
 	opencliPath := filepath.Join(binDir, "opencli")
 	script := `#!/bin/sh
-printf '%s\n' "$@"
+printf '%s\n' "$@" > ` + argsFile + `
+case "$2" in
+  question)
+    cat <<'EOF'
+- rank: 1
+  id: "123456789"
+  author: 恋猫
+  votes: 388
+  url: https://www.zhihu.com/question/35129528/answer/123456789
+  content: 代表片段一
+- rank: 2
+  id: "987654321"
+  author: 李明殊
+  votes: 11
+  url: https://www.zhihu.com/question/35129528/answer/987654321
+  content: 代表片段二
+EOF
+    ;;
+  answer-detail)
+    cat <<'EOF'
+- id: "123456789"
+  author: 恋猫
+  votes: 388
+  question_title: 如何看待 AI Agent 主动联系研究员
+  url: https://www.zhihu.com/question/35129528/answer/123456789
+  content: |-
+    这是这条回答的完整正文。
+    第二行。
+EOF
+    ;;
+esac
 `
 	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o755))
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
+	return argsFile
+}
+
+func readFakeArgs(t *testing.T, argsFile string) []string {
+	t.Helper()
+
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+
+	return strings.Split(strings.TrimSpace(string(raw)), "\n")
+}
+
+func TestOpenCLIDriverZhihuQuestionSplitsAnswers(t *testing.T) {
+	argsFile := zhihuFakeOpenCLI(t)
+
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
 	result := driver.FetchContent(context.Background(), "https://www.zhihu.com/question/35129528", types.ContentText)
+
 	require.NotNil(t, result)
-	assert.Equal(t, "", result.Error)
-	assert.Contains(t, result.Body, "--limit")
-	assert.Contains(t, result.Body, "5")
+	require.Equal(t, "", result.Error)
+	assert.Equal(t, []string{
+		"https://www.zhihu.com/question/35129528/answer/123456789",
+		"https://www.zhihu.com/question/35129528/answer/987654321",
+	}, result.ChildURLs)
+	// Body is the rendered synthesis input, not raw yaml.
+	assert.Contains(t, result.Body, "恋猫")
+	assert.Contains(t, result.Body, "388 赞同")
+	assert.NotContains(t, result.Body, "rank:")
+
+	args := readFakeArgs(t, argsFile)
+	assert.Contains(t, args, "question")
+	assert.Contains(t, args, "--limit")
+	assert.Contains(t, args, "3")
+	// yaml, not the route table's md table rendering.
+	assert.Contains(t, args, "yaml")
+}
+
+func TestOpenCLIDriverZhihuAnswerDetailUsesFullBody(t *testing.T) {
+	argsFile := zhihuFakeOpenCLI(t)
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := driver.FetchContent(
+		context.Background(),
+		"https://www.zhihu.com/question/35129528/answer/123456789",
+		types.ContentText,
+	)
+
+	require.NotNil(t, result)
+	require.Equal(t, "", result.Error)
+	assert.Empty(t, result.ChildURLs)
+	assert.Equal(t, "如何看待 AI Agent 主动联系研究员 - 恋猫", result.Title)
+	assert.Contains(t, result.Body, "这是这条回答的完整正文。")
+	assert.NotContains(t, result.Body, "author:")
+
+	args := readFakeArgs(t, argsFile)
+	assert.Contains(t, args, "answer-detail")
+	assert.Contains(t, args, "https://www.zhihu.com/question/35129528/answer/123456789")
+	assert.Contains(t, args, "yaml")
+}
+
+func TestOpenCLIDriverZhihuUnparseableYAMLIsExtractFailure(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	require.NoError(t, os.WriteFile(opencliPath, []byte("#!/bin/sh\nprintf 'not: [valid: yaml\\n'\n"), 0o755))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := driver.FetchContent(context.Background(), "https://www.zhihu.com/question/35129528", types.ContentText)
+
+	require.NotNil(t, result)
+	assert.Contains(t, result.Error, "parse zhihu question yaml")
+	assert.Equal(t, types.FailureExtract, result.FailureKind)
+	assert.Empty(t, result.Body, "raw yaml must never reach the summarizer")
 }
 
 // --- appendBilibiliTranscript with enough lines but short content ---

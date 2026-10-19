@@ -14,7 +14,10 @@ func TestDetectUnit(t *testing.T) {
 		want UnitType
 	}{
 		{"zhihu question", "https://www.zhihu.com/question/35129528", UnitQnA},
-		{"zhihu question with answer suffix", "https://www.zhihu.com/question/35129528/answer/123456789", UnitQnA},
+		// Answer permalinks also contain "/question/", so the answer check
+		// must win — otherwise a single answer is digested as a whole thread.
+		{"zhihu answer permalink", "https://www.zhihu.com/question/35129528/answer/123456789", UnitAnswer},
+		{"zhihu bare-domain answer permalink", "https://zhihu.com/question/35129528/answer/123", UnitAnswer},
 		{"zhihu bare domain question", "https://zhihu.com/question/35129528", UnitQnA},
 		{"zhuanlan article stays article", "https://zhuanlan.zhihu.com/p/123456789", UnitArticle},
 		{"zhihu non-question path", "https://www.zhihu.com/hot", UnitArticle},

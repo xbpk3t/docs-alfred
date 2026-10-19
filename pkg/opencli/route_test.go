@@ -103,14 +103,36 @@ func TestCommandForURL_hackernews(t *testing.T) {
 func TestCommandForURL_zhihuQuestion(t *testing.T) {
 	adapter, args := CommandForURL("https://www.zhihu.com/question/35129528")
 	assert.Equal(t, "zhihu", adapter)
-	assert.Equal(t, []string{"question", "35129528", "--format", "md", "--limit", "5"}, args)
+	// yaml, not md: the driver parses the answer rows structurally.
+	assert.Equal(t, []string{"question", "35129528", "--format", "yaml", "--limit", "3"}, args)
 }
 
 func TestCommandForURL_zhihuAnswer(t *testing.T) {
 	adapter, args := CommandForURL("https://www.zhihu.com/question/35129528/answer/123456789")
 	assert.Equal(t, "zhihu", adapter)
-	// Answer URLs route to the same question command; limit applies.
-	assert.Equal(t, []string{"question", "35129528", "--format", "md", "--limit", "5"}, args)
+	// Answer permalinks match both zhihu routes; only answer-detail returns the
+	// full answer body (question truncates every answer to a 200-char preview).
+	assert.Equal(t, []string{"answer-detail", "https://www.zhihu.com/question/35129528/answer/123456789", "--format", "yaml"}, args)
+}
+
+func TestSubcommandForURL(t *testing.T) {
+	assert.Equal(t, SubcmdZhihuQuestion, SubcommandForURL("https://www.zhihu.com/question/35129528"))
+	assert.Equal(t, SubcmdZhihuAnswerDetail, SubcommandForURL("https://www.zhihu.com/question/35129528/answer/1"))
+	assert.Equal(t, subcmdVideo, SubcommandForURL("https://www.youtube.com/watch?v=abc"))
+	assert.Equal(t, "", SubcommandForURL("https://example.com/whatever"))
+}
+
+// The unit detector and the fetch driver both branch on which zhihu page a URL
+// is; both must agree with the route table's dispatch.
+func TestZhihuSubcommandsMatchRouteTable(t *testing.T) {
+	for _, rawURL := range []string{
+		"https://www.zhihu.com/question/35129528",
+		"https://www.zhihu.com/question/35129528/answer/123456789",
+	} {
+		adapter, args := CommandForURL(rawURL)
+		require.Equal(t, AdapterZhihu, adapter)
+		assert.Equal(t, args[0], SubcommandForURL(rawURL), "SubcommandForURL must equal argsForRoute's first element")
+	}
 }
 
 func TestCommandForURL_zhuanlan(t *testing.T) {
@@ -263,19 +285,20 @@ func TestIsNumeric(t *testing.T) {
 	assert.False(t, isNumeric("12a"))
 }
 
+// A zhihu URL with no question id is not a question page: the zhihu subcommands
+// take a numeric id, so routing it to `zhihu question <url>` could only fail.
+// It falls through to the generic web read instead.
 func TestCommandForURL_zhihuNoQuestionID(t *testing.T) {
 	adapter, args := CommandForURL("https://www.zhihu.com/hot")
-	assert.Equal(t, "zhihu", adapter)
-	// Without a valid question ID, args should fall through to generic format with full URL.
-	// The limit knob must NOT be injected into non-question zhihu URLs.
-	require.GreaterOrEqual(t, len(args), 2)
-	assert.Equal(t, "https://www.zhihu.com/hot", args[1])
+	assert.Equal(t, AdapterWeb, adapter)
+	assert.Contains(t, args, "https://www.zhihu.com/hot")
 	assert.NotContains(t, args, "--limit")
+	assert.Empty(t, SubcommandForURL("https://www.zhihu.com/hot"))
 }
 
 // limit 0 must omit the flag entirely (the branch guards `r.limit > 0`).
 func TestArgsForRoute_zhihuLimitZero(t *testing.T) {
-	args := argsForRoute(route{adapter: AdapterZhihu, subcmd: "question", limit: 0},
+	args := argsForRoute(&route{adapter: AdapterZhihu, subcmd: SubcmdZhihuQuestion, limit: 0},
 		"https://www.zhihu.com/question/123/answer/456")
 	assert.Equal(t, []string{"question", "123", "--format", "md"}, args)
 }

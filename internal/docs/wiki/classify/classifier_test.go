@@ -205,30 +205,30 @@ func TestRejectedClassifyResultEmptyContentType(t *testing.T) {
 	assert.Equal(t, types.ContentVideo, result.ContentType)
 }
 
-// --- jsonKey ---
+// --- JSONFieldName ---
 
-func TestJsonKeyDashTag(t *testing.T) {
+func TestJSONFieldNameDashTag(t *testing.T) {
 	type S struct {
 		Field string `json:"-"`
 	}
 	field := reflect.TypeFor[S]().Field(0)
-	assert.Empty(t, jsonKey(&field))
+	assert.Empty(t, types.JSONFieldName(field.Tag))
 }
 
-func TestJsonKeyEmptyTag(t *testing.T) {
+func TestJSONFieldNameEmptyTag(t *testing.T) {
 	type S struct {
 		Field string
 	}
 	field := reflect.TypeFor[S]().Field(0)
-	assert.Empty(t, jsonKey(&field))
+	assert.Empty(t, types.JSONFieldName(field.Tag))
 }
 
-func TestJsonKeyWithOptions(t *testing.T) {
+func TestJSONFieldNameWithOptions(t *testing.T) {
 	type S struct {
 		Field string `json:"name,omitempty"`
 	}
 	field := reflect.TypeFor[S]().Field(0)
-	assert.Equal(t, "name", jsonKey(&field))
+	assert.Equal(t, "name", types.JSONFieldName(field.Tag))
 }
 
 // --- RenderStructuredSummary with detail and actionableAdvice ---
@@ -269,6 +269,146 @@ func TestClassifyURLVideoContentTooShort(t *testing.T) {
 	// Video content under 600 runes should be rejected
 	result := c.ClassifyURL(context.Background(), "https://www.youtube.com/watch?v=abc", "Title", "short")
 	assert.Nil(t, result)
+}
+
+// A child answer is digested with the answer template, under the topic it
+// inherits from its thread, and with no candidate tree to choose from.
+func TestClassifyURLInTopicPinsAnswerPrompt(t *testing.T) {
+	const pinned = "AI/agent/agent-security"
+	var captured string
+	calls := 0
+	c := NewClassifier(nil, t.TempDir(), "", WithChatFn(
+		func(_ context.Context, _ *ai.ClientConfig, messages []ai.Message) (string, error) {
+			calls++
+			captured = messages[0].Content
+
+			return `{"topicPath":"` + pinned + `","wikiType":"research","contentType":"text",
+				"summary":{"overview":"overview","keyPoints":["point"]},
+				"metadata":{"contentType":"text","tags":["a","b","c"]},
+				"confidence":0.9,"needsManualReview":false}`, nil
+		},
+	))
+	c.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
+		return []ghindex.TopicCandidate{{Path: pinned, Display: "agent-security"}}, nil
+	}
+
+	result := c.ClassifyURLInTopic(
+		context.Background(),
+		"https://www.zhihu.com/question/35129528/answer/123456789",
+		"问题标题 - 恋猫",
+		"这条回答的完整正文，足够长以通过内容检查。",
+		TopicPin{TopicPath: pinned, WikiType: types.TypeDeepDive},
+	)
+
+	require.NotNil(t, result)
+	assert.Equal(t, pinned, result.TopicPath)
+	assert.Contains(t, captured, "已知归档位置", "the answer template pins the archive location")
+	assert.Contains(t, captured, pinned)
+	assert.NotContains(t, captured, "候选 topic path", "a pinned post never sees the candidate tree")
+	assert.Equal(t, 1, calls, "child answers skip the verify pass")
+}
+
+// An answer permalink added on its own has no thread to inherit from, so the
+// answer template must fall back to choosing a topic from the candidate tree.
+func TestClassifyURLAnswerWithoutPinChoosesOwnTopic(t *testing.T) {
+	const chosen = "AI/LLM/claude-code"
+	var captured string
+	c := NewClassifier(nil, t.TempDir(), "", WithChatFn(
+		func(_ context.Context, _ *ai.ClientConfig, messages []ai.Message) (string, error) {
+			// The verify pass calls the same fake; keep only the classify prompt.
+			if captured == "" {
+				captured = messages[0].Content
+			}
+
+			return `{"topicPath":"` + chosen + `","wikiType":"research","contentType":"text",
+				"summary":{"overview":"overview","keyPoints":["point"]},
+				"metadata":{"contentType":"text","tags":["a","b","c"]},
+				"confidence":0.9,"needsManualReview":false}`, nil
+		},
+	))
+	c.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
+		return []ghindex.TopicCandidate{{Path: chosen, Display: "claude-code"}}, nil
+	}
+
+	result := c.ClassifyURL(
+		context.Background(),
+		"https://www.zhihu.com/question/35129528/answer/123456789",
+		"问题标题 - 恋猫",
+		"这条回答的完整正文，足够长以通过内容检查。",
+	)
+
+	require.NotNil(t, result)
+	assert.Equal(t, chosen, result.TopicPath)
+	assert.Contains(t, captured, "候选 topic path", "an unpinned answer picks its own topic")
+	assert.Contains(t, captured, chosen)
+	assert.NotContains(t, captured, "已知归档位置", "no pin block when there is nothing to inherit")
+	assert.NotContains(t, captured, `"topicPath": ""`, "the schema must not ask for an empty topic")
+}
+
+// The pin is enforced in code, not trusted to the model echoing it back: an
+// answer that paraphrases the path, or invents one, still lands where its
+// thread was filed.
+func TestClassifyURLInTopicOverridesModelTopic(t *testing.T) {
+	const pinned = "AI/agent/agent-security"
+	c := NewClassifier(nil, t.TempDir(), "", WithChatFn(
+		func(_ context.Context, _ *ai.ClientConfig, _ []ai.Message) (string, error) {
+			return `{"topicPath":"一些/被/改写的路径","wikiType":"inbox","contentType":"text",
+				"summary":{"overview":"overview","keyPoints":["point"]},
+				"metadata":{"contentType":"text","tags":["a","b","c"]},
+				"confidence":0.9,"needsManualReview":false}`, nil
+		},
+	))
+
+	result := c.ClassifyURLInTopic(
+		context.Background(),
+		"https://www.zhihu.com/question/35129528/answer/123456789",
+		"问题标题 - 恋猫",
+		"这条回答的完整正文，足够长以通过内容检查。",
+		TopicPin{TopicPath: pinned, WikiType: types.TypeDeepDive},
+	)
+
+	require.NotNil(t, result)
+	assert.Equal(t, pinned, result.TopicPath)
+	assert.Equal(t, types.TypeDeepDive, result.WikiType)
+}
+
+// A pinned post needs no catalog: an outage must not turn every child of a
+// thread into a classify failure.
+func TestClassifyURLInTopicSkipsCatalogWhenPinned(t *testing.T) {
+	const pinned = "AI/agent/agent-security"
+	catalogLoads := 0
+	c := NewClassifier(nil, t.TempDir(), "", WithChatFn(
+		func(_ context.Context, _ *ai.ClientConfig, _ []ai.Message) (string, error) {
+			return `{"topicPath":"` + pinned + `","wikiType":"research","contentType":"text",
+				"summary":{"overview":"overview","keyPoints":["point"]},
+				"metadata":{"contentType":"text","tags":["a","b","c"]},
+				"confidence":0.9,"needsManualReview":false}`, nil
+		},
+	))
+	c.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
+		catalogLoads++
+
+		return nil, errors.New("catalog down")
+	}
+
+	result := c.ClassifyURLInTopic(
+		context.Background(),
+		"https://www.zhihu.com/question/35129528/answer/123456789",
+		"问题标题 - 恋猫",
+		"这条回答的完整正文，足够长以通过内容检查。",
+		TopicPin{TopicPath: pinned, WikiType: types.TypeDeepDive},
+	)
+
+	require.NotNil(t, result, "a pinned post must classify even with no catalog")
+	assert.Equal(t, pinned, result.TopicPath)
+	assert.Zero(t, catalogLoads)
+}
+
+func TestTopicPinIsSet(t *testing.T) {
+	assert.False(t, TopicPin{}.IsSet())
+	assert.False(t, TopicPin{TopicPath: "a/b/c"}.IsSet(), "a pin needs a wikiType too")
+	assert.False(t, TopicPin{WikiType: types.TypeDeepDive}.IsSet())
+	assert.True(t, TopicPin{TopicPath: "a/b/c", WikiType: types.TypeDeepDive}.IsSet())
 }
 
 func TestClassifyURLNoCandidates(t *testing.T) {
@@ -655,21 +795,32 @@ func TestShouldSkipVerifyRepoMetadata(t *testing.T) {
 	assert.True(t, shouldSkipVerify(&aiClassification{
 		WikiType: types.TypeDeepDive,
 		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeRepo},
-	}))
+	}, false))
 }
 
 func TestShouldSkipVerifyReviewWikiType(t *testing.T) {
 	assert.True(t, shouldSkipVerify(&aiClassification{
 		WikiType: types.TypeRepoEval,
 		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeText},
-	}))
+	}, false))
 }
 
 func TestShouldSkipVerifyTextResearch(t *testing.T) {
 	assert.False(t, shouldSkipVerify(&aiClassification{
 		WikiType: types.TypeDeepDive,
 		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeText},
-	}))
+	}, false))
+}
+
+// A pinned child post never runs verify: its thread's synthesis entry already
+// does, and that is where cross-answer contradictions surface. The predicate is
+// child-ness, not the URL's shape — a standalone answer permalink has no
+// synthesis to defer to, so it still verifies.
+func TestShouldSkipVerifyPinnedChild(t *testing.T) {
+	assert.True(t, shouldSkipVerify(&aiClassification{
+		WikiType: types.TypeDeepDive,
+		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeText},
+	}, true))
 }
 
 func TestParseVerifyOutputPlainMarkdown(t *testing.T) {
@@ -705,7 +856,8 @@ func TestMaybeVerifyFillsSummary(t *testing.T) {
 			KeyPoints: []string{"uses 8443"},
 		},
 	}
-	c.maybeVerify(context.Background(), classified, "https://example.com/a", "Title", types.ContentText, "default port is 8443", 2000)
+	c.maybeVerify(context.Background(), classified, types.UnitArticle, false,
+		"https://example.com/a", "Title", types.ContentText, "default port is 8443", 2000)
 	require.NotNil(t, classified.Summary)
 	assert.Contains(t, classified.Summary.Verify, "assertions")
 	assert.Equal(t, 1, calls)
@@ -725,7 +877,29 @@ func TestMaybeVerifySkipsRepo(t *testing.T) {
 			KeyPoints: []string{"stars"},
 		},
 	}
-	c.maybeVerify(context.Background(), classified, "https://github.com/o/r", "repo", types.ContentText, "readme", 2000)
+	c.maybeVerify(context.Background(), classified, types.UnitArticle, false,
+		"https://github.com/o/r", "repo", types.ContentText, "readme", 2000)
+	assert.Empty(t, classified.Summary.Verify)
+	assert.Equal(t, 0, calls)
+}
+
+// A child answer must never burn a verify call: the thread synthesis covers it.
+func TestMaybeVerifySkipsPinnedChild(t *testing.T) {
+	calls := 0
+	c := NewClassifier(nil, t.TempDir(), "", WithChatFn(func(ctx context.Context, cfg *ai.ClientConfig, messages []ai.Message) (string, error) {
+		calls++
+		return "should not run", nil
+	}))
+	classified := &aiClassification{
+		WikiType: types.TypeDeepDive,
+		Metadata: &types.EntryMetadata{ContentType: types.DisplayTypeText},
+		Summary: &types.StructuredSummary{
+			Overview:  "answer",
+			KeyPoints: []string{"point"},
+		},
+	}
+	c.maybeVerify(context.Background(), classified, types.UnitArticle, true,
+		"https://www.zhihu.com/question/1/answer/2", "q - a", types.ContentText, "body", 2000)
 	assert.Empty(t, classified.Summary.Verify)
 	assert.Equal(t, 0, calls)
 }
@@ -742,7 +916,8 @@ func TestMaybeVerifyFailureDoesNotBreak(t *testing.T) {
 			KeyPoints: []string{"point"},
 		},
 	}
-	c.maybeVerify(context.Background(), classified, "https://example.com/b", "Title", types.ContentText, "body", 2000)
+	c.maybeVerify(context.Background(), classified, types.UnitArticle, false,
+		"https://example.com/b", "Title", types.ContentText, "body", 2000)
 	assert.Empty(t, classified.Summary.Verify)
 	assert.Equal(t, "overview", classified.Summary.Overview)
 }
@@ -762,34 +937,37 @@ func TestPromptRenderVerifySimple(t *testing.T) {
 	assert.Contains(t, out, "body")
 }
 
-// --- qna unit: prompt registry and answers rendering ---
+// --- unit prompt registry ---
 
 func TestPromptForUnit(t *testing.T) {
 	assert.Equal(t, "classify-json.txt", promptForUnit(types.UnitArticle))
 	assert.Equal(t, "qna-summary.txt", promptForUnit(types.UnitQnA))
+	assert.Equal(t, "answer-summary.txt", promptForUnit(types.UnitAnswer))
 	assert.Equal(t, "classify-json.txt", promptForUnit(types.UnitType("unknown")))
 }
 
-func TestRenderStructuredSummaryAnswers(t *testing.T) {
-	s := &types.StructuredSummary{
+// An answer is its own entry now, so the summary carries no per-answer list —
+// every rendered heading is a StructuredSummary json tag (see
+// types.SummarySectionHeadings, which the audit allowlist derives from).
+func TestRenderStructuredSummaryHeadingsAreStructFields(t *testing.T) {
+	rendered := RenderStructuredSummary(&types.StructuredSummary{
 		Overview:  "overview",
 		KeyPoints: []string{"point"},
-		Answers: []types.AnswerPoint{
-			{Author: "A先生", Votes: 1024, Point: "观点一"},
-			{Author: "B", Point: "观点二"},
-		},
-	}
-	rendered := RenderStructuredSummary(s)
-	assert.Contains(t, rendered, "answers")
-	assert.Contains(t, rendered, "author: A先生; votes: 1024; point: 观点一")
-	assert.Contains(t, rendered, "author: B; votes: 0; point: 观点二")
-}
-
-func TestRenderStructuredSummaryAnswersEmptySkips(t *testing.T) {
-	s := &types.StructuredSummary{
-		Overview:  "overview",
-		KeyPoints: []string{"point"},
-	}
-	rendered := RenderStructuredSummary(s)
+	})
 	assert.NotContains(t, rendered, "answers")
+
+	allowed := map[string]bool{}
+	for _, h := range types.SummarySectionHeadings() {
+		allowed[h] = true
+	}
+	var headings int
+	for _, line := range strings.Split(rendered, "\n") {
+		heading, ok := strings.CutPrefix(line, "#### ")
+		if !ok {
+			continue
+		}
+		headings++
+		assert.True(t, allowed[heading], "rendered heading %q is not a StructuredSummary field", heading)
+	}
+	require.Positive(t, headings, "expected the renderer to emit headings")
 }

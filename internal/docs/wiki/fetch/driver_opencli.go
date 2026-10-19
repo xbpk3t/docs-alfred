@@ -76,11 +76,135 @@ func (d *openCLIDriver) fetchWithAdapter(ctx context.Context, rawURL string) *ty
 		// These adapters return metadata only; merge the transcript from a
 		// second run so the AI has actual content to summarize.
 		return d.dispatchMedia(ctx, subcommand, extraArgs, rawURL)
+	case opencli.AdapterZhihu:
+		return d.fetchZhihu(ctx, extraArgs, rawURL)
 	default:
 		result := d.runOpenCLI(ctx, subcommand, extraArgs)
 		result.SourceURL = rawURL
 
 		return result
+	}
+}
+
+// zhihuAnswerRow is one row of `opencli zhihu question -f yaml` (columns:
+// rank, id, author, votes, url, content). Content is the adapter's 200-char
+// preview — the full body comes from a separate answer-detail fetch.
+type zhihuAnswerRow struct {
+	Author  string `yaml:"author"`
+	URL     string `yaml:"url"`
+	Content string `yaml:"content"`
+	Rank    int    `yaml:"rank"`
+	Votes   int    `yaml:"votes"`
+}
+
+// zhihuAnswer is the single row of `opencli zhihu answer-detail -f yaml`.
+type zhihuAnswer struct {
+	ID            string `yaml:"id"`
+	Author        string `yaml:"author"`
+	QuestionTitle string `yaml:"question_title"`
+	URL           string `yaml:"url"`
+	Content       string `yaml:"content"`
+	Votes         int    `yaml:"votes"`
+}
+
+// fetchZhihu runs a zhihu adapter (routed with -f yaml) and parses it
+// structurally. The default md rendering is a markdown table, which mangles a
+// long answer body into one cell; question additionally truncates every answer
+// to a 200-char preview. Neither shape can carry a full answer.
+func (d *openCLIDriver) fetchZhihu(
+	ctx context.Context,
+	extraArgs []string,
+	rawURL string,
+) *types.ContentFetchResult {
+	result := d.runOpenCLIRaw(ctx, opencli.AdapterZhihu, extraArgs)
+	result.SourceURL = rawURL
+	if result.Error != "" {
+		return result
+	}
+
+	switch opencli.SubcommandForURL(rawURL) {
+	case opencli.SubcmdZhihuQuestion:
+		return d.parseZhihuQuestion(result)
+	case opencli.SubcmdZhihuAnswerDetail:
+		return d.parseZhihuAnswer(result)
+	default:
+		return result
+	}
+}
+
+// parseZhihuQuestion turns the answer list into the thread's synthesis body
+// plus the per-answer permalinks the pipeline digests as their own entries.
+func (d *openCLIDriver) parseZhihuQuestion(result *types.ContentFetchResult) *types.ContentFetchResult {
+	var rows []zhihuAnswerRow
+	if err := yaml.Unmarshal([]byte(result.Body), &rows); err != nil {
+		return extractFailure(result.SourceURL, fmt.Sprintf("parse zhihu question yaml: %v", err))
+	}
+	if len(rows) == 0 {
+		return extractFailure(result.SourceURL, "zhihu question has no answers")
+	}
+
+	result.ChildURLs = make([]string, 0, len(rows))
+	for _, r := range rows {
+		if u := strings.TrimSpace(r.URL); u != "" {
+			result.ChildURLs = append(result.ChildURLs, u)
+		}
+	}
+	result.Body = renderZhihuAnswers(rows)
+
+	slog.Info("zhihu question parsed", "answers", len(rows), "children", len(result.ChildURLs))
+
+	return result
+}
+
+// parseZhihuAnswer extracts the full answer body and the entry title.
+func (d *openCLIDriver) parseZhihuAnswer(result *types.ContentFetchResult) *types.ContentFetchResult {
+	var rows []zhihuAnswer
+	if err := yaml.Unmarshal([]byte(result.Body), &rows); err != nil {
+		return extractFailure(result.SourceURL, fmt.Sprintf("parse zhihu answer yaml: %v", err))
+	}
+	if len(rows) == 0 {
+		return extractFailure(result.SourceURL, "zhihu answer-detail returned no rows")
+	}
+
+	answer := &rows[0]
+	body := textutil.TruncateUTF8(strings.TrimSpace(answer.Content), d.maxBodySize*3)
+	if body == "" {
+		return extractFailure(result.SourceURL, "zhihu answer has empty content")
+	}
+
+	result.Title = zhihuAnswerTitle(answer)
+	result.Body = body
+
+	slog.Info("zhihu answer parsed", "id", answer.ID, "votes", answer.Votes, "bodyLen", len(body))
+
+	return result
+}
+
+// renderZhihuAnswers renders the answer previews as markdown for the
+// thread-level synthesis prompt.
+func renderZhihuAnswers(rows []zhihuAnswerRow) string {
+	var b strings.Builder
+	for _, r := range rows {
+		fmt.Fprintf(&b, "## 回答 %d（%s，%d 赞同）\n\n%s\n\n", r.Rank, r.Author, r.Votes, strings.TrimSpace(r.Content))
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+// zhihuAnswerTitle builds the entry title "{question} - {author}", which is
+// what keeps an answer locatable once it is cut out of its thread.
+func zhihuAnswerTitle(a *zhihuAnswer) string {
+	question := strings.TrimSpace(a.QuestionTitle)
+	author := strings.TrimSpace(a.Author)
+	switch {
+	case question != "" && author != "":
+		return question + " - " + author
+	case question != "":
+		return question
+	case author != "":
+		return author
+	default:
+		return strings.TrimSpace(a.URL)
 	}
 }
 
@@ -301,12 +425,31 @@ const navRetryAttempts = 2
 // navRetryBackoff is the base delay between navigation retries; tests shrink it.
 var navRetryBackoff = 2 * time.Second
 
-// runOpenCLI runs an opencli subcommand and retries transient browser-bridge
-// refusals. opencli drives a single shared browser tab, so a batch of
-// concurrent fetches makes Chrome reject some navigations ("Navigation
-// rejected." from the tabs API). Retrying keeps a collision from being
-// recorded as a permanent fetch failure for a perfectly good URL.
+// runOpenCLI runs an opencli subcommand, retries transient browser-bridge
+// refusals, and caps the markdown body at the body-size limit.
 func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extraArgs []string) *types.ContentFetchResult {
+	result := d.runOpenCLIRaw(ctx, subcommand, extraArgs)
+	if result.Error != "" {
+		return result
+	}
+
+	result.Body = textutil.TruncateUTF8(result.Body, d.maxBodySize*3)
+	result.Title = md.ExtractTitleFromMarkdown(result.Body)
+
+	slog.Info("opencli fetch succeeded", "subcommand", subcommand, "bodyLen", len(result.Body))
+
+	return result
+}
+
+// runOpenCLIRaw runs an opencli subcommand and returns stdout untruncated.
+// Structured callers use it because a truncated document is not parseable;
+// they cap each field after parsing instead.
+//
+// opencli drives a single shared browser tab, so a batch of concurrent fetches
+// makes Chrome reject some navigations ("Navigation rejected." from the tabs
+// API). Retrying keeps a collision from being recorded as a permanent fetch
+// failure for a perfectly good URL.
+func (d *openCLIDriver) runOpenCLIRaw(ctx context.Context, subcommand string, extraArgs []string) *types.ContentFetchResult {
 	var last *types.ContentFetchResult
 	err := retry.Do(
 		func() error {
@@ -340,7 +483,11 @@ func isNavigationRejected(errText string) bool {
 	return strings.Contains(errText, "Navigation rejected")
 }
 
-func (d *openCLIDriver) runOpenCLIOnce(ctx context.Context, subcommand string, extraArgs []string) *types.ContentFetchResult {
+func (d *openCLIDriver) runOpenCLIOnce(
+	ctx context.Context,
+	subcommand string,
+	extraArgs []string,
+) *types.ContentFetchResult {
 	args := append([]string{subcommand}, extraArgs...)
 	stdout, stderr, err := cmdutil.RunSeparate(ctx, "opencli", args...)
 	if err != nil {
@@ -354,12 +501,7 @@ func (d *openCLIDriver) runOpenCLIOnce(ctx context.Context, subcommand string, e
 		return &types.ContentFetchResult{Error: "opencli returned empty content"}
 	}
 
-	body = textutil.TruncateUTF8(body, d.maxBodySize*3)
-	title := md.ExtractTitleFromMarkdown(body)
-
-	slog.Info("opencli fetch succeeded", "subcommand", subcommand, "bodyLen", len(body))
-
-	return &types.ContentFetchResult{Title: title, Body: body}
+	return &types.ContentFetchResult{Body: body}
 }
 
 // appendYoutubeTranscript runs `opencli youtube transcript <url>` and merges

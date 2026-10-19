@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/fetch"
+	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,16 +16,23 @@ import (
 
 const codeFence = "```"
 
-// canonicalSectionHeadings are the only allowed #### section headings in summary entries.
-var canonicalSectionHeadings = map[string]bool{
-	"overview":         true,
-	"detail":           true,
-	"keyPoints":        true,
-	"keyQuotes":        true,
-	"actionableAdvice": true,
-	"worthNoting":      true,
-	"verify":           true,
-}
+// summarySectionHeadings are the #### section headings a summary entry may
+// carry, in render order, derived from wikitypes.StructuredSummary — the
+// renderer emits exactly one heading per non-empty json-tagged field of that
+// struct, so deriving keeps the allowlist from drifting behind a field rename
+// or removal. (A removed field still flags its old headings, which is the
+// point: those are fossils written by an older version.)
+var summarySectionHeadings = wikitypes.SummarySectionHeadings()
+
+// canonicalSectionHeadings is summarySectionHeadings as a lookup set.
+var canonicalSectionHeadings = func() map[string]bool {
+	out := make(map[string]bool, len(summarySectionHeadings))
+	for _, n := range summarySectionHeadings {
+		out[n] = true
+	}
+
+	return out
+}()
 
 // validCodeblockFields are the allowed fields in summary codeblocks.
 var validCodeblockFields = map[string]bool{
@@ -245,7 +253,7 @@ func auditCanonicalHeadings(file string, lines []string) []checkutil.Issue {
 				File:     file,
 				Line:     i + 1,
 				Severity: checkutil.SeverityWarn,
-				Message:  fmt.Sprintf("non-canonical section heading: #### %s (allowed: overview, detail, keyPoints, keyQuotes, actionableAdvice, worthNoting, verify)", heading),
+				Message:  fmt.Sprintf("non-canonical section heading: #### %s (allowed: %s)", heading, strings.Join(summarySectionHeadings, ", ")),
 			})
 		}
 	}
