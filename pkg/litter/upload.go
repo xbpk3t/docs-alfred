@@ -16,6 +16,7 @@ const (
 	driverLitterbox = "litterbox"
 	driverZerox0    = "zerox0"
 	driverFileio    = "fileio"
+	driverR2        = "r2"
 )
 
 // Result holds the outcome of a successful upload.
@@ -38,6 +39,7 @@ var (
 	_ Uploader = (*Litterbox)(nil)
 	_ Uploader = (*ZeroX0)(nil)
 	_ Uploader = (*FileIO)(nil)
+	_ Uploader = (*R2)(nil)
 )
 
 // Fallback tries each uploader in order, returning the first success.
@@ -94,4 +96,35 @@ func NewFromNames(names []string, expiration string) *Fallback {
 	}
 
 	return NewFallback(uploaders...)
+}
+
+// NewFromConfig builds a Fallback from driver names. Unlike NewFromNames it can
+// construct the r2 driver, which requires explicit configuration. An empty
+// name list is a configuration error — callers must opt into a driver.
+func NewFromConfig(names []string, expiration string, r2cfg *R2Config) (*Fallback, error) {
+	var uploaders []Uploader
+	for _, name := range names {
+		switch name {
+		case driverLitterbox:
+			uploaders = append(uploaders, NewLitterbox(expiration))
+		case driverZerox0:
+			uploaders = append(uploaders, &ZeroX0{})
+		case driverFileio:
+			uploaders = append(uploaders, &FileIO{})
+		case driverR2:
+			if r2cfg == nil {
+				return nil, errors.New("litter: r2 driver selected but no r2 config provided")
+			}
+			r2, err := NewR2(r2cfg)
+			if err != nil {
+				return nil, err
+			}
+			uploaders = append(uploaders, r2)
+		}
+	}
+	if len(uploaders) == 0 {
+		return nil, fmt.Errorf("litter: no upload drivers configured (names: %v)", names)
+	}
+
+	return NewFallback(uploaders...), nil
 }
