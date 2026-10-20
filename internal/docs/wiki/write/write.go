@@ -231,6 +231,9 @@ func buildEntry(item *types.ClassifyItem) string {
 		// Fallback: just Type if no structured metadata.
 		metaBlock += fmt.Sprintf("Type: %s", item.Type)
 	}
+	if item.TranscriptURL != "" {
+		metaBlock += fmt.Sprintf("\nTranscript: %s", item.TranscriptURL)
+	}
 
 	return fmt.Sprintf("### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, classify.RenderStructuredSummary(item.Summary))
 }
@@ -449,6 +452,9 @@ func buildReviewEntryMeta(item *types.ClassifyItem) (title, metaBlock string) {
 	}
 	if item.SuggestedTopic != "" {
 		fmt.Fprintf(&b, "suggestedTopic: %s\n", item.SuggestedTopic)
+	}
+	if item.TranscriptURL != "" {
+		fmt.Fprintf(&b, "Transcript: %s\n", item.TranscriptURL)
 	}
 	metaBlock = strings.TrimRight(b.String(), "\n")
 

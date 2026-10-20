@@ -555,8 +555,9 @@ type fakeWriter struct {
 }
 
 type writeCall struct {
-	url    string
-	dryRun bool
+	url           string
+	transcriptURL string
+	dryRun        bool
 }
 
 type failureCall struct {
@@ -570,7 +571,7 @@ func (f *fakeWriter) WriteSummary(item *wikitypes.ClassifyItem, opts *wikiwrite.
 	if f.summaryErr != nil {
 		return "", f.summaryErr
 	}
-	f.summaries = append(f.summaries, writeCall{url: item.URL, dryRun: opts.DryRun})
+	f.summaries = append(f.summaries, writeCall{url: item.URL, transcriptURL: item.TranscriptURL, dryRun: opts.DryRun})
 
 	return filepath.Join(opts.WikiRoot, item.TopicPath, "summary.md"), nil
 }

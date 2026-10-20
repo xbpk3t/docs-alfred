@@ -3,11 +3,13 @@ package wikiingest
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/creasty/defaults"
 
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
+	"github.com/xbpk3t/docs-alfred/pkg/litter"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
@@ -26,9 +28,68 @@ const (
 
 // Config holds wiki workflow configuration shared by wiki subcommands.
 type Config struct {
-	AI      AIConfig      `yaml:"ai"`
-	Compact CompactConfig `yaml:"compact"`
-	Wiki    WikiConfig    `yaml:"wiki"`
+	R2        R2Config        `yaml:"r2,omitempty"`
+	AI        AIConfig        `yaml:"ai"`
+	Compact   CompactConfig   `yaml:"compact"`
+	Wiki      WikiConfig      `yaml:"wiki"`
+	TrnsIndex TrnsIndexConfig `yaml:"trnsIndex,omitempty"`
+}
+
+// R2Config points the digest at the R2 bucket holding media artifacts:
+// transcript pages uploaded by rss2nl and transcripts uploaded by the digest.
+// Credentials come from the environment (R2_AK/R2_SK with CF_R2_AK/CF_R2_SK
+// fallback), never from YAML.
+type R2Config struct {
+	Bucket        string `yaml:"bucket,omitempty"`
+	PublicBaseURL string `yaml:"publicBaseUrl,omitempty"`
+	Endpoint      string `yaml:"endpoint,omitempty"`
+	KeyPrefix     string `yaml:"keyPrefix,omitempty"`
+}
+
+// TrnsIndexConfig enables consuming the rss2nl trns index (index-<date>.json
+// objects in the R2 bucket) so podcast episodes with uploaded transcripts are
+// digested without manual inbox edits.
+type TrnsIndexConfig struct {
+	Enabled bool `yaml:"enabled,omitempty"`
+}
+
+// LitterConfig resolves the R2 uploader config, reading credentials from the
+// environment. Returns nil when no bucket is configured (R2 features off).
+func (c R2Config) LitterConfig() (*litter.R2Config, error) {
+	if c.Bucket == "" {
+		return nil, nil
+	}
+	if c.PublicBaseURL == "" {
+		return nil, errors.New("r2: publicBaseUrl is required when bucket is set")
+	}
+	endpoint := c.Endpoint
+	if endpoint == "" {
+		endpoint = os.Getenv("R2_ENDPOINT")
+	}
+	ak := firstEnv("R2_AK", "CF_R2_AK")
+	sk := firstEnv("R2_SK", "R2_KEY", "CF_R2_SK")
+	if endpoint == "" || ak == "" || sk == "" {
+		return nil, errors.New("r2: missing credentials (need R2_AK with R2_SK/R2_KEY/CF_R2_SK, and an endpoint)")
+	}
+
+	return &litter.R2Config{
+		Bucket:          c.Bucket,
+		PublicBaseURL:   c.PublicBaseURL,
+		Endpoint:        endpoint,
+		KeyPrefix:       c.KeyPrefix,
+		AccessKeyID:     ak,
+		SecretAccessKey: sk,
+	}, nil
+}
+
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+
+	return ""
 }
 
 // CompactConfig is wiki compact–only settings (delivery + brand + schedule).

@@ -23,6 +23,13 @@ import (
 const (
 	defaultTrnsSource         = "podcast"
 	defaultTrnsSummaryBaseURL = "https://api.lucc.dev/v1"
+	// trnsDriverR2 selects direct R2 links (never-expire) for trns uploads.
+	trnsDriverR2 = "r2"
+	// trnsDriverLitterbox is the default temporary-upload driver.
+	trnsDriverLitterbox = "litterbox"
+	// trnsIndexPrefix names the R2 index objects the wiki digest lists
+	// (index-<date>.json).
+	trnsIndexPrefix = "index-"
 )
 
 const (
@@ -138,7 +145,10 @@ func runTrns(source string, flags *trnsFlags) error {
 
 	summarizer := setupSummarizer(cfg)
 
-	uploader := setupUploader(cfg, flags)
+	uploader, err := setupUploader(cfg, flags)
+	if err != nil {
+		return fmt.Errorf("setup uploader: %w", err)
+	}
 
 	entries := processPodcastFeeds(cfg, outDir, flags, cache, router, summarizer, uploader)
 
@@ -200,16 +210,35 @@ func configuredSummaryBaseURL(cfg *rss.Config) string {
 	return baseURL
 }
 
-func setupUploader(cfg *rss.Config, flags *trnsFlags) litter.Uploader {
+func setupUploader(cfg *rss.Config, flags *trnsFlags) (litter.Uploader, error) {
 	if !flags.publish && !cfg.TrnsConfig.TemporaryUpload.Enabled {
-		return nil
-	}
-	exp := cfg.TrnsConfig.TemporaryUpload.ExpirationDuration
-	if exp == "" {
-		exp = "24h"
+		return nil, nil
 	}
 
-	return litter.NewLitterbox(exp)
+	return newTrnsUploader(cfg)
+}
+
+// newTrnsUploader builds the trns upload driver from config: litterbox by
+// default, r2 (never-expire links) when temporaryUpload.driver selects it.
+func newTrnsUploader(cfg *rss.Config) (litter.Uploader, error) {
+	driver := cfg.TrnsConfig.TemporaryUpload.Driver
+	if driver == "" {
+		driver = trnsDriverLitterbox
+	}
+	r2cfg, err := cfg.R2Config.LitterConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return litter.NewFromConfig([]string{driver}, trnsExpiration(cfg), r2cfg)
+}
+
+func trnsExpiration(cfg *rss.Config) string {
+	if exp := cfg.TrnsConfig.TemporaryUpload.ExpirationDuration; exp != "" {
+		return exp
+	}
+
+	return "24h"
 }
 
 //nolint:nonamedreturns
@@ -592,7 +621,8 @@ func renderTrnsPage(view *trnsPageView) string {
 }
 
 // ProcessNewsletterTrns fetches transcripts for podcast newsletter items,
-// renders HTML pages, uploads to Litterbox, sets TrnsURL on items, and returns a best-effort report.
+// renders HTML pages, uploads them (litterbox or r2 per config), sets TrnsURL
+// on items, and returns a best-effort report.
 func ProcessNewsletterTrns(items []NewsletterItem, cfg *rss.Config, outDir string) NewsletterTrnsReport {
 	if !cfg.TrnsConfig.Enabled {
 		return NewsletterTrnsReport{}
@@ -617,12 +647,87 @@ func ProcessNewsletterTrns(items []NewsletterItem, cfg *rss.Config, outDir strin
 		}
 	}
 	summarizer := setupSummarizer(cfg)
-	uploader := litter.NewLitterbox(expiration)
+	uploader, err := newTrnsUploader(cfg)
+	if err != nil {
+		slog.Warn("Trns uploader unavailable, skipping trns", "error", err)
+
+		return NewsletterTrnsReport{}
+	}
 	processor := func(item *NewsletterItem) (string, error) {
 		return processItemTrns(item, cfg, cache, router, summarizer, uploader, outDir)
 	}
 
 	return processNewsletterTrnsItems(items, cfg.TrnsConfig.DefaultLimit, processor)
+}
+
+// publishTrnsIndex uploads the episode → transcript-page map of every linked
+// newsletter item to R2 (index-<date>.json) so the wiki digest can pick the
+// episodes up without inbox edits. Best-effort: the newsletter itself is
+// already rendered by the time this runs. No-op when R2 is not configured.
+func publishTrnsIndex(cfg *rss.Config, categories []NewsletterCategory) error {
+	records := collectTrnsIndexRecords(categories)
+	if len(records) == 0 {
+		return nil
+	}
+
+	r2cfg, err := cfg.R2Config.LitterConfig()
+	if err != nil {
+		return fmt.Errorf("r2 config: %w", err)
+	}
+	if r2cfg == nil {
+		return nil
+	}
+
+	uploader, err := litter.NewFromConfig([]string{trnsDriverR2}, "", r2cfg)
+	if err != nil {
+		return fmt.Errorf("build r2 uploader: %w", err)
+	}
+
+	return uploadTrnsIndex(context.Background(), uploader, records)
+}
+
+// trnsIndexRecord is one entry of the R2 trns index the wiki digest consumes.
+type trnsIndexRecord struct {
+	URL           string `json:"url"`
+	TranscriptURL string `json:"transcriptUrl"`
+	Title         string `json:"title,omitempty"`
+	FeedTitle     string `json:"feedTitle,omitempty"`
+}
+
+func collectTrnsIndexRecords(categories []NewsletterCategory) []trnsIndexRecord {
+	var records []trnsIndexRecord
+	for i := range categories {
+		for j := range categories[i].Items {
+			item := &categories[i].Items[j]
+			if item.Link == "" || item.TrnsURL == "" {
+				continue
+			}
+			records = append(records, trnsIndexRecord{
+				URL:           item.Link,
+				TranscriptURL: item.TrnsURL,
+				Title:         item.Title,
+				FeedTitle:     item.FeedTitle,
+			})
+		}
+	}
+
+	return records
+}
+
+func uploadTrnsIndex(ctx context.Context, uploader litter.Uploader, records []trnsIndexRecord) error {
+	data, err := fileutil.MarshalJSON(records)
+	if err != nil {
+		return fmt.Errorf("marshal trns index: %w", err)
+	}
+
+	filename := trnsIndexPrefix + time.Now().Format("2006-01-02") + ".json"
+	result, err := uploader.Upload(ctx, filename, string(data))
+	if err != nil {
+		return fmt.Errorf("upload trns index: %w", err)
+	}
+	slog.Info("Trns index published", "entries", len(records), "url", result.URL)
+
+	return nil
 }
 
 func processNewsletterTrnsItems(items []NewsletterItem, limit int, process newsletterTrnsProcessor) NewsletterTrnsReport {

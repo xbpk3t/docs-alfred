@@ -171,6 +171,11 @@ func runSend(config *rss.Config, trnsOut, sourceHuntURL string) error {
 				"skippedByLimit", report.SkippedByLimit,
 			)
 		}
+		// Publish the episode → transcript map for the wiki digest. Best-effort:
+		// a failed publish must not sink the newsletter.
+		if publishErr := publishTrnsIndex(config, categories); publishErr != nil {
+			slog.Warn("Trns index publish failed", "error", publishErr)
+		}
 	}
 
 	contents, err := service.RenderNewsletter(categories, config.RSS, service.failedFeeds, sourceHuntURL)

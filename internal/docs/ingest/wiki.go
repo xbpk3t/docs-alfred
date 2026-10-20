@@ -15,6 +15,7 @@ import (
 	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/litter"
 )
 
 // CommandRunner abstracts external command execution for testability.
@@ -22,11 +23,15 @@ import (
 type CommandRunner func(ctx context.Context, dir string, name string, args ...string) ([]byte, error)
 
 type dependencies struct {
-	fetcher         fetcher
-	classifier      classifier
-	writer          writer
-	inbox           inboxStore
-	validTopicPaths map[string]bool // loaded from ghindex for write-layer validation
+	fetcher    fetcher
+	classifier classifier
+	writer     writer
+	inbox      inboxStore
+	// r2 is the media store for transcript uploads and the rss2nl trns index;
+	// nil when no R2 bucket is configured.
+	r2 mediaStore
+	// validTopicPaths is loaded from ghindex for write-layer validation.
+	validTopicPaths map[string]bool
 	// history holds previously digested URLs (from digest-success.jsonl).
 	// digest skips URLs found here; add skips them too unless --force re-digests.
 	history *digestHistory
@@ -134,19 +139,29 @@ func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 	}
 
 	result := &Result{Name: "wiki digest", WikiRoot: wikiRoot, DryRun: input.DryRun}
-	if len(entries) == 0 {
-		slog.Info("wiki digest: no entries found")
+	inboxCfg := resolveInboxConfig(input.Config)
 
-		return result, nil
+	if len(entries) == 0 {
+		slog.Info("wiki digest: no inbox entries found")
+	} else {
+		slog.Info("wiki digest: processing entries", "count", len(entries))
+		result.URLResults = runInboxEntries(ctx, deps, wikiRoot, entries, inboxCfg, input.DryRun)
 	}
 
-	slog.Info("wiki digest: processing entries", "count", len(entries))
-	inboxCfg := resolveInboxConfig(input.Config)
-	result.URLResults = runInboxEntries(ctx, deps, wikiRoot, entries, inboxCfg, input.DryRun)
+	// Podcast loop: consume the rss2nl trns index so episodes with uploaded
+	// transcripts are digested without manual inbox edits. A missing r2 client
+	// only skips this loop — the inbox run above still flushes.
+	if input.Config.TrnsIndex.Enabled {
+		if deps.r2 == nil {
+			slog.Warn("wiki digest: trnsIndex enabled but the r2 client is unavailable, skipping trns index")
+		} else {
+			result.URLResults = append(result.URLResults, runTrnsIndexEntries(ctx, deps, wikiRoot, inboxCfg, input.DryRun)...)
+		}
+	}
 
 	processed := handledURLsByLine(result.URLResults)
 	if len(processed) == 0 {
-		slog.Info("wiki digest: no entries handled")
+		slog.Info("wiki digest: nothing to flush")
 
 		return result, nil
 	}
@@ -205,7 +220,9 @@ func handledURLsByLine(results []URLResult) map[int][]string {
 	processed := make(map[int][]string)
 	for i := range results {
 		result := &results[i]
-		if result.Handled {
+		// Negative LineIndex marks non-inbox work (trns index entries); it is
+		// never part of the flush set.
+		if result.Handled && result.LineIndex >= 0 {
 			processed[result.LineIndex] = append(processed[result.LineIndex], result.URL)
 		}
 	}
@@ -296,9 +313,35 @@ func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 	if deps.validTopicPaths == nil {
 		deps.validTopicPaths = wikiwrite.LoadValidTopicPaths(ResolveWikiRoot(cfg), cfg.Wiki.GHTopicsURL)
 	}
+	if deps.r2 == nil {
+		deps.r2 = newMediaStore(cfg)
+	}
 	deps.isAggr = cfg.Wiki.IsAggr
 
 	return deps
+}
+
+// newMediaStore builds the R2 media store from config, or nil when R2 is not
+// configured. An invalid config or a failed client init is logged and degrades
+// the R2 features off rather than failing the run.
+func newMediaStore(cfg *Config) mediaStore {
+	r2cfg, err := cfg.R2.LitterConfig()
+	if err != nil {
+		slog.Warn("wiki: r2 config invalid", "error", err)
+
+		return nil
+	}
+	if r2cfg == nil {
+		return nil
+	}
+	r2, err := litter.NewR2(r2cfg)
+	if err != nil {
+		slog.Warn("wiki: r2 client init failed", "error", err)
+
+		return nil
+	}
+
+	return r2
 }
 
 func newAIConfig(cfg *Config) *ai.ClientConfig {

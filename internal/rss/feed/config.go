@@ -3,24 +3,77 @@ package rss //nolint:revive
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/creasty/defaults"
 
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
+	"github.com/xbpk3t/docs-alfred/pkg/litter"
 	"github.com/xbpk3t/docs-alfred/pkg/validator"
 )
 
 // Config 主配置结构.
 type Config struct {
-	FeedConfig       FeedConfig       `yaml:"feed"`
+	R2Config         R2Config         `yaml:"r2,omitempty"`
 	ResendConfig     ResendConfig     `yaml:"resend"`
 	NewsletterConfig NewsletterConfig `yaml:"newsletter"`
 	RSS              []FeedsDetail    `yaml:"rss"`
 	TrnsConfig       TrnsConfig       `yaml:"trns,omitempty"`
 	DashboardConfig  DashboardConfig  `yaml:"dashboard"`
 	HuntConfig       HuntConfig       `yaml:"hunt,omitempty"`
+	FeedConfig       FeedConfig       `yaml:"feed"`
 	EnvConfig        EnvConfig        `yaml:"env"`
+}
+
+// R2Config configures the R2 upload driver: the bucket and its public
+// surface. Credentials come from the environment (R2_AK/R2_SK with
+// CF_R2_AK/CF_R2_SK fallback), never from YAML.
+type R2Config struct {
+	Bucket        string `yaml:"bucket,omitempty"`
+	PublicBaseURL string `yaml:"publicBaseUrl,omitempty"`
+	Endpoint      string `yaml:"endpoint,omitempty"`
+	KeyPrefix     string `yaml:"keyPrefix,omitempty"`
+}
+
+// LitterConfig resolves the R2 uploader config. Returns nil when no bucket is
+// configured; errors when a bucket is set but the public base URL or
+// credentials are missing.
+func (c R2Config) LitterConfig() (*litter.R2Config, error) {
+	if c.Bucket == "" {
+		return nil, nil
+	}
+	if c.PublicBaseURL == "" {
+		return nil, errors.New("r2: publicBaseUrl is required when bucket is set")
+	}
+	endpoint := c.Endpoint
+	if endpoint == "" {
+		endpoint = os.Getenv("R2_ENDPOINT")
+	}
+	ak := firstEnv("R2_AK", "CF_R2_AK")
+	sk := firstEnv("R2_SK", "R2_KEY", "CF_R2_SK")
+	if ak == "" || sk == "" || endpoint == "" {
+		return nil, errors.New("r2: credentials missing (need R2_AK with R2_SK/R2_KEY/CF_R2_SK, and an endpoint)")
+	}
+
+	return &litter.R2Config{
+		Endpoint:        endpoint,
+		Bucket:          c.Bucket,
+		AccessKeyID:     ak,
+		SecretAccessKey: sk,
+		PublicBaseURL:   c.PublicBaseURL,
+		KeyPrefix:       c.KeyPrefix,
+	}, nil
+}
+
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+
+	return ""
 }
 
 // ResendConfig Resend相关配置.
@@ -106,8 +159,9 @@ type TrnsSummaryConfig struct {
 	Enabled  bool   `yaml:"enabled,omitempty"`
 }
 
-// TrnsTemporaryUploadConfig 临时上传配置（Litterbox）.
+// TrnsTemporaryUploadConfig 临时上传配置.
 type TrnsTemporaryUploadConfig struct {
+	Driver             string `yaml:"driver,omitempty"` // "litterbox"（默认）| "r2"
 	ExpirationDuration string `yaml:"expiration,omitempty"`
 	Enabled            bool   `yaml:"enabled,omitempty"`
 }

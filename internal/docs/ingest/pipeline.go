@@ -107,10 +107,17 @@ func prepareInboxEntry(
 		return expandChildPosts(urlCtx, deps, entry.URL, fetchResult)
 	}
 
+	// Archive the transcript remotely (R2) so the entry can link the full text
+	// without storing it in the wiki repo. Best-effort: "" means no link.
+	transcriptURL := maybeUploadTranscript(urlCtx, deps, entry.URL, fetchResult)
+
 	// Classify using pre-fetched content. Outer retry removed (streaming
 	// bypasses CF 524 timeout, so transient errors are rare). Inner retries
 	// in classifyOnly handle AI call failures.
-	return []pendingURLWrite{classifyPending(urlCtx, deps, entry.URL, fetchResult, wikiclassify.TopicPin{})}
+	pending := classifyPending(urlCtx, deps, entry.URL, fetchResult, wikiclassify.TopicPin{})
+	attachTranscriptURL(&pending, transcriptURL)
+
+	return []pendingURLWrite{pending}
 }
 
 // pendingFetchFailure maps a fetch outcome onto the failure entry it deserves.
@@ -302,7 +309,22 @@ func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) [
 		return expandChildPosts(ctx, deps, urlStr, fetchResult)
 	}
 
-	return []pendingURLWrite{classifyPending(ctx, deps, urlStr, fetchResult, wikiclassify.TopicPin{})}
+	// A multi-item page's children carry their own content, so only single-item
+	// pages archive a transcript — nothing else would link the upload.
+	transcriptURL := maybeUploadTranscript(ctx, deps, urlStr, fetchResult)
+
+	pending := classifyPending(ctx, deps, urlStr, fetchResult, wikiclassify.TopicPin{})
+	attachTranscriptURL(&pending, transcriptURL)
+
+	return []pendingURLWrite{pending}
+}
+
+// attachTranscriptURL records the uploaded transcript link on the pending
+// entry so the write layer renders "Transcript: <url>".
+func attachTranscriptURL(pending *pendingURLWrite, transcriptURL string) {
+	if transcriptURL != "" && pending.Item != nil {
+		pending.Item.TranscriptURL = transcriptURL
+	}
 }
 
 func classifyItemFromResult(urlStr, title string, classResult *wikitypes.ClassifyResult) *wikitypes.ClassifyItem {

@@ -48,6 +48,7 @@ var validCodeblockFields = map[string]bool{
 	"verdict":           true,
 	"stars":             true,
 	"language":          true,
+	"Transcript":        true,
 }
 
 var sectionHeadingRe = regexp.MustCompile(`^####\s+(.+)$`)

@@ -266,20 +266,24 @@ func TestConfiguredSummaryBaseURLCustom(t *testing.T) {
 func TestSetupUploaderDisabled(t *testing.T) {
 	cfg := &rss.Config{TrnsConfig: rss.TrnsConfig{TemporaryUpload: rss.TrnsTemporaryUploadConfig{Enabled: false}}}
 	flags := &trnsFlags{publish: false}
-	assert.Nil(t, setupUploader(cfg, flags))
+	uploader, err := setupUploader(cfg, flags)
+	assert.NoError(t, err)
+	assert.Nil(t, uploader)
 }
 
 func TestSetupUploaderPublishFlag(t *testing.T) {
 	cfg := &rss.Config{TrnsConfig: rss.TrnsConfig{TemporaryUpload: rss.TrnsTemporaryUploadConfig{Enabled: false}}}
 	flags := &trnsFlags{publish: true}
-	uploader := setupUploader(cfg, flags)
+	uploader, err := setupUploader(cfg, flags)
+	assert.NoError(t, err)
 	assert.NotNil(t, uploader)
 }
 
 func TestSetupUploaderConfigEnabled(t *testing.T) {
 	cfg := &rss.Config{TrnsConfig: rss.TrnsConfig{TemporaryUpload: rss.TrnsTemporaryUploadConfig{Enabled: true, ExpirationDuration: "12h"}}}
 	flags := &trnsFlags{publish: false}
-	uploader := setupUploader(cfg, flags)
+	uploader, err := setupUploader(cfg, flags)
+	assert.NoError(t, err)
 	assert.NotNil(t, uploader)
 }
 
