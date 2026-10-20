@@ -46,7 +46,7 @@ type R2Config struct {
 	KeyPrefix     string `yaml:"keyPrefix,omitempty"`
 }
 
-// TrnsIndexConfig enables consuming the rss2nl trns index (index-<date>.json
+// TrnsIndexConfig enables consuming the rss2nl trns index (index-<timestamp>.json
 // objects in the R2 bucket) so podcast episodes with uploaded transcripts are
 // digested without manual inbox edits.
 type TrnsIndexConfig struct {

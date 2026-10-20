@@ -72,7 +72,7 @@ func TestUploadTrnsIndexPublishesDigestWireShape(t *testing.T) {
 	assert.Equal(t, 1, uploader.calls)
 	assert.True(t, strings.HasPrefix(uploader.filename, trnsIndexPrefix), "key %q must list under the digest prefix", uploader.filename)
 	assert.True(t, strings.HasSuffix(uploader.filename, ".json"))
-	assert.Regexp(t, `^index-\d{4}-\d{2}-\d{2}\.json$`, uploader.filename)
+	assert.Regexp(t, `^index-\d{4}-\d{2}-\d{2}T\d{6}\.json$`, uploader.filename)
 
 	var decoded []map[string]string
 	require.NoError(t, json.Unmarshal([]byte(uploader.content), &decoded))

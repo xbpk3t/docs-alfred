@@ -28,8 +28,12 @@ const (
 	// trnsDriverLitterbox is the default temporary-upload driver.
 	trnsDriverLitterbox = "litterbox"
 	// trnsIndexPrefix names the R2 index objects the wiki digest lists
-	// (index-<date>.json).
+	// (index-<timestamp>.json). Each run writes its own batch so a same-day
+	// rerun can't overwrite episodes an earlier run indexed.
 	trnsIndexPrefix = "index-"
+	// artifactUploadTimeout bounds each R2/relay upload so a stuck request
+	// can't hang the newsletter or hunt run.
+	artifactUploadTimeout = 2 * time.Minute
 )
 
 const (
@@ -685,7 +689,10 @@ func publishTrnsIndex(cfg *rss.Config, categories []NewsletterCategory) error {
 		return fmt.Errorf("build r2 uploader: %w", err)
 	}
 
-	return uploadTrnsIndex(context.Background(), uploader, records)
+	ctx, cancel := context.WithTimeout(context.Background(), artifactUploadTimeout)
+	defer cancel()
+
+	return uploadTrnsIndex(ctx, uploader, records)
 }
 
 // trnsIndexRecord is one entry of the R2 trns index the wiki digest consumes.
@@ -722,7 +729,7 @@ func uploadTrnsIndex(ctx context.Context, uploader litter.Uploader, records []tr
 		return fmt.Errorf("marshal trns index: %w", err)
 	}
 
-	filename := trnsIndexPrefix + time.Now().Format("2006-01-02") + ".json"
+	filename := trnsIndexPrefix + time.Now().Format("2006-01-02T150405") + ".json"
 	result, err := uploader.Upload(ctx, filename, string(data))
 	if err != nil {
 		return fmt.Errorf("upload trns index: %w", err)
@@ -896,7 +903,10 @@ func uploadItemTrns(uploader litter.Uploader, itemHash, html string) (string, er
 	}
 
 	filename := fmt.Sprintf("trns-%s.html", itemHash[:min(16, len(itemHash))])
-	result, err := uploader.Upload(context.Background(), filename, html)
+	ctx, cancel := context.WithTimeout(context.Background(), artifactUploadTimeout)
+	defer cancel()
+
+	result, err := uploader.Upload(ctx, filename, html)
 	if err != nil {
 		return "", fmt.Errorf("upload trns page: %w", err)
 	}

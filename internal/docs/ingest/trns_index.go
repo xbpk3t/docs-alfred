@@ -13,7 +13,7 @@ import (
 )
 
 // trnsIndexPrefix is the key prefix rss2nl publishes index batches under
-// (index-<date>.json objects in the R2 bucket).
+// (index-<timestamp>.json objects in the R2 bucket, one per run).
 const trnsIndexPrefix = "index-"
 
 // trnsIndexEntry maps one podcast episode to its uploaded transcript page.
