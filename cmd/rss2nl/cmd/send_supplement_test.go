@@ -193,7 +193,9 @@ func TestFilterStaleFeedsRecentEntry(t *testing.T) {
 	service := &NewsletterService{
 		config: &rss.Config{DashboardConfig: rss.DashboardConfig{FeedDetail: rss.FeedDetailConfig{StaleMonths: 3}}},
 	}
-	feedList := []rss.FeedsDetail{{Type: "tech", Feeds: []rss.Feeds{{Feed: "a", LastUpdated: "2026-06-20"}}}}
+	// Relative to now: a hardcoded date rots into "stale" once the clock moves on.
+	recent := time.Now().AddDate(0, -1, 0).Format("2006-01-02")
+	feedList := []rss.FeedsDetail{{Type: "tech", Feeds: []rss.Feeds{{Feed: "a", LastUpdated: recent}}}}
 	result := service.filterStaleFeeds(feedList)
 	assert.Empty(t, result) // recent entry filtered out (not stale)
 }
