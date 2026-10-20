@@ -636,14 +636,16 @@ func ProcessNewsletterTrns(items []NewsletterItem, cfg *rss.Config, outDir strin
 	cache := transcript.NewCache(outDir)
 	router := buildRouter()
 
-	// Pre-flight: validate xiaoyuzhou credentials before processing.
+	// Pre-flight: validate xiaoyuzhou credentials before processing. A stale
+	// token only disables xiaoyuzhou episodes — RSS-transcript podcasts in the
+	// same run still have a source, and the published index is what makes the
+	// wiki digest loop work, so one dead provider must not skip everything.
 	if xzProvider, ok := router.Xiaoyuzhou.(*transcript.XiaoyuzhouProvider); ok {
 		if err := xzProvider.ValidateCredentials(context.Background()); err != nil {
-			slog.Warn("Xiaoyuzhou credential validation failed, skipping trns",
+			slog.Warn("Xiaoyuzhou credential validation failed, disabling xiaoyuzhou only",
 				"error", err,
 			)
-
-			return NewsletterTrnsReport{}
+			router.Xiaoyuzhou = nil
 		}
 	}
 	summarizer := setupSummarizer(cfg)

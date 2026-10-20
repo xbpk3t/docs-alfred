@@ -127,14 +127,19 @@ func (r *R2) Upload(ctx context.Context, filename, content string) (*Result, err
 }
 
 // ListKeys lists object keys under prefix (within the configured key prefix).
-// The wiki digest uses it to discover index files.
+// Returned keys are relative to the configured key prefix, so they can be
+// passed straight back to GetObject.
 func (r *R2) ListKeys(ctx context.Context, prefix string) ([]string, error) {
 	keys, err := r.store.List(ctx, r.bucket, r.keyPrefix+prefix)
 	if err != nil {
 		return nil, fmt.Errorf("r2 list %s: %w", prefix, err)
 	}
+	names := make([]string, 0, len(keys))
+	for _, key := range keys {
+		names = append(names, strings.TrimPrefix(key, r.keyPrefix))
+	}
 
-	return keys, nil
+	return names, nil
 }
 
 // GetObject reads an object's content. The wiki digest uses it to read index files.

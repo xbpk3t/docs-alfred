@@ -24,6 +24,12 @@ func (r *Router) Name() string {
 
 func (r *Router) Fetch(ctx context.Context, ep *EpisodeRef) (*TranscriptResult, error) {
 	if isXiaoyuzhouEpisode(ep) {
+		// Xiaoyuzhou may be disabled when its credentials are stale; that must
+		// not take down RSS-transcript episodes of the same run.
+		if r.Xiaoyuzhou == nil {
+			return nil, errors.New("xiaoyuzhou transcript unavailable: provider disabled")
+		}
+
 		return r.Xiaoyuzhou.Fetch(ctx, ep)
 	}
 

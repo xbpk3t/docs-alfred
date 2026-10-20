@@ -165,6 +165,23 @@ func TestR2_ListKeysAndGetObject(t *testing.T) {
 	assert.JSONEq(t, `[{"url":"u"}]`, string(data))
 }
 
+// With a key prefix configured, list keys must stay relative so they can be
+// fed back to GetObject without double-prefixing.
+func TestR2_ListKeysGetObjectWithKeyPrefix(t *testing.T) {
+	store := newFakeStore()
+	store.objects["verify/index-2026-10-20.json"] = []byte(`[{"url":"u"}]`)
+	store.objects["other/index-x.json"] = []byte(`[]`)
+	r := newR2WithStore(store, &R2Config{Bucket: "b", PublicBaseURL: "https://example.com", KeyPrefix: "verify"})
+
+	keys, err := r.ListKeys(context.Background(), "index-")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"index-2026-10-20.json"}, keys)
+
+	data, err := r.GetObject(context.Background(), keys[0])
+	require.NoError(t, err)
+	assert.JSONEq(t, `[{"url":"u"}]`, string(data))
+}
+
 func TestNewR2_RequiresConfig(t *testing.T) {
 	_, err := NewR2(&R2Config{})
 	require.Error(t, err)

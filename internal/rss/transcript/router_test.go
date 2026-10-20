@@ -47,6 +47,31 @@ func TestRouterRSSTranscriptEpisode(t *testing.T) {
 	assert.Equal(t, "rss transcript", result.Content)
 }
 
+// A disabled xiaoyuzhou provider (stale credentials) must fail only its own
+// episodes; RSS-transcript episodes keep working.
+func TestRouterXiaoyuzhouDisabledKeepsRSSTranscripts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRSS := mocks.NewMockProvider(ctrl)
+	mockRSS.EXPECT().Fetch(gomock.Any(), gomock.Any()).Return(&transcript.TranscriptResult{
+		Content: "rss transcript", ContentType: "plaintext", Source: "rss-transcript",
+	}, nil)
+
+	r := &transcript.Router{Xiaoyuzhou: nil, RssTranscript: mockRSS}
+
+	_, err := r.Fetch(context.Background(), &transcript.EpisodeRef{
+		URL: "https://www.xiaoyuzhoufm.com/episode/abc123",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider disabled")
+
+	result, err := r.Fetch(context.Background(), &transcript.EpisodeRef{
+		URL:             "https://example.com/ep1",
+		TranscriptLinks: []transcript.TranscriptLink{{URL: "https://example.com/t.txt"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "rss transcript", result.Content)
+}
+
 func TestRouterNoSource(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	r := &transcript.Router{
