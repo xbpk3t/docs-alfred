@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -49,20 +50,15 @@ var guardParams = map[string]bool{
 // guarded reports whether name is a content param that must never be stripped.
 func guarded(name string) bool { return guardParams[name] }
 
-// provider is one compiled ClearURLs rules entry for a host (or the global
-// catch-all).
+// provider is one compiled ClearURLs rules entry.
 type provider struct {
-	urlPattern *regexp.Regexp
-	// hostTokens are the literal dotted tokens appearing in urlPattern, used
-	// as a cheap pre-filter: a URL that shares none of them cannot match and is
-	// skipped without a regex run.
-	hostTokens   []string
+	urlPattern   *regexp.Regexp
+	hostTokens   []string // literal dotted tokens in urlPattern, used as a pre-filter
 	exceptions   []*regexp.Regexp
 	redirections []*regexp.Regexp // expand a URL to its real target (e.g. google /url)
 	paramNames   []*regexp.Regexp // matched against a single query-parameter name
 	rawRules     []*regexp.Regexp // whole-URL rewrite, unanchored replace
 	complete     bool             // completeProvider: strip every parameter on this domain
-	isGlobal     bool             // urlPattern matches any host (built-in catch-all)
 }
 
 // compileRe compiles a ClearURLs regex. URL-matching patterns (host, exceptions,
@@ -134,10 +130,6 @@ func parseProviders(data string) []*provider {
 
 func compileProvider(rp *rawProvider) *provider {
 	p := &provider{
-		// A global catch-all is exactly a provider whose urlPattern matches any
-		// host; classify on the payload rather than the map key so the check
-		// survives upstream renames.
-		isGlobal: rp.URLPattern == ".*",
 		complete: rp.CompleteProvider,
 	}
 	p.urlPattern = compileRe(rp.URLPattern, false)
@@ -152,10 +144,7 @@ func compileProvider(rp *rawProvider) *provider {
 	return p
 }
 
-// hostTokens extracts the literal dotted tokens from a urlPattern, used as a
-// pre-filter. A URL that contains none of them cannot match, so the provider
-// is skipped without a regex run. Returning an empty slice disables filtering
-// (keeps every URL the provider's regex would be run against).
+// hostTokens extracts the literal dotted tokens from pattern for the pre-filter.
 func hostTokens(pattern string) []string {
 	normalized := strings.NewReplacer(
 		"\\.", ".",
@@ -215,8 +204,6 @@ func cleanOnce(cur string) string {
 		return cur
 	}
 	for _, p := range compiledProviders() {
-		// Cheap pre-filter: skip providers whose literal host tokens are all
-		// absent from the URL, avoiding the regex run in the common case.
 		if !p.mayMatch(cur) {
 			continue
 		}
@@ -250,17 +237,16 @@ func cleanOnce(cur string) string {
 	return cur
 }
 
-// mayMatch is the host-token pre-filter. An empty token set disables it.
+// mayMatch reports whether p's urlPattern applies to cur. hostTokens is a cheap
+// negative pre-filter: if none appear, no match is possible; a hit proves
+// nothing, so urlPattern decides.
 func (p *provider) mayMatch(cur string) bool {
-	if len(p.hostTokens) == 0 {
-		return true
+	if len(p.hostTokens) > 0 && !slices.ContainsFunc(p.hostTokens, func(tok string) bool {
+		return strings.Contains(cur, tok)
+	}) {
+		return false
 	}
-	for _, tok := range p.hostTokens {
-		if strings.Contains(cur, tok) {
-			return true
-		}
-	}
-	return false
+	return p.urlPattern.MatchString(cur)
 }
 
 func redirectionMatch(p *provider, cur string) string {

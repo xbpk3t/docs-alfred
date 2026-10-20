@@ -45,6 +45,28 @@ func TestEngineCompleteProvider(t *testing.T) {
 	require.NotContains(t, got, "bar=2")
 }
 
+// TestEngineCompleteProviderDomainScoped pins that a completeProvider fires
+// only on its own domain: ad-network patterns built from character classes
+// yield no host tokens, so a token-only pre-filter would strip every query
+// param on every URL and collapse all mp.weixin.qq.com articles onto one key.
+func TestEngineCompleteProviderDomainScoped(t *testing.T) {
+	wechat := "https://mp.weixin.qq.com/s?__biz=MzAxMDMxOTI2NA==&mid=2649112227&idx=1&sn=f7a93900f4b348506d869fde52f7f831"
+	got := StripTracking(wechat)
+	parsed, err := url.Parse(got)
+	require.NoError(t, err)
+	require.Equal(t, url.Values{
+		"__biz": {"MzAxMDMxOTI2NA=="},
+		"idx":   {"1"},
+		"mid":   {"2649112227"},
+		"sn":    {"f7a93900f4b348506d869fde52f7f831"},
+	}, parsed.Query(), "wechat article identity params must survive")
+
+	// Distinct articles must keep distinct dedup keys.
+	wechatKey := NormalizeForDedup(wechat)
+	other := "https://mp.weixin.qq.com/s?__biz=MzAxMDMxOTI2NA==&mid=2649112400&idx=1&sn=bf003c4f2595850bd686032ffa92909b"
+	require.NotEqual(t, wechatKey, NormalizeForDedup(other))
+}
+
 // TestEngineGuardParams are content-bearing params that must never be stripped
 // even under full ClearURLs semantics — the classic three (?v, ?bvid, ?q) plus
 // the rest of the guard set, exercised through the full NormalizeForDedup path.
