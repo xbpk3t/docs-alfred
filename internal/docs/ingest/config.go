@@ -62,10 +62,7 @@ func (c R2Config) LitterConfig() (*litter.R2Config, error) {
 	if c.PublicBaseURL == "" {
 		return nil, errors.New("r2: publicBaseUrl is required when bucket is set")
 	}
-	endpoint := c.Endpoint
-	if endpoint == "" {
-		endpoint = os.Getenv("R2_ENDPOINT")
-	}
+	endpoint := resolveR2Endpoint(c)
 	ak := firstEnv("R2_AK", "CF_R2_AK")
 	sk := firstEnv("R2_SK", "R2_KEY", "CF_R2_SK")
 	if endpoint == "" || ak == "" || sk == "" {
@@ -87,6 +84,22 @@ func firstEnv(names ...string) string {
 		if v := os.Getenv(name); v != "" {
 			return v
 		}
+	}
+
+	return ""
+}
+
+// resolveR2Endpoint takes the endpoint from config, else R2_ENDPOINT, else the
+// Cloudflare account id (CF_ACCOUNT), so the account id stays out of YAML.
+func resolveR2Endpoint(c R2Config) string {
+	if c.Endpoint != "" {
+		return c.Endpoint
+	}
+	if endpoint := os.Getenv("R2_ENDPOINT"); endpoint != "" {
+		return endpoint
+	}
+	if account := os.Getenv("CF_ACCOUNT"); account != "" {
+		return "https://" + account + ".r2.cloudflarestorage.com"
 	}
 
 	return ""

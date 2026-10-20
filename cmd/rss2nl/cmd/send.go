@@ -659,7 +659,7 @@ func addFeedCategorySection(doc *md.Document, data *TemplateData) {
 			}
 			extra := ""
 			if item.TrnsURL != "" {
-				extra = " " + md.Link("trns", item.TrnsURL)
+				extra = " " + md.Link("transcript", item.TrnsURL)
 			}
 			items = append(items, title+dateStr+extra)
 		}

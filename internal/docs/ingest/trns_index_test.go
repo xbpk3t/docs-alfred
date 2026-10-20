@@ -255,3 +255,16 @@ func TestHandledURLsByLineIgnoresTrnsEntries(t *testing.T) {
 
 	assert.Equal(t, map[int][]string{0: {"https://example.com/a"}}, processed)
 }
+
+func TestR2ConfigLitterConfigDerivesEndpointFromCFAccount(t *testing.T) {
+	t.Setenv("R2_AK", "ak")
+	t.Setenv("R2_SK", "sk")
+	t.Setenv("R2_ENDPOINT", "")
+	t.Setenv("CF_ACCOUNT", "0123456789abcdef0123456789abcdef")
+
+	got, err := R2Config{Bucket: "media", PublicBaseURL: "https://media.example"}.LitterConfig()
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com", got.Endpoint)
+}

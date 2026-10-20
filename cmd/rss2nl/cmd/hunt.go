@@ -115,8 +115,9 @@ type huntRunConfig struct {
 	blockedSet      map[string]bool
 	providerWeights map[string]float64
 	typeWeights     map[string]float64
-	providerNames   []huntProvider
+	r2cfg           rss.R2Config
 	categories      []rss.FeedsDetail
+	providerNames   []huntProvider
 	publish         rss.HuntPublishConfig
 	max             int
 	perCat          int
@@ -290,6 +291,7 @@ func initHuntRun(opts *struct {
 		typeWeights:     typeWeights,
 		apiKeys:         apiKeys,
 		publish:         cfg.HuntConfig.Publish,
+		r2cfg:           cfg.R2Config,
 		max:             maxVal,
 		perCat:          perCatVal,
 		seedLimit:       seedLimitVal,
@@ -341,6 +343,18 @@ func runHunt(opts *struct {
 	return nil
 }
 
+// newHuntUploader builds the publish driver chain. Unlike the old
+// NewFromNames path it understands the r2 driver, so hunt reports can live on
+// the same never-expire bucket as transcripts.
+func newHuntUploader(hc *huntRunConfig) (litter.Uploader, error) {
+	r2cfg, err := hc.r2cfg.LitterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("resolve r2 config: %w", err)
+	}
+
+	return litter.NewFromConfig(hc.publish.Drivers, hc.publish.Expiration, r2cfg)
+}
+
 func publishHuntReport(hc *huntRunConfig, reportHTML string) {
 	if !hc.publish.Enabled || hc.report.Stats.AcceptedCandidates <= 0 {
 		return
@@ -353,7 +367,12 @@ func publishHuntReport(hc *huntRunConfig, reportHTML string) {
 		return
 	}
 
-	uploader := litter.NewFromNames(hc.publish.Drivers, hc.publish.Expiration)
+	uploader, err := newHuntUploader(hc)
+	if err != nil {
+		slog.Warn("Failed to build hunt uploader", "error", err)
+
+		return
+	}
 	filename := fmt.Sprintf("feeds-hunt-report-%s.html", hc.report.GeneratedAt[:10])
 	result, err := uploader.Upload(context.Background(), filename, string(htmlContent))
 	if err != nil {

@@ -670,3 +670,35 @@ func TestDiscoverKeenableMapsResults(t *testing.T) {
 	c := &huntCandidate{Provider: providerKeenable, CandidateType: candSource, Confidence: 0.65}
 	assert.InDelta(t, 0.65, computeCandidateScore(c, hc), 0.01)
 }
+
+func TestNewHuntUploaderR2WithoutConfigErrors(t *testing.T) {
+	hc := &huntRunConfig{publish: rss.HuntPublishConfig{Drivers: []string{"r2"}}}
+
+	_, err := newHuntUploader(hc)
+
+	require.Error(t, err, "r2 must not silently fall back to an expiring host")
+}
+
+func TestNewHuntUploaderR2WithConfig(t *testing.T) {
+	t.Setenv("R2_AK", "ak")
+	t.Setenv("R2_SK", "sk")
+	t.Setenv("R2_ENDPOINT", "https://acct.r2.cloudflarestorage.com")
+	hc := &huntRunConfig{
+		publish: rss.HuntPublishConfig{Drivers: []string{"r2"}, Expiration: "72h"},
+		r2cfg:   rss.R2Config{Bucket: "docs-wiki", PublicBaseURL: "https://dw.lucc.dev"},
+	}
+
+	uploader, err := newHuntUploader(hc)
+
+	require.NoError(t, err)
+	assert.Equal(t, "fallback", uploader.Name())
+}
+
+func TestNewHuntUploaderLitterboxWithoutR2(t *testing.T) {
+	hc := &huntRunConfig{publish: rss.HuntPublishConfig{Drivers: []string{"litterbox"}, Expiration: "72h"}}
+
+	uploader, err := newHuntUploader(hc)
+
+	require.NoError(t, err)
+	assert.Equal(t, "fallback", uploader.Name())
+}
