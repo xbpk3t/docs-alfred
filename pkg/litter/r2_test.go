@@ -143,11 +143,23 @@ func TestR2_Upload_InvalidNames(t *testing.T) {
 	store := newFakeStore()
 	r := newR2WithStore(store, &R2Config{Bucket: "b", PublicBaseURL: "https://example.com"})
 
-	for _, name := range []string{"a/b.html", "with space.html", "中文.html", ".hidden", "..", ""} {
+	for _, name := range []string{"with space.html", "中文.html", ".hidden", "..", ".", "", "digest//a.md", "digest/./a.md", "/digest/a.md", "digest/a.md/"} {
 		_, err := r.Upload(context.Background(), name, "x")
 		assert.Error(t, err, "name %q should be rejected", name)
 	}
 	assert.Empty(t, store.puts)
+}
+
+func TestR2_Upload_PathKey(t *testing.T) {
+	store := newFakeStore()
+	srv := publicServer(t, http.StatusOK, "text/markdown; charset=utf-8")
+	r := newR2WithStore(store, &R2Config{Bucket: "b", PublicBaseURL: srv.URL})
+
+	result, err := r.Upload(context.Background(), "digest/wiki-2026-10-26/AI/agent/1a2b3c4d.md", "# t")
+
+	require.NoError(t, err)
+	assert.Equal(t, srv.URL+"/digest/wiki-2026-10-26/AI/agent/1a2b3c4d.md", result.URL)
+	assert.Equal(t, "digest/wiki-2026-10-26/AI/agent/1a2b3c4d.md", store.puts[0].key)
 }
 
 func TestR2_ListKeysAndGetObject(t *testing.T) {
@@ -189,12 +201,14 @@ func TestNewR2_RequiresConfig(t *testing.T) {
 
 func TestContentTypeForName(t *testing.T) {
 	tests := map[string]string{
-		"a.html":  "text/html; charset=utf-8",
-		"a.md":    "text/markdown; charset=utf-8",
-		"a.json":  "application/json",
-		"a.bin":   "application/octet-stream",
-		"a.HTML":  "text/html; charset=utf-8",
-		"noext":   "application/octet-stream",
+		"a.html": "text/html; charset=utf-8",
+		"a.md":   "text/markdown; charset=utf-8",
+		"a.json": "application/json",
+		"a.xml":  "application/xml",
+		"a.opml": "application/xml",
+		"a.bin":  "application/octet-stream",
+		"a.HTML": "text/html; charset=utf-8",
+		"noext":  "application/octet-stream",
 	}
 	for name, want := range tests {
 		assert.Equal(t, want, contentTypeForName(name), "name %q", name)

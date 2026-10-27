@@ -153,9 +153,10 @@ type WikiConfig struct {
 	PerURLTimeout  int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
 	MaxContentSize int             `default:"20000"                       yaml:"maxContentSize"`
 	Media          wikiMediaConfig `yaml:"media"`
-	// IsAggr switches digest output layout. false (default): entries append to
-	// each topic's <topic>/summary.md, grouped by date. true: one
-	// <date>-summary.md per day at the wiki root, grouped by topic path.
+	// IsAggr switches the local digest output layout: one <date>-summary.md at
+	// the wiki root, grouped by topic path, instead of per-topic summary.md
+	// files. When R2 is set, digest artifacts go to the bucket and IsAggr has
+	// no effect. Kept to parse configs written before R2-mode took over.
 	IsAggr bool `default:"false" yaml:"isAggr"`
 }
 

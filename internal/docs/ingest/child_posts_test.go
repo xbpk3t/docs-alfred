@@ -111,7 +111,7 @@ func TestExpandChildPostsUncategorisedSynthesisLeavesChildrenUnpinned(t *testing
 
 func TestExpandChildPostsSkipsAlreadyDigestedChild(t *testing.T) {
 	deps := multiItemDeps()
-	deps.history = newDigestHistory()
+	deps.history = newDigestHistory(nil)
 	deps.history.keys[answerOne] = true
 
 	pending := expandChildPosts(context.Background(), deps.dependencies(), questionURL, deps.fetcher.results[questionURL])
@@ -123,7 +123,7 @@ func TestExpandChildPostsSkipsAlreadyDigestedChild(t *testing.T) {
 
 func TestExpandChildPostsClaimsChildURLs(t *testing.T) {
 	deps := multiItemDeps()
-	deps.history = newDigestHistory()
+	deps.history = newDigestHistory(nil)
 
 	expandChildPosts(context.Background(), deps.dependencies(), questionURL, deps.fetcher.results[questionURL])
 
@@ -208,7 +208,7 @@ func TestRunDigestExpandsMultiItemPage(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("inbox\n"), 0o600))
 
 	deps := multiItemDeps()
-	deps.history = newDigestHistory()
+	deps.history = newDigestHistory(nil)
 	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: questionURL, LineIndex: 0}}
 
 	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies()})

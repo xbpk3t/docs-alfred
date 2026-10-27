@@ -93,7 +93,7 @@ func RunAddURLs(ctx context.Context, input AddInput) (*Result, error) {
 	// history — re-digesting already seen URLs — but the per-run claim set below
 	// still collapses duplicates within this single call in every case.
 	if deps.history == nil {
-		deps.history = newDigestHistory()
+		deps.history = newDigestHistory(digestStoreOrNil(deps))
 	}
 	if !input.Force {
 		deps.history.loadSuccesses(wikiRoot)
@@ -131,7 +131,7 @@ func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 	deps := resolveDependencies(input.Config, input.deps)
 	// Only digest consults history — explicit `wiki add` stays re-digest-capable.
 	if deps.history == nil {
-		deps.history = loadDigestHistory(wikiRoot)
+		deps.history = loadDigestHistory(wikiRoot, digestStoreOrNil(deps))
 	}
 	entries, err := deps.inbox.ParseInbox(inboxPath)
 	if err != nil {
