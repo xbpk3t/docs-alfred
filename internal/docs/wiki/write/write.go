@@ -1,6 +1,9 @@
 package write
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
@@ -34,20 +37,29 @@ type SummaryFrontmatter struct {
 
 // WriteOptions contains options for writing wiki entries.
 type WriteOptions struct {
+	R2Store         DigestStore
 	ValidTopicPaths map[string]bool
 	WikiRoot        string
 	BatchID         string
 	DryRun          bool
-	// IsAggr switches the digest output layout (wiki.isAggr): entries go to one
-	// <date>-summary.md at the wiki root, grouped by topic path, instead of
-	// per-topic summary.md files grouped by date.
-	IsAggr bool
+	IsAggr          bool
 }
 
 var pathLocks = struct {
 	locks map[string]*sync.Mutex
 	mu    sync.Mutex
 }{locks: make(map[string]*sync.Mutex)}
+
+// DigestStore is the R2 surface the write layer needs when digest artifacts go
+// remote. *litter.R2 implements it via a small adapter in the ingest package;
+// tests fake it.
+type DigestStore interface {
+	// Upload stores content under the given object name and returns its public
+	// URL.
+	Upload(ctx context.Context, key, content string) (string, error)
+	// GetObject reads an object's content; a missing object reads as empty.
+	GetObject(ctx context.Context, key string) ([]byte, error)
+}
 
 func lockPath(path string) func() {
 	key, err := filepath.Abs(path)
@@ -143,14 +155,38 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 	}
 
 	if opts.DryRun {
+		if opts.R2Store != nil {
+			slog.Info("[DRY RUN] Would write summary to R2",
+				"key", digestObjectKey(batchID, item.TopicPath, item.URL), "url", item.URL, "topic", item.TopicPath)
+
+			return digestObjectKey(batchID, item.TopicPath, item.URL), nil
+		}
 		slog.Info("[DRY RUN] Would write summary", "path", summaryPath)
 
 		return summaryPath, nil
 	}
+
+	entry := buildEntry(item)
+
+	// R2 mode: every post is its own object at digest/<batch>/<topic>/<hash>.md,
+	// so the wiki tree stays free of digest artifacts. batch = one digest run.
+	if opts.R2Store != nil {
+		key := digestObjectKey(batchID, item.TopicPath, item.URL)
+		url, err := opts.R2Store.Upload(context.Background(), key, entry)
+		if err != nil {
+			return "", fmt.Errorf("r2 write summary: %w", err)
+		}
+		slog.Info("Summary written to R2", "key", key, "url", url, "topic", item.TopicPath)
+		if _, err := LogSuccessEntry(item, url, opts); err != nil {
+			slog.Warn("Failed to log success entry", "url", item.URL, "error", err)
+		}
+
+		return url, nil
+	}
+
 	unlock := lockPath(summaryPath)
 	defer unlock()
 
-	entry := buildEntry(item)
 	fm, existingBody := loadFrontmatter(summaryPath, item, today, batchID)
 
 	fm.TotalURLs++
@@ -186,6 +222,71 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 
 func resolveTopicDir(item *types.ClassifyItem, opts *WriteOptions) string {
 	return filepath.Join(opts.WikiRoot, item.TopicPath)
+}
+
+// digestObjectKey builds the R2 object key for one post's digest:
+// digest/<batch>/<topicPath>/<hash>.md. batch is the digest run id
+// (wiki-<date>), topicPath is folder/type/topic, and hash is a short sha256 of
+// the URL so a post's object is stable and collision-resistant. Each topic
+// segment is slugified so CJK/space-heavy topics still produce keys that the
+// R2 path validator accepts ([A-Za-z0-9._-] segments).
+func digestObjectKey(batch, topicPath, urlStr string) string {
+	batch = strings.Trim(batch, "/")
+	if batch == "" {
+		batch = "unbatched"
+	}
+	topicPath = strings.Trim(topicPath, "/")
+	if topicPath == "" {
+		topicPath = "uncat"
+	}
+	segs := strings.Split(topicPath, "/")
+	for i, seg := range segs {
+		segs[i] = slugifySegment(seg)
+	}
+	sum := sha256.Sum256([]byte(urlStr))
+
+	return fmt.Sprintf("digest/%s/%s/%s.md", batch, strings.Join(segs, "/"), hex.EncodeToString(sum[:8]))
+}
+
+// slugifySegment maps a topic segment to the R2-safe charset [A-Za-z0-9._-]:
+// runs of non-alphanumeric runes become a single "-", and a leading
+// non-alphanumeric (the charset requires an alphanumeric first char) is
+// replaced by "x". Empty stays empty (handled by the caller via "uncat").
+func slugifySegment(seg string) string {
+	var b strings.Builder
+	dashPending := false
+	for _, r := range seg {
+		switch {
+		case isKeyChar(r):
+			if dashPending && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			dashPending = false
+			b.WriteRune(r)
+		case r == '.' || r == '_' || r == '-':
+			b.WriteRune(r)
+		default:
+			dashPending = true
+		}
+	}
+
+	return prefixKeySegment(b.String())
+}
+
+// isKeyChar reports whether r is an R2 key alphanumeric.
+func isKeyChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+}
+
+// prefixKeySegment ensures a segment starts with an alphanumeric, prepending
+// "x" when it does not (so ".." and "..." stay R2-valid). An empty result
+// (the whole segment was non-alphanumeric, e.g. all-CJK) also becomes "x".
+func prefixKeySegment(seg string) string {
+	if seg != "" && isKeyChar(rune(seg[0])) {
+		return seg
+	}
+
+	return "x" + seg
 }
 
 // LoadValidTopicPaths loads valid topic paths from the remote gh.yml URL when
@@ -403,14 +504,37 @@ func WriteManualReviewEntry(item *types.ClassifyItem, opts *WriteOptions) (strin
 
 		return path, nil
 	}
-	unlock := lockPath(path)
-	defer unlock()
 
 	today := carbon.Now().ToDateString()
 	dateHeading := "## " + today
 
 	title, metaBlock := buildReviewEntryMeta(item)
 	entry := fmt.Sprintf("\n### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, classify.RenderStructuredSummary(item.Summary))
+
+	// R2 mode: the uncat queue lives at uncat.md in the bucket (read-merge-write,
+	// same as the digest logs) so nothing lands in the local wiki tree.
+	if opts.R2Store != nil {
+		key := "uncat.md"
+		existing, err := opts.R2Store.GetObject(context.Background(), key)
+		if err != nil {
+			return "", fmt.Errorf("r2 write uncat.md: read existing: %w", err)
+		}
+		merged := mergeDateSection(string(existing), dateHeading, entry)
+		url, err := opts.R2Store.Upload(context.Background(), key, merged)
+		if err != nil {
+			return "", fmt.Errorf("r2 write uncat.md: %w", err)
+		}
+		slog.Info("Manual review entry appended to R2",
+			"key", key, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
+		if _, err := LogSuccessEntry(item, url, opts); err != nil {
+			slog.Warn("Failed to log success entry for manual review", "url", item.URL, "error", err)
+		}
+
+		return url, nil
+	}
+
+	unlock := lockPath(path)
+	defer unlock()
 
 	if err := appendToDateSectionAndWrite(path, dateHeading, entry); err != nil {
 		return "", fmt.Errorf("write uncat.md: %w", err)
@@ -461,6 +585,20 @@ func buildReviewEntryMeta(item *types.ClassifyItem) (title, metaBlock string) {
 	return
 }
 
+// mergeDateSection appends an entry to the matching date section of existing
+// content, falling back to appending a fresh section when none exists. Shared by
+// the local (file) and R2 (object) uncat write paths.
+func mergeDateSection(existing, dateHeading, entry string) string {
+	if merged, ok := appendEntryToExistingSection(existing, dateHeading, entry); ok {
+		return merged
+	}
+	if strings.TrimSpace(existing) == "" {
+		return fmt.Sprintf("%s\n\n%s\n", dateHeading, entry)
+	}
+
+	return fmt.Sprintf("%s\n%s\n\n%s\n", strings.TrimRight(existing, "\n"), dateHeading, entry)
+}
+
 // appendToDateSectionAndWrite appends an entry to the appropriate date section
 // in the uncat.md file and writes the result.
 func appendToDateSectionAndWrite(path, dateHeading, entry string) error {
@@ -469,16 +607,7 @@ func appendToDateSectionAndWrite(path, dateHeading, entry string) error {
 		existing.Write(data)
 	}
 
-	var newContent string
-	if merged, ok := appendEntryToExistingSection(existing.String(), dateHeading, entry); ok {
-		newContent = merged
-	} else if existing.Len() > 0 {
-		newContent = fmt.Sprintf("%s\n%s\n\n%s\n", strings.TrimRight(existing.String(), "\n"), dateHeading, entry)
-	} else {
-		newContent = fmt.Sprintf("%s\n\n%s\n", dateHeading, entry)
-	}
-
-	return fileutil.AtomicWriteFile(path, []byte(newContent), fileutil.FilePermPrivate)
+	return fileutil.AtomicWriteFile(path, []byte(mergeDateSection(existing.String(), dateHeading, entry)), fileutil.FilePermPrivate)
 }
 
 func itemURL(item *types.ClassifyItem) string {

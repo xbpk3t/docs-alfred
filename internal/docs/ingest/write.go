@@ -35,12 +35,17 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 
 // newWriteOpts builds WriteOptions with ValidTopicPaths from dependencies.
 func newWriteOpts(deps *dependencies, wikiRoot string, dryRun bool) *wikiwrite.WriteOptions {
-	return &wikiwrite.WriteOptions{
+	opts := &wikiwrite.WriteOptions{
 		WikiRoot:        wikiRoot,
 		DryRun:          dryRun,
 		ValidTopicPaths: deps.validTopicPaths,
 		IsAggr:          deps.isAggr,
+		// Digest artifacts go to R2 when configured; the local wiki tree then
+		// holds no digest outputs (summary/logs/uncat all live in the bucket).
+		R2Store: digestStoreOrNil(deps),
 	}
+
+	return opts
 }
 
 func writeSummary(deps *dependencies, wikiRoot string, item *wikitypes.ClassifyItem, dryRun bool) URLResult {

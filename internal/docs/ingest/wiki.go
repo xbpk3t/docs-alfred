@@ -93,7 +93,7 @@ func RunAddURLs(ctx context.Context, input AddInput) (*Result, error) {
 	// history — re-digesting already seen URLs — but the per-run claim set below
 	// still collapses duplicates within this single call in every case.
 	if deps.history == nil {
-		deps.history = newDigestHistory()
+		deps.history = newDigestHistory(digestStoreOrNil(deps))
 	}
 	if !input.Force {
 		deps.history.loadSuccesses(wikiRoot)
@@ -131,7 +131,7 @@ func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 	deps := resolveDependencies(input.Config, input.deps)
 	// Only digest consults history — explicit `wiki add` stays re-digest-capable.
 	if deps.history == nil {
-		deps.history = loadDigestHistory(wikiRoot)
+		deps.history = loadDigestHistory(wikiRoot, digestStoreOrNil(deps))
 	}
 	entries, err := deps.inbox.ParseInbox(inboxPath)
 	if err != nil {
@@ -177,6 +177,19 @@ func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 	}
 	result.Flushed = len(processed)
 	slog.Info("wiki digest completed", "flushed", len(processed))
+
+	// Feed rebuild: after new digest posts land on R2, rewrite every topic feed
+	// and the OPML index so subscribers see the fresh batch. Best-effort — a
+	// broken feed rebuild must not fail the digest run itself; the next run
+	// retries it.
+	if deps.r2 != nil {
+		if err := BuildFeeds(ctx, deps.r2, input.Config.R2.PublicBaseURL); err != nil {
+			slog.Warn("wiki digest: feed rebuild failed", "error", err)
+		}
+		if _, err := BuildOPML(ctx, deps.r2, input.Config.R2.PublicBaseURL); err != nil {
+			slog.Warn("wiki digest: opml rebuild failed", "error", err)
+		}
+	}
 
 	return result, nil
 }

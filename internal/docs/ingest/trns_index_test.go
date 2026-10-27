@@ -85,7 +85,7 @@ func TestRunTrnsIndexEntriesSkipsAlreadyDigested(t *testing.T) {
 		trnsIndexEntry{URL: episodeOne, TranscriptURL: pageOne})
 
 	deps := newFakeDeps()
-	deps.history = newDigestHistory()
+	deps.history = newDigestHistory(nil)
 	deps.history.keys[urlutil.NormalizeForDedup(episodeOne)] = true
 	d := deps.dependencies()
 	d.r2 = store

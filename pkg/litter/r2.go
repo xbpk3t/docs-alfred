@@ -106,8 +106,9 @@ func newR2WithStore(store objectStore, cfg *R2Config) *R2 {
 
 func (r *R2) Name() string { return driverR2 }
 
-// Upload stores content under the given flat filename and returns its public
-// direct link. Filenames must be single path segments of [A-Za-z0-9._-].
+// Upload stores content under the given object name and returns its public
+// direct link. The name is a path of [A-Za-z0-9._-] segments separated by "/"
+// (e.g. "digest/wiki-2026-10-26/AI/agent/1a2b3c4d.md"); flat names still work.
 func (r *R2) Upload(ctx context.Context, filename, content string) (*Result, error) {
 	key, err := r.objectKey(filename)
 	if err != nil {
@@ -142,24 +143,47 @@ func (r *R2) ListKeys(ctx context.Context, prefix string) ([]string, error) {
 	return names, nil
 }
 
-// GetObject reads an object's content. The wiki digest uses it to read index files.
+// GetObject reads an object's content. A missing object reads as empty (nil,
+// nil) so read-merge-write callers can append to a not-yet-existing object
+// without special-casing; any other error is returned. The wiki digest uses it
+// to read index files and merge JSONL logs.
 func (r *R2) GetObject(ctx context.Context, key string) ([]byte, error) {
 	data, err := r.store.Get(ctx, r.bucket, r.keyPrefix+key)
 	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return nil, nil
+		}
+
 		return nil, fmt.Errorf("r2 get %s: %w", key, err)
 	}
 
 	return data, nil
 }
 
-var r2KeyNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+// r2KeySegRe matches one key path segment: [A-Za-z0-9][A-Za-z0-9._-]*.
+var r2KeySegRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 func (r *R2) objectKey(filename string) (string, error) {
-	if !r2KeyNameRe.MatchString(filename) {
-		return "", fmt.Errorf("r2: invalid object name %q (want a flat [A-Za-z0-9._-] segment)", filename)
+	if !validObjectKey(filename) {
+		return "", fmt.Errorf("r2: invalid object name %q (want [A-Za-z0-9._-] path segments separated by /)", filename)
 	}
 
 	return r.keyPrefix + filename, nil
+}
+
+// validObjectKey accepts a "/"-separated path where every segment is a non-empty
+// [A-Za-z0-9][A-Za-z0-9._-]* token (so ".." and empty segments are rejected).
+func validObjectKey(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, seg := range strings.Split(name, "/") {
+		if !r2KeySegRe.MatchString(seg) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func normalizeKeyPrefix(p string) string {
@@ -182,18 +206,24 @@ func contentTypeForName(name string) string {
 		return "text/markdown; charset=utf-8"
 	case ".json":
 		return "application/json"
+	case ".xml", ".opml":
+		return "application/xml"
 	default:
 		return "application/octet-stream"
 	}
 }
+
+// verifyClient is shared across self-checks so the digest write path (a HEAD
+// after every upload) reuses one connection pool instead of rebuilding a client
+// (and its TLS handshake) per call.
+var verifyClient = httputil.NewRestyClient(httputil.DefaultClientTimeout, 2)
 
 // verifyPublicObject checks the freshly uploaded object through its public URL:
 // HTTP 200 and the expected media type. Any mismatch (private bucket, broken
 // domain binding, wrong Content-Type) surfaces as an error so callers can
 // decide how to degrade instead of publishing a dead link.
 func verifyPublicObject(ctx context.Context, publicURL, wantContentType string) error {
-	resp, err := httputil.NewRestyClient(httputil.DefaultClientTimeout, 2).
-		R().
+	resp, err := verifyClient.R().
 		SetContext(ctx).
 		Head(publicURL)
 	if err != nil {

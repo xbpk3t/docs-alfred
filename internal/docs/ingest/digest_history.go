@@ -2,6 +2,8 @@ package wikiingest
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -9,6 +11,7 @@ import (
 	"sync"
 
 	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
+	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
@@ -26,20 +29,23 @@ const digestFileNameSuccess = "digest-success.jsonl"
 // persisted history is seeded is a caller policy (wiki add skips it under
 // --force, to re-digest); the claim set itself always deduplicates within a run.
 type digestHistory struct {
-	keys map[string]bool
-	mu   sync.Mutex
+	r2Store wikiwrite.DigestStore
+	keys    map[string]bool
+	mu      sync.Mutex
 }
 
 // newDigestHistory returns an empty history, ready for in-run deduplication.
-func newDigestHistory() *digestHistory {
-	return &digestHistory{keys: make(map[string]bool)}
+// r2Store, when non-nil, is where the persisted success log is read from
+// (logs/digest-success.jsonl in the bucket instead of the local wiki root).
+func newDigestHistory(r2Store wikiwrite.DigestStore) *digestHistory {
+	return &digestHistory{keys: make(map[string]bool), r2Store: r2Store}
 }
 
 // loadDigestHistory reads the persisted success history and returns a history
 // seeded with it. A missing or unreadable log file is not an error — it just
 // yields an empty history.
-func loadDigestHistory(wikiRoot string) *digestHistory {
-	h := newDigestHistory()
+func loadDigestHistory(wikiRoot string, r2Store wikiwrite.DigestStore) *digestHistory {
+	h := newDigestHistory(r2Store)
 	h.loadSuccesses(wikiRoot)
 	return h
 }
@@ -49,6 +55,12 @@ func loadDigestHistory(wikiRoot string) *digestHistory {
 // already-claimed) set; it is idempotent.
 func (h *digestHistory) loadSuccesses(wikiRoot string) {
 	if h == nil || wikiRoot == "" {
+		return
+	}
+
+	if h.r2Store != nil {
+		h.loadSuccessesFromR2()
+
 		return
 	}
 
@@ -85,6 +97,39 @@ func (h *digestHistory) loadSuccesses(wikiRoot string) {
 	}
 
 	slog.Info("wiki digest: loaded digest history", "count", len(h.keys), "path", path)
+}
+
+// loadSuccessesFromR2 seeds history from logs/digest-success.jsonl in the
+// bucket. A missing object just yields an empty history.
+func (h *digestHistory) loadSuccessesFromR2() {
+	data, err := h.r2Store.GetObject(context.Background(), "logs/"+digestFileNameSuccess)
+	if err != nil || len(data) == 0 {
+		if err != nil {
+			slog.Debug("wiki digest: no R2 success history yet", "error", err)
+		}
+
+		return
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for _, raw := range bytes.Split(data, []byte("\n")) {
+		if len(bytes.TrimSpace(raw)) == 0 {
+			continue
+		}
+		var entry wikitypes.DigestEntry
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			slog.Debug("wiki digest: skipping malformed history line", "error", err)
+			continue
+		}
+		if entry.Status != wikitypes.DigestSuccess || entry.URL == "" {
+			continue
+		}
+		h.keys[urlutil.NormalizeForDedup(entry.URL)] = true
+	}
+
+	slog.Info("wiki digest: loaded digest history from R2", "count", len(h.keys))
 }
 
 // claimOrSeen reports whether a URL is already handled for the purposes of this
