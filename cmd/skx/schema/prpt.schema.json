@@ -9,10 +9,6 @@
       "type": "object",
       "description": "(必填) frontmatter 命名空间；至少含 name+role",
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "(必填) 等于文件名 stem（路由名）"
-        },
         "role": {
           "type": "string",
           "enum": ["atom", "composite"],
@@ -118,8 +114,14 @@
                   "description": "dispatch 步：串行起 sub-agent 运行目标 prompt",
                   "required": ["kind", "name"],
                   "properties": {
-                    "kind": { "const": "prompt", "description": "(必填) dispatch 类型" },
-                    "name": { "type": "string", "description": "(必填) 目标 prompt stem（references 里必须存在）" }
+                    "kind": {
+                      "const": "prompt",
+                      "description": "(必填) dispatch 类型"
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "(必填) 目标 prompt stem（references 里必须存在）"
+                    }
                   },
                   "additionalProperties": false
                 }
@@ -166,8 +168,14 @@
           "type": "object",
           "description": "(可选) 产出物落盘行为；persist 存在即表示要落盘",
           "properties": {
-            "enabled": { "type": "boolean", "description": "(可选) 落盘开关，默认 true" },
-            "path": { "type": "string", "description": "(必填) 落盘路径（相对 workspace）" }
+            "enabled": {
+              "type": "boolean",
+              "description": "(可选) 落盘开关，默认 true"
+            },
+            "path": {
+              "type": "string",
+              "description": "(必填) 落盘路径（相对 workspace）"
+            }
           },
           "required": ["path"],
           "additionalProperties": false
