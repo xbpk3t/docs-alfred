@@ -178,6 +178,19 @@ func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 	result.Flushed = len(processed)
 	slog.Info("wiki digest completed", "flushed", len(processed))
 
+	// Feed rebuild: after new digest posts land on R2, rewrite every topic feed
+	// and the OPML index so subscribers see the fresh batch. Best-effort — a
+	// broken feed rebuild must not fail the digest run itself; the next run
+	// retries it.
+	if deps.r2 != nil {
+		if err := BuildFeeds(ctx, deps.r2, input.Config.R2.PublicBaseURL); err != nil {
+			slog.Warn("wiki digest: feed rebuild failed", "error", err)
+		}
+		if _, err := BuildOPML(ctx, deps.r2, input.Config.R2.PublicBaseURL); err != nil {
+			slog.Warn("wiki digest: opml rebuild failed", "error", err)
+		}
+	}
+
 	return result, nil
 }
 
