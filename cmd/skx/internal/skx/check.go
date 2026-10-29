@@ -30,8 +30,8 @@ type CheckResult struct {
 // HasErrors reports whether any issue was found.
 func (r *CheckResult) HasErrors() bool { return len(r.Issues) > 0 }
 
-// KnownNames returns the set of prompt names (frontmatter.name) present under
-// dir, hidden files excluded. Used to verify pl-* dependency references exist.
+// KnownNames returns the set of prompt names (file stems) present under dir,
+// hidden files excluded. Used to verify dispatch step references exist.
 func KnownNames(dir string) (map[string]bool, error) {
 	files, err := CollectYML(dir)
 	if err != nil {

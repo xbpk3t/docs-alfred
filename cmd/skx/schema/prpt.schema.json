@@ -7,7 +7,7 @@
   "properties": {
     "frontmatter": {
       "type": "object",
-      "description": "(必填) frontmatter 命名空间；至少含 name+role",
+      "description": "(必填) frontmatter 命名空间；至少含 role",
       "properties": {
         "role": {
           "type": "string",
@@ -24,7 +24,7 @@
           "description": "(可选) 状态；省略即 active"
         }
       },
-      "required": ["name", "role"],
+      "required": ["role"],
       "additionalProperties": false
     },
 

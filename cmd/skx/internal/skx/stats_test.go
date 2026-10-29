@@ -71,8 +71,8 @@ func TestLoadStatsMissingFile(t *testing.T) {
 
 func TestResolvePromptHitAndMiss(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, writeDirFile(dir, "brk.yml", "frontmatter:\n  name: brk\n  role: atom\n"))
-	require.NoError(t, writeDirFile(dir, ".TableCate.yml", "frontmatter:\n  name: TableCate\n  role: atom\n"))
+	require.NoError(t, writeDirFile(dir, "brk.yml", "frontmatter:\n  role: atom\n"))
+	require.NoError(t, writeDirFile(dir, ".TableCate.yml", "frontmatter:\n  role: atom\n"))
 
 	rel, ymlAbs, ok, err := ResolvePrompt(dir, "brk")
 	require.NoError(t, err)
@@ -92,9 +92,9 @@ func TestResolvePromptHitAndMiss(t *testing.T) {
 
 func TestAvailableNamesExcludesHidden(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, writeDirFile(dir, "b.yml", "frontmatter:\n  name: b\n  role: atom\n"))
-	require.NoError(t, writeDirFile(dir, "a.yml", "frontmatter:\n  name: a\n  role: atom\n"))
-	require.NoError(t, writeDirFile(dir, ".hidden.yml", "frontmatter:\n  name: hidden\n  role: atom\n"))
+	require.NoError(t, writeDirFile(dir, "b.yml", "frontmatter:\n  role: atom\n"))
+	require.NoError(t, writeDirFile(dir, "a.yml", "frontmatter:\n  role: atom\n"))
+	require.NoError(t, writeDirFile(dir, ".hidden.yml", "frontmatter:\n  role: atom\n"))
 
 	names, err := AvailableNames(dir)
 	require.NoError(t, err)

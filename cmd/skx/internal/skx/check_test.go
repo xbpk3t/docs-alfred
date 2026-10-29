@@ -42,16 +42,17 @@ func TestCheckDirValid(t *testing.T) {
 }
 
 func TestCheckDirMissingRequired(t *testing.T) {
+	// Missing top-level required field: frontmatter alone is not enough.
 	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  role: atom\n"})
 
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
 	assert.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "name")
+	assert.Contains(t, res.Issues[0].Message, "what")
 }
 
 func TestCheckDirUnknownTopLevelKey(t *testing.T) {
-	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  name: a\n  role: atom\nbogus:\n  x: 1\n"})
+	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  role: atom\nbogus:\n  x: 1\n"})
 
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
@@ -60,7 +61,7 @@ func TestCheckDirUnknownTopLevelKey(t *testing.T) {
 }
 
 func TestCheckDirUnknownFrontmatterKey(t *testing.T) {
-	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  name: a\n  role: atom\n  nope: 1\n"})
+	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  role: atom\n  nope: 1\n"})
 
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
@@ -70,7 +71,7 @@ func TestCheckDirUnknownFrontmatterKey(t *testing.T) {
 
 func TestCheckDirCompositeRequiresPipeline(t *testing.T) {
 	// role=composite without pl-* is rejected by the schema's if/then.
-	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  name: a\n  role: composite\nwhat:\n  is: x\n"})
+	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  role: composite\nwhat:\n  is: x\n"})
 
 	res, err := CheckDir(refs, schema)
 	require.NoError(t, err)
@@ -80,8 +81,8 @@ func TestCheckDirCompositeRequiresPipeline(t *testing.T) {
 
 func TestCheckDirCompositeWithDispatchOK(t *testing.T) {
 	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: b\nwhat:\n  is: x\n",
-		"b.yml": "frontmatter:\n  name: b\n  role: atom\nwhat:\n  is: x\n",
+		"a.yml": "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: b\nwhat:\n  is: x\n",
+		"b.yml": "frontmatter:\n  role: atom\nwhat:\n  is: x\n",
 	})
 
 	res, err := CheckDir(refs, schema)
@@ -92,7 +93,7 @@ func TestCheckDirCompositeWithDispatchOK(t *testing.T) {
 func TestCheckDirCompositeDispatchDanglingDep(t *testing.T) {
 	// dispatch step references a prompt that has no source file.
 	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: ghost\nwhat:\n  is: x\n",
+		"a.yml": "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: ghost\nwhat:\n  is: x\n",
 	})
 
 	res, err := CheckDir(refs, schema)
@@ -104,7 +105,7 @@ func TestCheckDirCompositeDispatchDanglingDep(t *testing.T) {
 func TestCheckDirCompositeDispatchMissingKeys(t *testing.T) {
 	// dispatch step without kind/name must fail schema (oneOf object requires both).
 	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\nwhat:\n  is: x\n",
+		"a.yml": "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\nwhat:\n  is: x\n",
 	})
 
 	res, err := CheckDir(refs, schema)
@@ -116,8 +117,8 @@ func TestCheckDirCompositeDispatchMissingKeys(t *testing.T) {
 func TestCheckDirStrictSectionKeys(t *testing.T) {
 	_, refs, schema := setupLayout(t, map[string]string{
 		// output.format is schema-valid; a bogus sub-key must be flagged.
-		"ok.yml":  "frontmatter:\n  name: ok\n  role: atom\nwhat:\n  is: x\noutput:\n  format: md\n  template: x\n",
-		"bad.yml": "frontmatter:\n  name: bad\n  role: atom\nwhat:\n  is: x\noutput:\n  format: md\n  bogus: 1\n",
+		"ok.yml":  "frontmatter:\n  role: atom\nwhat:\n  is: x\noutput:\n  format: md\n  template: x\n",
+		"bad.yml": "frontmatter:\n  role: atom\nwhat:\n  is: x\noutput:\n  format: md\n  bogus: 1\n",
 	})
 
 	res, err := CheckDir(refs, schema)
@@ -132,7 +133,7 @@ func TestCheckDirStrictSectionKeys(t *testing.T) {
 
 func TestCheckDirStrictWorkflowItemKeys(t *testing.T) {
 	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  name: a\n  role: atom\nworkflow:\n  - phase: x\n    bloop: 1\n",
+		"a.yml": "frontmatter:\n  role: atom\nworkflow:\n  - phase: x\n    bloop: 1\n",
 	})
 
 	res, err := CheckDir(refs, schema)

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+	domrules "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/internal/gh/goods"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
@@ -95,8 +96,9 @@ func RunDomainRender(cfg DomainRenderConfig) (*DomainRenderResult, error) {
 // grouped catalog domains emit the pre-gathered catalog, everything else is the
 // generic single-file path.
 func renderFormat(domain string, isSourceDir bool, src string, ft fileType, renderer render.Renderer, proc *docProcessor, outputName string, catalogEntries []catalogEntry) error {
+	spec, _ := domrules.SpecForDomain(domrules.DataDomain(domain))
 	switch {
-	case domain == "gh" && isSourceDir:
+	case spec.Render == domrules.RenderGH && isSourceDir:
 		if err := processGithubDirDomain(src, ft, proc); err != nil {
 			return fmt.Errorf("process gh dir: %w", err)
 		}
@@ -118,31 +120,31 @@ func renderFormat(domain string, isSourceDir bool, src string, ft fileType, rend
 	}
 }
 
-// createRendererForDomain returns the appropriate renderer for a domain.
+// createRendererForDomain returns the appropriate renderer for a domain. The
+// zero-value spec (Render "" — unknown domain) falls through to the generic
+// single-stream renderer.
 func createRendererForDomain(domain string) (render.Renderer, error) {
+	spec, _ := domrules.SpecForDomain(domrules.DataDomain(domain))
+
 	var renderer render.Renderer
-	switch domain {
-	case "gh":
+	switch spec.Render {
+	case domrules.RenderGH:
 		renderer = ghindex.NewGithubYAMLRender("")
-	case "goods":
+	case domrules.RenderGoods:
 		renderer = goods.NewGoodsYAMLRender()
 	default:
 		renderer = render.NewYAMLRenderer(domain, true)
 	}
 
-	parseMode, exists := serviceParseModeMap()[domain]
-	if !exists {
-		parseMode = render.ParseSingle
+	// Every renderer embeds *render.YAMLRenderer, so the parse-mode setter is
+	// always present. An unknown domain's zero spec defaults to single-doc.
+	mode := spec.ParseMode
+	if mode == render.ParseModeInvalid {
+		mode = render.ParseSingle
 	}
-
-	type parseModeSetter interface {
-		WithParseMode(mode render.ParseMode)
+	if r, ok := renderer.(interface{ WithParseMode(render.ParseMode) }); ok {
+		r.WithParseMode(mode)
 	}
-	r, ok := renderer.(parseModeSetter)
-	if !ok {
-		return nil, fmt.Errorf("renderer %T does not support parse mode configuration", renderer)
-	}
-	r.WithParseMode(parseMode)
 
 	return renderer, nil
 }
@@ -180,16 +182,12 @@ func processGithubDirDomain(src string, ft fileType, proc *docProcessor) error {
 // entry's type tag for the grouped domains, and whether the domain is grouped.
 // goods/books/ntl split by file into the frontend's `type`→`topics` catalog.
 func catalogDomainPrefix(domain string) (string, bool) {
-	switch domain {
-	case "goods":
-		return "goods.", true
-	case "books":
-		return "books.", true
-	case "ntl":
-		return "", true
-	default:
+	spec, ok := domrules.SpecForDomain(domrules.DataDomain(domain))
+	if !ok || !spec.Catalog {
 		return "", false
 	}
+
+	return spec.CatalogPrefix, true
 }
 
 // catalogEntry is one output `{type, topics}` group, matching the frontend
@@ -261,17 +259,6 @@ func normalizeFormat(f string) fileType {
 		return fileTypeYAML
 	default:
 		return ""
-	}
-}
-
-// serviceParseModeMap returns the parse mode for each domain.
-func serviceParseModeMap() map[string]render.ParseMode {
-	return map[string]render.ParseMode{
-		"goods": render.ParseFlatten,
-		"task":  render.ParseMulti,
-		"gh":    render.ParseFlatten,
-		"books": render.ParseFlatten,
-		"ntl":   render.ParseFlatten,
 	}
 }
 

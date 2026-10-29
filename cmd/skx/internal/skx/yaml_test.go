@@ -11,7 +11,6 @@ import (
 
 const samplePrompt = `---
 frontmatter:
-  name: choose
   role: atom
   desc: Grill me 对齐入口；先对齐再 PLAN/写码
 
@@ -83,10 +82,10 @@ func TestLoadPrompt(t *testing.T) {
 
 	p, err := LoadPrompt(path)
 	require.NoError(t, err)
-	assert.Equal(t, "choose", p.Name)
+	assert.Equal(t, "choose", p.Name) // derived from file stem, not frontmatter
 	assert.Equal(t, "atom", p.Role)
-	assert.Len(t, p.Frontmatter, 3) // name, role, description
-	assert.Equal(t, "name", p.Frontmatter[0].Key)
+	assert.Len(t, p.Frontmatter, 2) // role, desc (name removed from frontmatter)
+	assert.Equal(t, "role", p.Frontmatter[0].Key)
 }
 
 func TestCollectYML(t *testing.T) {

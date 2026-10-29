@@ -5,8 +5,8 @@ import (
 	"log/slog"
 
 	datarender "github.com/xbpk3t/docs-alfred/internal/data/render"
-	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/internal/gh/books"
+	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
 	"github.com/xbpk3t/docs-alfred/internal/gh/goods"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -68,36 +68,31 @@ func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, erro
 }
 
 func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions) (*DomainCheckResult, error) {
-	if domain == data.DomainGH {
-		result, err := ghcheck.RunCheckWithOptions(opts.path, ghcheck.CheckOptions{IncludeHidden: opts.includeHidden})
-		if err != nil {
-			return nil, err
-		}
-
-		return &DomainCheckResult{Issues: result.Issues}, nil
-	}
-
-	// goods is validated against goods.schema.json; books and ntl share the
-	// books.schema.json (ntl borrows the books schema — same table shape).
-	if domain == data.DomainGoods {
+	switch opts.spec.Check {
+	case data.CheckGoodsSchema:
 		result, err := goods.RunCheckWithOptions(opts.path, goods.CheckOptions{IncludeHidden: opts.includeHidden})
 		if err != nil {
 			return nil, err
 		}
 
 		return &DomainCheckResult{Issues: result.Issues}, nil
-	}
-
-	if domain == data.DomainBooks || domain == data.DomainNtl {
+	case data.CheckBooksSchema:
+		// books and ntl share the books.schema.json (ntl borrows the books
+		// schema — same table shape).
 		result, err := books.RunCheckWithOptions(opts.path, books.CheckOptions{IncludeHidden: opts.includeHidden})
 		if err != nil {
 			return nil, err
 		}
 
 		return &DomainCheckResult{Issues: result.Issues}, nil
-	}
+	case data.CheckWalker:
+		result, err := ghcheck.RunCheckWithOptions(opts.path, ghcheck.CheckOptions{IncludeHidden: opts.includeHidden})
+		if err != nil {
+			return nil, err
+		}
 
-	if opts.spec.StructuredCheck {
+		return &DomainCheckResult{Issues: result.Issues}, nil
+	case data.CheckStructured:
 		result, err := data.RunStructuredDataCheckWithOptions(opts.path, opts.scope, data.RunStructuredCheckOptions{
 			IncludeHidden: opts.includeHidden,
 		})
@@ -106,15 +101,13 @@ func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions)
 		}
 
 		return &DomainCheckResult{Issues: result.Issues}, nil
-	}
-
-	if opts.spec.YAMLParseOnly {
+	case data.CheckYAMLParseOnly:
 		return runYAMLParseOnlyDomainCheck(domain, opts.path)
+	default:
+		slog.Info("Data check passed", "domain", domain)
+
+		return &DomainCheckResult{}, nil
 	}
-
-	slog.Info("Data check passed", "domain", domain)
-
-	return &DomainCheckResult{}, nil
 }
 
 func runYAMLParseOnlyDomainCheck(domain data.DataDomain, path string) (*DomainCheckResult, error) {
@@ -147,7 +140,7 @@ func RunDomainDedup(input DomainDedupInput) (*DomainDedupResult, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown data domain %q", input.Domain)
 	}
-	if !spec.DuplicateCheck {
+	if spec.Duplicate == data.DupNone {
 		return nil, fmt.Errorf("data duplicate %s is not supported", input.Domain)
 	}
 
@@ -162,7 +155,7 @@ func RunDomainDedup(input DomainDedupInput) (*DomainDedupResult, error) {
 		report *data.DuplicateReport
 		err    error
 	)
-	if input.Domain == data.DomainGH {
+	if spec.Duplicate == data.DupGH {
 		report, err = data.RunGHDuplicateCheck(path)
 	} else {
 		report, err = data.RunDuplicateCheck(path)
@@ -218,12 +211,10 @@ func RunDomainRender(input DomainRenderInput) (*DomainRenderResult, error) {
 }
 
 func defaultRenderFormat(domain data.DataDomain) string {
-	switch domain {
-	case data.DomainGH:
-		return "json,yaml"
-	case data.DomainGoods, data.DomainBooks, data.DomainNtl:
-		return "json"
-	default:
+	spec, ok := data.SpecForDomain(domain)
+	if !ok || spec.DefaultFormat == "" {
 		return "yaml"
 	}
+
+	return spec.DefaultFormat
 }

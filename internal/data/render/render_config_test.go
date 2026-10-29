@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -260,14 +261,38 @@ func TestCreateRendererForDomain_Default(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// serviceParseModeMap
+// createRendererForDomain — parse-mode wiring
 // ---------------------------------------------------------------------------
 
-func TestServiceParseModeMap(t *testing.T) {
-	m := serviceParseModeMap()
-	assert.Equal(t, render.ParseFlatten, m["goods"])
-	assert.Equal(t, render.ParseMulti, m["task"])
-	assert.Equal(t, render.ParseFlatten, m["gh"])
+// embeddedParseMode reads the spec's parse mode off a renderer. gh/goods
+// embed *render.YAMLRenderer; the generic renderer is one itself.
+func embeddedParseMode(t *testing.T, renderer any) render.ParseMode {
+	t.Helper()
+	rv := reflect.ValueOf(renderer).Elem()
+	if f := rv.FieldByName("YAMLRenderer"); f.IsValid() {
+		rv = f.Elem()
+	}
+	return render.ParseMode(rv.FieldByName("ParseMode").Int())
+}
+
+func TestCreateRendererForDomain_ParseModes(t *testing.T) {
+	// Every renderer embeds *render.YAMLRenderer and should receive the spec's
+	// parse mode. The zero-value spec defaults to ParseSingle.
+	tests := []struct {
+		domain string
+		mode   render.ParseMode
+	}{
+		{"gh", render.ParseFlatten},
+		{"goods", render.ParseFlatten},
+		{"task", render.ParseMulti},
+		{"diary", render.ParseSingle},
+		{"default", render.ParseSingle},
+	}
+	for _, tt := range tests {
+		renderer, err := createRendererForDomain(tt.domain)
+		require.NoError(t, err)
+		assert.Equal(t, tt.mode, embeddedParseMode(t, renderer), tt.domain)
+	}
 }
 
 // ---------------------------------------------------------------------------

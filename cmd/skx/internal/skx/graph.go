@@ -41,18 +41,19 @@ func BuildGraph(dir string) (*Graph, []string, error) {
 		if relErr == nil && skipHidden(rel) {
 			continue // hidden files are cross-ref targets, not graph nodes
 		}
-		p, err := LoadPrompt(f)
+		doc, err := LoadPrompt(f)
 		if err != nil {
 			skipped = append(skipped, f)
 			continue
 		}
-		if p.Name != "" {
-			nodeSet[p.Name] = true
+		stem := doc.Name
+		if stem != "" {
+			nodeSet[stem] = true
 		}
 		// Dispatch steps (kind: prompt) in the workflow are serial sub-agent
 		// targets; execution order follows the workflow/phase/step sequence.
-		for _, to := range dispatchNames(p.Doc) {
-			edges = append(edges, Edge{From: p.Name, To: to, Mode: "serial"})
+		for _, to := range dispatchNames(doc.Doc) {
+			edges = append(edges, Edge{From: stem, To: to, Mode: "serial"})
 		}
 	}
 

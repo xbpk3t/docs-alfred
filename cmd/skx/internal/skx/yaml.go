@@ -40,15 +40,16 @@ const (
 
 // Dispatch step sub-keys (workflow.steps items with kind: prompt).
 const (
-	keyKind    = "kind"
-	keySteps   = "steps"
-	valPrompt  = "prompt"
+	keyKind   = "kind"
+	keySteps  = "steps"
+	valPrompt = "prompt"
 )
 
 // Prompt is a single parsed zzz prompt document.
 type Prompt struct {
 	Path string
-	// Name is frontmatter.name (the routing stem). Role is frontmatter.role.
+	// Name is the routing stem derived from the file name (brk.yml → "brk"),
+	// not a frontmatter field. Role is frontmatter.role.
 	Name        string
 	Role        string
 	Doc         map[string]any
@@ -72,17 +73,25 @@ func LoadPrompt(path string) (*Prompt, error) {
 		return nil, fmt.Errorf("parse frontmatter %s: %w", path, err)
 	}
 
-	p := &Prompt{Path: path, Doc: doc, Frontmatter: fmSlice}
+	p := &Prompt{Path: path, Doc: doc, Frontmatter: fmSlice, Name: PromptStem(path)}
 	if fm, ok := getMap(doc, keyFrontmatter); ok {
-		if v, ok := getString(fm, keyName); ok {
-			p.Name = strings.TrimSpace(v)
-		}
 		if v, ok := getString(fm, keyRole); ok {
 			p.Role = strings.TrimSpace(v)
 		}
 	}
 
 	return p, nil
+}
+
+// PromptStem returns the routing name for a prompt file: its base file name
+// without extension. Hidden files (dot-prefixed segments) are cross-ref
+// targets, not routing entries, and return "".
+func PromptStem(path string) string {
+	stem := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	if strings.HasPrefix(stem, ".") {
+		return ""
+	}
+	return stem
 }
 
 // CollectYML returns every *.yml file under dir (recursively, sorted).
@@ -120,10 +129,10 @@ func skipHidden(rel string) bool {
 	return false
 }
 
-// ResolvePrompt finds the prompt whose frontmatter.name equals name under
-// dir. It returns the relative references path (e.g. "analysis/3w3h") and the
-// absolute path to the rendered markdown sibling. ok is false when no source
-// .yml carries that name.
+// ResolvePrompt finds the prompt whose file stem equals name under dir. It
+// returns the relative references path (e.g. "analysis/3w3h") and the absolute
+// path to the rendered markdown sibling. ok is false when no source .yml
+// carries that stem.
 func ResolvePrompt(dir, name string) (rel, ymlAbs string, ok bool, err error) {
 	files, err := CollectYML(dir)
 	if err != nil {
@@ -138,19 +147,16 @@ func ResolvePrompt(dir, name string) (rel, ymlAbs string, ok bool, err error) {
 		if filepath.Base(stem) != name {
 			continue
 		}
-		p, err := LoadPrompt(f)
-		if err != nil {
+		if _, err := LoadPrompt(f); err != nil {
 			continue
 		}
-		if p.Name == name {
-			return stem, f, true, nil
-		}
+		return stem, f, true, nil
 	}
 	return "", "", false, nil
 }
 
 // AvailableNames returns all routeable prompt names under dir (sorted).
-// Hidden files are skipped; names come straight from the source yml files.
+// Hidden files are skipped; names come from each file's stem.
 func AvailableNames(dir string) ([]string, error) {
 	files, err := CollectYML(dir)
 	if err != nil {
@@ -162,12 +168,8 @@ func AvailableNames(dir string) ([]string, error) {
 		if err != nil || skipHidden(rel) {
 			continue
 		}
-		p, err := LoadPrompt(f)
-		if err != nil {
-			continue // unparseable files are surfaced by `skx check`, not here
-		}
-		if p.Name != "" {
-			seen[p.Name] = true
+		if p, err := LoadPrompt(f); err == nil && p.Name != "" {
+			seen[p.Name] = true // unparseable files are surfaced by `skx check`, not here
 		}
 	}
 	names := make([]string, 0, len(seen))

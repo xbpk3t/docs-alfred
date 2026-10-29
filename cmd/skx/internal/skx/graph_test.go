@@ -13,7 +13,6 @@ func TestBuildGraph(t *testing.T) {
 	root := t.TempDir()
 	refs := filepath.Join(root, "references")
 	require.NoError(t, writeDirFile(refs, "3w3h.yml", `frontmatter:
-  name: 3w3h
   role: composite
 workflow:
   - phase: x
@@ -27,10 +26,9 @@ workflow:
 what:
   is: x
 `))
-	require.NoError(t, writeDirFile(refs, "brk.yml", "frontmatter:\n  name: brk\n  role: atom\nwhat:\n  is: x\n"))
-	require.NoError(t, writeDirFile(refs, "diagram.yml", "frontmatter:\n  name: diagram\n  role: atom\nwhat:\n  is: x\n"))
+	require.NoError(t, writeDirFile(refs, "brk.yml", "frontmatter:\n  role: atom\nwhat:\n  is: x\n"))
+	require.NoError(t, writeDirFile(refs, "diagram.yml", "frontmatter:\n  role: atom\nwhat:\n  is: x\n"))
 	require.NoError(t, writeDirFile(refs, "vs.yml", `frontmatter:
-  name: vs
   role: composite
 workflow:
   - phase: x
@@ -40,7 +38,7 @@ workflow:
 what:
   is: x
 `))
-	require.NoError(t, writeDirFile(refs, "table2yml.yml", "frontmatter:\n  name: table2yml\n  role: atom\nwhat:\n  is: x\n"))
+	require.NoError(t, writeDirFile(refs, "table2yml.yml", "frontmatter:\n  role: atom\nwhat:\n  is: x\n"))
 
 	g, _, err := BuildGraph(refs)
 	require.NoError(t, err)
@@ -58,8 +56,8 @@ what:
 func TestBuildGraphPlainStepsNoDispatch(t *testing.T) {
 	root := t.TempDir()
 	refs := filepath.Join(root, "references")
-	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  name: a\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - 普通操作\n      - 另一个\n"))
-	require.NoError(t, writeDirFile(refs, "b.yml", "frontmatter:\n  name: b\n  role: atom\n"))
+	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - 普通操作\n      - 另一个\n"))
+	require.NoError(t, writeDirFile(refs, "b.yml", "frontmatter:\n  role: atom\n"))
 
 	g, _, err := BuildGraph(refs)
 	require.NoError(t, err)
@@ -70,8 +68,8 @@ func TestBuildGraphPlainStepsNoDispatch(t *testing.T) {
 func TestBuildGraphCycle(t *testing.T) {
 	root := t.TempDir()
 	refs := filepath.Join(root, "references")
-	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  name: a\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: b\n"))
-	require.NoError(t, writeDirFile(refs, "b.yml", "frontmatter:\n  name: b\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: a\n"))
+	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: b\n"))
+	require.NoError(t, writeDirFile(refs, "b.yml", "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: a\n"))
 
 	g, _, err := BuildGraph(refs)
 	require.NoError(t, err)
@@ -81,7 +79,7 @@ func TestBuildGraphCycle(t *testing.T) {
 func TestBuildGraphSelfLoop(t *testing.T) {
 	root := t.TempDir()
 	refs := filepath.Join(root, "references")
-	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  name: a\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: a\n"))
+	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: a\n"))
 
 	g, _, err := BuildGraph(refs)
 	require.NoError(t, err)
