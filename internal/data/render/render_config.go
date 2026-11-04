@@ -52,10 +52,7 @@ func RunDomainRender(cfg DomainRenderConfig) (*DomainRenderResult, error) {
 	isSourceDir := fi.IsDir()
 	formats := strings.Split(cfg.Format, ",")
 
-	renderer, err := createRendererForDomain(cfg.Domain)
-	if err != nil {
-		return nil, err
-	}
+	renderer := createRendererForDomain(cfg.Domain)
 
 	var outputFiles []string
 
@@ -123,7 +120,7 @@ func renderFormat(domain string, isSourceDir bool, src string, ft fileType, rend
 // createRendererForDomain returns the appropriate renderer for a domain. The
 // zero-value spec (Render "" — unknown domain) falls through to the generic
 // single-stream renderer.
-func createRendererForDomain(domain string) (render.Renderer, error) {
+func createRendererForDomain(domain string) render.Renderer {
 	spec, _ := domrules.SpecForDomain(domrules.DataDomain(domain))
 
 	var renderer render.Renderer
@@ -146,7 +143,7 @@ func createRendererForDomain(domain string) (render.Renderer, error) {
 		r.WithParseMode(mode)
 	}
 
-	return renderer, nil
+	return renderer
 }
 
 // processGithubDirDomain handles the gh domain's special directory-based rendering.

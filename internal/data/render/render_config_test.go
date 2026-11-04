@@ -237,27 +237,19 @@ func TestRunDomainRender_NixMetadata(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCreateRendererForDomain_Task(t *testing.T) {
-	renderer, err := createRendererForDomain("task")
-	require.NoError(t, err)
-	assert.NotNil(t, renderer)
+	assert.NotNil(t, createRendererForDomain("task"))
 }
 
 func TestCreateRendererForDomain_GH(t *testing.T) {
-	renderer, err := createRendererForDomain("gh")
-	require.NoError(t, err)
-	assert.NotNil(t, renderer)
+	assert.NotNil(t, createRendererForDomain("gh"))
 }
 
 func TestCreateRendererForDomain_Goods(t *testing.T) {
-	renderer, err := createRendererForDomain("goods")
-	require.NoError(t, err)
-	assert.NotNil(t, renderer)
+	assert.NotNil(t, createRendererForDomain("goods"))
 }
 
 func TestCreateRendererForDomain_Default(t *testing.T) {
-	renderer, err := createRendererForDomain("default")
-	require.NoError(t, err)
-	assert.NotNil(t, renderer)
+	assert.NotNil(t, createRendererForDomain("default"))
 }
 
 // ---------------------------------------------------------------------------
@@ -289,8 +281,7 @@ func TestCreateRendererForDomain_ParseModes(t *testing.T) {
 		{"default", render.ParseSingle},
 	}
 	for _, tt := range tests {
-		renderer, err := createRendererForDomain(tt.domain)
-		require.NoError(t, err)
+		renderer := createRendererForDomain(tt.domain)
 		assert.Equal(t, tt.mode, embeddedParseMode(t, renderer), tt.domain)
 	}
 }
