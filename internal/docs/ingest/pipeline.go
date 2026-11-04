@@ -129,10 +129,17 @@ func fetchFailurePending(
 	fetchResult *wikitypes.ContentFetchResult,
 ) (pendingURLWrite, bool) {
 	if fetchResult == nil {
-		return newPendingFetchFailure(urlStr, wikitypes.FailureFetch, "fetch content: empty result"), true
+		return newPendingFetchFailure(
+			urlStr, wikitypes.FailureFetch, wikitypes.FailureReasonHTTPError, "fetch content: empty result",
+		), true
 	}
 	if fetchResult.Error != "" {
-		return newPendingFetchFailure(urlStr, failureKindForFetchResult(fetchResult), "fetch content: "+fetchResult.Error), true
+		return newPendingFetchFailure(
+			urlStr,
+			failureKindForFetchResult(fetchResult),
+			failureReasonForFetchResult(fetchResult),
+			"fetch content: "+fetchResult.Error,
+		), true
 	}
 
 	return pendingURLWrite{}, false
@@ -145,7 +152,12 @@ func videoTooShortPending(
 	urlStr, contentType string,
 	fetchResult *wikitypes.ContentFetchResult,
 ) (pendingURLWrite, bool) {
-	if contentType != wikitypes.ContentVideo || len([]rune(fetchResult.Body)) >= minVideoRunes {
+	// Video metadata tables are long enough to pass a length-only check
+	// (bilibili video emits ~25 field/value rows). The driver flags results
+	// where a transcript or official summary was actually appended.
+	hasTranscript := fetchResult.HasTranscript
+	if contentType != wikitypes.ContentVideo ||
+		(len([]rune(fetchResult.Body)) >= minVideoRunes && hasTranscript) {
 		return pendingURLWrite{}, false
 	}
 
@@ -156,7 +168,9 @@ func videoTooShortPending(
 		Summary:     &wikitypes.StructuredSummary{Overview: fetchResult.Body},
 	}
 
-	return pendingExtractFailureWrite(item, "video content too short (likely no transcript)"), true
+	return pendingExtractFailureWrite(
+		item, wikitypes.FailureReasonTooShort, "video content too short (likely no transcript)",
+	), true
 }
 
 // minVideoRunes is the minimum transcript length for video content to be
@@ -251,11 +265,12 @@ func classifyPending(
 		// Empty content is a permanent content-side failure; non-empty content
 		// with a nil classifier means the AI call failed, which is transient.
 		if strings.TrimSpace(content) == "" {
-			return pendingExtractFailureWrite(item, "extraction failed: empty content")
+			return pendingExtractFailureWrite(item, wikitypes.FailureReasonEmpty, "extraction failed: empty content")
 		}
 
-		// Content was fetched but AI classify failed. Log as AI error JSONL
-		// (inbox still flushes; human re-adds URL). Do not dump raw into uncat.
+		// Content was fetched but AI classify failed. Log as AI error JSONL and
+		// keep the inbox line: an AI/network outage is transient. Do not dump
+		// raw content into uncat.
 		return pendingURLWrite{
 			URL:   urlStr,
 			Kind:  pendingAIError,
@@ -285,12 +300,13 @@ const (
 )
 
 type pendingURLWrite struct {
-	URL         string
-	Kind        pendingWriteKind
-	Item        *wikitypes.ClassifyItem
-	FailureType wikitypes.FailureKind
-	ExtraInfo   string
-	Error       string
+	URL           string
+	Kind          pendingWriteKind
+	Item          *wikitypes.ClassifyItem
+	FailureType   wikitypes.FailureKind
+	FailureReason wikitypes.FailureReason
+	ExtraInfo     string
+	Error         string
 }
 
 func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) []pendingURLWrite {
@@ -345,26 +361,43 @@ func classifyItemFromResult(urlStr, title string, classResult *wikitypes.Classif
 
 func pendingClassifyFailureWrite(item *wikitypes.ClassifyItem, extraInfo string) pendingURLWrite {
 	return pendingURLWrite{
-		URL:         item.URL,
-		Kind:        pendingClassifyFailure,
-		Item:        item,
-		FailureType: wikitypes.FailureClassify,
-		ExtraInfo:   extraInfo,
+		URL:           item.URL,
+		Kind:          pendingClassifyFailure,
+		Item:          item,
+		FailureType:   wikitypes.FailureClassify,
+		FailureReason: wikitypes.FailureReasonClassify,
+		ExtraInfo:     extraInfo,
 	}
 }
 
-func pendingExtractFailureWrite(item *wikitypes.ClassifyItem, extraInfo string) pendingURLWrite {
+func pendingExtractFailureWrite(
+	item *wikitypes.ClassifyItem,
+	failureReason wikitypes.FailureReason,
+	extraInfo string,
+) pendingURLWrite {
 	return pendingURLWrite{
-		URL:         item.URL,
-		Kind:        pendingExtractFailure,
-		Item:        item,
-		FailureType: wikitypes.FailureExtract,
-		ExtraInfo:   extraInfo,
+		URL:           item.URL,
+		Kind:          pendingExtractFailure,
+		Item:          item,
+		FailureType:   wikitypes.FailureExtract,
+		FailureReason: failureReason,
+		ExtraInfo:     extraInfo,
 	}
 }
 
-func newPendingFetchFailure(urlStr string, failureType wikitypes.FailureKind, extraInfo string) pendingURLWrite {
-	return pendingURLWrite{URL: urlStr, Kind: pendingFetchFailure, FailureType: failureType, ExtraInfo: extraInfo}
+func newPendingFetchFailure(
+	urlStr string,
+	failureType wikitypes.FailureKind,
+	failureReason wikitypes.FailureReason,
+	extraInfo string,
+) pendingURLWrite {
+	return pendingURLWrite{
+		URL:           urlStr,
+		Kind:          pendingFetchFailure,
+		FailureType:   failureType,
+		FailureReason: failureReason,
+		ExtraInfo:     extraInfo,
+	}
 }
 
 func newPendingUnhandled(urlStr, message string) pendingURLWrite {

@@ -60,6 +60,7 @@ type writer interface {
 	WriteFailureEntry(
 		item *wikitypes.ClassifyItem,
 		failureType wikitypes.FailureKind,
+		failureReason wikitypes.FailureReason,
 		extraInfo string,
 		opts *wikiwrite.WriteOptions,
 	) (string, error)
@@ -284,30 +285,62 @@ func requireFile(path, label string) error {
 	return nil
 }
 
+// newWikiFetcher builds the fetcher and its driver stack: the configured
+// driver, an opencli fallback when the configured name is unknown, and the
+// static-HTTP fallback that keeps generic pages off the shared browser tab.
+func newWikiFetcher(cfg *Config) fetcher {
+	driverName := cfg.Wiki.Driver
+	if driverName == "" {
+		driverName = "opencli"
+	}
+	// A browser slot is held per in-flight fetch, so more slots than workers
+	// is dead config; clamp it so a mistyped value cannot stampede opencli.
+	browserConcurrency := cfg.Wiki.BrowserConcurrency
+	if limit := cfg.Wiki.Concurrency; limit > 0 && browserConcurrency > limit {
+		slog.Warn("browserConcurrency above wiki concurrency has no effect; clamping",
+			"browserConcurrency", browserConcurrency, "wikiConcurrency", limit)
+		browserConcurrency = limit
+	}
+	driverOpts := wikifetch.DriverOptions{
+		MaxBodySize:        cfg.Wiki.MaxContentSize,
+		MediaEnabled:       cfg.Wiki.Media.Enabled,
+		BrowserConcurrency: browserConcurrency,
+	}
+	driver, err := wikifetch.NewDriver(driverName, driverOpts)
+	if err != nil {
+		slog.Warn("Unknown driver, falling back to opencli", "driver", driverName, "error", err)
+		driver, _ = wikifetch.NewDriver("opencli", driverOpts)
+	}
+	fetcherOpts := []wikifetch.FetcherOption{
+		wikifetch.WithDriver(driver),
+		wikifetch.WithMediaEnabled(cfg.Wiki.Media.Enabled),
+	}
+	if driver != nil && driver.Name() == "opencli" {
+		fetcherOpts = append(fetcherOpts, httpFallbackOptions(driverOpts)...)
+	}
+
+	return wikifetch.NewFetcher(fetcherOpts...)
+}
+
+// httpFallbackOptions returns the HTTP fallback fetcher option, or nil when the
+// fallback driver cannot be created.
+func httpFallbackOptions(opts wikifetch.DriverOptions) []wikifetch.FetcherOption {
+	fallback, err := wikifetch.NewDriver("http-readability", opts)
+	if err != nil {
+		slog.Warn("HTTP fallback driver unavailable", "error", err)
+
+		return nil
+	}
+
+	return []wikifetch.FetcherOption{wikifetch.WithFallbackDriver(fallback)}
+}
+
 func resolveDependencies(cfg *Config, deps *dependencies) *dependencies {
 	if deps == nil {
 		deps = &dependencies{}
 	}
 	if deps.fetcher == nil {
-		driverName := cfg.Wiki.Driver
-		if driverName == "" {
-			driverName = "opencli"
-		}
-		driver, err := wikifetch.NewDriver(driverName, wikifetch.DriverOptions{
-			MaxBodySize:  cfg.Wiki.MaxContentSize,
-			MediaEnabled: cfg.Wiki.Media.Enabled,
-		})
-		if err != nil {
-			slog.Warn("Unknown driver, falling back to opencli", "driver", driverName, "error", err)
-			driver, _ = wikifetch.NewDriver("opencli", wikifetch.DriverOptions{
-				MaxBodySize:  cfg.Wiki.MaxContentSize,
-				MediaEnabled: cfg.Wiki.Media.Enabled,
-			})
-		}
-		deps.fetcher = wikifetch.NewFetcher(
-			wikifetch.WithDriver(driver),
-			wikifetch.WithMediaEnabled(cfg.Wiki.Media.Enabled),
-		)
+		deps.fetcher = newWikiFetcher(cfg)
 	}
 	if deps.classifier == nil {
 		deps.classifier = wikiclassify.NewClassifier(
@@ -358,6 +391,9 @@ func newMediaStore(cfg *Config) mediaStore {
 }
 
 func newAIConfig(cfg *Config) *ai.ClientConfig {
+	// Client-side rate shaping: keep the process under the gateway's account
+	// RPM so 429 storms never start. 0 = unlimited.
+	ai.SetGlobalRPM(cfg.AI.MaxRPM)
 	// Start from DefaultConfig so Streaming defaults to true. Do not assign
 	// Streaming from a zero-value bool — that would re-enable CF 524 for
 	// tests/hand-built configs that never went through creasty defaults.

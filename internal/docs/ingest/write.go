@@ -19,9 +19,9 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 	case pendingClassifyFailure:
 		return writeClassifyFailure(deps, wikiRoot, pending.Item, pending.ExtraInfo, dryRun)
 	case pendingExtractFailure:
-		return writeExtractFailure(deps, wikiRoot, pending.Item, pending.ExtraInfo, dryRun)
+		return writeExtractFailure(deps, wikiRoot, pending.Item, pending.FailureReason, pending.ExtraInfo, dryRun)
 	case pendingFetchFailure:
-		return writeFetchFailure(deps, wikiRoot, pending.URL, pending.FailureType, pending.ExtraInfo, dryRun)
+		return writeFetchFailure(deps, wikiRoot, pending.URL, pending.FailureType, pending.FailureReason, pending.ExtraInfo, dryRun)
 	case pendingAIError:
 		return writeAIError(deps, wikiRoot, pending.URL, pending.Error, dryRun)
 	case pendingSkip:
@@ -217,6 +217,7 @@ func writeClassifyFailure(
 	path, err := deps.writer.WriteFailureEntry(
 		item,
 		wikitypes.FailureClassify,
+		wikitypes.FailureReasonClassify,
 		extraInfo,
 		newWriteOpts(deps, wikiRoot, dryRun),
 	)
@@ -235,14 +236,15 @@ func writeClassifyFailure(
 	}
 
 	return URLResult{
-		URL:         item.URL,
-		Status:      status,
-		Handled:     true,
-		OutputPath:  path,
-		TopicPath:   item.TopicPath,
-		WikiType:    string(item.Type),
-		ContentType: item.ContentType,
-		FailureType: wikitypes.FailureClassify,
+		URL:           item.URL,
+		Status:        status,
+		Handled:       true,
+		OutputPath:    path,
+		TopicPath:     item.TopicPath,
+		WikiType:      string(item.Type),
+		ContentType:   item.ContentType,
+		FailureType:   wikitypes.FailureClassify,
+		FailureReason: wikitypes.FailureReasonClassify,
 	}
 }
 
@@ -250,21 +252,24 @@ func writeExtractFailure(
 	deps *dependencies,
 	wikiRoot string,
 	item *wikitypes.ClassifyItem,
+	failureReason wikitypes.FailureReason,
 	extraInfo string,
 	dryRun bool,
 ) URLResult {
 	path, err := deps.writer.WriteFailureEntry(
 		item,
 		wikitypes.FailureExtract,
+		failureReason,
 		extraInfo,
 		newWriteOpts(deps, wikiRoot, dryRun),
 	)
 	if err != nil {
 		return URLResult{
-			URL:         item.URL,
-			Status:      StatusUnhandledError,
-			FailureType: wikitypes.FailureExtract,
-			Error:       fmt.Sprintf("write extract failure: %v", err),
+			URL:           item.URL,
+			Status:        StatusUnhandledError,
+			FailureType:   wikitypes.FailureExtract,
+			FailureReason: failureReason,
+			Error:         fmt.Sprintf("write extract failure: %v", err),
 		}
 	}
 
@@ -272,13 +277,16 @@ func writeExtractFailure(
 	if dryRun {
 		status = StatusDryRunFailure
 	}
+	retryable := failureRetryable(failureReason)
 
 	return URLResult{
-		URL:         item.URL,
-		Status:      status,
-		Handled:     true,
-		OutputPath:  path,
-		FailureType: wikitypes.FailureExtract,
+		URL:           item.URL,
+		Status:        status,
+		Handled:       !retryable,
+		Retryable:     retryable,
+		OutputPath:    path,
+		FailureType:   wikitypes.FailureExtract,
+		FailureReason: failureReason,
 	}
 }
 
@@ -287,6 +295,7 @@ func writeFetchFailure(
 	wikiRoot,
 	urlStr string,
 	failureType wikitypes.FailureKind,
+	failureReason wikitypes.FailureReason,
 	extraInfo string,
 	dryRun bool,
 ) URLResult {
@@ -294,15 +303,17 @@ func writeFetchFailure(
 	path, err := deps.writer.WriteFailureEntry(
 		item,
 		failureType,
+		failureReason,
 		extraInfo,
 		newWriteOpts(deps, wikiRoot, dryRun),
 	)
 	if err != nil {
 		return URLResult{
-			URL:         urlStr,
-			Status:      StatusUnhandledError,
-			FailureType: failureType,
-			Error:       fmt.Sprintf("write %s failure: %v", failureType, err),
+			URL:           urlStr,
+			Status:        StatusUnhandledError,
+			FailureType:   failureType,
+			FailureReason: failureReason,
+			Error:         fmt.Sprintf("write %s failure: %v", failureType, err),
 		}
 	}
 
@@ -310,13 +321,16 @@ func writeFetchFailure(
 	if dryRun {
 		status = StatusDryRunFailure
 	}
+	retryable := failureRetryable(failureReason)
 
 	return URLResult{
-		URL:         urlStr,
-		Status:      status,
-		Handled:     true,
-		OutputPath:  path,
-		FailureType: failureType,
+		URL:           urlStr,
+		Status:        status,
+		Handled:       !retryable,
+		Retryable:     retryable,
+		OutputPath:    path,
+		FailureType:   failureType,
+		FailureReason: failureReason,
 	}
 }
 
@@ -335,15 +349,17 @@ func writeAIError(
 	path, err := deps.writer.WriteFailureEntry(
 		item,
 		wikitypes.FailureAI,
+		wikitypes.FailureReasonAI,
 		message,
 		newWriteOpts(deps, wikiRoot, dryRun),
 	)
 	if err != nil {
 		return URLResult{
-			URL:         urlStr,
-			Status:      StatusUnhandledError,
-			FailureType: wikitypes.FailureAI,
-			Error:       fmt.Sprintf("write AI error: %v", err),
+			URL:           urlStr,
+			Status:        StatusUnhandledError,
+			FailureType:   wikitypes.FailureAI,
+			FailureReason: wikitypes.FailureReasonAI,
+			Error:         fmt.Sprintf("write AI error: %v", err),
 		}
 	}
 
@@ -353,10 +369,30 @@ func writeAIError(
 	}
 
 	return URLResult{
-		URL:         urlStr,
-		Status:      status,
-		Handled:     true,
-		OutputPath:  path,
-		FailureType: wikitypes.FailureAI,
+		URL:           urlStr,
+		Status:        status,
+		Handled:       false, // AI/network failure is transient: keep the inbox line.
+		Retryable:     failureRetryable(wikitypes.FailureReasonAI),
+		OutputPath:    path,
+		FailureType:   wikitypes.FailureAI,
+		FailureReason: wikitypes.FailureReasonAI,
+	}
+}
+
+// failureRetryable reports whether a failure should keep its inbox line for a
+// later run. Permanent outcomes (404, empty PDF, index page, no topic) flush;
+// transient blocks and incomplete extracts stay queued.
+func failureRetryable(reason wikitypes.FailureReason) bool {
+	switch reason {
+	case wikitypes.FailureReasonAntiBot,
+		wikitypes.FailureReasonCloudflare,
+		wikitypes.FailureReasonJSShell,
+		wikitypes.FailureReasonBrowserError,
+		wikitypes.FailureReasonHTTPError,
+		wikitypes.FailureReasonPartialExtract,
+		wikitypes.FailureReasonAI:
+		return true
+	default:
+		return false
 	}
 }

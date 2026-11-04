@@ -22,9 +22,9 @@ type mediaStore interface {
 	GetObject(ctx context.Context, key string) ([]byte, error)
 }
 
-// transcriptSectionMarker is the heading the opencli driver appends when it
-// merges a video subtitle into the fetch body.
-const transcriptSectionMarker = "## 字幕内容"
+// transcriptSectionMarker aliases the wikitypes marker so both the driver that
+// writes the section and the ingest that extracts it share one spelling.
+const transcriptSectionMarker = wikitypes.TranscriptSectionMarker
 
 // maybeUploadTranscript uploads the fetched media transcript to R2 and returns
 // its public URL. Returns "" when R2 is not configured, the content carries no

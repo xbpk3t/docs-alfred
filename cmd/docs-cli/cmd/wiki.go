@@ -567,9 +567,10 @@ func formatWikiTextResult(result *wikiuc.Result) string {
 	}
 	fmt.Fprintf(&out, "%s %s\n", result.Name, status)
 	fmt.Fprintf(&out,
-		"summary: processed=%v succeeded=%v handledFailures=%v unhandledFailures=%v skipped=%v "+
-			"written=%v flushed=%v wouldFlush=%v dryRun=%v\n",
-		summary["processed"], summary["succeeded"], summary["handledFailures"], summary["unhandledFailures"],
+		"summary: processed=%v succeeded=%v handledFailures=%v retryableFailures=%v permanentFailures=%v "+
+			"unhandledFailures=%v skipped=%v written=%v flushed=%v wouldFlush=%v dryRun=%v\n",
+		summary["processed"], summary["succeeded"], summary["handledFailures"],
+		summary["retryableFailures"], summary["permanentFailures"], summary["unhandledFailures"],
 		summary["skipped"], summary["written"], summary["flushed"], summary["wouldFlush"], summary["dryRun"])
 	for i := range result.URLResults {
 		item := &result.URLResults[i]
@@ -582,6 +583,12 @@ func formatWikiTextResult(result *wikiuc.Result) string {
 		}
 		if item.FailureType != "" {
 			fmt.Fprintf(&out, " failure=%s", item.FailureType)
+		}
+		if item.FailureReason != "" {
+			fmt.Fprintf(&out, " reason=%s", item.FailureReason)
+		}
+		if item.Retryable {
+			fmt.Fprint(&out, " retryable=true")
 		}
 		if item.Error != "" {
 			fmt.Fprintf(&out, " error=%s", item.Error)

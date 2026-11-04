@@ -146,13 +146,16 @@ type CompactLinearConfig struct {
 
 // WikiConfig contains wiki-specific workflow settings.
 type WikiConfig struct {
-	WikiRoot       string          `default:"wiki"    validate:"required" yaml:"wikiRoot"`
-	Driver         string          `default:"opencli"                     yaml:"driver"`
-	GHTopicsURL    string          `default:"https://docs.lucc.dev/gh.yml" yaml:"ghTopicsURL"`
-	Concurrency    int             `default:"3"       validate:"gte:1"    yaml:"concurrency"`
-	PerURLTimeout  int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
-	MaxContentSize int             `default:"20000"                       yaml:"maxContentSize"`
-	Media          wikiMediaConfig `yaml:"media"`
+	WikiRoot    string `default:"wiki"    validate:"required" yaml:"wikiRoot"`
+	Driver      string `default:"opencli"                     yaml:"driver"`
+	GHTopicsURL string `default:"https://docs.lucc.dev/gh.yml" yaml:"ghTopicsURL"`
+	Concurrency int    `default:"3"       validate:"gte:1"    yaml:"concurrency"`
+	// BrowserConcurrency caps concurrent opencli processes. opencli shares one
+	// Chrome tab, so this stays below Concurrency; 0 uses the driver default.
+	BrowserConcurrency int             `default:"2" validate:"gte:0" yaml:"browserConcurrency"`
+	PerURLTimeout      int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
+	MaxContentSize     int             `default:"20000"                       yaml:"maxContentSize"`
+	Media              wikiMediaConfig `yaml:"media"`
 	// IsAggr switches the local digest output layout: one <date>-summary.md at
 	// the wiki root, grouped by topic path, instead of per-topic summary.md
 	// files. When R2 is set, digest artifacts go to the bucket and IsAggr has
@@ -174,7 +177,10 @@ type AIConfig struct {
 	// Effort is the reasoning-effort tier, a peer of model. Empty falls to the
 	// shared pkg/ai default (LLM_EFFORT env, else "max"); no struct default so an
 	// unset YAML value doesn't override LLM_EFFORT. Recognized: low/medium/high/xhigh/max.
-	Effort      string  `yaml:"effort"`
+	Effort string `yaml:"effort"`
+	// MaxRPM caps AI requests per minute process-wide (client-side shaping for
+	// rate-limited gateways; set below the channel's real limit). 0 = unlimited.
+	MaxRPM      int     `default:"0"                       yaml:"maxRPM"`
 	Temperature float64 `default:"0.3"                     yaml:"temperature"`
 }
 

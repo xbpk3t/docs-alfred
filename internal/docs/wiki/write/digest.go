@@ -106,6 +106,9 @@ func logDigestPath(opts *WriteOptions, entry *types.DigestEntry) string {
 // in the bucket. R2 has no append, so it read-merge-writes the object; the
 // success log is read back by history dedup, so its URL set must stay complete.
 func logDigestEntryR2(entry *types.DigestEntry, opts *WriteOptions, line []byte) (string, error) {
+	r2LogMu.Lock()
+	defer r2LogMu.Unlock()
+
 	key := "logs/" + digestFilename(entry)
 	if opts.DryRun {
 		slog.Info("[DRY RUN] Would log digest entry to R2", "key", key,

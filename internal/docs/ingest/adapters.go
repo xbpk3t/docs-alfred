@@ -16,10 +16,11 @@ func (serviceWriter) WriteSummary(item *wikitypes.ClassifyItem, opts *wikiwrite.
 func (serviceWriter) WriteFailureEntry(
 	item *wikitypes.ClassifyItem,
 	failureType wikitypes.FailureKind,
+	failureReason wikitypes.FailureReason,
 	extraInfo string,
 	opts *wikiwrite.WriteOptions,
 ) (string, error) {
-	return wikiwrite.WriteFailureEntry(item, failureType, extraInfo, opts)
+	return wikiwrite.WriteFailureEntry(item, failureType, failureReason, extraInfo, opts)
 }
 
 func (serviceWriter) WriteManualReviewEntry(

@@ -77,21 +77,23 @@ type Result struct {
 
 // URLResult records the outcome for one URL.
 type URLResult struct {
-	URL         string                `json:"url"`
-	Status      string                `json:"status"`
-	OutputPath  string                `json:"outputPath,omitempty"`
-	TopicPath   string                `json:"topicPath,omitempty"`
-	WikiType    string                `json:"wikiType,omitempty"`
-	ContentType string                `json:"contentType,omitempty"`
-	FailureType wikitypes.FailureKind `json:"failureType,omitempty"`
-	Error       string                `json:"error,omitempty"`
-	LineIndex   int                   `json:"lineIndex,omitempty"`
-	Handled     bool                  `json:"handled"`
+	URL           string                  `json:"url"`
+	Status        string                  `json:"status"`
+	OutputPath    string                  `json:"outputPath,omitempty"`
+	TopicPath     string                  `json:"topicPath,omitempty"`
+	WikiType      string                  `json:"wikiType,omitempty"`
+	ContentType   string                  `json:"contentType,omitempty"`
+	FailureType   wikitypes.FailureKind   `json:"failureType,omitempty"`
+	FailureReason wikitypes.FailureReason `json:"failureReason,omitempty"`
+	Error         string                  `json:"error,omitempty"`
+	LineIndex     int                     `json:"lineIndex,omitempty"`
+	Retryable     bool                    `json:"retryable,omitempty"`
+	Handled       bool                    `json:"handled"`
 }
 
 // Summary returns count-oriented command details for structured output.
 func (r *Result) Summary() map[string]any {
-	var succeeded, handledFailures, unhandledFailures, skipped, written int
+	var succeeded, handledFailures, retryableFailures, permanentFailures, unhandledFailures, skipped, written int
 	for i := range r.URLResults {
 		item := &r.URLResults[i]
 		switch item.Status {
@@ -99,6 +101,11 @@ func (r *Result) Summary() map[string]any {
 			succeeded++
 		case StatusFailureWritten, StatusDryRunFailure:
 			handledFailures++
+			if item.Retryable {
+				retryableFailures++
+			} else {
+				permanentFailures++
+			}
 		case StatusUnhandledError:
 			unhandledFailures++
 		case StatusSkipped:
@@ -113,6 +120,8 @@ func (r *Result) Summary() map[string]any {
 		"processed":         len(r.URLResults),
 		"succeeded":         succeeded,
 		"handledFailures":   handledFailures,
+		"retryableFailures": retryableFailures,
+		"permanentFailures": permanentFailures,
 		"unhandledFailures": unhandledFailures,
 		"skipped":           skipped,
 		"written":           written,

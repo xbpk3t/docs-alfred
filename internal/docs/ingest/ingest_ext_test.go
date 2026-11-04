@@ -408,7 +408,7 @@ func TestWritePendingURLFailureDryRun(t *testing.T) {
 
 func TestPendingExtractFailureWrite(t *testing.T) {
 	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
-	p := pendingExtractFailureWrite(item, "too short")
+	p := pendingExtractFailureWrite(item, wikitypes.FailureReasonTooShort, "too short")
 	assert.Equal(t, pendingExtractFailure, p.Kind)
 	assert.Equal(t, wikitypes.FailureExtract, p.FailureType)
 	assert.Equal(t, "too short", p.ExtraInfo)
@@ -441,7 +441,7 @@ func TestServiceWriterWriteFailureEntry(t *testing.T) {
 	w := serviceWriter{}
 	path, err := w.WriteFailureEntry(
 		&wikitypes.ClassifyItem{URL: "https://example.com"},
-		wikitypes.FailureFetch, "timeout",
+		wikitypes.FailureFetch, wikitypes.FailureReasonHTTPError, "timeout",
 		&wikiwrite.WriteOptions{WikiRoot: root},
 	)
 	require.NoError(t, err)
@@ -795,7 +795,7 @@ func TestWriteExtractFailureWriterError(t *testing.T) {
 	deps.writer.failureErr = errors.New("write failed")
 	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 
-	result := writeExtractFailure(deps.dependencies(), t.TempDir(), item, "info", false)
+	result := writeExtractFailure(deps.dependencies(), t.TempDir(), item, wikitypes.FailureReasonEmpty, "info", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
 	assert.Equal(t, wikitypes.FailureExtract, result.FailureType)
@@ -805,7 +805,7 @@ func TestWriteExtractFailureDryRun(t *testing.T) {
 	deps := newFakeDeps()
 	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 
-	result := writeExtractFailure(deps.dependencies(), t.TempDir(), item, "info", true)
+	result := writeExtractFailure(deps.dependencies(), t.TempDir(), item, wikitypes.FailureReasonEmpty, "info", true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
 	assert.True(t, result.Handled)
 	assert.True(t, deps.writer.failures[0].dryRun)
@@ -817,7 +817,7 @@ func TestWriteFetchFailureWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.failureErr = errors.New("write failed")
 
-	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureFetch, "timeout", false)
+	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureFetch, wikitypes.FailureReasonHTTPError, "timeout", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
 	assert.Equal(t, wikitypes.FailureFetch, result.FailureType)
@@ -826,9 +826,10 @@ func TestWriteFetchFailureWriterError(t *testing.T) {
 func TestWriteFetchFailureDryRun(t *testing.T) {
 	deps := newFakeDeps()
 
-	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureFetch, "timeout", true)
+	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureFetch, wikitypes.FailureReasonHTTPError, "timeout", true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
-	assert.True(t, result.Handled)
+	assert.False(t, result.Handled, "transient failures keep the inbox line")
+	assert.True(t, result.Retryable)
 	assert.True(t, deps.writer.failures[0].dryRun)
 }
 
@@ -849,7 +850,8 @@ func TestWriteAIErrorDryRun(t *testing.T) {
 
 	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", "AI timeout", true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
-	assert.True(t, result.Handled)
+	assert.False(t, result.Handled, "AI failure is transient; keep the inbox line")
+	assert.True(t, result.Retryable)
 	assert.True(t, deps.writer.failures[0].dryRun)
 }
 
@@ -1021,12 +1023,12 @@ func TestProcessAddURLUnhandledClassifyRetryError(t *testing.T) {
 		Title: "Title",
 		Body:  "some real content",
 	}
-	// No classifier result → AI failure JSONL (handled), not unhandled
+	// No classifier result → AI failure JSONL (retryable), not unhandled.
 
 	results := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
 	require.Len(t, results, 1)
 	assert.Equal(t, StatusFailureWritten, results[0].Status)
-	assert.True(t, results[0].Handled)
+	assert.False(t, results[0].Handled, "transient AI failure keeps the inbox line")
 	assert.Equal(t, wikitypes.FailureAI, results[0].FailureType)
 }
 
@@ -1041,9 +1043,12 @@ func TestRunDigestNoEntriesHandled(t *testing.T) {
 
 	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies()})
 	require.NoError(t, err)
-	// A nil fetch result writes a failure entry (Handled=true) and still flushes the line
+	// A nil fetch result is a driver bug/cancellation, so keep the inbox line.
 	assert.True(t, result.OK())
-	assert.Equal(t, 1, result.Flushed)
+	assert.Equal(t, 0, result.Flushed)
+	require.Len(t, result.URLResults, 1)
+	assert.False(t, result.URLResults[0].Handled)
+	assert.True(t, result.URLResults[0].Retryable)
 }
 
 // --- LoadConfig validation error ---
@@ -1095,4 +1100,12 @@ func TestChangedWikiGitRootsAbsError(t *testing.T) {
 	_, err := changedWikiGitRoots(context.Background(), t.TempDir(), runCmd)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "find git worktree")
+}
+
+func TestFailureReasonForFetchResultNotFound(t *testing.T) {
+	assert.Equal(t, wikitypes.FailureReasonNotFound, failureReasonForFetchResult(&wikitypes.ContentFetchResult{
+		Error:       "GET https://example.com: 404 Not Found",
+		FailureKind: wikitypes.FailureResolve,
+	}))
+	assert.False(t, failureRetryable(wikitypes.FailureReasonNotFound))
 }

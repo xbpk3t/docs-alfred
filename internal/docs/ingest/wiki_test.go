@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,12 +23,35 @@ func TestLoadConfigPreservesDefaultsWithPartialFile(t *testing.T) {
 	cfg, err := LoadConfig(configPath, "")
 	require.NoError(t, err)
 	require.Equal(t, 2, cfg.Wiki.Concurrency)
+	require.Equal(t, 2, cfg.Wiki.BrowserConcurrency, "browser concurrency defaults below wiki concurrency")
 	require.Equal(t, "wiki", cfg.Wiki.WikiRoot)
 	require.True(t, cfg.Wiki.Media.Enabled)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
 	require.Equal(t, "wiki compact", cfg.Compact.Title)
 	require.Equal(t, 1, cfg.Compact.Schedule, "schedule defaults to weekly")
 	require.Equal(t, "LUC", cfg.Compact.Send.Linear.TeamKey)
+}
+
+func TestLoadConfigBrowserConcurrencyOverride(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "wiki.yml")
+	require.NoError(t, os.WriteFile(configPath, []byte("wiki:\n  browserConcurrency: 1\n"), 0o600))
+
+	cfg, err := LoadConfig(configPath, "")
+	require.NoError(t, err)
+	require.Equal(t, 1, cfg.Wiki.BrowserConcurrency)
+}
+
+func TestLoadConfigMaxRPM(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "wiki.yml")
+	require.NoError(t, os.WriteFile(configPath, []byte("ai:\n  maxRPM: 10\n"), 0o600))
+
+	cfg, err := LoadConfig(configPath, "")
+	require.NoError(t, err)
+	require.Equal(t, 10, cfg.AI.MaxRPM)
+
+	cfg, err = LoadConfig("", "")
+	require.NoError(t, err)
+	require.Zero(t, cfg.AI.MaxRPM, "unset maxRPM defaults to unlimited")
 }
 
 func TestLoadConfigCompactSendBlock(t *testing.T) {
@@ -522,6 +546,7 @@ type fakeClassifier struct {
 	results map[string]*wikitypes.ClassifyResult
 	// pins records the pin each URL was classified under, so tests can assert
 	// that child posts inherit their container's topic.
+	mu   sync.Mutex
 	pins map[string]wikiclassify.TopicPin
 }
 
@@ -530,6 +555,8 @@ func (f *fakeClassifier) ClassifyURLInTopic(
 	urlStr, _, _ string,
 	pin wikiclassify.TopicPin,
 ) *wikitypes.ClassifyResult {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.pins == nil {
 		f.pins = map[string]wikiclassify.TopicPin{}
 	}
@@ -561,10 +588,11 @@ type writeCall struct {
 }
 
 type failureCall struct {
-	url         string
-	failureType wikitypes.FailureKind
-	extraInfo   string
-	dryRun      bool
+	url           string
+	failureType   wikitypes.FailureKind
+	failureReason wikitypes.FailureReason
+	extraInfo     string
+	dryRun        bool
 }
 
 func (f *fakeWriter) WriteSummary(item *wikitypes.ClassifyItem, opts *wikiwrite.WriteOptions) (string, error) {
@@ -579,13 +607,20 @@ func (f *fakeWriter) WriteSummary(item *wikitypes.ClassifyItem, opts *wikiwrite.
 func (f *fakeWriter) WriteFailureEntry(
 	item *wikitypes.ClassifyItem,
 	failureType wikitypes.FailureKind,
+	failureReason wikitypes.FailureReason,
 	extraInfo string,
 	opts *wikiwrite.WriteOptions,
 ) (string, error) {
 	if f.failureErr != nil {
 		return "", f.failureErr
 	}
-	f.failures = append(f.failures, failureCall{url: item.URL, failureType: failureType, dryRun: opts.DryRun, extraInfo: extraInfo})
+	f.failures = append(f.failures, failureCall{
+		url:           item.URL,
+		failureType:   failureType,
+		failureReason: failureReason,
+		dryRun:        opts.DryRun,
+		extraInfo:     extraInfo,
+	})
 
 	return filepath.Join(opts.WikiRoot, failureType.String()+"-failed.md"), nil
 }
@@ -620,4 +655,29 @@ func (f *fakeInbox) FlushInbox(_ string, processedLineIndices map[int][]string) 
 	f.flushed = processedLineIndices
 
 	return nil
+}
+
+func TestRunDigestRetryableFailureKeepsInboxLine(t *testing.T) {
+	deps := newFakeDeps()
+	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: "https://example.com/a", LineIndex: 1}}
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
+		Error:         "extract: zhihu anti-bot verification page",
+		FailureKind:   wikitypes.FailureExtract,
+		FailureReason: wikitypes.FailureReasonAntiBot,
+	}
+	cfg := testConfig(t)
+	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/a\n"), 0o600))
+
+	result, err := RunDigest(context.Background(), DigestInput{
+		Config: cfg,
+		deps:   deps.dependencies(),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, result.Flushed)
+	require.Empty(t, deps.inbox.flushed)
+	require.Len(t, result.URLResults, 1)
+	require.False(t, result.URLResults[0].Handled)
+	require.True(t, result.URLResults[0].Retryable)
+	require.Equal(t, wikitypes.FailureReasonAntiBot, result.URLResults[0].FailureReason)
 }

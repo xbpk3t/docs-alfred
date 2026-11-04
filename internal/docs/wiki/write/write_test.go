@@ -91,7 +91,7 @@ func TestWriteFailureEntryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
 		Title: "A",
 	}
 
-	path, err := WriteFailureEntry(item, types.FailureFetch, "fetch failed", &WriteOptions{WikiRoot: root, DryRun: true})
+	path, err := WriteFailureEntry(item, types.FailureFetch, types.FailureReasonHTTPError, "fetch failed", &WriteOptions{WikiRoot: root, DryRun: true})
 
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(root, "digest-fetch-error.jsonl"), path)
@@ -473,44 +473,24 @@ func TestSectionBodyStartHeadingAtEndWithoutNewline(t *testing.T) {
 	assert.Equal(t, len("body\n## AI/agent"), sectionBodyStart("body\n## AI/agent", "## AI/agent"))
 }
 
-// --- appendToDateSectionAndWrite ---
+// --- mergeDateSection ---
 
-func TestAppendToDateSectionAndWriteExistingContent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "uncat.md")
-	require.NoError(t, os.WriteFile(path, []byte("## 2026-06-20\n\n### Existing\n"), 0o600))
-
-	err := appendToDateSectionAndWrite(path, "## 2026-06-20", "### New Entry\nContent")
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "### Existing")
-	assert.Contains(t, string(data), "### New Entry")
+func TestMergeDateSectionExistingDate(t *testing.T) {
+	merged := mergeDateSection("## 2026-06-20\n\n### Existing\n", "## 2026-06-20", "### New Entry\nContent")
+	assert.Contains(t, merged, "### Existing")
+	assert.Contains(t, merged, "### New Entry")
 }
 
-func TestAppendToDateSectionAndWriteNewDateInExistingFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "uncat.md")
-	require.NoError(t, os.WriteFile(path, []byte("## 2026-06-19\n\n### Old\n"), 0o600))
-
-	err := appendToDateSectionAndWrite(path, "## 2026-06-20", "### New Entry\nContent")
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "## 2026-06-20")
-	assert.Contains(t, string(data), "## 2026-06-19")
+func TestMergeDateSectionNewDateInExistingFile(t *testing.T) {
+	merged := mergeDateSection("## 2026-06-19\n\n### Old\n", "## 2026-06-20", "### New Entry\nContent")
+	assert.Contains(t, merged, "## 2026-06-20")
+	assert.Contains(t, merged, "## 2026-06-19")
 }
 
-func TestAppendToDateSectionAndWriteEmptyFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "uncat.md")
-
-	err := appendToDateSectionAndWrite(path, "## 2026-06-20", "### Entry\nContent")
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "## 2026-06-20")
-	assert.Contains(t, string(data), "### Entry")
+func TestMergeDateSectionEmpty(t *testing.T) {
+	merged := mergeDateSection("", "## 2026-06-20", "### Entry\nContent")
+	assert.Contains(t, merged, "## 2026-06-20")
+	assert.Contains(t, merged, "### Entry")
 }
 
 // --- itemURL ---
@@ -692,7 +672,7 @@ func TestWriteFailureEntryRealWrite(t *testing.T) {
 		Title: "Failed Item",
 	}
 
-	path, err := WriteFailureEntry(item, types.FailureExtract, "extraction failed", &WriteOptions{WikiRoot: root})
+	path, err := WriteFailureEntry(item, types.FailureExtract, types.FailureReasonPartialExtract, "extraction failed", &WriteOptions{WikiRoot: root})
 	require.NoError(t, err)
 	assert.NotEmpty(t, path)
 
@@ -700,6 +680,7 @@ func TestWriteFailureEntryRealWrite(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "https://example.com")
 	assert.Contains(t, string(data), "extraction failed")
+	assert.Contains(t, string(data), `"failureReason":"partial_extract"`)
 }
 
 // --- appendEntryBody edge cases ---
@@ -893,4 +874,10 @@ func TestFlushInboxMatchesStrippedHandledURL(t *testing.T) {
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Empty(t, string(data))
+}
+
+func TestManualReviewContainsURL(t *testing.T) {
+	content := "### A\n\n```markdown\nURL: https://example.com/post?utm_source=x\nType: inbox\n```\n"
+	assert.True(t, manualReviewContainsURL(content, "https://example.com/post"))
+	assert.False(t, manualReviewContainsURL(content, "https://example.com/other"))
 }

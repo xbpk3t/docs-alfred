@@ -50,6 +50,15 @@ var pathLocks = struct {
 	mu    sync.Mutex
 }{locks: make(map[string]*sync.Mutex)}
 
+// R2 has no append/CAS primitive, so read-merge-write must be serialized at
+// least inside this process. r2UncatMu and r2LogMu are separate because an
+// uncat write also logs a success entry. Overlapping digest processes still
+// need an object-store CAS/lease.
+var (
+	r2UncatMu sync.Mutex
+	r2LogMu   sync.Mutex
+)
+
 // DigestStore is the R2 surface the write layer needs when digest artifacts go
 // remote. *litter.R2 implements it via a small adapter in the ingest package;
 // tests fake it.
@@ -125,7 +134,7 @@ func routeInvalidTopicPath(item *types.ClassifyItem, opts *WriteOptions) (bool, 
 func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) {
 	if item.TopicPath == "" {
 		// Empty TopicPath would write to wiki root — route to classify rejection.
-		_, err := WriteFailureEntry(item, types.FailureClassify, "empty topic path", opts)
+		_, err := WriteFailureEntry(item, types.FailureClassify, types.FailureReasonClassify, "empty topic path", opts)
 
 		return "", err
 	}
@@ -153,6 +162,11 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 		sectionHeading = "## " + item.TopicPath
 		fmTitle = batchID
 	}
+	// PathWithin is used even when ValidTopicPaths is nil (catalog outage), so
+	// an AI-supplied or pinned topic path can never escape the wiki root.
+	if !fileutil.PathWithin(opts.WikiRoot, summaryPath) {
+		return "", fmt.Errorf("summary path escapes wiki root: %s", summaryPath)
+	}
 
 	if opts.DryRun {
 		if opts.R2Store != nil {
@@ -171,17 +185,7 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 	// R2 mode: every post is its own object at digest/<batch>/<topic>/<hash>.md,
 	// so the wiki tree stays free of digest artifacts. batch = one digest run.
 	if opts.R2Store != nil {
-		key := digestObjectKey(batchID, item.TopicPath, item.URL)
-		url, err := opts.R2Store.Upload(context.Background(), key, entry)
-		if err != nil {
-			return "", fmt.Errorf("r2 write summary: %w", err)
-		}
-		slog.Info("Summary written to R2", "key", key, "url", url, "topic", item.TopicPath)
-		if _, err := LogSuccessEntry(item, url, opts); err != nil {
-			slog.Warn("Failed to log success entry", "url", item.URL, "error", err)
-		}
-
-		return url, nil
+		return writeSummaryR2(item, entry, batchID, opts)
 	}
 
 	unlock := lockPath(summaryPath)
@@ -218,6 +222,22 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 	}
 
 	return summaryPath, nil
+}
+
+// writeSummaryR2 uploads the entry as its own object at
+// digest/<batch>/<topic>/<hash>.md and logs the success entry.
+func writeSummaryR2(item *types.ClassifyItem, entry, batchID string, opts *WriteOptions) (string, error) {
+	key := digestObjectKey(batchID, item.TopicPath, item.URL)
+	url, err := opts.R2Store.Upload(context.Background(), key, entry)
+	if err != nil {
+		return "", fmt.Errorf("r2 write summary: %w", err)
+	}
+	slog.Info("Summary written to R2", "key", key, "url", url, "topic", item.TopicPath)
+	if _, err := LogSuccessEntry(item, url, opts); err != nil {
+		slog.Warn("Failed to log success entry", "url", item.URL, "error", err)
+	}
+
+	return url, nil
 }
 
 func resolveTopicDir(item *types.ClassifyItem, opts *WriteOptions) string {
@@ -438,7 +458,13 @@ func renderContent(fm *SummaryFrontmatter, body string) string {
 //   - classify:  content fetched but AI couldn't assign a topic
 //
 // The legacy MD file format is replaced by JSONL for machine-parseable diagnostics.
-func WriteFailureEntry(item *types.ClassifyItem, failureType types.FailureKind, extraInfo string, opts *WriteOptions) (string, error) {
+func WriteFailureEntry(
+	item *types.ClassifyItem,
+	failureType types.FailureKind,
+	failureReason types.FailureReason,
+	extraInfo string,
+	opts *WriteOptions,
+) (string, error) {
 	if opts == nil {
 		return "", errors.New("write options required for failure entry")
 	}
@@ -448,6 +474,7 @@ func WriteFailureEntry(item *types.ClassifyItem, failureType types.FailureKind, 
 		Stage:          digestStageForFailure(failureType),
 		Status:         types.DigestFailure,
 		FailureKind:    string(failureType),
+		FailureReason:  failureReason,
 		Error:          extraInfo,
 		TopicPath:      item.TopicPath,
 		SuggestedTopic: item.SuggestedTopic,
@@ -514,29 +541,22 @@ func WriteManualReviewEntry(item *types.ClassifyItem, opts *WriteOptions) (strin
 	// R2 mode: the uncat queue lives at uncat.md in the bucket (read-merge-write,
 	// same as the digest logs) so nothing lands in the local wiki tree.
 	if opts.R2Store != nil {
-		key := "uncat.md"
-		existing, err := opts.R2Store.GetObject(context.Background(), key)
-		if err != nil {
-			return "", fmt.Errorf("r2 write uncat.md: read existing: %w", err)
-		}
-		merged := mergeDateSection(string(existing), dateHeading, entry)
-		url, err := opts.R2Store.Upload(context.Background(), key, merged)
-		if err != nil {
-			return "", fmt.Errorf("r2 write uncat.md: %w", err)
-		}
-		slog.Info("Manual review entry appended to R2",
-			"key", key, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
-		if _, err := LogSuccessEntry(item, url, opts); err != nil {
-			slog.Warn("Failed to log success entry for manual review", "url", item.URL, "error", err)
-		}
-
-		return url, nil
+		return writeManualReviewR2(item, opts, dateHeading, entry)
 	}
 
 	unlock := lockPath(path)
 	defer unlock()
 
-	if err := appendToDateSectionAndWrite(path, dateHeading, entry); err != nil {
+	existing, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("write uncat.md: read existing: %w", err)
+	}
+	if manualReviewContainsURL(string(existing), item.URL) {
+		slog.Info("Manual review entry already exists; skipping duplicate", "path", path, "url", item.URL)
+
+		return path, nil
+	}
+	if err := fileutil.AtomicWriteFile(path, []byte(mergeDateSection(string(existing), dateHeading, entry)), fileutil.FilePermPrivate); err != nil {
 		return "", fmt.Errorf("write uncat.md: %w", err)
 	}
 
@@ -549,6 +569,37 @@ func WriteManualReviewEntry(item *types.ClassifyItem, opts *WriteOptions) (strin
 	}
 
 	return path, nil
+}
+
+// writeManualReviewR2 appends a manual review entry to uncat.md in the R2
+// bucket, skipping URLs that are already queued.
+func writeManualReviewR2(item *types.ClassifyItem, opts *WriteOptions, dateHeading, entry string) (string, error) {
+	const key = "uncat.md"
+
+	r2UncatMu.Lock()
+	defer r2UncatMu.Unlock()
+
+	existing, err := opts.R2Store.GetObject(context.Background(), key)
+	if err != nil {
+		return "", fmt.Errorf("r2 write uncat.md: read existing: %w", err)
+	}
+	if manualReviewContainsURL(string(existing), item.URL) {
+		slog.Info("Manual review entry already exists in R2; skipping duplicate",
+			"key", key, "url", item.URL)
+
+		return key, nil
+	}
+	url, err := opts.R2Store.Upload(context.Background(), key, mergeDateSection(string(existing), dateHeading, entry))
+	if err != nil {
+		return "", fmt.Errorf("r2 write uncat.md: %w", err)
+	}
+	slog.Info("Manual review entry appended to R2",
+		"key", key, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
+	if _, err := LogSuccessEntry(item, url, opts); err != nil {
+		slog.Warn("Failed to log success entry for manual review", "url", item.URL, "error", err)
+	}
+
+	return url, nil
 }
 
 // buildReviewEntryMeta builds the title and metadata block for a manual review entry.
@@ -597,17 +648,6 @@ func mergeDateSection(existing, dateHeading, entry string) string {
 	}
 
 	return fmt.Sprintf("%s\n%s\n\n%s\n", strings.TrimRight(existing, "\n"), dateHeading, entry)
-}
-
-// appendToDateSectionAndWrite appends an entry to the appropriate date section
-// in the uncat.md file and writes the result.
-func appendToDateSectionAndWrite(path, dateHeading, entry string) error {
-	var existing strings.Builder
-	if data, err := os.ReadFile(path); err == nil {
-		existing.Write(data)
-	}
-
-	return fileutil.AtomicWriteFile(path, []byte(mergeDateSection(existing.String(), dateHeading, entry)), fileutil.FilePermPrivate)
 }
 
 func itemURL(item *types.ClassifyItem) string {
@@ -808,4 +848,26 @@ func cleanFlushedInboxLine(line string) string {
 	line = strings.ReplaceAll(line, "- :", "-")
 
 	return strings.TrimSpace(line)
+}
+
+// manualReviewContainsURL reports whether an uncat.md body already has an
+// entry for rawURL. Entries carry the URL in their fenced metadata block as
+// "URL: <url>"; compare normalized forms so tracking variants collapse.
+func manualReviewContainsURL(content, rawURL string) bool {
+	target := urlutil.NormalizeForDedup(rawURL)
+	if target == "" {
+		return false
+	}
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "URL:") {
+			continue
+		}
+		candidate := strings.TrimSpace(strings.TrimPrefix(line, "URL:"))
+		if urlutil.NormalizeForDedup(candidate) == target {
+			return true
+		}
+	}
+
+	return false
 }
