@@ -31,11 +31,15 @@ func TestHTTPDriverRejectsLowQualityContent(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
+	// The fetcher-level gate (ensureFetchedQuality) is the single quality gate
+	// for all drivers; the HTTP driver no longer gates internally.
 	driver := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
 	result := driver.FetchContent(context.Background(), server.URL, types.ContentText)
-
 	require.NotNil(t, result)
-	require.Contains(t, result.Error, "extract:")
+
+	f := NewFetcher(WithDriver(driver))
+	gated := f.ensureFetchedQuality(result, types.ContentText, server.URL)
+	require.Contains(t, gated.Error, "extract:")
 }
 
 func TestFetchPodcastTranscriptUsesRSSTranscript(t *testing.T) {
@@ -177,8 +181,14 @@ func TestIsVideoURLInvalidURL(t *testing.T) {
 // --- assessContentQuality with social shell domain ---
 
 func TestAssessContentQualitySocialShellDomain(t *testing.T) {
-	// Social shell domain with short content should be rejected
+	// A short social body is a too-short failure, not necessarily a login shell.
 	q := assessContentQuality("Title", "short", "https://x.com/user/status/1")
+	assert.False(t, q.OK)
+	assert.Equal(t, "too short", q.Reason)
+
+	// Explicit login chrome on a long-enough body is still a social shell.
+	body := strings.Repeat("welcome ", 30) + " already have an account"
+	q = assessContentQuality("Title", body, "https://x.com/user/status/1")
 	assert.False(t, q.OK)
 	assert.Equal(t, "social/login shell", q.Reason)
 }
@@ -519,17 +529,23 @@ func TestFetchPodcastTranscriptDirectAudioURL(t *testing.T) {
 
 func TestFetchPodcastTranscriptInvalidFeedURL(t *testing.T) {
 	f := NewFetcher()
-	result := f.fetchPodcastTranscript(context.Background(), "https://invalid.invalid.invalid/feed.xml")
-	require.NotNil(t, result)
-	assert.Contains(t, result.Error, "rss transcript unavailable")
+	result := f.fetchPodcastTranscript(context.Background(), "https://invalid.invalid.invalid/episode/1")
+	assert.Nil(t, result, "a non-feed URL falls through to the normal drivers")
 }
 
-// --- socialShellLike edge cases ---
+func TestFetchPodcastTranscriptFeedLikeNetworkErrorIsRetryable(t *testing.T) {
+	f := NewFetcher()
+	result := f.fetchPodcastTranscript(context.Background(), "https://invalid.invalid.invalid/feed.xml")
+	require.NotNil(t, result)
+	assert.Equal(t, types.FailureReasonHTTPError, result.FailureReason)
+}
+
+// --- socialShellPatterns edge cases ---
 
 func TestSocialShellLikeMediumContentWithPatterns(t *testing.T) {
 	// Content between 300 and 2000 runes with social patterns
-	content := strings.Repeat("x", 500) + " please log in " + strings.Repeat("y", 500)
-	assert.True(t, socialShellLike(content, content))
+	content := strings.Repeat("x", 500) + " please log in to continue " + strings.Repeat("y", 500)
+	assert.True(t, socialShellPatterns(content))
 }
 
 // --- isLinkHeavy edge case ---
@@ -552,7 +568,7 @@ func TestNewFetcherWithGHBaseURL(t *testing.T) {
 
 func TestFetchContentPodcastURL(t *testing.T) {
 	f := NewFetcher(WithMediaEnabled(false))
-	result := f.FetchContent(context.Background(), "https://xiaoyuzhoufm.com/ep/1", "")
+	result := f.FetchContent(context.Background(), "https://xiaoyuzhoufm.com/episode/abc", "")
 	require.NotNil(t, result)
 	assert.Contains(t, result.Error, "media extraction disabled")
 }
@@ -720,12 +736,12 @@ func TestAssessContentQualityLinkHeavy(t *testing.T) {
 	assert.Contains(t, q.Reason, "link-heavy")
 }
 
-// --- socialShellLike with medium content and patterns ---
+// --- socialShellPatterns with medium content and patterns ---
 
 func TestSocialShellLikeMediumContentWithSocialPatterns(t *testing.T) {
 	// Content between 300 and 2000 runes with social patterns
-	content := strings.Repeat("x", 500) + " please log in " + strings.Repeat("y", 500)
-	assert.True(t, socialShellLike(content, content))
+	content := strings.Repeat("x", 500) + " please log in to continue " + strings.Repeat("y", 500)
+	assert.True(t, socialShellPatterns(content))
 }
 
 // --- FetchContent with podcast URL and media enabled ---
@@ -776,4 +792,205 @@ func TestIsLinkHeavyManyLinks(t *testing.T) {
 	// 30 links with short text
 	heavy := strings.Repeat("[a](https://x.com) ", 30)
 	assert.True(t, isLinkHeavy(heavy))
+}
+
+// --- quality gate: production shell/error pages ---
+
+func TestAssessContentQualityShellSignals(t *testing.T) {
+	normalArticle := strings.Repeat("This article explains a real engineering tradeoff in detail. ", 30)
+
+	tests := []struct {
+		name       string
+		title      string
+		body       string
+		url        string
+		wantOK     bool
+		wantReason types.FailureReason
+	}{
+		{
+			name:       "zhihu verification title",
+			title:      "安全验证",
+			body:       "进入知乎\n\n系统监测到您的网络环境存在异常，请点击下方验证按钮进行验证。",
+			url:        "https://zhuanlan.zhihu.com/p/1",
+			wantReason: types.FailureReasonAntiBot,
+		},
+		{
+			name:       "cloudflare challenge",
+			title:      "Just a moment...",
+			body:       "Just a moment... Performing security verification...",
+			url:        "https://example.com/article",
+			wantReason: types.FailureReasonCloudflare,
+		},
+		{
+			name:       "chrome connection error",
+			title:      "vutr.substack.com",
+			body:       "This site can’t be reached. ERR_CONNECTION_CLOSED",
+			url:        "https://vutr.substack.com/p/1",
+			wantReason: types.FailureReasonBrowserError,
+		},
+		{
+			name:       "gerrit query shell",
+			title:      "status:open",
+			body:       "[All](https://gerrit.libreoffice.org/) [Open](https://gerrit.libreoffice.org/)",
+			url:        "https://gerrit.libreoffice.org/",
+			wantReason: types.FailureReasonIndexPage,
+		},
+		{
+			name:       "javascript loading shell",
+			title:      "bbtree",
+			body:       "Loading…",
+			url:        "https://bbtree.xiangpeng.systems/post/",
+			wantReason: types.FailureReasonJSShell,
+		},
+		{
+			name:       "github api 404 json",
+			title:      "",
+			body:       `{"message":"Not Found","documentation_url":"https://docs.github.com/rest"}`,
+			url:        "https://api.github.com/repos/a/b",
+			wantReason: types.FailureReasonNotFound,
+		},
+		{
+			name:   "short article mentioning captcha passes",
+			title:  "CAPTCHA notes",
+			body:   strings.Repeat("A captcha is a challenge-response test. ", 20),
+			url:    "https://example.com/captcha-short",
+			wantOK: true,
+		},
+		{
+			name:   "long article mentioning captcha passes",
+			title:  "How CAPTCHA systems work",
+			body:   strings.Repeat("CAPTCHA is a challenge-response test. ", 80),
+			url:    "https://example.com/captcha",
+			wantOK: true,
+		},
+		{
+			name:   "chinese social post with sentences passes",
+			title:  "推文",
+			body:   strings.Repeat("这是真实内容。它包含完整句子。还有第三个句子。", 20),
+			url:    "https://x.com/user/status/1",
+			wantOK: true,
+		},
+		{
+			name:   "normal article passes",
+			title:  "A real article",
+			body:   normalArticle,
+			url:    "https://example.com/article",
+			wantOK: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := assessContentQuality(tt.title, tt.body, tt.url)
+			assert.Equal(t, tt.wantOK, q.OK)
+			if !tt.wantOK {
+				assert.Equal(t, tt.wantReason, q.FailureReason)
+			}
+		})
+	}
+}
+
+func TestFetchGitHubRepoIncludesReadme(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/readme") {
+			_, _ = w.Write([]byte(`{"content":"IyBSRVZNRQoKVGhpcyBpcyB0aGUgcmVhZG1lIGJvZHku","encoding":"base64"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{
+			"name": "testrepo",
+			"full_name": "owner/testrepo",
+			"description": "A test repository",
+			"html_url": "https://github.com/owner/testrepo"
+		}`))
+	}))
+	t.Cleanup(server.Close)
+
+	f := NewFetcher()
+	f.GHBaseURL = server.URL + "/"
+	result := f.fetchGitHubRepo(context.Background(), "https://github.com/owner/testrepo")
+
+	require.NotNil(t, result)
+	require.Empty(t, result.Error)
+	assert.Contains(t, result.Body, "README:")
+	assert.Contains(t, result.Body, "This is the readme body.")
+}
+
+func TestNormalizeGitHubAPIURL(t *testing.T) {
+	assert.Equal(t, "https://github.com/Autumn-27/ARTEX",
+		normalizeGitHubAPIURL("https://api.github.com/repos/Autumn-27/ARTEX"))
+	assert.Equal(t, "https://example.com/x",
+		normalizeGitHubAPIURL("https://example.com/x"))
+	assert.Equal(t, "https://api.github.com/users/foo",
+		normalizeGitHubAPIURL("https://api.github.com/users/foo"))
+}
+
+// --- PDF and arXiv routing ---
+
+type recordingDriver struct {
+	url  string
+	body string
+}
+
+func (d *recordingDriver) Name() string { return "recording" }
+func (d *recordingDriver) FetchContent(_ context.Context, urlStr, _ string) *types.ContentFetchResult {
+	d.url = urlStr
+	if d.body == "" {
+		d.body = strings.Repeat("A sufficiently long article body. ", 20)
+	}
+
+	return &types.ContentFetchResult{Title: "Article", Body: d.body, SourceURL: urlStr}
+}
+
+func TestFetchContentArxivPDFUsesAbsPage(t *testing.T) {
+	driver := &recordingDriver{}
+	f := NewFetcher(WithDriver(driver))
+	result := f.FetchContent(context.Background(), "https://arxiv.org/pdf/2411.19718", types.ContentText)
+
+	require.NotNil(t, result)
+	assert.Empty(t, result.Error)
+	assert.Equal(t, "https://arxiv.org/abs/2411.19718", driver.url)
+	assert.Equal(t, "https://arxiv.org/pdf/2411.19718", result.SourceURL)
+}
+
+func TestFetchContentGenericPDFRejected(t *testing.T) {
+	driver := &recordingDriver{}
+	f := NewFetcher(WithDriver(driver))
+	result := f.FetchContent(context.Background(), "https://example.com/paper.pdf", types.ContentText)
+
+	require.NotNil(t, result)
+	assert.Contains(t, result.Error, "pdf extraction unsupported")
+	assert.Equal(t, types.FailureReasonPDFUnsupported, result.FailureReason)
+	assert.Empty(t, driver.url)
+}
+
+func TestAssessContentQualityPartialExtract(t *testing.T) {
+	q := assessContentQuality("Article", "A short lede. Continue reading", "https://example.com/article")
+	assert.False(t, q.OK)
+	assert.Equal(t, types.FailureReasonPartialExtract, q.FailureReason)
+}
+
+func TestFetchContentPrefersFallbackForGenericURL(t *testing.T) {
+	primary := &recordingDriver{body: strings.Repeat("primary body. ", 30)}
+	fallback := &recordingDriver{body: strings.Repeat("fallback body. ", 30)}
+	f := NewFetcher(WithDriver(primary), WithFallbackDriver(fallback))
+
+	result := f.FetchContent(context.Background(), "https://example.com/article", types.ContentText)
+
+	require.NotNil(t, result)
+	require.Empty(t, result.Error)
+	assert.Equal(t, "https://example.com/article", fallback.url)
+	assert.Empty(t, primary.url, "generic urls should not touch the browser-backed primary")
+	assert.Contains(t, result.Body, "fallback body")
+}
+
+func TestFetchContentAdapterFallsBackWhenPrimaryEmpty(t *testing.T) {
+	fallback := &recordingDriver{body: strings.Repeat("fallback body. ", 30)}
+	f := NewFetcher(WithDriver(&nilDriver{}), WithFallbackDriver(fallback))
+
+	result := f.FetchContent(context.Background(), "https://zhuanlan.zhihu.com/p/123", types.ContentText)
+
+	require.NotNil(t, result)
+	require.Empty(t, result.Error)
+	assert.Equal(t, "https://zhuanlan.zhihu.com/p/123", fallback.url)
 }

@@ -37,4 +37,7 @@ func NewDriver(name string, opts DriverOptions) (ContentDriver, error) {
 type DriverOptions struct {
 	MaxBodySize  int
 	MediaEnabled bool
+	// BrowserConcurrency caps concurrent opencli processes. Only the opencli
+	// driver uses it; 0 means the driver default.
+	BrowserConcurrency int
 }

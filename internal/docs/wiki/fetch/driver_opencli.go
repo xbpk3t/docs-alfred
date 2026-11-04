@@ -2,8 +2,11 @@ package fetch
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -12,29 +15,197 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 	"github.com/xbpk3t/docs-alfred/pkg/opencli"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // openCLIDriver fetches content via the opencli CLI tool.
 // Site-specific adapters (youtube/bilibili/twitter...) extract structured content;
 // generic URLs fall back to opencli web read.
+//
+// opencli drives one shared browser tab, so every invocation goes through
+// browserSem: running wiki.concurrency opencli processes at once makes the
+// browser tabs API reject navigations ("Navigation rejected."), drop the
+// connection, or detach the target. The semaphore keeps some overlap without
+// colliding on the tab.
 type openCLIDriver struct {
+	browserSem   chan struct{}
 	maxBodySize  int
 	mediaEnabled bool
 }
+
+// openCLIEnvelope is the opencli 2.x wire format: successful JSON rows are
+// wrapped as {"ok":true,"data":[...]}; failures are {"ok":false,"error":{...}}.
+// opencli 1.x printed the bare array and wrote errors to stderr.
+type openCLIEnvelope[T any] struct {
+	Data []T  `json:"data"`
+	OK   bool `json:"ok"`
+}
+
+type openCLIErrorEnvelope struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+	OK bool `json:"ok"`
+}
+
+// decodeOpenCLIRows accepts both the 1.x bare array and the 2.x envelope.
+func decodeOpenCLIRows[T any](body string) ([]T, bool) {
+	var rows []T
+	if err := json.Unmarshal([]byte(body), &rows); err == nil {
+		return rows, true
+	}
+	var env openCLIEnvelope[T]
+	if err := json.Unmarshal([]byte(body), &env); err == nil && env.OK {
+		return env.Data, true
+	}
+
+	return nil, false
+}
+
+// openCLIOutputDetail returns a bounded, human-readable description of the
+// command output for logs/errors. opencli 2.x puts its error envelope on stdout.
+func openCLIOutputDetail(stdout, stderr []byte) string {
+	var parts []string
+	if s := strings.TrimSpace(string(stdout)); s != "" {
+		parts = append(parts, "stdout: "+textutil.TruncateUTF8(s, 2000))
+	}
+	if s := strings.TrimSpace(string(stderr)); s != "" {
+		parts = append(parts, "stderr: "+textutil.TruncateUTF8(s, 2000))
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+// openCLIExitCode recovers the exit code cmdutil attached to the error. It
+// returns 0 when unknown.
+func openCLIExitCode(err error) int {
+	var exitErr *cmdutil.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.Code
+	}
+
+	return 0
+}
+
+// openCLIFailureReason classifies an opencli failure using the 2.x error
+// envelope, then the exit code, then the raw text. This keeps retry policy
+// independent of which stream the tool used.
+func openCLIFailureReason(stdout, stderr []byte, err error) types.FailureReason {
+	var env openCLIErrorEnvelope
+	if json.Unmarshal(stdout, &env) == nil && !env.OK && env.Error.Code != "" {
+		return openCLIEnvelopeReason(env)
+	}
+
+	switch openCLIExitCode(err) {
+	case 66:
+		return types.FailureReasonEmpty
+	case 2:
+		return types.FailureReasonNotFound
+	case 77:
+		return types.FailureReasonAntiBot
+	case 69, 75:
+		return types.FailureReasonHTTPError
+	}
+
+	// Text fallback for older builds or errors that bypass the envelope.
+	text := strings.ToLower(string(stdout) + "\n" + string(stderr) + "\n" + err.Error())
+	switch {
+	case strings.Contains(text, "empty_result"):
+		return types.FailureReasonEmpty
+	case strings.Contains(text, "auth_required") || strings.Contains(text, "noperm"):
+		return types.FailureReasonAntiBot
+	default:
+		return types.FailureReasonHTTPError
+	}
+}
+
+// openCLIEnvelopeReason classifies a parsed 2.x error envelope by code, with a
+// message fallback for codes the adapter embeds in prose.
+func openCLIEnvelopeReason(env openCLIErrorEnvelope) types.FailureReason {
+	message := strings.ToLower(env.Error.Message)
+	if strings.Contains(message, "404") || strings.Contains(message, "410") ||
+		strings.Contains(message, "not found") {
+		return types.FailureReasonNotFound
+	}
+	switch strings.ToUpper(strings.TrimSpace(env.Error.Code)) {
+	case "EMPTY_RESULT":
+		return types.FailureReasonEmpty
+	case "ARGUMENT", "USAGE_ERROR", "USAGE":
+		return types.FailureReasonNotFound
+	case "AUTH_REQUIRED", "NOPERM", "PERMISSION":
+		return types.FailureReasonAntiBot
+	case "BROWSER_CONNECT":
+		return types.FailureReasonBrowserError
+	default:
+		return types.FailureReasonHTTPError
+	}
+}
+
+// savedFileFromAttempt reports whether path was written during the most recent
+// opencli attempt. A retry can reuse the same --output directory; without this
+// check a partial file from a failed attempt can be mistaken for this attempt's
+// output.
+func savedFileFromAttempt(path string, attemptStart time.Time) bool {
+	if attemptStart.IsZero() {
+		return true
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	// Tolerate coarse filesystem timestamp resolution. Retries are separated by
+	// navRetryBackoff (2s), so a stale file is still rejected.
+	return !info.ModTime().Before(attemptStart.Add(-500 * time.Millisecond))
+}
+
+// defaultBrowserConcurrency is the number of concurrent opencli processes the
+// driver allows. opencli serializes browser access internally per process, so
+// 2 overlaps I/O waits while staying under the tab-lease collision threshold.
+const defaultBrowserConcurrency = 2
 
 func newOpenCLIDriver(opts DriverOptions) *openCLIDriver {
 	maxBody := opts.MaxBodySize
 	if maxBody <= 0 {
 		maxBody = 5000
 	}
+	concurrency := opts.BrowserConcurrency
+	if concurrency <= 0 {
+		concurrency = defaultBrowserConcurrency
+	}
+	// opencli's browser command deadline defaults to 60s, shorter than the
+	// wiki per-URL timeout. Slow bilibili/youtube pages then fail as TIMEOUT
+	// even though the page eventually loads. Give the subprocess headroom;
+	// the caller's context still enforces the real per-URL deadline.
+	if os.Getenv("OPENCLI_BROWSER_COMMAND_TIMEOUT") == "" {
+		if err := os.Setenv("OPENCLI_BROWSER_COMMAND_TIMEOUT", "180"); err != nil {
+			slog.Warn("failed to set opencli browser timeout", "error", err)
+		}
+	}
 
 	return &openCLIDriver{
 		maxBodySize:  maxBody,
 		mediaEnabled: opts.MediaEnabled,
+		browserSem:   make(chan struct{}, concurrency),
 	}
+}
+
+// acquireBrowser blocks until a browser slot is free or ctx is canceled.
+func (d *openCLIDriver) acquireBrowser(ctx context.Context) error {
+	select {
+	case d.browserSem <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (d *openCLIDriver) releaseBrowser() {
+	<-d.browserSem
 }
 
 func (d *openCLIDriver) Name() string { return "opencli" }
@@ -78,7 +249,13 @@ func (d *openCLIDriver) fetchWithAdapter(ctx context.Context, rawURL string) *ty
 		return d.dispatchMedia(ctx, subcommand, extraArgs, rawURL)
 	case opencli.AdapterZhihu:
 		return d.fetchZhihu(ctx, extraArgs, rawURL)
+	case opencli.AdapterTwitter:
+		return d.fetchTwitterThread(ctx, extraArgs, rawURL)
 	default:
+		if subcommand == opencli.AdapterWeb {
+			// Web-read routes need the same settle time as the generic path.
+			return d.fetchWebRead(ctx, rawURL)
+		}
 		result := d.runOpenCLI(ctx, subcommand, extraArgs)
 		result.SourceURL = rawURL
 
@@ -107,6 +284,302 @@ type zhihuAnswer struct {
 	Votes         int    `yaml:"votes"`
 }
 
+// twitterThreadRow is one row of `opencli twitter thread -f json`. The first
+// row is the root tweet in structural order; replies follow.
+type twitterCard struct {
+	URL         string `json:"url"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+type twitterThreadRow struct {
+	Card     *twitterCard `json:"card"`
+	ID       string       `json:"id"`
+	Author   string       `json:"author"`
+	Text     string       `json:"text"`
+	URL      string       `json:"url"`
+	Likes    int          `json:"likes"`
+	Retweets int          `json:"retweets"`
+}
+
+// fetchTwitterThread parses the thread rows instead of the md table. Some X
+// posts only contain a link; the thread's replies are not the article, so a
+// root tweet that is essentially one URL is replaced by the linked page.
+func (d *openCLIDriver) fetchTwitterThread(
+	ctx context.Context,
+	extraArgs []string,
+	rawURL string,
+) *types.ContentFetchResult {
+	result := d.runOpenCLIRaw(ctx, opencli.AdapterTwitter, extraArgs)
+	result.SourceURL = rawURL
+	if result.Error != "" {
+		return result
+	}
+
+	rows, ok := decodeOpenCLIRows[twitterThreadRow](result.Body)
+	if !ok {
+		// Keep compatibility with older opencli builds that rendered markdown.
+		result.Body = textutil.TruncateUTF8(result.Body, d.maxBodySize*3)
+		result.Title = md.ExtractTitleFromMarkdown(result.Body)
+
+		return result
+	}
+	if len(rows) == 0 {
+		return extractFailureWithReason(rawURL, "twitter thread returned no rows", types.FailureReasonPartialExtract)
+	}
+
+	root := twitterRootRow(rows, rawURL)
+	if root == nil || strings.TrimSpace(root.Text) == "" {
+		return extractFailureWithReason(rawURL, "twitter root tweet body missing", types.FailureReasonPartialExtract)
+	}
+
+	target := twitterLinkPostTarget(root.Text)
+	if target == "" && root.Card != nil {
+		// The link often lives in the card rather than the tweet text (X hides
+		// the URL behind a preview). Follow the card target when it is external.
+		target = strings.TrimSpace(root.Card.URL)
+	}
+	if target != "" {
+		return d.fetchTwitterLinkPost(ctx, root, target, rawURL)
+	}
+
+	var body strings.Builder
+	for _, row := range rows {
+		fmt.Fprintf(&body, "## @%s\n\n%s\n\n", row.Author, strings.TrimSpace(row.Text))
+	}
+
+	title := md.ExtractTitleFromMarkdown(body.String())
+	if title == "" || strings.HasPrefix(title, "@") {
+		title = "X thread by @" + root.Author
+	}
+
+	return &types.ContentFetchResult{
+		Title:     title,
+		Body:      textutil.TruncateUTF8(body.String(), d.maxBodySize*3),
+		SourceURL: rawURL,
+	}
+}
+
+// fetchTwitterLinkPost follows a link-only tweet to its target page and renders
+// the page body with the original tweet quoted beneath it.
+func (d *openCLIDriver) fetchTwitterLinkPost(
+	ctx context.Context,
+	root *twitterThreadRow,
+	target, rawURL string,
+) *types.ContentFetchResult {
+	resolved := d.resolveTcoURL(ctx, target)
+	if isXStatusURL(resolved) {
+		return extractFailureWithReason(rawURL, "twitter root tweet is a link-only post", types.FailureReasonLinkOnlyPost)
+	}
+
+	followed := d.fetchWebRead(ctx, resolved)
+	if followed.Error != "" || strings.TrimSpace(followed.Body) == "" {
+		return extractFailureWithReason(
+			rawURL,
+			"x link post target fetch failed: "+followed.Error,
+			types.FailureReasonPartialExtract,
+		)
+	}
+
+	title := strings.TrimSpace(followed.Title)
+	if title == "" {
+		title = md.ExtractTitleFromMarkdown(followed.Body)
+	}
+	if title == "" {
+		title = "X link post by @" + root.Author
+	}
+	body := fmt.Sprintf("# %s\n\n%s\n\n---\n\n原推文（@%s）：\n\n%s\n\n链接：%s\n",
+		title, followed.Body, root.Author, root.Text, resolved)
+
+	slog.Info("x link post followed", "tweet", rawURL, "target", resolved)
+
+	return &types.ContentFetchResult{
+		Title:     title,
+		Body:      textutil.TruncateUTF8(body, d.maxBodySize*3),
+		SourceURL: rawURL,
+	}
+}
+
+// twitterRootRow finds the tweet whose id matches the URL's /status/<id>.
+func twitterRootRow(rows []twitterThreadRow, rawURL string) *twitterThreadRow {
+	parsed, err := url.Parse(rawURL)
+	if err == nil {
+		parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+		for i := 0; i+1 < len(parts); i++ {
+			if parts[i] != "status" {
+				continue
+			}
+			id := parts[i+1]
+			for j := range rows {
+				if rows[j].ID == id || strings.HasSuffix(rows[j].URL, "/status/"+id) {
+					return &rows[j]
+				}
+			}
+		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	return &rows[0]
+}
+
+// twitterLinkPostTarget returns the single external URL when the tweet text is
+// essentially just that link. It returns "" for tweets with real commentary.
+func twitterLinkPostTarget(text string) string {
+	refs := urlutil.ExtractURLRefs(text, urlutil.ExtractOptions{
+		BareURLs:    true,
+		HTTPOnly:    true,
+		Normalize:   true,
+		Deduplicate: true,
+	})
+	if len(refs) == 0 {
+		return ""
+	}
+
+	remaining := text
+	for i := len(refs) - 1; i >= 0; i-- {
+		if refs[i].Start < 0 || refs[i].End > len(remaining) || refs[i].Start >= refs[i].End {
+			continue
+		}
+		remaining = remaining[:refs[i].Start] + " " + remaining[refs[i].End:]
+	}
+	if len([]rune(strings.TrimSpace(remaining))) > 120 {
+		return ""
+	}
+
+	return refs[0].URL
+}
+
+func isXStatusURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host != "x.com" && host != "twitter.com" && host != "mobile.twitter.com" {
+		return false
+	}
+
+	return strings.Contains(parsed.Path, "/status/")
+}
+
+// zhihuDownloadEntry is one row of `opencli zhihu download -f json`.
+// status is an extraction status ("success", "failed — no title", ...), not an
+// HTTP status; saved is the absolute path of the markdown file.
+type zhihuDownloadEntry struct {
+	Title       string `json:"title"`
+	Author      string `json:"author"`
+	PublishTime string `json:"publish_time"`
+	Status      string `json:"status"`
+	Size        string `json:"size"`
+	Saved       string `json:"saved"`
+}
+
+// fetchZhihuArticle runs `zhihu download`, which uses the zhihu site session
+// and writes clean markdown to disk. The generic web reader uses the `web`
+// site session and gets zhihu's 安全验证 page instead.
+func (d *openCLIDriver) fetchZhihuArticle(ctx context.Context, rawURL string) *types.ContentFetchResult {
+	tmpDir, err := os.MkdirTemp("", "docs-zhihu-download-*")
+	if err != nil {
+		return extractFailureWithReason(rawURL, "create zhihu download dir: "+err.Error(), types.FailureReasonEmpty)
+	}
+	defer func() {
+		if rmErr := os.RemoveAll(tmpDir); rmErr != nil {
+			slog.Warn("zhihu download: failed to remove temp dir", "path", tmpDir, "error", rmErr)
+		}
+	}()
+
+	args := []string{
+		opencli.SubcmdZhihuDownload,
+		"--url", rawURL,
+		"--output", tmpDir,
+		"--format", "json",
+	}
+	var lastAttemptStart time.Time
+	result := d.runOpenCLIRawWithHook(ctx, opencli.AdapterZhihu, args, func(_ int, started time.Time) {
+		lastAttemptStart = started
+	})
+	result.SourceURL = rawURL
+	if result.Error != "" {
+		return result
+	}
+
+	rows, ok := decodeOpenCLIRows[zhihuDownloadEntry](result.Body)
+	if !ok {
+		// Older opencli builds answered in markdown; keep that shape usable.
+		result.Body = textutil.TruncateUTF8(result.Body, d.maxBodySize*3)
+		result.Title = md.ExtractTitleFromMarkdown(result.Body)
+
+		return result
+	}
+	if len(rows) == 0 {
+		return extractFailureWithReason(rawURL, "zhihu download returned no rows", types.FailureReasonEmpty)
+	}
+
+	return d.zhihuResultFromRow(rawURL, &rows[0], lastAttemptStart, tmpDir)
+}
+
+// zhihuResultFromRow validates the download row's status and saved file, then
+// builds the article result from the saved markdown.
+func (d *openCLIDriver) zhihuResultFromRow(
+	rawURL string,
+	row *zhihuDownloadEntry,
+	attemptStart time.Time,
+	tmpDir string,
+) *types.ContentFetchResult {
+	if status := strings.ToLower(strings.TrimSpace(row.Status)); status != "" && status != "success" {
+		reason := types.FailureReasonPartialExtract
+		if strings.Contains(status, "no title") || strings.Contains(status, "no content") {
+			reason = types.FailureReasonEmpty
+		}
+
+		return extractFailureWithReason(rawURL, "zhihu download "+row.Status, reason)
+	}
+
+	return d.downloadResultFromSavedFile(rawURL, "zhihu download", row.Saved, tmpDir, attemptStart, strings.TrimSpace(row.Title))
+}
+
+// downloadResultFromSavedFile is the shared tail of the download-style
+// adapters (zhihu, weixin): validate that the saved file came from this
+// attempt, read it, and build the article result. Per-adapter status mapping
+// stays in the callers; label prefixes the failure messages.
+func (d *openCLIDriver) downloadResultFromSavedFile(
+	rawURL, label, saved, tmpDir string,
+	attemptStart time.Time,
+	title string,
+) *types.ContentFetchResult {
+	saved = strings.TrimSpace(saved)
+	if saved == "" || saved == "-" || !fileutil.PathWithin(tmpDir, saved) {
+		return extractFailureWithReason(
+			rawURL,
+			label+" did not save a usable file (saved="+saved+")",
+			types.FailureReasonPartialExtract,
+		)
+	}
+	if !savedFileFromAttempt(saved, attemptStart) {
+		return extractFailureWithReason(rawURL, label+" file is from an earlier failed attempt", types.FailureReasonPartialExtract)
+	}
+
+	content, err := os.ReadFile(saved) // #nosec G304 -- path is constrained to tmpDir.
+	if err != nil {
+		return extractFailureWithReason(rawURL, label+" read saved file: "+err.Error(), types.FailureReasonPartialExtract)
+	}
+	body := strings.TrimSpace(string(content))
+	if body == "" {
+		return extractFailureWithReason(rawURL, label+" saved file is empty", types.FailureReasonEmpty)
+	}
+
+	body = textutil.TruncateUTF8(body, d.maxBodySize*3)
+	if title == "" || title == "安全验证" {
+		title = md.ExtractTitleFromMarkdown(body)
+	}
+
+	slog.Info("download adapter article fetched", "adapter", label, "url", rawURL, "title", title, "bodyLen", len(body))
+
+	return &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
+}
+
 // fetchZhihu runs a zhihu adapter (routed with -f yaml) and parses it
 // structurally. The default md rendering is a markdown table, which mangles a
 // long answer body into one cell; question additionally truncates every answer
@@ -116,13 +589,18 @@ func (d *openCLIDriver) fetchZhihu(
 	extraArgs []string,
 	rawURL string,
 ) *types.ContentFetchResult {
+	subcommand := opencli.SubcommandForURL(rawURL)
+	if subcommand == opencli.SubcmdZhihuDownload {
+		return d.fetchZhihuArticle(ctx, rawURL)
+	}
+
 	result := d.runOpenCLIRaw(ctx, opencli.AdapterZhihu, extraArgs)
 	result.SourceURL = rawURL
 	if result.Error != "" {
 		return result
 	}
 
-	switch opencli.SubcommandForURL(rawURL) {
+	switch subcommand {
 	case opencli.SubcmdZhihuQuestion:
 		return d.parseZhihuQuestion(result)
 	case opencli.SubcmdZhihuAnswerDetail:
@@ -219,7 +697,9 @@ func (d *openCLIDriver) dispatchMedia(ctx context.Context, subcommand string, ex
 	}
 	switch subcommand {
 	case opencli.AdapterBilibili:
-		d.appendBilibiliTranscript(ctx, result, rawURL)
+		if failure := d.appendBilibiliTranscript(ctx, result, rawURL); failure != nil {
+			return failure
+		}
 	case opencli.AdapterYoutube:
 		d.appendYoutubeTranscript(ctx, result, rawURL)
 	}
@@ -231,27 +711,35 @@ func (d *openCLIDriver) dispatchMedia(ctx context.Context, subcommand string, ex
 // bilibili URL and merges any transcript content into the fetch result body.
 // When no subtitles are available, falls back to `bilibili summary <bvid>` for
 // B站's official AI-generated summary (with section outlines and timestamps).
-func (d *openCLIDriver) appendBilibiliTranscript(ctx context.Context, result *types.ContentFetchResult, rawURL string) {
+// It returns a failure result only when the summary service itself failed
+// transiently; a video that simply has no summary is left to the video
+// too-short gate.
+func (d *openCLIDriver) appendBilibiliTranscript(
+	ctx context.Context,
+	result *types.ContentFetchResult,
+	rawURL string,
+) *types.ContentFetchResult {
 	subResult := d.runOpenCLI(ctx, "bilibili", []string{"subtitle", rawURL, "--format", "md"})
 	if subResult.Error != "" || subResult.Body == "" {
 		// Fallback: try B站官方 AI summary when no subtitles are available.
-		d.appendBilibiliSummary(ctx, result, rawURL)
-
-		return
+		return d.appendBilibiliSummary(ctx, result, rawURL)
 	}
 	transcript := strings.TrimSpace(subResult.Body)
 	if len([]rune(transcript)) < 100 {
-		return
+		return d.appendBilibiliSummary(ctx, result, rawURL)
 	}
 
 	transcriptLines := md.ExtractTranscriptLines(transcript, 3)
 	if len(transcriptLines) < 5 {
-		return
+		return d.appendBilibiliSummary(ctx, result, rawURL)
 	}
 
-	transcriptBlock := "\n\n## 字幕内容\n\n" + strings.Join(transcriptLines, "\n")
+	transcriptBlock := "\n\n" + types.TranscriptSectionMarker + "\n\n" + strings.Join(transcriptLines, "\n")
 	result.Body += transcriptBlock
+	result.HasTranscript = true
 	slog.Info("Bilibili transcript appended", "url", rawURL, "lines", len(transcriptLines))
+
+	return nil
 }
 
 // resolveTcoURL follows the redirect chain for a t.co shortlink using `curl -sL`
@@ -294,25 +782,55 @@ func (d *openCLIDriver) resolveTcoURL(ctx context.Context, rawURL string) string
 
 // appendBilibiliSummary runs `opencli bilibili summary <bvid>` and appends
 // B站's official AI-generated summary to the result body. Used as a fallback
-// when a video has no subtitles/transcript available.
-func (d *openCLIDriver) appendBilibiliSummary(ctx context.Context, result *types.ContentFetchResult, rawURL string) {
+// when a video has no subtitles/transcript available. A missing summary
+// (EMPTY_RESULT) is not a failure — the metadata-only result later trips the
+// video too-short gate. A transient summary API error is returned so ingest
+// keeps the URL retryable instead of recording a permanent too-short failure.
+func (d *openCLIDriver) appendBilibiliSummary(
+	ctx context.Context,
+	result *types.ContentFetchResult,
+	rawURL string,
+) *types.ContentFetchResult {
 	summaryResult := d.runOpenCLI(ctx, "bilibili", []string{"summary", rawURL, "--format", "md"})
 	if summaryResult.Error != "" || summaryResult.Body == "" {
-		return
+		if isBilibiliNoSummary(summaryResult.Error) {
+			return nil
+		}
+
+		return extractFailureWithReason(
+			rawURL,
+			"bilibili summary unavailable: "+summaryResult.Error,
+			types.FailureReasonPartialExtract,
+		)
 	}
 	summary := strings.TrimSpace(summaryResult.Body)
 	if len([]rune(summary)) < 50 {
-		return
+		return nil
 	}
 
 	summaryBlock := "\n\n## AI 总结\n\n" + summary
 	result.Body += summaryBlock
+	result.HasTranscript = true
 	slog.Info("Bilibili AI summary appended (no transcript available)",
 		"url", rawURL, "len", len([]rune(summary)))
+
+	return nil
+}
+
+// isBilibiliNoSummary reports the "video has no official AI summary" shape,
+// which is permanent content absence rather than a service failure.
+func isBilibiliNoSummary(errText string) bool {
+	return textutil.ContainsAny(errText, []string{
+		"EMPTY_RESULT",
+		"has not generated an AI summary",
+		"summary returned no data",
+	})
 }
 
 func (d *openCLIDriver) fetchWebRead(ctx context.Context, rawURL string) *types.ContentFetchResult {
-	r := d.runOpenCLI(ctx, "web", []string{"read", "--url", rawURL, "--stdout"})
+	// Give client-rendered pages a little longer to settle: the default 3s
+	// occasionally yields a null DOM (cloneNode TypeError) on heavy SPAs.
+	r := d.runOpenCLI(ctx, "web", []string{"read", "--url", rawURL, "--stdout", "--wait", "5"})
 	r.SourceURL = rawURL
 
 	return r
@@ -339,88 +857,118 @@ func (d *openCLIDriver) fetchWeixinArticle(ctx context.Context, rawURL string) *
 		}
 	}()
 
-	// Run weixin download with YAML output format so we can parse the saved path.
+	// Run weixin download with YAML output format so we can parse title,
+	// status and saved path. It shares the opencli browser tab.
 	args := []string{"weixin", "download", "--url", rawURL, "-f", "yaml", "--output", tmpDir}
 
 	slog.Info("weixin: downloading article", "url", rawURL)
-	stdout, stderr, runErr := cmdutil.RunSeparate(ctx, "opencli", args...)
+	var lastAttemptStart time.Time
+	stdout, stderr, runErr := d.execOpenCLI(ctx, args, func(_ int, started time.Time) {
+		lastAttemptStart = started
+	})
 	if runErr != nil {
+		detail := fmt.Sprintf("weixin: %v", runErr)
+		if out := openCLIOutputDetail(stdout, stderr); out != "" {
+			detail += "\n" + out
+		}
+
 		return &types.ContentFetchResult{
-			Error:       fmt.Sprintf("weixin: %v (stderr: %s)", runErr, strings.TrimSpace(string(stderr))),
-			SourceURL:   rawURL,
-			FailureKind: types.FailureFetch,
+			Error:         detail,
+			SourceURL:     rawURL,
+			FailureKind:   types.FailureFetch,
+			FailureReason: openCLIFailureReason(stdout, stderr, runErr),
 		}
 	}
 
-	// Parse the YAML output to find the saved file path.
-	// YAML format:
-	//   - title: ...
-	//     ...
-	//     saved: /tmp/weixin-xxx/红筹退潮.../红筹退潮....md
-	savedPath := extractWeixinSavedPath(string(stdout))
-	if savedPath == "" {
+	entry, ok := parseWeixinDownloadEntry(string(stdout))
+	if !ok {
+		// Older opencli builds printed the article body directly. Preserve
+		// that shape, but do not mistake an error envelope or an unparsable
+		// metadata row for content.
+		body := strings.TrimSpace(string(stdout))
+		if body == "" {
+			return extractFailureWithReason(rawURL, "weixin: empty download output", types.FailureReasonEmpty)
+		}
+		if strings.HasPrefix(body, "ok: false") || looksLikeWeixinYAMLRow(body) {
+			return extractFailureWithReason(
+				rawURL,
+				"weixin: unparsable download output: "+body,
+				types.FailureReasonPartialExtract,
+			)
+		}
+
 		return &types.ContentFetchResult{
-			Error:       "weixin: could not find saved file path in output",
-			SourceURL:   rawURL,
-			FailureKind: types.FailureExtract,
+			Title:     md.ExtractTitleFromMarkdown(body),
+			Body:      textutil.TruncateUTF8(body, d.maxBodySize*3),
+			SourceURL: rawURL,
 		}
 	}
 
-	// Read the saved markdown file content.
-	content, err := os.ReadFile(savedPath)
-	if err != nil {
-		return &types.ContentFetchResult{
-			Error:       fmt.Sprintf("weixin: read saved file: %v", err),
-			SourceURL:   rawURL,
-			FailureKind: types.FailureExtract,
-		}
-	}
-
-	body := string(content)
-	body = textutil.TruncateUTF8(body, d.maxBodySize*3)
-	title := md.ExtractTitleFromMarkdown(body)
-
-	slog.Info("weixin: article fetched successfully",
-		"url", rawURL, "title", title, "size", len(body))
-
-	return &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
+	return d.weixinResultFromEntry(rawURL, &entry, lastAttemptStart, tmpDir)
 }
 
-// extractWeixinSavedPath parses the YAML output from `weixin download -f yaml`
-// and returns the value of the `saved:` field (the absolute path to the saved
-// markdown file).
-func extractWeixinSavedPath(yamlOutput string) string {
-	var entries []weixinDownloadEntry
-	if err := yaml.Unmarshal([]byte(yamlOutput), &entries); err == nil {
-		if path := firstSavedPath(entries); path != "" {
-			return path
+// weixinResultFromEntry validates the download entry's status and saved file,
+// then builds the article result from the saved markdown. Status is reported
+// separately from HTTP status: "failed — verification required in WeChat
+// browser page" is an anti-bot wall, retryable, so the inbox line survives.
+func (d *openCLIDriver) weixinResultFromEntry(
+	rawURL string,
+	entry *weixinDownloadEntry,
+	attemptStart time.Time,
+	tmpDir string,
+) *types.ContentFetchResult {
+	switch status := strings.ToLower(strings.TrimSpace(entry.Status)); status {
+	case "", "success":
+	case "invalid url":
+		return extractFailureWithReason(rawURL, "weixin: not a wechat article url", types.FailureReasonNotFound)
+	default:
+		// "no title"/"no content" are permanent extraction outcomes, not an
+		// anti-bot wall; retrying them would keep the inbox line forever.
+		reason := types.FailureReasonAntiBot
+		if strings.Contains(status, "no title") || strings.Contains(status, "no content") {
+			reason = types.FailureReasonEmpty
 		}
+
+		return extractFailureWithReason(rawURL, "weixin: download "+entry.Status, reason)
+	}
+
+	return d.downloadResultFromSavedFile(rawURL, "weixin: download", entry.Saved, tmpDir, attemptStart, strings.TrimSpace(entry.Title))
+}
+
+// parseWeixinDownloadEntry parses the YAML output from `weixin download -f yaml`.
+// It accepts both the sequence form and a single mapping.
+func parseWeixinDownloadEntry(yamlOutput string) (weixinDownloadEntry, bool) {
+	var entries []weixinDownloadEntry
+	if err := yaml.Unmarshal([]byte(yamlOutput), &entries); err == nil && len(entries) > 0 {
+		return entries[0], true
 	}
 
 	var entry weixinDownloadEntry
-	if err := yaml.Unmarshal([]byte(yamlOutput), &entry); err == nil {
-		return strings.TrimSpace(entry.Saved)
+	if err := yaml.Unmarshal([]byte(yamlOutput), &entry); err == nil &&
+		(entry.Status != "" || entry.Saved != "" || entry.Title != "") {
+		return entry, true
 	}
 
-	return ""
+	return weixinDownloadEntry{}, false
 }
 
 type weixinDownloadEntry struct {
-	Saved string `yaml:"saved"`
+	Title  string `yaml:"title"`
+	Status string `yaml:"status"`
+	Saved  string `yaml:"saved"`
 }
 
-func firstSavedPath(entries []weixinDownloadEntry) string {
-	for _, entry := range entries {
-		if path := strings.TrimSpace(entry.Saved); path != "" {
-			return path
-		}
-	}
-
-	return ""
+// looksLikeWeixinYAMLRow reports output that was meant to be a download
+// metadata row but did not parse as YAML (for example the invalid plain
+// scalar `saved: -`), so it is treated as a failure instead of article body.
+func looksLikeWeixinYAMLRow(body string) bool {
+	return strings.HasPrefix(body, "- title:") || strings.HasPrefix(body, "title:") ||
+		strings.Contains(body, "\nstatus:") || strings.Contains(body, "\nsaved:")
 }
 
-// navRetryAttempts is the number of retries after a browser-bridge refusal.
-const navRetryAttempts = 2
+// navRetryAttempts is the number of retries after a transient browser-bridge
+// refusal (Navigation rejected, dropped connection, detached target).
+const navRetryAttempts = 3
 
 // navRetryBackoff is the base delay between navigation retries; tests shrink it.
 var navRetryBackoff = 2 * time.Second
@@ -450,13 +998,70 @@ func (d *openCLIDriver) runOpenCLI(ctx context.Context, subcommand string, extra
 // API). Retrying keeps a collision from being recorded as a permanent fetch
 // failure for a perfectly good URL.
 func (d *openCLIDriver) runOpenCLIRaw(ctx context.Context, subcommand string, extraArgs []string) *types.ContentFetchResult {
-	var last *types.ContentFetchResult
-	err := retry.Do(
+	return d.runOpenCLIRawWithHook(ctx, subcommand, extraArgs, nil)
+}
+
+// openCLIAttemptHook observes each retry attempt. Commands that write files
+// under --output use it to reject a file left behind by an earlier, failed
+// attempt.
+type openCLIAttemptHook func(attempt int, started time.Time)
+
+func (d *openCLIDriver) runOpenCLIRawWithHook(
+	ctx context.Context,
+	subcommand string,
+	extraArgs []string,
+	hook openCLIAttemptHook,
+) *types.ContentFetchResult {
+	args := append([]string{subcommand}, extraArgs...)
+	stdout, stderr, err := d.execOpenCLI(ctx, args, hook)
+	if err != nil {
+		slog.Warn("opencli failure", "subcommand", subcommand, "url", strings.Join(extraArgs, " "))
+
+		detail := "opencli: " + err.Error()
+		if out := openCLIOutputDetail(stdout, stderr); out != "" {
+			detail += "\n" + out
+		}
+
+		return &types.ContentFetchResult{
+			Error:         detail,
+			FailureKind:   types.FailureFetch,
+			FailureReason: openCLIFailureReason(stdout, stderr, err),
+		}
+	}
+
+	body := string(stdout)
+	if body == "" {
+		return &types.ContentFetchResult{Error: "opencli returned empty content"}
+	}
+
+	return &types.ContentFetchResult{Body: body}
+}
+
+// execOpenCLI runs an opencli command under the browser semaphore and retries
+// transient browser-bridge failures. It returns raw stdout/stderr so callers
+// that parse structured output decide how to treat empty or unparsable bodies.
+func (d *openCLIDriver) execOpenCLI(
+	ctx context.Context,
+	args []string,
+	hook openCLIAttemptHook,
+) (stdout, stderr []byte, runErr error) {
+	attempt := 0
+	retryErr := retry.Do(
 		func() error {
-			r := d.runOpenCLIOnce(ctx, subcommand, extraArgs)
-			last = r
-			if isNavigationRejected(r.Error) {
-				return fmt.Errorf("%s", r.Error)
+			attempt++
+			if hook != nil {
+				hook(attempt, time.Now())
+			}
+			if err := d.acquireBrowser(ctx); err != nil {
+				return err
+			}
+			defer d.releaseBrowser()
+			var err error
+			stdout, stderr, err = cmdutil.RunSeparate(ctx, "opencli", args...)
+			runErr = err
+			if err != nil && (isTransientOpenCLIError(err.Error()+"\n"+openCLIOutputDetail(stdout, stderr)) ||
+				isTransientOpenCLIExitCode(err)) {
+				return err
 			}
 
 			return nil
@@ -467,41 +1072,40 @@ func (d *openCLIDriver) runOpenCLIRaw(ctx context.Context, subcommand string, ex
 		retry.Context(ctx),
 		retry.LastErrorOnly(true),
 	)
-	if err != nil {
-		slog.Warn("opencli navigation rejected, final retry", "subcommand", subcommand, "url", strings.Join(extraArgs, " "))
-		if last == nil {
-			last = &types.ContentFetchResult{Error: err.Error()}
-		}
+	if retryErr != nil {
+		runErr = retryErr
 	}
 
-	return last
+	return stdout, stderr, runErr
 }
 
-// isNavigationRejected reports whether opencli failed because the browser
-// refused to navigate the automation tab, which is transient.
-func isNavigationRejected(errText string) bool {
-	return strings.Contains(errText, "Navigation rejected")
+// isTransientOpenCLIExitCode reports opencli's TEMPFAIL/SERVICE_UNAVAIL exit
+// codes, which are retryable even when the envelope is unavailable.
+func isTransientOpenCLIExitCode(err error) bool {
+	switch openCLIExitCode(err) {
+	case 69, 75:
+		return true
+	default:
+		return false
+	}
 }
 
-func (d *openCLIDriver) runOpenCLIOnce(
-	ctx context.Context,
-	subcommand string,
-	extraArgs []string,
-) *types.ContentFetchResult {
-	args := append([]string{subcommand}, extraArgs...)
-	stdout, stderr, err := cmdutil.RunSeparate(ctx, "opencli", args...)
-	if err != nil {
-		return &types.ContentFetchResult{
-			Error: fmt.Sprintf("opencli: %v (stderr: %s)", err, strings.TrimSpace(string(stderr))),
-		}
-	}
-
-	body := string(stdout)
-	if body == "" {
-		return &types.ContentFetchResult{Error: "opencli returned empty content"}
-	}
-
-	return &types.ContentFetchResult{Body: body}
+// isTransientOpenCLIError reports whether an opencli failure is the shared
+// browser tab refusing or dropping the command, which a retry can clear.
+func isTransientOpenCLIError(errText string) bool {
+	return textutil.ContainsAny(errText, []string{
+		"Navigation rejected",
+		"Cannot attach to this target",
+		"Browser connection dropped",
+		"stale page identity",
+		"TypeError: Failed to fetch",
+		"fetchJsonOrLoginWall",
+		"cloneNode",
+		"Cannot read properties of null",
+		"TEMPFAIL",
+		"SERVICE_UNAVAIL",
+		"BROWSER_CONNECT",
+	})
 }
 
 // appendYoutubeTranscript runs `opencli youtube transcript <url>` and merges
@@ -523,7 +1127,8 @@ func (d *openCLIDriver) appendYoutubeTranscript(ctx context.Context, result *typ
 		return
 	}
 
-	transcriptBlock := "\n\n## 字幕内容\n\n" + strings.Join(transcriptLines, "\n")
+	transcriptBlock := "\n\n" + types.TranscriptSectionMarker + "\n\n" + strings.Join(transcriptLines, "\n")
 	result.Body += transcriptBlock
+	result.HasTranscript = true
 	slog.Info("YouTube transcript appended", "url", rawURL, "lines", len(transcriptLines))
 }

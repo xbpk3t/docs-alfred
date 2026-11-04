@@ -84,37 +84,6 @@ func TestExtractTitleFromHTMLMultipleTitles(t *testing.T) {
 // Note: isHTTPBlockError panics on nil because it calls err.Error() directly.
 // This is acceptable since the caller always checks err != nil first.
 
-// --- ensureContentQuality ---
-
-func TestEnsureContentQualityNilResult(t *testing.T) {
-	d := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
-	result := d.ensureContentQuality(context.Background(), nil)
-	assert.Nil(t, result)
-}
-
-func TestEnsureContentQualityWithError(t *testing.T) {
-	d := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
-	input := &types.ContentFetchResult{Error: "existing error", SourceURL: "https://example.com"}
-	result := d.ensureContentQuality(context.Background(), input)
-	assert.Equal(t, "existing error", result.Error)
-}
-
-func TestEnsureContentQualityGoodContent(t *testing.T) {
-	d := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
-	body := strings.Repeat("This is good content with enough length to pass quality checks. ", 10)
-	input := &types.ContentFetchResult{Title: "Good", Body: body, SourceURL: "https://example.com/article"}
-	result := d.ensureContentQuality(context.Background(), input)
-	assert.Empty(t, result.Error)
-}
-
-func TestEnsureContentQualityLowQuality(t *testing.T) {
-	d := newHTTPDriver(DriverOptions{MaxBodySize: 5000})
-	input := &types.ContentFetchResult{Title: "Bad", Body: "this page requires javascript", SourceURL: "https://example.com"}
-	result := d.ensureContentQuality(context.Background(), input)
-	assert.NotEmpty(t, result.Error)
-	assert.Contains(t, result.Error, "extract:")
-}
-
 // --- HTTP driver FetchContent with block error ---
 
 func TestHTTPDriverFetchContentBlockError(t *testing.T) {
@@ -389,7 +358,8 @@ printf 'B站 official AI summary that is long enough to pass the minimum thresho
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
 	result := &types.ContentFetchResult{Title: "Test", Body: "original body", SourceURL: "https://www.bilibili.com/video/BV1xx"}
-	driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
+	failure := driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
+	assert.Nil(t, failure)
 	assert.Contains(t, result.Body, "AI 总结")
 }
 
@@ -404,7 +374,8 @@ printf 'short\n'
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
 	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
-	driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
+	failure := driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
+	assert.Nil(t, failure)
 	assert.Equal(t, "original", result.Body)
 }
 
@@ -412,14 +383,34 @@ func TestAppendBilibiliSummaryError(t *testing.T) {
 	binDir := t.TempDir()
 	opencliPath := filepath.Join(binDir, "opencli")
 	script := `#!/bin/sh
-exit 1
+printf '{"ok":false,"error":{"code":"TEMPFAIL","message":"Bilibili conclusion API failed: 服务调用超时 (-504)"}}\n'
+exit 75
 `
 	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o700))
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
 	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
-	driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
+	failure := driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
+	require.NotNil(t, failure, "transient summary API failure must stay retryable")
+	assert.Equal(t, types.FailureReasonPartialExtract, failure.FailureReason)
+	assert.Equal(t, "original", result.Body)
+}
+
+func TestAppendBilibiliSummaryNoSummaryIsNotFailure(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	script := `#!/bin/sh
+printf '{"ok":false,"error":{"code":"EMPTY_RESULT","message":"Bilibili has not generated an AI summary"}}\n'
+exit 66
+`
+	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o700))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
+	failure := driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
+	assert.Nil(t, failure, "a video without an official AI summary is content absence, not a service failure")
 	assert.Equal(t, "original", result.Body)
 }
 
@@ -653,18 +644,15 @@ func TestOpenCLIDriverFetchContentWeixinURL(t *testing.T) {
 	binDir := t.TempDir()
 	opencliPath := filepath.Join(binDir, "opencli")
 	script := `#!/bin/sh
-case "$1" in
-  weixin)
-    # Create a temp file and output YAML with saved path
-    tmpdir=$(mktemp -d)
-    echo "# WeChat Article" > "$tmpdir/article.md"
-    echo "- title: Test Article"
-    echo "  saved: $tmpdir/article.md"
-    ;;
-  *)
-    printf 'mock\n'
-    ;;
-esac
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output) out="$2"; shift 2;;
+    *) shift;;
+  esac
+done
+printf '# WeChat Article\n' > "$out/article.md"
+printf -- '- title: Test Article\n  status: success\n  saved: %s\n' "$out/article.md"
 `
 	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o700))
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -672,6 +660,41 @@ esac
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
 	result := driver.FetchContent(context.Background(), "https://mp.weixin.qq.com/s/abc", types.ContentText)
 	require.NotNil(t, result)
+	require.Empty(t, result.Error)
+	assert.Contains(t, result.Body, "WeChat Article")
+}
+
+func TestOpenCLIDriverWeixinVerificationIsRetryable(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	script := `#!/bin/sh
+printf -- "- title: Error\n  status: failed — verification required in WeChat browser page\n  saved: '-'\n"
+`
+	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o700))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := driver.FetchContent(context.Background(), "https://mp.weixin.qq.com/s/abc", types.ContentText)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Error)
+	assert.Equal(t, types.FailureExtract, result.FailureKind)
+	assert.Equal(t, types.FailureReasonAntiBot, result.FailureReason)
+}
+
+func TestOpenCLIDriverWeixinInvalidURLIsPermanent(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	script := `#!/bin/sh
+printf -- "- title: Error\n  status: invalid URL\n  saved: '-'\n"
+`
+	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o700))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := driver.FetchContent(context.Background(), "https://mp.weixin.qq.com/s/abc", types.ContentText)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Error)
+	assert.Equal(t, types.FailureReasonNotFound, result.FailureReason)
 }
 
 // --- openCLIDriver.FetchContent with zhihu URL ---
@@ -955,7 +978,7 @@ n=0
 n=$((n + 1))
 printf '%%s' "$n" > "$OPENCLI_TEST_COUNT"
 if [ "$n" -le %d ]; then
-  printf 'ok: false\nerror:\n  code: UNKNOWN\n  message: %s\n' >&2
+  printf '{"ok":false,"error":{"code":"UNKNOWN","message":"%s"}}\n'
   exit 1
 fi
 printf '# Title\n\nbody content\n'
@@ -1005,7 +1028,7 @@ func TestRunOpenCLIGivesUpAfterNavigationRetries(t *testing.T) {
 	result := driver.runOpenCLI(context.Background(), "web", []string{"read", "--url", "https://example.com"})
 
 	assert.Contains(t, result.Error, "Navigation rejected")
-	assert.Equal(t, "3", countInvocations(t, counter), "1 initial attempt + 2 retries")
+	assert.Equal(t, "4", countInvocations(t, counter), "1 initial attempt + 3 retries")
 }
 
 func TestRunOpenCLIDoesNotRetryOtherFailures(t *testing.T) {
@@ -1019,8 +1042,84 @@ func TestRunOpenCLIDoesNotRetryOtherFailures(t *testing.T) {
 	assert.Equal(t, "1", countInvocations(t, counter), "non-transient failures are not retried")
 }
 
-func TestIsNavigationRejected(t *testing.T) {
-	assert.True(t, isNavigationRejected("opencli: exec opencli: exit 1: ok: false\n  message: Navigation rejected."))
-	assert.False(t, isNavigationRejected("opencli: exec opencli: exit 1: ok: false\n  message: EMPTY_RESULT"))
-	assert.False(t, isNavigationRejected(""))
+func TestIsTransientOpenCLIError(t *testing.T) {
+	assert.True(t, isTransientOpenCLIError("opencli: exec opencli: exit 1: ok: false\n  message: Navigation rejected."))
+	assert.True(t, isTransientOpenCLIError("message: Cannot attach to this target."))
+	assert.True(t, isTransientOpenCLIError("message: Browser connection dropped after the navigate command"))
+	assert.True(t, isTransientOpenCLIError("TypeError: Failed to fetch"))
+	assert.True(t, isTransientOpenCLIError("TypeError: Cannot read properties of null (reading 'cloneNode')"))
+	assert.False(t, isTransientOpenCLIError("opencli: exec opencli: exit 1: ok: false\n  message: EMPTY_RESULT"))
+	assert.False(t, isTransientOpenCLIError(""))
+}
+
+// --- zhihu zhuanlan download ---
+
+func TestOpenCLIDriverFetchContentZhihuZhuanlan(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	script := `#!/bin/sh
+outdir=""
+while [ $# -gt 0 ]; do
+  if [ "$1" = "--output" ]; then outdir="$2"; shift 2; continue; fi
+  shift
+done
+mkdir -p "$outdir"
+printf '# 测试文章\n\n这是正文内容，长度足够用于质量检查。\n' > "$outdir/article.md"
+printf '{"ok":true,"data":[{"title":"测试文章","author":"作者","publish_time":"2026-10-01","status":"success","size":"1 KB","saved":"%s"}]}\n' "$outdir/article.md"
+`
+	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o700))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := driver.FetchContent(context.Background(), "https://zhuanlan.zhihu.com/p/123", types.ContentText)
+	require.NotNil(t, result)
+	require.Empty(t, result.Error)
+	assert.Equal(t, "测试文章", result.Title)
+	assert.Contains(t, result.Body, "这是正文内容")
+}
+
+// --- x link-post follow ---
+
+func TestTwitterLinkPostFollowsTarget(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	script := `#!/bin/sh
+case "$1" in
+  twitter)
+    printf '{"ok":true,"data":[{"id":"123","author":"alice","text":"Worth reading: https://example.com/post","url":"https://x.com/alice/status/123"}]}\n'
+    ;;
+  web)
+    printf '# Linked Article\n\nThis is the linked article body with enough detail.\n'
+    ;;
+  *)
+    printf 'mock\n'
+    ;;
+esac
+`
+	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o700))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := driver.FetchContent(context.Background(), "https://x.com/alice/status/123", types.ContentText)
+	require.NotNil(t, result)
+	require.Empty(t, result.Error)
+	assert.Equal(t, "Linked Article", result.Title)
+	assert.Contains(t, result.Body, "linked article body")
+	assert.Contains(t, result.Body, "原推文")
+}
+
+func TestTwitterLinkPostToXStatusIsRejected(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	script := `#!/bin/sh
+printf '{"ok":true,"data":[{"id":"123","author":"alice","text":"https://x.com/bob/status/456","url":"https://x.com/alice/status/123"}]}\n'
+`
+	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o700))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := driver.FetchContent(context.Background(), "https://x.com/alice/status/123", types.ContentText)
+	require.NotNil(t, result)
+	assert.Contains(t, result.Error, "link-only")
+	assert.Equal(t, types.FailureReasonLinkOnlyPost, result.FailureReason)
 }

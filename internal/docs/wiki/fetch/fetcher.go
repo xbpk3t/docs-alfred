@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/cloudflare/ahocorasick"
 	"github.com/go-resty/resty/v2"
@@ -17,8 +18,10 @@ import (
 	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/internal/rss/transcript"
 	"github.com/xbpk3t/docs-alfred/pkg/httputil"
+	"github.com/xbpk3t/docs-alfred/pkg/opencli"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
+	"golang.org/x/sync/errgroup"
 )
 
 const noneVal = "none"
@@ -26,6 +29,7 @@ const noneVal = "none"
 // Fetcher handles fetching content from various sources.
 type Fetcher struct {
 	driver       ContentDriver
+	fallback     ContentDriver
 	GHClient     *resty.Client
 	GHBaseURL    string
 	MaxBodySize  int
@@ -38,6 +42,14 @@ type FetcherOption func(*Fetcher)
 // WithDriver sets the content driver for the fetcher.
 func WithDriver(driver ContentDriver) FetcherOption {
 	return func(f *Fetcher) { f.driver = driver }
+}
+
+// WithFallbackDriver sets a secondary driver. Generic (non-adapter) URLs try
+// the fallback first, and adapter URLs fall back to it only when the primary
+// driver returns nothing usable. This keeps browser-dependent opencli calls
+// reserved for sites that actually need a browser.
+func WithFallbackDriver(driver ContentDriver) FetcherOption {
+	return func(f *Fetcher) { f.fallback = driver }
 }
 
 // WithMediaEnabled enables or media content extraction.
@@ -76,8 +88,10 @@ func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) 
 	slog.Info("FetchContent", "url", urlStr, "type", contentType)
 
 	if err := urlutil.ValidateURL(urlStr); err != nil {
-		return extractFailure(urlStr, err.Error())
+		return extractFailureWithReason(urlStr, err.Error(), types.FailureReasonHTTPError)
 	}
+
+	urlStr = normalizeGitHubAPIURL(urlStr)
 
 	u := strings.ToLower(urlStr)
 	if contentType == "" {
@@ -87,26 +101,215 @@ func (f *Fetcher) FetchContent(ctx context.Context, urlStr, contentType string) 
 		return f.fetchGitHubRepo(ctx, urlStr)
 	}
 
+	// PDF is not consumable by the browser readers. arXiv has a stable HTML
+	// abstract page, so use that instead of archiving an empty "untitled" PDF.
+	if id := arxivPDFID(urlStr); id != "" {
+		return f.fetchArxivPDF(ctx, urlStr, id)
+	}
+	if isPDFURL(urlStr) {
+		return extractFailureWithReason(urlStr, "pdf extraction unsupported", types.FailureReasonPDFUnsupported)
+	}
+
 	// Podcast/audio bypasses the driver — direct to podcast transcript pipeline.
-	if contentType == types.ContentAudio || isPodcastLikeURL(u) || isDirectAudioURL(u) {
-		if !f.MediaEnabled {
-			return extractFailure(urlStr, "media extraction disabled")
+	if result := f.fetchPodcast(ctx, urlStr, contentType); result != nil {
+		return result
+	}
+	// A podcast-looking URL that is not a feed is an ordinary page. Do not let
+	// its audio content type bypass the text quality gate.
+	if contentType == types.ContentAudio {
+		contentType = types.ContentText
+	}
+
+	return f.fetchFromDrivers(ctx, urlStr, contentType)
+}
+
+// fetchArxivPDF fetches the HTML abstract page for an arXiv PDF and rewrites
+// the source back to the original PDF URL.
+func (f *Fetcher) fetchArxivPDF(ctx context.Context, rawURL, id string) *types.ContentFetchResult {
+	abstractURL := "https://arxiv.org/abs/" + id
+	if f.fallback != nil {
+		if fast := f.fetchUsable(ctx, f.fallback, abstractURL, types.ContentText); fast != nil {
+			fast.SourceURL = rawURL
+
+			return fast
+		}
+	}
+	result := f.driver.FetchContent(ctx, abstractURL, types.ContentText)
+	if result != nil {
+		result.SourceURL = rawURL
+	}
+
+	return f.ensureFetchedQuality(result, types.ContentText, rawURL)
+}
+
+// fetchPodcast routes podcast/audio URLs to the transcript pipeline. It
+// returns nil for podcast-looking URLs that are not feeds (for example a
+// bestblogs.dev episode page), so the caller falls through to the drivers.
+func (f *Fetcher) fetchPodcast(ctx context.Context, rawURL, contentType string) *types.ContentFetchResult {
+	lowerURL := strings.ToLower(rawURL)
+	if contentType != types.ContentAudio && !isPodcastLikeURL(lowerURL) && !isDirectAudioURL(lowerURL) {
+		return nil
+	}
+	if !f.MediaEnabled {
+		// Only genuine media is unusable when media extraction is off. A page
+		// whose URL merely contains "podcast" can still use the normal drivers.
+		if isDirectAudioURL(lowerURL) || isXiaoyuzhouEpisodeURL(lowerURL) {
+			return extractFailureWithReason(rawURL, "media extraction disabled", types.FailureReasonEmpty)
 		}
 
-		return f.fetchPodcastTranscript(ctx, urlStr)
+		return nil
 	}
 
-	// Delegate to driver.
-	result := f.driver.FetchContent(ctx, urlStr, contentType)
-	if result != nil && result.Error == "" {
+	return f.fetchPodcastTranscript(ctx, rawURL)
+}
+
+// fetchFromDrivers delegates to the configured drivers. Static (non-adapter)
+// URLs prefer the fallback HTTP driver so the shared opencli browser tab is
+// reserved for adapter sites; adapter URLs fall back to it only when the
+// primary driver returns nothing usable.
+func (f *Fetcher) fetchFromDrivers(ctx context.Context, rawURL, contentType string) *types.ContentFetchResult {
+	needsAdapter := opencli.NeedsSiteAdapter(rawURL)
+	if f.fallback != nil && !needsAdapter {
+		// A thin landing/navigation page passes the 120-rune gate but would
+		// suppress the primary renderer. Require enough body to look like an
+		// article before accepting the generic fallback.
+		if fast := f.fetchUsable(ctx, f.fallback, rawURL, contentType); fast != nil &&
+			utf8.RuneCountInString(fast.Body) >= minFallbackBodyRunes {
+			slog.Debug("fallback driver served generic url", "url", rawURL, "driver", f.fallback.Name())
+
+			return fast
+		}
+	}
+
+	result := f.driver.FetchContent(ctx, rawURL, contentType)
+	// Single quality gate: a driver can return a 200 anti-bot shell without an
+	// error; that is still a failed primary extraction and deserves the
+	// fallback.
+	gated := f.ensureFetchedQuality(result, contentType, rawURL)
+	if f.fallback != nil && needsAdapter && gated.Error != "" {
+		if rescue := f.fetchUsable(ctx, f.fallback, rawURL, contentType); rescue != nil {
+			slog.Info("primary driver failed, fallback served url",
+				"url", rawURL, "primary", f.driver.Name(), "fallback", f.fallback.Name())
+
+			return rescue
+		}
+	}
+
+	return gated
+}
+
+// minFallbackBodyRunes is the minimum body length for the generic HTTP
+// fallback to be preferred over the primary renderer. Below this a page is
+// usually navigation/landing chrome rather than an article.
+const minFallbackBodyRunes = 300
+
+// fetchUsable runs a driver and returns nil unless it produced content that
+// passes the quality gate, so a driver that returns a login shell is not
+// mistaken for a successful fallback.
+func (f *Fetcher) fetchUsable(
+	ctx context.Context,
+	driver ContentDriver,
+	urlStr, contentType string,
+) *types.ContentFetchResult {
+	if driver == nil {
+		return nil
+	}
+	result := f.ensureFetchedQuality(driver.FetchContent(ctx, urlStr, contentType), contentType, urlStr)
+	if result.Error != "" {
+		// The caller reports the primary driver's error; keep the fallback's
+		// own reason visible here instead of discarding it.
+		slog.Debug("driver result unusable", "url", urlStr, "driver", driver.Name(), "reason", result.Error)
+
+		return nil
+	}
+
+	return result
+}
+
+// ensureFetchedQuality is the single post-driver content gate. It runs for all
+// drivers (opencli, http-readability, future ones) so a driver that returns a
+// 200 anti-bot page cannot leak that page into classification. Repo and media
+// results keep their own contracts.
+func (f *Fetcher) ensureFetchedQuality(
+	result *types.ContentFetchResult,
+	contentType, fallbackURL string,
+) *types.ContentFetchResult {
+	if result == nil {
+		return extractFailureWithReason(fallbackURL, "driver returned empty result", types.FailureReasonHTTPError)
+	}
+	if result.Error != "" {
 		return result
 	}
 
-	if result != nil {
+	var quality contentQuality
+	if contentType == types.ContentText {
+		quality = assessContentQuality(result.Title, result.Body, result.SourceURL)
+	} else {
+		// Non-text results (video metadata, podcast transcripts) must still not
+		// archive anti-bot/browser-error shells. Skip only the text-specific
+		// length/social/link checks.
+		quality = assessShellSignals(result.Title, result.Body)
+	}
+	if quality.OK {
 		return result
 	}
 
-	return extractFailure(urlStr, "driver returned empty result")
+	slog.Warn("fetched content rejected by quality gate",
+		"url", result.SourceURL, "reason", quality.Reason, "failureReason", quality.FailureReason)
+
+	return extractFailureWithReason(result.SourceURL, "low quality content: "+quality.Reason, quality.FailureReason)
+}
+
+// normalizeGitHubAPIURL rewrites api.github.com/repos/<owner>/<repo> to the
+// canonical github.com page. The API endpoint returns a JSON error body for
+// 404s, which the generic driver would otherwise archive as an article.
+func normalizeGitHubAPIURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || strings.ToLower(parsed.Hostname()) != "api.github.com" {
+		return rawURL
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	// Only the exact /repos/<owner>/<repo> endpoint maps to the repo page.
+	// Subpaths (issues, contents, ...) must not be silently collapsed.
+	if len(parts) != 3 || parts[0] != "repos" || parts[1] == "" || parts[2] == "" {
+		return rawURL
+	}
+
+	return "https://github.com/" + parts[1] + "/" + strings.TrimSuffix(parts[2], ".git")
+}
+
+// arxivPDFID returns the arXiv identifier when rawURL points at a PDF.
+func arxivPDFID(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	if !strings.EqualFold(parsed.Hostname(), "arxiv.org") &&
+		!strings.EqualFold(parsed.Hostname(), "www.arxiv.org") {
+		return ""
+	}
+	path := strings.Trim(parsed.Path, "/")
+	if !strings.HasPrefix(path, "pdf/") {
+		return ""
+	}
+	path = strings.TrimPrefix(path, "pdf/")
+	if path == "" {
+		return ""
+	}
+	path = strings.TrimSuffix(path, ".pdf")
+
+	return path
+}
+
+// isPDFURL reports whether the URL itself is a PDF document.
+func isPDFURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	path := strings.ToLower(parsed.Path)
+
+	return strings.HasSuffix(path, ".pdf")
 }
 
 // --- GitHub repo fetching ---
@@ -122,9 +325,39 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *types.Con
 	if err != nil {
 		return &types.ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
 	}
-	repoData, _, err := ghClient.Repositories.Get(ctx, owner, repoName)
-	if err != nil {
-		return &types.ContentFetchResult{SourceURL: rawURL, Error: err.Error()}
+	var (
+		repoData *github.Repository
+		readme   *github.RepositoryContent
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		repoData, _, err = ghClient.Repositories.Get(gctx, owner, repoName)
+
+		return err
+	})
+	// README failures are non-fatal: a missing README leaves the metadata-only body.
+	g.Go(func() error {
+		var err error
+		readme, _, err = ghClient.Repositories.GetReadme(gctx, owner, repoName, nil)
+		if err != nil {
+			readme = nil
+		}
+
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		reason := types.FailureReasonHTTPError
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not Found") {
+			reason = types.FailureReasonNotFound
+		}
+
+		return &types.ContentFetchResult{
+			SourceURL:     rawURL,
+			Error:         err.Error(),
+			FailureKind:   types.FailureResolve,
+			FailureReason: reason,
+		}
 	}
 
 	licenseName := noneVal
@@ -147,6 +380,14 @@ func (f *Fetcher) fetchGitHubRepo(ctx context.Context, rawURL string) *types.Con
 		repoData.GetDescription(),
 		repoData.GetHTMLURL(),
 	)
+
+	// Metadata alone is not digestible: a README carries what the project
+	// actually does and how it is used.
+	if readme != nil {
+		if content, contentErr := readme.GetContent(); contentErr == nil && strings.TrimSpace(content) != "" {
+			body += "\n\nREADME:\n\n" + textutil.TruncateUTF8(content, f.MaxBodySize*3)
+		}
+	}
 
 	title := fmt.Sprintf("%s/%s", owner, repoName)
 	if repoData.GetDescription() != "" {
@@ -181,15 +422,35 @@ func (f *Fetcher) githubClient() (*github.Client, error) {
 
 // --- Podcast/audio fetching ---
 
+// fetchPodcastTranscript resolves a podcast episode or feed URL to a
+// transcript. It returns nil when the URL only looked podcast-like but is not
+// an RSS feed, so the caller can fall through to the normal content drivers.
 func (f *Fetcher) fetchPodcastTranscript(ctx context.Context, rawURL string) *types.ContentFetchResult {
 	lowerURL := strings.ToLower(rawURL)
 	if isDirectAudioURL(lowerURL) {
 		return extractFailure(rawURL, "rss transcript unavailable: direct audio URL has no RSS metadata")
 	}
+	if isXiaoyuzhouEpisodeURL(lowerURL) {
+		ep := &transcript.EpisodeRef{URL: rawURL}
+
+		return f.fetchTranscriptFromEpisode(ctx, ep, rawURL)
+	}
 
 	feed, err := gofeed.NewParser().ParseURLWithContext(rawURL, ctx)
 	if err != nil {
-		return extractFailure(rawURL, "rss transcript unavailable: feed parse: "+err.Error())
+		// A URL that is clearly supposed to be a feed (.xml/.rss//feed) is
+		// retryable: the failure may be a transient network/5xx error. A
+		// podcast-looking episode page that is not a feed falls through.
+		if isRSSFeedLike(lowerURL) {
+			return extractFailureWithReason(
+				rawURL,
+				"rss transcript unavailable: feed parse: "+err.Error(),
+				types.FailureReasonHTTPError,
+			)
+		}
+		slog.Info("podcast-like url is not an rss feed; using normal drivers", "url", rawURL, "error", err)
+
+		return nil
 	}
 	if feed == nil || len(feed.Items) == 0 {
 		return extractFailure(rawURL, "rss transcript unavailable: feed has no items")
@@ -287,6 +548,7 @@ func (f *Fetcher) fetchTranscriptFromEpisode(
 	rawURL string,
 ) *types.ContentFetchResult {
 	providers := []transcript.Provider{
+		transcript.NewXiaoyuzhouProvider(""),
 		transcript.NewRssTranscriptProvider(),
 		transcript.NewDescriptionLinkProvider(),
 	}
@@ -331,46 +593,251 @@ func mediaContentResult(title, rawURL, source, content string, maxBodySize int) 
 // --- Content quality assessment ---
 
 type contentQuality struct {
-	Reason string
-	OK     bool
+	Reason        string
+	FailureReason types.FailureReason
+	OK            bool
 }
 
 func assessContentQuality(title, body, rawURL string) contentQuality {
 	trimmed := strings.TrimSpace(body)
 	if trimmed == "" {
-		return contentQuality{Reason: "empty body"}
+		return contentQuality{Reason: "empty body", FailureReason: types.FailureReasonEmpty}
 	}
-	lower := strings.ToLower(title + "\n" + trimmed)
-	if cfReason := cloudflareChallengeReason(lower); cfReason != "" {
-		return contentQuality{Reason: cfReason}
+
+	// Normalize once; the shell checks and the text checks share the values.
+	titleLower := strings.ToLower(normalizeShellText(strings.TrimSpace(title)))
+	bodyLower := strings.ToLower(normalizeShellText(trimmed))
+	runes := utf8.RuneCountInString(trimmed)
+	if reason, failureReason := shellSignalReason(titleLower, bodyLower, runes); failureReason != "" {
+		return contentQuality{Reason: reason, FailureReason: failureReason}
 	}
-	if matches := LowQualityMatcher.Match([]byte(lower)); len(matches) > 0 {
-		return contentQuality{Reason: "matched error/login shell"}
+
+	lower := titleLower + "\n" + bodyLower
+
+	// The broad legacy matcher is only safe on short bodies: an article about
+	// 404/login pages must not be rejected for mentioning them.
+	if runes < 400 && errorShellMatcher.Match([]byte(lower)) != nil {
+		return contentQuality{Reason: "matched error/login shell", FailureReason: types.FailureReasonAntiBot}
 	}
 
 	domain := urlutil.Domain(rawURL)
-	if isSocialShellDomain(domain) && socialShellLike(lower, trimmed) {
-		return contentQuality{Reason: "social/login shell"}
+	if isSocialShellDomain(domain) && socialShellPatterns(lower) {
+		return contentQuality{Reason: "social/login shell", FailureReason: types.FailureReasonAntiBot}
 	}
-	if len([]rune(trimmed)) < 120 {
-		return contentQuality{Reason: "too short"}
+	if runes < 120 {
+		return contentQuality{Reason: "too short", FailureReason: types.FailureReasonTooShort}
 	}
 	if isLinkHeavy(trimmed) {
-		return contentQuality{Reason: "link-heavy navigation shell"}
+		return contentQuality{Reason: "link-heavy navigation shell", FailureReason: types.FailureReasonIndexPage}
 	}
 
 	return contentQuality{OK: true}
 }
 
-func cloudflareChallengeReason(lower string) string {
-	if strings.Contains(lower, "just a moment") &&
-		strings.Contains(lower, "checking your browser") {
-		return "cloudflare anti-bot: challenge page"
+// assessShellSignals runs only the content-type-independent shell checks. It is
+// used for video/audio results, where text length/social/link heuristics do not
+// apply but an anti-bot page must still be rejected.
+func assessShellSignals(title, body string) contentQuality {
+	trimmed := strings.TrimSpace(body)
+	if trimmed == "" {
+		return contentQuality{Reason: "empty body", FailureReason: types.FailureReasonEmpty}
 	}
-	if strings.Contains(lower, "just a moment") &&
-		(strings.Contains(lower, "cf-browser-verification") ||
-			strings.Contains(lower, "cloudflare") ||
-			strings.Contains(lower, "ray id:")) {
+
+	titleLower := strings.ToLower(normalizeShellText(strings.TrimSpace(title)))
+	bodyLower := strings.ToLower(normalizeShellText(trimmed))
+	runes := utf8.RuneCountInString(trimmed)
+	if reason, failureReason := shellSignalReason(titleLower, bodyLower, runes); failureReason != "" {
+		return contentQuality{Reason: reason, FailureReason: failureReason}
+	}
+
+	return contentQuality{OK: true}
+}
+
+// shellSignalReason detects the shell/error pages this pipeline has actually
+// seen in production. It is deliberately more specific than LowQualityMatcher
+// so legitimate articles that discuss anti-bot pages are not rejected. It
+// takes the already-normalized lowercased title and body.
+func shellSignalReason(titleLower, bodyLower string, runes int) (string, types.FailureReason) {
+	if reason, failureReason := shellTitleReason(titleLower); failureReason != "" {
+		return reason, failureReason
+	}
+	// Body keyword checks are only safe on short pages; a long article may
+	// legitimately discuss Cloudflare, Zhihu verification, or browser errors.
+	if runes < 1200 {
+		if reason := cloudflareChallengeReason(bodyLower); reason != "" {
+			return reason, types.FailureReasonCloudflare
+		}
+		if reason := zhihuVerificationReason(bodyLower); reason != "" {
+			return reason, types.FailureReasonAntiBot
+		}
+		if reason := browserErrorReason(bodyLower); reason != "" {
+			return reason, types.FailureReasonBrowserError
+		}
+	}
+	if isJSONAPIError(bodyLower) {
+		return "json api error body", types.FailureReasonNotFound
+	}
+	if reason := jsShellReason(bodyLower, runes); reason != "" {
+		return reason, types.FailureReasonJSShell
+	}
+	if reason := accessDeniedReason(bodyLower, runes); reason != "" {
+		return reason, types.FailureReasonAntiBot
+	}
+	if reason := partialExtractReason(bodyLower, runes); reason != "" {
+		return reason, types.FailureReasonPartialExtract
+	}
+
+	return "", ""
+}
+
+func shellTitleReason(titleLower string) (string, types.FailureReason) {
+	switch titleLower {
+	case "安全验证":
+		return "zhihu anti-bot verification page", types.FailureReasonAntiBot
+	case "just a moment", "just a moment…", "just a moment...":
+		return "cloudflare anti-bot: challenge page", types.FailureReasonCloudflare
+	case "status:open":
+		return "gerrit/SPA query shell", types.FailureReasonIndexPage
+	case "loading…", "loading...":
+		return "javascript shell: page still loading", types.FailureReasonJSShell
+	case "untitled":
+		return "empty extraction: untitled page", types.FailureReasonPartialExtract
+	}
+
+	return "", ""
+}
+
+func zhihuVerificationReason(bodyLower string) string {
+	if strings.Contains(bodyLower, "系统监测到您的网络环境存在异常") ||
+		strings.Contains(bodyLower, "人机验证") ||
+		strings.Contains(bodyLower, "滑动验证") {
+		return "zhihu/anti-bot verification page"
+	}
+
+	return ""
+}
+
+func browserErrorReason(bodyLower string) string {
+	for _, pattern := range browserErrorPatterns {
+		if strings.Contains(bodyLower, pattern) {
+			return "browser error page: " + pattern
+		}
+	}
+
+	return ""
+}
+
+func jsShellReason(bodyLower string, runes int) string {
+	if runes >= 800 {
+		return ""
+	}
+	if strings.Contains(bodyLower, "loading…") ||
+		strings.Contains(bodyLower, "loading...") ||
+		strings.Contains(bodyLower, "please enable javascript") ||
+		strings.Contains(bodyLower, "you need to enable javascript") ||
+		strings.Contains(bodyLower, "this page requires javascript") {
+		return "javascript shell: content not rendered"
+	}
+
+	return ""
+}
+
+func accessDeniedReason(bodyLower string, runes int) string {
+	if runes >= 1500 {
+		return ""
+	}
+	if strings.Contains(bodyLower, "verify you are human") ||
+		strings.Contains(bodyLower, "are you a robot") ||
+		strings.Contains(bodyLower, "access denied") {
+		return "anti-bot/access-denied shell"
+	}
+
+	return ""
+}
+
+func partialExtractReason(bodyLower string, runes int) string {
+	if runes >= 1200 {
+		return ""
+	}
+	for _, pattern := range partialExtractPatterns {
+		if strings.Contains(bodyLower, pattern) {
+			return "partial extract: " + pattern
+		}
+	}
+
+	return ""
+}
+
+// errorShellPatterns is the curated subset of LowQualityPatternsList that is
+// safe to apply to arbitrary text: it omits broad words such as "captcha" and
+// "forbidden" that appear in legitimate security articles.
+var errorShellPatterns = []string{
+	"this page requires javascript",
+	"javascript is not available",
+	"enable javascript",
+	"please enable js",
+	"please log in",
+	"log in to continue",
+	"sign in to continue",
+	"404 not found",
+	"page not found",
+	"400 bad request",
+}
+
+var errorShellMatcher = ahocorasick.NewStringMatcher(errorShellPatterns)
+
+var browserErrorPatterns = []string{
+	"err_connection_closed",
+	"err_connection_reset",
+	"err_name_not_resolved",
+	"err_internet_disconnected",
+	"err_ssl",
+	"this site can't be reached",
+	"this site can’t be reached",
+	"unexpectedly closed the connection",
+	"took too long to respond",
+}
+
+var partialExtractPatterns = []string{
+	"continue reading",
+	"subscribe to continue",
+	"subscribe to read",
+	"sign in to read",
+	"this content is for subscribers",
+}
+
+// isJSONAPIError takes the already-normalized lowercased body.
+func isJSONAPIError(bodyLower string) bool {
+	if !strings.HasPrefix(bodyLower, "{") || utf8.RuneCountInString(bodyLower) > 800 {
+		return false
+	}
+	if !strings.Contains(bodyLower, "\"message\"") && !strings.Contains(bodyLower, "\"error\"") {
+		return false
+	}
+
+	return strings.Contains(bodyLower, "not found") ||
+		strings.Contains(bodyLower, "\"status\": \"404\"") ||
+		strings.Contains(bodyLower, "\"status\":404") ||
+		strings.Contains(bodyLower, "documentation_url")
+}
+
+func normalizeShellText(s string) string {
+	return strings.ReplaceAll(textutil.DecodeCommonHTMLEntities(s), " ", " ")
+}
+
+func cloudflareChallengeReason(lower string) string {
+	if !strings.Contains(lower, "just a moment") {
+		return ""
+	}
+	if textutil.ContainsAny(lower, []string{
+		"checking your browser",
+		"performing security verification",
+		"verification successful",
+		"cf-browser-verification",
+		"cloudflare",
+		"ray id:",
+		"enable javascript and cookies",
+	}) {
 		return "cloudflare anti-bot: challenge page"
 	}
 
@@ -409,33 +876,17 @@ func isSocialShellDomain(domain string) bool {
 	}
 }
 
-const (
-	socialShortContentThreshold = 300
-	socialContentThreshold      = 2000
-	socialMinSentences          = 3
-)
-
-func socialShellLike(lower, body string) bool {
-	trimmed := strings.TrimSpace(body)
-	runeLen := len([]rune(trimmed))
-	if runeLen < socialShortContentThreshold {
-		return true
-	}
-	if socialShellPatterns(lower) {
-		return true
-	}
-	if runeLen < socialContentThreshold && !hasRealSentences(lower) {
-		return true
-	}
-
-	return false
-}
+// socialShellPatterns matches only explicit login/chrome phrases. Broad words
+// like "javascript" or "log in" appear in legitimate technical threads; the
+// legacy short-body rejection also killed every tweet under 300 runes.
 
 var socialShellMatcher = ahocorasick.NewStringMatcher([]string{
-	"log in",
-	"sign up",
-	"javascript",
-	"enable js",
+	"log in to continue",
+	"sign in to continue",
+	"sign up to continue",
+	"enable javascript",
+	"javascript is not available",
+	"please enable js",
 	"keyboard shortcuts",
 	"keyboard shortcut",
 	"to continue, please",
@@ -445,21 +896,6 @@ var socialShellMatcher = ahocorasick.NewStringMatcher([]string{
 
 func socialShellPatterns(lower string) bool {
 	return len(socialShellMatcher.Match([]byte(lower))) > 0
-}
-
-func hasRealSentences(lower string) bool {
-	count := 0
-	for i := 0; i < len(lower); i++ {
-		switch lower[i] {
-		case '.', '!', '?':
-			count++
-			if count >= socialMinSentences {
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 func isLinkHeavy(body string) bool {
@@ -478,15 +914,32 @@ func isLinkHeavy(body string) bool {
 // --- Failure helpers ---
 
 func extractFailure(rawURL, reason string) *types.ContentFetchResult {
+	return extractFailureWithReason(rawURL, reason, "")
+}
+
+func extractFailureWithReason(
+	rawURL, reason string,
+	failureReason types.FailureReason,
+) *types.ContentFetchResult {
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
 		reason = "content extraction failed"
 	}
 	if strings.HasPrefix(reason, "extract:") {
-		return &types.ContentFetchResult{SourceURL: rawURL, Error: reason, FailureKind: types.FailureExtract}
+		return &types.ContentFetchResult{
+			SourceURL:     rawURL,
+			Error:         reason,
+			FailureKind:   types.FailureExtract,
+			FailureReason: failureReason,
+		}
 	}
 
-	return &types.ContentFetchResult{SourceURL: rawURL, Error: "extract: " + reason, FailureKind: types.FailureExtract}
+	return &types.ContentFetchResult{
+		SourceURL:     rawURL,
+		Error:         "extract: " + reason,
+		FailureKind:   types.FailureExtract,
+		FailureReason: failureReason,
+	}
 }
 
 func cleanExtractReason(reason string) string {
@@ -542,6 +995,12 @@ func isParsedVideoURL(parsed *url.URL) bool {
 func isPodcastLikeURL(lowerURL string) bool {
 	return strings.Contains(lowerURL, "xiaoyuzhou") || strings.Contains(lowerURL, "podcast") ||
 		strings.Contains(lowerURL, "libsyn.com") || strings.Contains(lowerURL, "anchor.fm") || isRSSFeedLike(lowerURL)
+}
+
+// isXiaoyuzhouEpisodeURL reports a Xiaoyuzhou episode page, whose transcript
+// comes from the Xiaoyuzhou API provider rather than RSS parsing.
+func isXiaoyuzhouEpisodeURL(lowerURL string) bool {
+	return strings.Contains(lowerURL, "xiaoyuzhoufm.com/episode/")
 }
 
 func isRSSFeedLike(lowerURL string) bool {

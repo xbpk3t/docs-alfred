@@ -51,7 +51,7 @@ func (d *httpDriver) FetchContent(ctx context.Context, urlStr, contentType strin
 func (d *httpDriver) handlePageData(ctx context.Context, rawURL string, data []byte) *types.ContentFetchResult {
 	slog.Info("HTTP fetch succeeded", "url", rawURL, "bodyLen", len(data))
 	if result := d.extractWithReadability(data, rawURL); result != nil {
-		return d.ensureContentQuality(ctx, result)
+		return result
 	}
 
 	body := textutil.TruncateUTF8(markdownFallbackBody(data), d.maxBodySize)
@@ -60,7 +60,7 @@ func (d *httpDriver) handlePageData(ctx context.Context, rawURL string, data []b
 		title = rawURL
 	}
 
-	return d.ensureContentQuality(ctx, &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL})
+	return &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
 }
 
 func (d *httpDriver) extractWithReadability(data []byte, rawURL string) *types.ContentFetchResult {
@@ -97,18 +97,6 @@ func (d *httpDriver) extractWithReadability(data []byte, rawURL string) *types.C
 	slog.Info("go-readability extraction succeeded", "url", rawURL, "bodyLen", len(body))
 
 	return &types.ContentFetchResult{Title: title, Body: body, SourceURL: rawURL}
-}
-
-func (d *httpDriver) ensureContentQuality(_ context.Context, result *types.ContentFetchResult) *types.ContentFetchResult {
-	if result == nil || result.Error != "" {
-		return result
-	}
-	quality := assessContentQuality(result.Title, result.Body, result.SourceURL)
-	if quality.OK {
-		return result
-	}
-
-	return extractFailure(result.SourceURL, "low quality HTTP content: "+quality.Reason)
 }
 
 // extractTitleFromHTML extracts the <title> from HTML content using goquery.

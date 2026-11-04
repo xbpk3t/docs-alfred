@@ -1,12 +1,17 @@
 package types
 
+// TranscriptSectionMarker is the heading the opencli driver appends when it
+// merges a video subtitle into the fetch body.
+const TranscriptSectionMarker = "## 字幕内容"
+
 // ContentFetchResult holds fetched content metadata and body.
 type ContentFetchResult struct {
-	Title       string      `json:"title"`
-	Body        string      `json:"body"`
-	SourceURL   string      `json:"sourceUrl"`
-	Error       string      `json:"error,omitempty"`
-	FailureKind FailureKind `json:"-"`
+	Title         string        `json:"title"`
+	Body          string        `json:"body"`
+	SourceURL     string        `json:"sourceUrl"`
+	Error         string        `json:"error,omitempty"`
+	FailureKind   FailureKind   `json:"-"`
+	FailureReason FailureReason `json:"-"`
 	// ChildURLs are independent sub-posts discovered in this page, each with
 	// its own canonical permalink (one zhihu answer inside a question page).
 	// The pipeline digests every one as its own entry, fetched by URL, instead
@@ -18,4 +23,8 @@ type ContentFetchResult struct {
 	// a page whose children are unrelated (an index or feed) should not
 	// populate this field.
 	ChildURLs []string `json:"childUrls,omitempty"`
+	// HasTranscript reports that a subtitle/official-summary section was
+	// actually appended to Body, distinguishing a real video transcript from
+	// metadata-only output that merely passes a length check.
+	HasTranscript bool `json:"hasTranscript,omitempty"`
 }
