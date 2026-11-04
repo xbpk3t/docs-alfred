@@ -24,6 +24,16 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
+// ExitError reports a command that finished with a non-zero exit code.
+// Callers recover the code with errors.As instead of parsing the formatted
+// message, which is presentation, not API.
+type ExitError struct {
+	Cmd  string
+	Code int
+}
+
+func (e *ExitError) Error() string { return fmt.Sprintf("exit %d", e.Code) }
+
 // RunWithOutput executes a command and returns combined stdout+stderr.
 // Use this when you need all output in a single stream (like exec.CombinedOutput).
 func RunWithOutput(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
@@ -39,7 +49,7 @@ func RunWithOutput(ctx context.Context, dir, name string, args ...string) ([]byt
 	if status.Exit != 0 {
 		out := strings.Join(status.Stdout, "\n")
 
-		return []byte(out), fmt.Errorf("exec %s: exit %d: %s", name, status.Exit, out)
+		return []byte(out), fmt.Errorf("exec %s: %w: %s", name, &ExitError{Cmd: name, Code: status.Exit}, out)
 	}
 
 	return []byte(strings.Join(status.Stdout, "\n")), nil
@@ -57,7 +67,7 @@ func RunStdout(ctx context.Context, name string, args ...string) ([]byte, error)
 	if status.Exit != 0 {
 		errMsg := strings.Join(status.Stderr, "\n")
 
-		return nil, fmt.Errorf("exec %s: exit %d: %s", name, status.Exit, errMsg)
+		return nil, fmt.Errorf("exec %s: %w: %s", name, &ExitError{Cmd: name, Code: status.Exit}, errMsg)
 	}
 
 	return []byte(strings.Join(status.Stdout, "\n")), nil
@@ -73,9 +83,12 @@ func RunSeparate(ctx context.Context, name string, args ...string) ([]byte, []by
 		return nil, nil, fmt.Errorf("exec %s: %w", name, status.Error)
 	}
 	if status.Exit != 0 {
+		// Keep stdout even on failure: opencli 2.x writes its machine-readable
+		// error envelope to stdout, so discarding it hides the error code/message.
+		out := []byte(strings.Join(status.Stdout, "\n"))
 		errMsg := strings.Join(status.Stderr, "\n")
 
-		return nil, nil, fmt.Errorf("exec %s: exit %d: %s", name, status.Exit, errMsg)
+		return out, []byte(errMsg), fmt.Errorf("exec %s: %w: %s", name, &ExitError{Cmd: name, Code: status.Exit}, errMsg)
 	}
 
 	return []byte(strings.Join(status.Stdout, "\n")),
