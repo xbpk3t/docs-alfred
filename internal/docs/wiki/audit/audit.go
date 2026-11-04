@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 const codeFence = "```"
@@ -170,11 +171,7 @@ func resolveAuditPath(wikiRoot, rawPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	withinRoot, err := pathWithinRoot(absRoot, absPath)
-	if err != nil {
-		return "", err
-	}
-	if !withinRoot {
+	if !fileutil.PathWithin(absRoot, absPath) {
 		return "", fmt.Errorf("audit path outside wiki root: %s", rawPath)
 	}
 
@@ -214,15 +211,6 @@ func evalSymlinks(path string) (string, bool) {
 	}
 
 	return resolved, true
-}
-
-func pathWithinRoot(absRoot, absPath string) (bool, error) {
-	rel, err := filepath.Rel(absRoot, absPath)
-	if err != nil {
-		return false, err
-	}
-
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel), nil
 }
 
 func auditSummaryFile(file string, lines []string) []checkutil.Issue {

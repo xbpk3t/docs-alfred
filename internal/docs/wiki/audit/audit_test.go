@@ -183,29 +183,6 @@ func TestEvalSymlinksInvalidPath(t *testing.T) {
 	assert.Empty(t, resolved)
 }
 
-// --- pathWithinRoot ---
-
-func TestPathWithinRoot(t *testing.T) {
-	tests := []struct {
-		name string
-		root string
-		path string
-		want bool
-	}{
-		{"within root", "/wiki", "/wiki/topic/file.md", true},
-		{"same as root", "/wiki", "/wiki", true},
-		{"outside root", "/wiki", "/other/file.md", false},
-		{"parent of root", "/wiki/sub", "/wiki", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := pathWithinRoot(tt.root, tt.path)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, result)
-		})
-	}
-}
-
 // --- resolveAuditPath ---
 
 func TestResolveAuditPathValidFile(t *testing.T) {
@@ -499,20 +476,6 @@ func TestAbsEvalSymlinkExistingPath(t *testing.T) {
 	result, err := absEvalSymlink(filepath.Join(dir, "test.md"))
 	require.NoError(t, err)
 	assert.True(t, filepath.IsAbs(result))
-}
-
-// --- pathWithinRoot edge cases ---
-
-func TestPathWithinRootNestedPath(t *testing.T) {
-	result, err := pathWithinRoot("/wiki", "/wiki/a/b/c/d/file.md")
-	require.NoError(t, err)
-	assert.True(t, result)
-}
-
-func TestPathWithinRootSimilarPrefix(t *testing.T) {
-	result, err := pathWithinRoot("/wiki", "/wiki2/file.md")
-	require.NoError(t, err)
-	assert.False(t, result)
 }
 
 // --- auditCanonicalHeadings with mixed content ---
