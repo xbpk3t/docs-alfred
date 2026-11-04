@@ -41,10 +41,15 @@ const (
 const (
 	SubcmdZhihuQuestion     = "question"
 	SubcmdZhihuAnswerDetail = "answer-detail"
+	SubcmdZhihuDownload     = "download"
 )
 
 // formatYAML asks opencli for structured output; see route.format.
 const formatYAML = "yaml"
+
+// formatJSON asks opencli for JSON rows; used where the driver needs
+// per-row fields (zhihu download's saved path, twitter thread's root tweet).
+const formatJSON = "json"
 
 // CommandForURL returns the opencli adapter name and arguments for the given URL.
 // The caller uses these to build: opencli <adapter> <args...>.
@@ -114,8 +119,12 @@ const defaultFormat = "md"
 // Ordered by specificity — more precise domains come first.
 var routes = []route{
 	{adapter: AdapterYoutube, subcmd: subcmdVideo, domains: []string{"youtube.com", "youtu.be"}},
-	{adapter: AdapterTwitter, subcmd: "thread", domains: []string{"x.com", "twitter.com", "mobile.twitter.com"}},
-	{adapter: AdapterWeb, subcmd: subcmdRead, domains: []string{"zhuanlan.zhihu.com"}},
+	{adapter: AdapterTwitter, subcmd: "thread", domains: []string{"x.com", "twitter.com", "mobile.twitter.com"}, format: formatJSON},
+	// zhuanlan is a full article page, and `web read` carries the generic web
+	// site session rather than the zhihu session, so zhihu serves it an
+	// anti-bot page. `zhihu download` uses the zhihu session and saves clean
+	// markdown to a file (the driver reads `saved` from JSON rows).
+	{adapter: AdapterZhihu, subcmd: SubcmdZhihuDownload, domains: []string{"zhuanlan.zhihu.com"}, format: formatJSON},
 	// Answer permalinks before the question route: /question/<qid>/answer/<aid>
 	// matches both, and only answer-detail returns the full answer body
 	// (question truncates every answer to a 200-char preview).
@@ -128,10 +137,16 @@ var routes = []route{
 	// `zhihu question <url>`.
 	{adapter: AdapterZhihu, subcmd: SubcmdZhihuAnswerDetail, domains: []string{"zhihu.com"}, pathContains: "/answer/", format: formatYAML},
 	{adapter: AdapterZhihu, subcmd: SubcmdZhihuQuestion, domains: []string{"zhihu.com"}, pathContains: "/question/", format: formatYAML, limit: 3},
+	// Bilibili opus dynamics and read/cv articles are normal web pages: the
+	// bilibili video adapter cannot resolve a BV id from them and exits with
+	// "Cannot resolve BV ID". Route them through web read before the catch-all
+	// bilibili video route below.
+	{adapter: AdapterWeb, subcmd: subcmdRead, domains: []string{"bilibili.com"}, pathContains: "/opus/"},
+	{adapter: AdapterWeb, subcmd: subcmdRead, domains: []string{"bilibili.com"}, pathContains: "/read/"},
 	{adapter: AdapterBilibili, subcmd: subcmdVideo, domains: []string{"bilibili.com", "b23.tv"}},
-	{adapter: AdapterWeixin, subcmd: "download", domains: []string{"mp.weixin.qq.com"}},
+	{adapter: AdapterWeixin, subcmd: "download", domains: []string{"mp.weixin.qq.com"}, pathContains: "/s"},
 	{adapter: AdapterReddit, subcmd: subcmdRead, domains: []string{"reddit.com"}},
-	{adapter: AdapterHN, subcmd: "item", domains: []string{"news.ycombinator.com"}},
+	{adapter: AdapterHN, subcmd: subcmdRead, domains: []string{"news.ycombinator.com"}, pathContains: "/item"},
 }
 
 // routeFor returns the matching route for a URL, if any.
@@ -143,9 +158,31 @@ func routeFor(rawURL string) (route, bool) {
 		if r.pathContains == "" {
 			return true
 		}
+		if !urlPathContains(rawURL, r.pathContains) {
+			return false
+		}
+		// hackernews read takes a numeric item id; a domain match without one
+		// is not an item page and should fall through to web read.
+		if r.adapter == AdapterHN && hnItemID(rawURL) == "" {
+			return false
+		}
 
-		return urlPathContains(rawURL, r.pathContains)
+		return true
 	})
+}
+
+// hnItemID returns the numeric item id from a news.ycombinator.com item URL.
+func hnItemID(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	id := strings.TrimSpace(parsed.Query().Get("id"))
+	if !isNumeric(id) {
+		return ""
+	}
+
+	return id
 }
 
 // urlPathContains reports whether rawURL's path contains sub.
@@ -163,6 +200,16 @@ func HasAdapter(rawURL string) bool {
 	_, found := routeFor(rawURL)
 
 	return found
+}
+
+// NeedsSiteAdapter reports whether rawURL routes to a site-specific adapter
+// rather than the generic web reader. Callers that reserve the browser for
+// adapter pages use this; the generic web reader is itself browser-backed but
+// runs the same page a plain HTTP fetch can read.
+func NeedsSiteAdapter(rawURL string) bool {
+	r, found := routeFor(rawURL)
+
+	return found && r.adapter != AdapterWeb
 }
 
 // extractZhihuQuestionID extracts the zhihu question ID from a zhihu URL path.
@@ -188,6 +235,11 @@ func argsForRoute(r *route, rawURL string) []string {
 		return []string{r.subcmd, urlFlag, rawURL, "--stdout"}
 	}
 
+	// hackernews read takes the numeric item id from ?id=, not the URL.
+	if r.adapter == AdapterHN {
+		return []string{r.subcmd, hnItemID(rawURL), "--format", r.outputFormat()}
+	}
+
 	// Strip query parameters for site-specific adapters — they expect a clean URL.
 	// e.g. bilibili/video extracts BV ID from the path; ?spm_id_from= breaks parsing.
 	cleanURL := rawURL
@@ -201,9 +253,10 @@ func argsForRoute(r *route, rawURL string) []string {
 		return args
 	}
 
-	// weixin download uses --url <url> (not positional), and outputs to file
-	// by default so we need an explicit format for stdout-friendly output.
-	if r.adapter == AdapterWeixin {
+	// weixin/zhihu download take --url <url> (not positional) and write to a
+	// file, so they need an explicit format; the drivers add --output and read
+	// the saved path from the structured output.
+	if r.adapter == AdapterWeixin || (r.adapter == AdapterZhihu && r.subcmd == SubcmdZhihuDownload) {
 		return []string{r.subcmd, urlFlag, cleanURL, "--format", r.outputFormat()}
 	}
 

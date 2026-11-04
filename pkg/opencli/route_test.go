@@ -115,6 +115,17 @@ func TestCommandForURL_zhihuAnswer(t *testing.T) {
 	assert.Equal(t, []string{"answer-detail", "https://www.zhihu.com/question/35129528/answer/123456789", "--format", "yaml"}, args)
 }
 
+func TestCommandForURL_hackerNewsItem(t *testing.T) {
+	adapter, args := CommandForURL("https://news.ycombinator.com/item?id=34218003")
+	assert.Equal(t, AdapterHN, adapter)
+	assert.Equal(t, []string{"read", "34218003", "--format", "md"}, args)
+}
+
+func TestCommandForURL_hackerNewsNonItemFallsBackToWeb(t *testing.T) {
+	adapter, _ := CommandForURL("https://news.ycombinator.com/newest")
+	assert.Equal(t, AdapterWeb, adapter, "a non-item HN page has no read id and should use web read")
+}
+
 func TestSubcommandForURL(t *testing.T) {
 	assert.Equal(t, SubcmdZhihuQuestion, SubcommandForURL("https://www.zhihu.com/question/35129528"))
 	assert.Equal(t, SubcmdZhihuAnswerDetail, SubcommandForURL("https://www.zhihu.com/question/35129528/answer/1"))
@@ -137,9 +148,11 @@ func TestZhihuSubcommandsMatchRouteTable(t *testing.T) {
 
 func TestCommandForURL_zhuanlan(t *testing.T) {
 	adapter, args := CommandForURL("https://zhuanlan.zhihu.com/p/123456789")
-	assert.Equal(t, "web", adapter, "zhuanlan goes to web read")
+	assert.Equal(t, AdapterZhihu, adapter, "zhuanlan uses the zhihu session, not generic web")
 	require.GreaterOrEqual(t, len(args), 1)
-	assert.Equal(t, subcmdRead, args[0])
+	assert.Equal(t, SubcmdZhihuDownload, args[0])
+	assert.Contains(t, args, urlFlag)
+	assert.Contains(t, args, formatJSON)
 }
 
 func TestCommandForURL_genericWeb(t *testing.T) {
@@ -242,6 +255,15 @@ func TestHasAdapter(t *testing.T) {
 	}
 }
 
+func TestNeedsSiteAdapter(t *testing.T) {
+	assert.True(t, NeedsSiteAdapter("https://www.bilibili.com/video/BV1xx"))
+	assert.True(t, NeedsSiteAdapter("https://mp.weixin.qq.com/s/abc"))
+	// Web-read routes still run through opencli, but a plain HTTP fetch can
+	// serve the same page, so they do not need to reserve the browser.
+	assert.False(t, NeedsSiteAdapter("https://www.bilibili.com/opus/123"))
+	assert.False(t, NeedsSiteAdapter("https://example.com/article"))
+}
+
 func TestURLMatchesDomain_InvalidURL(t *testing.T) {
 	// Invalid URLs should not match any domain
 	assert.False(t, urlMatchesDomain("%zz", []string{"example.com"}))
@@ -301,4 +323,21 @@ func TestArgsForRoute_zhihuLimitZero(t *testing.T) {
 	args := argsForRoute(&route{adapter: AdapterZhihu, subcmd: SubcmdZhihuQuestion, limit: 0},
 		"https://www.zhihu.com/question/123/answer/456")
 	assert.Equal(t, []string{"question", "123", "--format", "md"}, args)
+}
+
+func TestCommandForURL_bilibiliOpusUsesWebRead(t *testing.T) {
+	adapter, args := CommandForURL("https://www.bilibili.com/opus/1263511874497937408")
+	assert.Equal(t, AdapterWeb, adapter, "opus posts have no BV id; use web read")
+	assert.Equal(t, []string{"read", "--url", "https://www.bilibili.com/opus/1263511874497937408", "--stdout"}, args)
+}
+
+func TestCommandForURL_bilibiliReadUsesWebRead(t *testing.T) {
+	adapter, _ := CommandForURL("https://www.bilibili.com/read/cv53618808/")
+	assert.Equal(t, AdapterWeb, adapter)
+}
+
+func TestCommandForURL_bilibiliVideoStillUsesVideoAdapter(t *testing.T) {
+	adapter, args := CommandForURL("https://www.bilibili.com/video/BV1xx411c7mD")
+	assert.Equal(t, AdapterBilibili, adapter)
+	assert.Equal(t, subcmdVideo, args[0])
 }
