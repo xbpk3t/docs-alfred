@@ -58,6 +58,7 @@ func retryWait(base time.Duration, attempt int) time.Duration {
 		return wait
 	}
 
+	//nolint:gosec // retry jitter needs spread, not unpredictability
 	return half + rand.N(half)
 }
 
@@ -70,7 +71,7 @@ func retryWait(base time.Duration, attempt int) time.Duration {
 // retried. `who`, when non-empty, labels start/done/retry log lines (curate
 // passes the agent name); empty keeps the call silent.
 //
-//nolint:gocyclo,revive // one deliberate retry/backoff/parse choke point for all AI calls
+//nolint:gocognit,gocyclo,revive // one deliberate retry/backoff/parse choke point for all AI calls
 func run[T any](ctx context.Context, a *mafagent.Agent, prompt string, opts []mafagent.Option,
 	who string, ro RunOptions, try func(text string) (T, error)) (T, error) {
 	var zero T
