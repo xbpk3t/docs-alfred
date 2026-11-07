@@ -44,7 +44,7 @@
 
 ## metadata 字段说明
 - tags: JSON 数组格式的关键词标签，3-8 个，如 ["tag1", "tag2", "tag3"]
-- quality: 综合质量评分，格式 "X/5"（如 "4/5"）
+- quality: 综合质量评分，格式 "X/5"（如 "4/5"），所有类型都必填
 - author: 作者/UP主/仓库所有者（有则填，无则空字符串）
 - uncertainties: 正文中不确定或需要核实的信息（可选，无则为空字符串）
 - duration: 视频/播客时长（仅 media 类型，如 "15:23"）
@@ -60,12 +60,12 @@
 - summary.keyQuotes: string[]
 
 ## 摘要质量要求
-- overview 必须 3-5 句，包含具体的技术细节、数据指标和结论，不能只说"本文介绍了XX"这种空洞概括
+- overview 必须 3-5 句，包含具体的技术细节、数据指标和结论；第一句直接给出「是否值得读/适合谁」的判断，不能只说"本文介绍了XX"这种空洞概括
 - keyPoints 至少 5 条，每条附带具体数据、例子或细节
 - actionableAdvice 在有明确可执行建议时提供 2-3 条具体建议
 - 目标：读者只看你的摘要就能掌握原文 90% 的知识点，无需再打开原文
 - **术语保留**：原文中的英文技术术语（如 "rate limiting", "vector clock", "leader election"）应当保留原文，不要在中文概括中意译成模糊描述
-- **语言一致性**：正文是哪种语言，摘要就以哪种语言为主。中文正文用中文摘要，英文正文以英文概述为主，但 keyPoints 和 tags 可以双语
+- **输出语言**：无论正文是中文还是英文，summary 的描述性字段（overview、detail、keyPoints、actionableAdvice、worthNoting、verify）一律用简体中文，便于快速判断内容质量；英文技术术语、产品名、代码标识保留原文，只翻译句子，不意译术语。metadata.uncertainties 也用中文。keyQuotes 保留原文引用，不翻译；tags 可中英双语。
 - **客观性标记**：区分「作者声称」和「客观事实」，在 overview 中用「作者认为」「实验表明」等措辞标注
 
 ## 按 wikiType 定制摘要风格
