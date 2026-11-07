@@ -9,10 +9,12 @@
 package cmdutil
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -94,6 +96,27 @@ func RunSeparate(ctx context.Context, name string, args ...string) ([]byte, []by
 	return []byte(strings.Join(status.Stdout, "\n")),
 		[]byte(strings.Join(status.Stderr, "\n")),
 		nil
+}
+
+// RunSeparateLarge is RunSeparate for tools such as `yt-dlp --dump-json`
+// whose output is one very long line. go-cmd's Buffered mode scans lines with
+// bufio.Scanner's 64 KiB token limit, so it is bypassed here.
+func RunSeparateLarge(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 -- name is a fixed caller-provided binary.
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		code := -1
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			code = exitErr.ExitCode()
+		}
+
+		return stdout.Bytes(), stderr.Bytes(), fmt.Errorf("exec %s: %w: %s", name, &ExitError{Cmd: name, Code: code}, strings.TrimSpace(stderr.String()))
+	}
+
+	return stdout.Bytes(), stderr.Bytes(), nil
 }
 
 // ErrJobRunning is returned by RunBackground when a job with the same name
