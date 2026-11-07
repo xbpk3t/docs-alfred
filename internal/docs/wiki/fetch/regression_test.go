@@ -518,3 +518,32 @@ func TestReviewVideoAntiBotShellIsRejected(t *testing.T) {
 	require.NotNil(t, result)
 	assert.NotEmpty(t, result.Error, "a video anti-bot shell must not bypass the quality gate")
 }
+
+// A media adapter's partial transcript failure must not be replaced by a
+// metadata-only HTTP fallback result: that would turn a retryable
+// partial_extract into a permanent too_short.
+func TestReviewMediaPartialExtractIsNotOverriddenByHTTPFallback(t *testing.T) {
+	primary := &failureDriver{result: &types.ContentFetchResult{
+		Error:         "youtube transcript unavailable: Caption URL returned empty response",
+		FailureKind:   types.FailureExtract,
+		FailureReason: types.FailureReasonPartialExtract,
+		SourceURL:     "https://www.youtube.com/watch?v=abc",
+	}}
+	fallback := &recordingDriver{body: strings.Repeat("video page metadata shell. ", 30)}
+	f := NewFetcher(WithDriver(primary), WithFallbackDriver(fallback))
+
+	result := f.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", types.ContentVideo)
+	require.NotNil(t, result)
+	assert.NotEmpty(t, result.Error)
+	assert.Equal(t, types.FailureReasonPartialExtract, result.FailureReason)
+	assert.Empty(t, fallback.url, "the HTTP fallback must not replace a transcript failure")
+}
+
+type failureDriver struct {
+	result *types.ContentFetchResult
+}
+
+func (d *failureDriver) Name() string { return "failure" }
+func (d *failureDriver) FetchContent(_ context.Context, _, _ string) *types.ContentFetchResult {
+	return d.result
+}

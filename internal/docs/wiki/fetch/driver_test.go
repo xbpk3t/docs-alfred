@@ -442,7 +442,64 @@ exit 1
 
 	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
 	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.youtube.com/watch?v=abc"}
-	driver.appendYoutubeTranscript(context.Background(), result, "https://www.youtube.com/watch?v=abc")
+	failure := driver.appendYoutubeTranscript(context.Background(), result, "https://www.youtube.com/watch?v=abc")
+	require.NotNil(t, failure, "a failed transcript command must stay retryable")
+	assert.Equal(t, types.FailureReasonPartialExtract, failure.FailureReason)
+	assert.Equal(t, "original", result.Body)
+}
+
+// opencli's transcript command can fail transiently ("Caption URL returned
+// empty response", anti-bot, network). That is not proof the video has no
+// captions: the URL must stay in the inbox for a later retry, not be flushed
+// as a permanent too-short failure.
+func TestAppendYoutubeTranscriptCommandFailureIsRetryable(t *testing.T) {
+	const envelope = `{"ok":false,"error":{"code":"COMMAND_EXEC","message":"Caption URL returned empty response","exitCode":1}}`
+
+	tests := []struct {
+		name string
+		exit int
+	}{
+		{name: "envelope on stderr path", exit: 1},
+		{name: "envelope with zero exit", exit: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			binDir := t.TempDir()
+			script := "#!/bin/sh\nprintf '%s\\n' '" + envelope + "'\nexit " + fmt.Sprint(tt.exit) + "\n"
+			writeFakeBin(t, binDir, "opencli", script)
+			prependPATH(t, binDir)
+
+			driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+			result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.youtube.com/watch?v=abc"}
+			failure := driver.appendYoutubeTranscript(context.Background(), result, "https://www.youtube.com/watch?v=abc")
+
+			require.NotNil(t, failure, "a transcript command error must not be treated as a missing transcript")
+			assert.Equal(t, types.FailureExtract, failure.FailureKind)
+			assert.Equal(t, types.FailureReasonPartialExtract, failure.FailureReason)
+			assert.Contains(t, failure.Error, "Caption URL returned empty response")
+			assert.Equal(t, "original", result.Body)
+		})
+	}
+}
+
+// An explicit "no captions" answer is content absence, not a command failure:
+// the fetch result stays successful and the too-short gate decides.
+func TestAppendYoutubeTranscriptNoCaptionsIsNotFailure(t *testing.T) {
+	binDir := t.TempDir()
+	script := `#!/bin/sh
+printf '{"ok":false,"error":{"code":"EMPTY_RESULT","message":"No captions available for this video"}}\n'
+exit 66
+`
+	writeFakeBin(t, binDir, "opencli", script)
+	prependPATH(t, binDir)
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.youtube.com/watch?v=abc"}
+	failure := driver.appendYoutubeTranscript(context.Background(), result, "https://www.youtube.com/watch?v=abc")
+
+	assert.Nil(t, failure, "no captions is content absence, not a service failure")
+	assert.False(t, result.HasTranscript)
 	assert.Equal(t, "original", result.Body)
 }
 

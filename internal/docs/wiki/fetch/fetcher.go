@@ -169,7 +169,12 @@ func (f *Fetcher) fetchPodcast(ctx context.Context, rawURL, contentType string) 
 // primary driver returns nothing usable.
 func (f *Fetcher) fetchFromDrivers(ctx context.Context, rawURL, contentType string) *types.ContentFetchResult {
 	needsAdapter := opencli.NeedsSiteAdapter(rawURL)
-	if f.fallback != nil && !needsAdapter {
+	// The static HTTP driver never extracts a transcript, and ingest rejects a
+	// video without one as too_short. A fallback "rescue" can therefore only
+	// replace a retryable extraction failure with a permanent one — never call
+	// it for video.
+	canFallback := f.fallback != nil && contentType != types.ContentVideo
+	if canFallback && !needsAdapter {
 		// A thin landing/navigation page passes the 120-rune gate but would
 		// suppress the primary renderer. Require enough body to look like an
 		// article before accepting the generic fallback.
@@ -186,7 +191,7 @@ func (f *Fetcher) fetchFromDrivers(ctx context.Context, rawURL, contentType stri
 	// error; that is still a failed primary extraction and deserves the
 	// fallback.
 	gated := f.ensureFetchedQuality(result, contentType, rawURL)
-	if f.fallback != nil && needsAdapter && gated.Error != "" {
+	if canFallback && needsAdapter && gated.Error != "" {
 		if rescue := f.fetchUsable(ctx, f.fallback, rawURL, contentType); rescue != nil {
 			slog.Info("primary driver failed, fallback served url",
 				"url", rawURL, "primary", f.driver.Name(), "fallback", f.fallback.Name())

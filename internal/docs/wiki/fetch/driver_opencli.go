@@ -96,8 +96,7 @@ func openCLIExitCode(err error) int {
 // envelope, then the exit code, then the raw text. This keeps retry policy
 // independent of which stream the tool used.
 func openCLIFailureReason(stdout, stderr []byte, err error) types.FailureReason {
-	var env openCLIErrorEnvelope
-	if json.Unmarshal(stdout, &env) == nil && !env.OK && env.Error.Code != "" {
+	if env, ok := parseOpenCLIErrorEnvelope(stdout); ok {
 		return openCLIEnvelopeReason(env)
 	}
 
@@ -705,7 +704,9 @@ func (d *openCLIDriver) dispatchMedia(ctx context.Context, subcommand string, ex
 			return failure
 		}
 	case opencli.AdapterYoutube:
-		d.appendYoutubeTranscript(ctx, result, rawURL)
+		if failure := d.appendYoutubeTranscript(ctx, result, rawURL); failure != nil {
+			return failure
+		}
 	}
 
 	return result
@@ -1113,26 +1114,94 @@ func isTransientOpenCLIError(errText string) bool {
 }
 
 // appendYoutubeTranscript runs `opencli youtube transcript <url>` and merges
-// transcript text into the fetch result body.
-func (d *openCLIDriver) appendYoutubeTranscript(ctx context.Context, result *types.ContentFetchResult, rawURL string) {
+// transcript text into the fetch result body. A failed transcript command
+// (network/anti-bot, "Caption URL returned empty response") returns a
+// retryable failure so ingest keeps the inbox line; only explicit no-caption
+// output counts as content absence and falls through to the too-short gate.
+func (d *openCLIDriver) appendYoutubeTranscript(
+	ctx context.Context,
+	result *types.ContentFetchResult,
+	rawURL string,
+) *types.ContentFetchResult {
 	subResult := d.runOpenCLI(ctx, "youtube", []string{"transcript", rawURL, "--format", "md"})
-	if subResult.Error != "" || subResult.Body == "" {
-		return
+
+	detail := subResult.Error
+	if detail == "" {
+		if envelopeDetail, isErr := openCLIErrorDetail(subResult.Body); isErr {
+			detail = envelopeDetail
+		}
 	}
+	if detail != "" {
+		if isYoutubeNoCaptions(detail) {
+			slog.Info("YouTube transcript unavailable (no captions)", "url", rawURL)
+
+			return nil
+		}
+		slog.Warn("YouTube transcript command failed; keeping URL retryable",
+			"url", rawURL, "reason", subResult.FailureReason, "error", detail)
+
+		return extractFailureWithReason(
+			rawURL,
+			"youtube transcript unavailable: "+detail,
+			types.FailureReasonPartialExtract,
+		)
+	}
+
 	transcript := strings.TrimSpace(subResult.Body)
 	if len([]rune(transcript)) < 100 {
-		return
+		return nil
 	}
 
 	// Parse the YouTube transcript table (| timestamp | speaker | text |) with goldmark.
 	transcriptLines := md.ExtractTranscriptLines(transcript, 2)
 
 	if len(transcriptLines) < 5 {
-		return
+		return nil
 	}
 
 	transcriptBlock := "\n\n" + types.TranscriptSectionMarker + "\n\n" + strings.Join(transcriptLines, "\n")
 	result.Body += transcriptBlock
 	result.HasTranscript = true
 	slog.Info("YouTube transcript appended", "url", rawURL, "lines", len(transcriptLines))
+
+	return nil
+}
+
+// parseOpenCLIErrorEnvelope parses opencli's 2.x error envelope from output.
+func parseOpenCLIErrorEnvelope(body []byte) (openCLIErrorEnvelope, bool) {
+	var env openCLIErrorEnvelope
+	if json.Unmarshal(body, &env) == nil && !env.OK && env.Error.Code != "" {
+		return env, true
+	}
+
+	return env, false
+}
+
+// openCLIErrorDetail extracts the 2.x error envelope from stdout for callers
+// that inspect structured output without an exec error.
+func openCLIErrorDetail(body string) (string, bool) {
+	env, ok := parseOpenCLIErrorEnvelope([]byte(body))
+	if !ok {
+		return "", false
+	}
+
+	return env.Error.Code + ": " + env.Error.Message, true
+}
+
+// isYoutubeNoCaptions reports explicit "this video has no captions" output.
+// Anything else — including "Caption URL returned empty response" — is a
+// transient command failure, so the URL stays retryable.
+func isYoutubeNoCaptions(detail string) bool {
+	lower := strings.ToLower(detail)
+
+	return strings.Contains(lower, "empty_result") ||
+		textutil.ContainsAny(lower, []string{
+			"no caption",
+			"captions not available",
+			"captions unavailable",
+			"no subtitle",
+			"no transcript",
+			"transcript not available",
+			"transcript unavailable",
+		})
 }
