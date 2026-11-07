@@ -762,7 +762,10 @@ type InboxEntry struct {
 }
 
 // FlushInbox removes handled URLs from inbox.md without dropping unhandled URLs
-// that share the same line.
+// that share the same line. The line-index snapshot can shift if the file is
+// edited while a digest is running, so matching is by normalized URL across the
+// whole file; a handled URL must never survive, and an unhandled one must never
+// be dropped because its line moved.
 func FlushInbox(filePath string, handledURLsByLine map[int][]string) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -770,9 +773,9 @@ func FlushInbox(filePath string, handledURLsByLine map[int][]string) error {
 	}
 
 	lines := strings.Split(string(data), "\n")
+	handled := normalizedURLSet(flattenHandledURLs(handledURLsByLine))
 	var remaining []string
-	for i, line := range lines {
-		handled := normalizedURLSet(handledURLsByLine[i])
+	for _, line := range lines {
 		if len(handled) == 0 {
 			remaining = append(remaining, line)
 
@@ -797,6 +800,15 @@ func FlushInbox(filePath string, handledURLsByLine map[int][]string) error {
 	}
 
 	return fileutil.AtomicWriteFile(filePath, []byte(strings.Join(cleaned, "\n")), fileutil.FilePermPrivate) // #nosec G703
+}
+
+func flattenHandledURLs(byLine map[int][]string) []string {
+	var urls []string
+	for _, lineURLs := range byLine {
+		urls = append(urls, lineURLs...)
+	}
+
+	return urls
 }
 
 func normalizedURLSet(urls []string) map[string]bool {

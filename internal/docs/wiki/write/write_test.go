@@ -729,6 +729,25 @@ func TestFlushInboxMultipleLines(t *testing.T) {
 	assert.NotContains(t, string(data), "https://example.com/c")
 }
 
+// Line indices are a snapshot; editing inbox.md during a run can shift them.
+// Flush must still remove handled URLs and preserve every retryable one.
+func TestFlushInboxSurvivesLineShift(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inbox.md")
+	require.NoError(t, os.WriteFile(path, []byte(`- https://example.com/new-retryable
+- https://example.com/handled
+- https://example.com/other-retryable
+`), 0o600))
+
+	err := FlushInbox(path, map[int][]string{0: {"https://example.com/handled"}})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "https://example.com/handled")
+	assert.Contains(t, string(data), "https://example.com/new-retryable")
+	assert.Contains(t, string(data), "https://example.com/other-retryable")
+}
+
 // --- appendInboxEntry edge cases ---
 
 func TestAppendInboxEntryEmptyURL(t *testing.T) {
