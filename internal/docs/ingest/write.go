@@ -15,7 +15,7 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 	}
 	switch pending.Kind {
 	case pendingSummary:
-		return writeSummary(deps, wikiRoot, pending.Item, dryRun)
+		return writeSummary(deps, wikiRoot, pending.Item, dryRun, pending.SkipHistory)
 	case pendingClassifyFailure:
 		return writeClassifyFailure(deps, wikiRoot, pending.Item, pending.ExtraInfo, dryRun)
 	case pendingExtractFailure:
@@ -52,7 +52,13 @@ func newWriteOpts(deps *dependencies, wikiRoot string, dryRun bool) *wikiwrite.W
 	return opts
 }
 
-func writeSummary(deps *dependencies, wikiRoot string, item *wikitypes.ClassifyItem, dryRun bool) URLResult {
+func writeSummary(
+	deps *dependencies,
+	wikiRoot string,
+	item *wikitypes.ClassifyItem,
+	dryRun bool,
+	skipHistory bool,
+) URLResult {
 	// Good content with no usable topic (none/inbox) still belongs in uncat.md for triage.
 	// Classifier may leave NeedsManualReview false when overview is non-empty.
 	if !item.NeedsManualReview && isUnclassifiedTopic(item) {
@@ -74,10 +80,9 @@ func writeSummary(deps *dependencies, wikiRoot string, item *wikitypes.ClassifyI
 		if item.RouteReason == "" {
 			item.RouteReason = wikitypes.RouteReasonNeedsManualReview
 		}
-		path, err := deps.writer.WriteManualReviewEntry(
-			item,
-			newWriteOpts(deps, wikiRoot, dryRun),
-		)
+		opts := newWriteOpts(deps, wikiRoot, dryRun)
+		opts.SkipHistory = skipHistory
+		path, err := deps.writer.WriteManualReviewEntry(item, opts)
 		if err != nil {
 			return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("write manual review: %v", err)}
 		}
@@ -98,7 +103,9 @@ func writeSummary(deps *dependencies, wikiRoot string, item *wikitypes.ClassifyI
 		}
 	}
 
-	path, err := deps.writer.WriteSummary(item, newWriteOpts(deps, wikiRoot, dryRun))
+	opts := newWriteOpts(deps, wikiRoot, dryRun)
+	opts.SkipHistory = skipHistory
+	path, err := deps.writer.WriteSummary(item, opts)
 	if err != nil {
 		return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("write summary: %v", err)}
 	}

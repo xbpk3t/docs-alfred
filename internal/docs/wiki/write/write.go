@@ -43,6 +43,10 @@ type WriteOptions struct {
 	BatchID         string
 	DryRun          bool
 	IsAggr          bool
+	// SkipHistory writes the artifact but does not append a success entry to
+	// digest-success.jsonl. Multi-item synthesis entries use it while the line
+	// still has retryable child failures, so a later run re-expands the thread.
+	SkipHistory bool
 }
 
 var pathLocks = struct {
@@ -496,7 +500,7 @@ func WriteFailureEntry(
 
 // LogSuccessEntry logs a successful pipeline outcome to digest-success.jsonl.
 func LogSuccessEntry(item *types.ClassifyItem, outputPath string, opts *WriteOptions) (string, error) {
-	if opts == nil {
+	if opts == nil || opts.SkipHistory {
 		return "", nil
 	}
 

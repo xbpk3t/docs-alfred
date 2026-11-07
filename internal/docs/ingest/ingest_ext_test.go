@@ -893,7 +893,7 @@ func TestWriteSummaryNeedsManualReview(t *testing.T) {
 		NeedsManualReview: true,
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, false)
+	result := writeSummary(deps.dependencies(), t.TempDir(), item, false, false)
 	assert.Equal(t, StatusSummaryWritten, result.Status)
 	assert.True(t, result.Handled)
 	assert.Contains(t, result.OutputPath, "summary.md")
@@ -913,7 +913,7 @@ func TestWriteSummaryNeedsManualReviewNoTopicGoesUncat(t *testing.T) {
 		RouteReason:       wikitypes.RouteReasonNoTopicMatch,
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, false)
+	result := writeSummary(deps.dependencies(), t.TempDir(), item, false, false)
 	assert.Equal(t, StatusSummaryWritten, result.Status)
 	assert.True(t, result.Handled)
 	assert.Contains(t, result.OutputPath, "uncat.md")
@@ -932,7 +932,7 @@ func TestWriteSummaryManualReviewWriterError(t *testing.T) {
 		NeedsManualReview: true,
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, false)
+	result := writeSummary(deps.dependencies(), t.TempDir(), item, false, false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "disk full")
 }
@@ -948,7 +948,7 @@ func TestWriteSummaryWriterError(t *testing.T) {
 		Summary:   &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, false)
+	result := writeSummary(deps.dependencies(), t.TempDir(), item, false, false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
 }
@@ -975,7 +975,7 @@ func TestWriteSummaryNeedsManualReviewDryRun(t *testing.T) {
 		NeedsManualReview: true,
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, true)
+	result := writeSummary(deps.dependencies(), t.TempDir(), item, true, false)
 	assert.Equal(t, StatusDryRunSummary, result.Status)
 	assert.True(t, result.Handled)
 }

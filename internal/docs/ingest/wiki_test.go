@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
@@ -282,7 +283,7 @@ func TestRunDigestFlushesHandledLines(t *testing.T) {
 	require.Equal(t, []string{"https://example.com/a"}, deps.inbox.flushed[1])
 }
 
-func TestRunDigestWritesSameTopicInInboxOrderAfterReverseCompletion(t *testing.T) {
+func TestRunDigestWritesLinesIncrementallyAndSortsResults(t *testing.T) {
 	urls := []string{"https://example.com/a", "https://example.com/b", "https://example.com/c"}
 	blocks := map[string]chan struct{}{
 		urls[0]: make(chan struct{}),
@@ -329,6 +330,18 @@ func TestRunDigestWritesSameTopicInInboxOrderAfterReverseCompletion(t *testing.T
 
 	<-started[urls[0]]
 	<-started[urls[1]]
+
+	// urls[2] is unblocked, so its line must be persisted while the first two
+	// are still in flight: a kill at this point loses at most those two lines.
+	summaryPath := filepath.Join(cfg.Wiki.WikiRoot, "topic", "path", "summary.md")
+	require.Eventually(t, func() bool {
+		data, err := os.ReadFile(summaryPath)
+		return err == nil && strings.Contains(string(data), urls[2])
+	}, 2*time.Second, 10*time.Millisecond)
+	data, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	require.NotContains(t, string(data), urls[0])
+
 	close(blocks[urls[1]])
 	close(blocks[urls[0]])
 
@@ -336,13 +349,18 @@ func TestRunDigestWritesSameTopicInInboxOrderAfterReverseCompletion(t *testing.T
 	require.NoError(t, outcome.err)
 	require.True(t, outcome.result.OK())
 
-	data, err := os.ReadFile(filepath.Join(cfg.Wiki.WikiRoot, "topic", "path", "summary.md"))
+	// Results are sorted back into inbox order for stable CLI output even
+	// though the writes completed in reverse.
+	require.Len(t, outcome.result.URLResults, 3)
+	for i, url := range urls {
+		require.Equal(t, url, outcome.result.URLResults[i].URL)
+	}
+
+	data, err = os.ReadFile(summaryPath)
 	require.NoError(t, err)
 	content := string(data)
 	require.Contains(t, content, "total_urls: 3")
 	require.Contains(t, content, "succeeded: 3")
-	require.Less(t, strings.Index(content, urls[0]), strings.Index(content, urls[1]))
-	require.Less(t, strings.Index(content, urls[1]), strings.Index(content, urls[2]))
 }
 
 func TestRunDigestDryRunDoesNotWriteOrFlush(t *testing.T) {
@@ -592,6 +610,7 @@ type writeCall struct {
 	url           string
 	transcriptURL string
 	dryRun        bool
+	skipHistory   bool
 }
 
 type failureCall struct {
@@ -606,7 +625,12 @@ func (f *fakeWriter) WriteSummary(item *wikitypes.ClassifyItem, opts *wikiwrite.
 	if f.summaryErr != nil {
 		return "", f.summaryErr
 	}
-	f.summaries = append(f.summaries, writeCall{url: item.URL, transcriptURL: item.TranscriptURL, dryRun: opts.DryRun})
+	f.summaries = append(f.summaries, writeCall{
+		url:           item.URL,
+		transcriptURL: item.TranscriptURL,
+		dryRun:        opts.DryRun,
+		skipHistory:   opts.SkipHistory,
+	})
 
 	return filepath.Join(opts.WikiRoot, item.TopicPath, "summary.md"), nil
 }

@@ -2,6 +2,7 @@ package wikiingest
 
 import (
 	"fmt"
+	"time"
 
 	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -67,12 +68,13 @@ func (r *AuditResult) OK() bool {
 
 // Result is the structured outcome for wiki commands.
 type Result struct {
-	Name       string      `json:"-"`
-	WikiRoot   string      `json:"wikiRoot"`
-	URLResults []URLResult `json:"urls"`
-	Flushed    int         `json:"flushed"`
-	WouldFlush int         `json:"wouldFlush"`
-	DryRun     bool        `json:"dryRun"`
+	Name        string      `json:"-"`
+	WikiRoot    string      `json:"wikiRoot"`
+	AbortReason string      `json:"abortReason,omitempty"`
+	URLResults  []URLResult `json:"urls"`
+	Flushed     int         `json:"flushed"`
+	WouldFlush  int         `json:"wouldFlush"`
+	DryRun      bool        `json:"dryRun"`
 }
 
 // URLResult records the outcome for one URL.
@@ -128,6 +130,7 @@ func (r *Result) Summary() map[string]any {
 		"flushed":           r.Flushed,
 		"wouldFlush":        r.WouldFlush,
 		"dryRun":            r.DryRun,
+		"abortReason":       r.AbortReason,
 	}
 }
 
@@ -157,6 +160,56 @@ func (r *Result) Actions() []string {
 	if r.Flushed > 0 {
 		actions = append(actions, fmt.Sprintf("flushed %d inbox line(s)", r.Flushed))
 	}
+	if r.AbortReason != "" {
+		actions = append(actions, fmt.Sprintf("aborted: %s", r.AbortReason))
+	}
 
 	return actions
+}
+
+// RunLog builds the run-level summary written to logs/digest-runs.jsonl.
+func (r *Result) RunLog(started time.Time, runErr error) *wikitypes.DigestRunEntry {
+	now := time.Now()
+	entry := &wikitypes.DigestRunEntry{
+		Timestamp:       now.Format(time.RFC3339),
+		BatchID:         "wiki-" + now.Format("2006-01-02"),
+		StartedAt:       started.Format(time.RFC3339),
+		DurationMs:      now.Sub(started).Milliseconds(),
+		DryRun:          r.DryRun,
+		Processed:       len(r.URLResults),
+		Flushed:         r.Flushed,
+		AbortReason:     r.AbortReason,
+		FailureByReason: map[string]int{},
+	}
+	for i := range r.URLResults {
+		item := &r.URLResults[i]
+		switch item.Status {
+		case StatusSummaryWritten, StatusDryRunSummary:
+			entry.Succeeded++
+		case StatusFailureWritten, StatusDryRunFailure:
+			if item.Retryable {
+				entry.Retryable++
+			} else {
+				entry.Permanent++
+			}
+		case StatusUnhandledError:
+			entry.Unhandled++
+		case StatusSkipped:
+			entry.Skipped++
+		}
+		if item.OutputPath != "" && (item.Status == StatusSummaryWritten || item.Status == StatusFailureWritten) {
+			entry.Written++
+		}
+		if item.FailureReason != "" {
+			entry.FailureByReason[string(item.FailureReason)]++
+		}
+	}
+	if len(entry.FailureByReason) == 0 {
+		entry.FailureByReason = nil
+	}
+	if runErr != nil {
+		entry.Error = runErr.Error()
+	}
+
+	return entry
 }

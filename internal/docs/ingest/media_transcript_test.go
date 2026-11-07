@@ -3,7 +3,6 @@ package wikiingest
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -58,7 +57,9 @@ func (f *fakeMediaStore) GetObject(_ context.Context, key string) ([]byte, error
 	}
 	data, ok := f.objects[key]
 	if !ok {
-		return nil, fmt.Errorf("no such object: %s", key)
+		// Match litter.R2.GetObject: a missing object reads as empty, not an
+		// error.
+		return nil, nil
 	}
 
 	return []byte(data), nil

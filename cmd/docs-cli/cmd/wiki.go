@@ -33,13 +33,15 @@ type wikiFlags struct {
 }
 
 const (
-	wikiCommandName        = "wiki"
-	wikiDigestCommandName  = "digest"
-	wikiAuditCommandName   = "audit"
-	wikiCheckCommandName   = "check"
-	wikiStatsCommandName   = "stats"
-	wikiCompactCommandName = "compact"
-	wikiPruneCommandName   = "prune"
+	wikiCommandName         = "wiki"
+	wikiDigestCommandName   = "digest"
+	wikiAuditCommandName    = "audit"
+	wikiCheckCommandName    = "check"
+	wikiStatsCommandName    = "stats"
+	wikiCompactCommandName  = "compact"
+	wikiPruneCommandName    = "prune"
+	wikiNotifyCommandName   = "digest-notify"
+	wikiBackfillCommandName = "backfill-history"
 )
 
 func newWikiCmd() *cobra.Command {
@@ -66,6 +68,8 @@ and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 	cmd.AddCommand(newWikiStatsCmd())
 	cmd.AddCommand(newWikiCompactCmd())
 	cmd.AddCommand(newWikiPruneCmd())
+	cmd.AddCommand(newWikiNotifyCmd())
+	cmd.AddCommand(newWikiBackfillCmd())
 
 	return cmd
 }
@@ -121,13 +125,91 @@ func newWikiDigestCmd() *cobra.Command {
 				Config: cfg,
 				DryRun: flags.dryRun,
 			})
+			if result != nil {
+				// Print the partial result on an abort; keep the original error.
+				if writeErr := writeWikiResult(result, output.GetFormat(cmd)); err == nil {
+					err = writeErr
+				}
+			}
+
+			return err
+		},
+	}
+	addWikiFlags(cmd, &flags)
+
+	return cmd
+}
+
+func newWikiNotifyCmd() *cobra.Command {
+	var (
+		flags  wikiFlags
+		failed bool
+	)
+	cmd := &cobra.Command{
+		Use:   wikiNotifyCommandName,
+		Short: "Send a digest run notification (dagu failure handler)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+			applyWikiFlagOverrides(cfg, &flags)
+
+			result, err := wikiuc.RunDigestNotify(context.Background(), wikiuc.NotifyInput{
+				Config: cfg,
+				Failed: failed,
+				DryRun: flags.dryRun,
+			})
+			if result != nil && flags.dryRun {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), result.Subject)
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), result.HTML)
+			}
+			if err == nil && result != nil && result.Sent {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "notification sent")
+			}
+
+			return err
+		},
+	}
+	cmd.Flags().BoolVar(&failed, "failed", false, "Render the notification as a failed run")
+	addWikiFlags(cmd, &flags)
+
+	return cmd
+}
+
+func newWikiBackfillCmd() *cobra.Command {
+	var (
+		flags wikiFlags
+		from  string
+	)
+	cmd := &cobra.Command{
+		Use:   wikiBackfillCommandName,
+		Short: "Merge the local digest-success log into the R2 success history",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+			applyWikiFlagOverrides(cfg, &flags)
+
+			result, err := wikiuc.RunBackfillDigestHistory(context.Background(), wikiuc.BackfillHistoryInput{
+				Config:    cfg,
+				LocalPath: from,
+				DryRun:    flags.dryRun,
+			})
 			if err != nil {
 				return err
 			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(),
+				"local_unique=%d remote_unique=%d added=%d key=%s dry_run=%v\n",
+				result.LocalUnique, result.RemoteUnique, result.Added, result.Key, result.DryRun)
 
-			return writeWikiResult(result, output.GetFormat(cmd))
+			return nil
 		},
 	}
+	cmd.Flags().StringVar(&from, "from", "", "Local digest-success.jsonl (default <wikiRoot>/digest-success.jsonl)")
 	addWikiFlags(cmd, &flags)
 
 	return cmd

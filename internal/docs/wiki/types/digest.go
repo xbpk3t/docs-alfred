@@ -47,6 +47,27 @@ const (
 	FailureReasonCatalog FailureReason = "catalog_unavailable"
 )
 
+// DigestRunEntry is one line in logs/digest-runs.jsonl: a run-level summary
+// written once per digest run, including aborted runs.
+type DigestRunEntry struct {
+	FailureByReason map[string]int `json:"failureByReason,omitempty"`
+	Timestamp       string         `json:"timestamp"`
+	BatchID         string         `json:"batchId,omitempty"`
+	StartedAt       string         `json:"startedAt"`
+	Error           string         `json:"error,omitempty"`
+	AbortReason     string         `json:"abortReason,omitempty"`
+	Flushed         int            `json:"flushed"`
+	Retryable       int            `json:"retryable"`
+	Permanent       int            `json:"permanent"`
+	Unhandled       int            `json:"unhandled"`
+	Skipped         int            `json:"skipped"`
+	Written         int            `json:"written"`
+	Succeeded       int            `json:"succeeded"`
+	Processed       int            `json:"processed"`
+	DurationMs      int64          `json:"durationMs"`
+	DryRun          bool           `json:"dryRun,omitempty"`
+}
+
 // DigestEntry records a single pipeline outcome for one URL.
 type DigestEntry struct {
 	Timestamp      string        `json:"timestamp"`

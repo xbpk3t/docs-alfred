@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	wikiaudit "github.com/xbpk3t/docs-alfred/internal/docs/wiki/audit"
 	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
@@ -135,7 +136,7 @@ func RunPrune(ctx context.Context, input PruneInput) (*wikiwrite.PruneResult, er
 }
 
 // RunDigest processes wiki/inbox.md and flushes handled lines.
-func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
+func RunDigest(ctx context.Context, input DigestInput) (result *Result, retErr error) {
 	slog.Info("wiki digest started")
 	if input.Config == nil {
 		return nil, errors.New("wiki config is required")
@@ -151,6 +152,12 @@ func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 	}
 
 	deps := resolveDependencies(input.Config, input.deps)
+	// R2 is load-bearing when configured: summaries, history dedup, logs and
+	// feeds all live in the bucket. Refuse a silent local fallback — it would
+	// desync the repo and lose the dedup history.
+	if input.Config.R2.Bucket != "" && deps.r2 == nil {
+		return nil, errors.New("wiki digest: r2.bucket is configured but the R2 client is unavailable")
+	}
 	// Only digest consults history — explicit `wiki add` stays re-digest-capable.
 	if deps.history == nil {
 		deps.history = loadDigestHistory(wikiRoot, digestStoreOrNil(deps))
@@ -160,60 +167,119 @@ func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 		return nil, fmt.Errorf("parse inbox: %w", err)
 	}
 
-	result := &Result{Name: "wiki digest", WikiRoot: wikiRoot, DryRun: input.DryRun}
+	result = &Result{Name: "wiki digest", WikiRoot: wikiRoot, DryRun: input.DryRun}
+	started := time.Now()
+	defer func() {
+		logDigestRun(deps, wikiRoot, result, started, retErr)
+	}()
+
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	breaker := newAIFailureBreaker(cancelRun)
 	inboxCfg := resolveInboxConfig(input.Config)
 
+	result.URLResults = collectDigestResults(runCtx, deps, wikiRoot, entries, inboxCfg, input, breaker)
+	if err := flushDigestInbox(deps, inboxPath, result, input.DryRun); err != nil {
+		return result, fmt.Errorf("flush inbox: %w", err)
+	}
+	rebuildDigestFeeds(ctx, deps, input.Config, result, input.DryRun)
+
+	if breaker.Tripped() {
+		result.AbortReason = "consecutive_ai_failures"
+
+		return result, errAIBreaker
+	}
+
+	return result, nil
+}
+
+// collectDigestResults runs the inbox and rss2nl trns-index loops.
+func collectDigestResults(
+	runCtx context.Context,
+	deps *dependencies,
+	wikiRoot string,
+	entries []wikiwrite.InboxEntry,
+	inboxCfg inboxConfig,
+	input DigestInput,
+	breaker *aiFailureBreaker,
+) []URLResult {
+	var results []URLResult
 	if len(entries) == 0 {
 		slog.Info("wiki digest: no inbox entries found")
 	} else {
 		slog.Info("wiki digest: processing entries", "count", len(entries))
-		result.URLResults = runInboxEntries(ctx, deps, wikiRoot, entries, inboxCfg, input.DryRun)
+		results = runInboxEntries(runCtx, deps, wikiRoot, entries, inboxCfg, input.DryRun, breaker)
 	}
 
 	// Podcast loop: consume the rss2nl trns index so episodes with uploaded
-	// transcripts are digested without manual inbox edits. A missing r2 client
-	// only skips this loop — the inbox run above still flushes.
-	if input.Config.TrnsIndex.Enabled {
+	// transcripts are digested without manual inbox edits. Skip it once the
+	// breaker has stopped the run.
+	if input.Config.TrnsIndex.Enabled && !breaker.Tripped() {
 		if deps.r2 == nil {
 			slog.Warn("wiki digest: trnsIndex enabled but the r2 client is unavailable, skipping trns index")
 		} else {
-			result.URLResults = append(result.URLResults, runTrnsIndexEntries(ctx, deps, wikiRoot, inboxCfg, input.DryRun)...)
+			results = append(results, runTrnsIndexEntries(runCtx, deps, wikiRoot, inboxCfg, input.DryRun)...)
 		}
 	}
 
-	processed := handledURLsByLine(result.URLResults)
-	if len(processed) == 0 {
-		slog.Info("wiki digest: nothing to flush")
+	return results
+}
 
-		return result, nil
-	}
-	if input.DryRun {
+// flushDigestInbox removes handled URLs from inbox.md. On failure the run's
+// abort reason is recorded for the run log.
+func flushDigestInbox(deps *dependencies, inboxPath string, result *Result, dryRun bool) error {
+	processed := handledURLsByLine(result.URLResults)
+	if dryRun {
 		result.WouldFlush = len(processed)
 		slog.Info("wiki digest dry-run: would flush", "count", len(processed))
 
-		return result, nil
+		return nil
 	}
+	if len(processed) == 0 {
+		slog.Info("wiki digest: nothing to flush")
 
+		return nil
+	}
 	if err := deps.inbox.FlushInbox(inboxPath, processed); err != nil {
-		return result, fmt.Errorf("flush inbox: %w", err)
+		result.AbortReason = "flush_failed"
+
+		return err
 	}
 	result.Flushed = len(processed)
 	slog.Info("wiki digest completed", "flushed", len(processed))
 
-	// Feed rebuild: after new digest posts land on R2, rewrite every topic feed
-	// and the OPML index so subscribers see the fresh batch. Best-effort — a
-	// broken feed rebuild must not fail the digest run itself; the next run
-	// retries it.
-	if deps.r2 != nil {
-		if err := BuildFeeds(ctx, deps.r2, input.Config.R2.PublicBaseURL); err != nil {
-			slog.Warn("wiki digest: feed rebuild failed", "error", err)
-		}
-		if _, err := BuildOPML(ctx, deps.r2, input.Config.R2.PublicBaseURL); err != nil {
-			slog.Warn("wiki digest: opml rebuild failed", "error", err)
-		}
-	}
+	return nil
+}
 
-	return result, nil
+// rebuildDigestFeeds rewrites every topic feed and the OPML index. Best-effort:
+// a broken feed rebuild must not fail the run. The parent ctx is used so an
+// aborted run still publishes what it wrote.
+func rebuildDigestFeeds(ctx context.Context, deps *dependencies, cfg *Config, result *Result, dryRun bool) {
+	if dryRun || deps.r2 == nil || len(result.URLResults) == 0 {
+		return
+	}
+	if err := BuildFeeds(ctx, deps.r2, cfg.R2.PublicBaseURL); err != nil {
+		slog.Warn("wiki digest: feed rebuild failed", "error", err)
+	}
+	if _, err := BuildOPML(ctx, deps.r2, cfg.R2.PublicBaseURL); err != nil {
+		slog.Warn("wiki digest: opml rebuild failed", "error", err)
+	}
+}
+
+// logDigestRun appends a run-level summary to logs/digest-runs.jsonl. It is
+// best-effort: a logging failure must not mask the digest outcome.
+func logDigestRun(deps *dependencies, wikiRoot string, result *Result, started time.Time, runErr error) {
+	if result == nil {
+		return
+	}
+	opts := &wikiwrite.WriteOptions{
+		WikiRoot: wikiRoot,
+		R2Store:  digestStoreOrNil(deps),
+		DryRun:   result.DryRun,
+	}
+	if _, err := wikiwrite.LogDigestRun(result.RunLog(started, runErr), opts); err != nil {
+		slog.Warn("wiki digest: run log write failed", "error", err)
+	}
 }
 
 // RunAudit scans wiki markdown files for known extraction and URL pollution issues.

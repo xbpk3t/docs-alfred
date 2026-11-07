@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 
@@ -32,6 +33,76 @@ func writePendingURLs(deps *dependencies, wikiRoot string, pending []pendingURLW
 	return results
 }
 
+// maxConsecutiveAIFailures is the circuit breaker threshold: this many
+// consecutive AI/catalog failures means the gateway or account quota is down,
+// so the rest of the batch would only burn fetch work and retries.
+const maxConsecutiveAIFailures = 5
+
+// errAIBreaker is returned when a digest run is stopped early by the breaker.
+var errAIBreaker = errors.New("wiki digest aborted: consecutive AI failures")
+
+// aiFailureBreaker counts consecutive AI-side failures across workers and
+// cancels the run context once the threshold is hit.
+type aiFailureBreaker struct {
+	cancel      context.CancelFunc
+	consecutive int
+	mu          sync.Mutex
+	tripped     bool
+}
+
+func newAIFailureBreaker(cancel context.CancelFunc) *aiFailureBreaker {
+	return &aiFailureBreaker{cancel: cancel}
+}
+
+// record updates the breaker with one line's results. Skipped URLs make no AI
+// call, so they leave the streak untouched; any other non-AI outcome resets it.
+func (b *aiFailureBreaker) record(results []URLResult) {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.tripped {
+		return
+	}
+	for i := range results {
+		result := &results[i]
+		switch {
+		case isAIFailure(result):
+			b.consecutive++
+		case result.Status == StatusSkipped:
+			// no AI call; keep the current streak
+		default:
+			b.consecutive = 0
+		}
+		if b.consecutive >= maxConsecutiveAIFailures {
+			b.tripped = true
+			slog.Warn("wiki digest: AI failure breaker tripped; stopping remaining work",
+				"consecutive", b.consecutive)
+			b.cancel()
+
+			return
+		}
+	}
+}
+
+func (b *aiFailureBreaker) Tripped() bool {
+	if b == nil {
+		return false
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.tripped
+}
+
+func isAIFailure(result *URLResult) bool {
+	return result.FailureType == wikitypes.FailureAI &&
+		(result.Status == StatusFailureWritten || result.Status == StatusDryRunFailure) &&
+		(result.FailureReason == wikitypes.FailureReasonAI ||
+			result.FailureReason == wikitypes.FailureReasonCatalog)
+}
+
 func runInboxEntries(
 	ctx context.Context,
 	deps *dependencies,
@@ -39,21 +110,33 @@ func runInboxEntries(
 	entries []wikiwrite.InboxEntry,
 	inboxCfg inboxConfig,
 	dryRun bool,
+	breaker *aiFailureBreaker,
 ) []URLResult {
-	// One inbox line can yield several entries (a zhihu question produces its
-	// synthesis plus one entry per answer), so each line maps to a slice.
-	pending := make([][]pendingURLWrite, len(entries))
-	var mu sync.Mutex
+	var (
+		mu      sync.Mutex
+		results []URLResult
+	)
 
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(inboxCfg.concurrency)
 
-	for i, entry := range entries {
+	for _, entry := range entries {
 		g.Go(func() error {
+			// The breaker already stopped the run: do not fetch, classify or log
+			// the remaining URLs. The cause is recorded by the breaker, so a nil
+			// return here is intentional.
+			if groupCtx.Err() != nil {
+				return nil //nolint:nilerr
+			}
 			prepared := prepareInboxEntry(groupCtx, deps, entry, inboxCfg)
+			lineResults := writeLineResults(deps, wikiRoot, prepared, dryRun)
+			for i := range lineResults {
+				lineResults[i].LineIndex = entry.LineIndex
+			}
+			breaker.record(lineResults)
 
 			mu.Lock()
-			pending[i] = prepared
+			results = append(results, lineResults...)
 			mu.Unlock()
 
 			return nil
@@ -61,14 +144,42 @@ func runInboxEntries(
 	}
 	_ = g.Wait()
 
-	// Every entry of a line carries that line's index, so the line flushes once.
-	var results []URLResult
-	for i, prepared := range pending {
-		for _, result := range writePendingURLs(deps, wikiRoot, prepared, dryRun) {
-			result.LineIndex = entries[i].LineIndex
-			results = append(results, result)
-		}
+	// Writes happen as each line finishes, so sort back into inbox order for a
+	// stable CLI output.
+	sort.SliceStable(results, func(i, j int) bool {
+		return results[i].LineIndex < results[j].LineIndex
+	})
+
+	return results
+}
+
+// writeLineResults writes one inbox line's pending entries. A multi-entry line
+// (synthesis + child posts) writes children first and the synthesis last: if a
+// child is still retryable, the synthesis keeps the line (Handled=false) and
+// skips success history, so the next run re-expands the thread and retries the
+// child instead of orphaning it.
+func writeLineResults(deps *dependencies, wikiRoot string, pending []pendingURLWrite, dryRun bool) []URLResult {
+	if len(pending) <= 1 {
+		return writePendingURLs(deps, wikiRoot, pending, dryRun)
 	}
+
+	results := make([]URLResult, 0, len(pending))
+	lineComplete := true
+	for i := 1; i < len(pending); i++ {
+		result := writePendingURL(deps, wikiRoot, &pending[i], dryRun)
+		if !result.Handled {
+			lineComplete = false
+		}
+		results = append(results, result)
+	}
+
+	parent := pending[0]
+	parent.SkipHistory = !lineComplete
+	parentResult := writePendingURL(deps, wikiRoot, &parent, dryRun)
+	if !lineComplete {
+		parentResult.Handled = false
+	}
+	results = append(results, parentResult)
 
 	return results
 }
@@ -334,6 +445,8 @@ type pendingURLWrite struct {
 	FailureReason wikitypes.FailureReason
 	ExtraInfo     string
 	Error         string
+	// SkipHistory writes the artifact without appending a success-history entry.
+	SkipHistory bool
 }
 
 func prepareURLAttempt(ctx context.Context, deps *dependencies, urlStr string) []pendingURLWrite {

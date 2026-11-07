@@ -21,6 +21,7 @@ const (
 	digestFilenameExtractError   = "digest-extract-error.jsonl"
 	digestFilenameAIError        = "digest-ai-error.jsonl"
 	digestFilenameClassifyReject = "digest-classify-rejected.jsonl"
+	digestFilenameRuns           = "digest-runs.jsonl"
 )
 
 // digestFilename returns the JSONL filename for the given entry.
@@ -131,6 +132,77 @@ func logDigestEntryR2(entry *types.DigestEntry, opts *WriteOptions, line []byte)
 		return "", fmt.Errorf("r2 log %s: %w", key, err)
 	}
 	slog.Debug("Digest entry logged to R2", "key", key, "url", entry.URL, "status", entry.Status)
+
+	return key, nil
+}
+
+// LogDigestRun appends one run-summary line to logs/digest-runs.jsonl in the
+// bucket, or to <wikiRoot>/digest-runs.jsonl when R2 is not configured.
+func LogDigestRun(entry *types.DigestRunEntry, opts *WriteOptions) (string, error) {
+	if opts == nil || (opts.WikiRoot == "" && opts.R2Store == nil) {
+		return "", nil
+	}
+	if entry.Timestamp == "" {
+		entry.Timestamp = carbon.Now().Layout(time.RFC3339)
+	}
+	line, err := json.Marshal(entry)
+	if err != nil {
+		return "", fmt.Errorf("marshal digest run: %w", err)
+	}
+
+	if opts.R2Store != nil {
+		return logRunEntryR2(line, opts)
+	}
+
+	logPath := filepath.Join(opts.WikiRoot, digestFilenameRuns)
+	if opts.DryRun {
+		slog.Info("[DRY RUN] Would log digest run", "path", logPath)
+
+		return logPath, nil
+	}
+
+	unlock := lockPath(logPath)
+	defer unlock()
+
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileutil.FilePermPrivate)
+	if err != nil {
+		return "", fmt.Errorf("open digest run log %s: %w", logPath, err)
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		return "", fmt.Errorf("write digest run: %w", err)
+	}
+
+	return logPath, nil
+}
+
+// logRunEntryR2 appends one run-summary line to logs/digest-runs.jsonl via the
+// same read-merge-write path as the per-URL logs.
+func logRunEntryR2(line []byte, opts *WriteOptions) (string, error) {
+	r2LogMu.Lock()
+	defer r2LogMu.Unlock()
+
+	const key = "logs/" + digestFilenameRuns
+	if opts.DryRun {
+		slog.Info("[DRY RUN] Would log digest run to R2", "key", key)
+
+		return key, nil
+	}
+
+	existing, getErr := opts.R2Store.GetObject(context.Background(), key)
+	if getErr != nil {
+		return "", fmt.Errorf("r2 log %s: read existing: %w", key, getErr)
+	}
+	merged := make([]byte, 0, len(existing)+len(line)+1)
+	merged = append(merged, existing...)
+	if len(merged) > 0 && merged[len(merged)-1] != '\n' {
+		merged = append(merged, '\n')
+	}
+	merged = append(merged, line...)
+	merged = append(merged, '\n')
+	if _, err := opts.R2Store.Upload(context.Background(), key, string(merged)); err != nil {
+		return "", fmt.Errorf("r2 log %s: %w", key, err)
+	}
 
 	return key, nil
 }
