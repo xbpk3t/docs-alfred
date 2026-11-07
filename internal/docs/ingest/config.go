@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/creasty/defaults"
@@ -146,21 +147,17 @@ type CompactLinearConfig struct {
 
 // WikiConfig contains wiki-specific workflow settings.
 type WikiConfig struct {
-	WikiRoot    string `default:"wiki"    validate:"required" yaml:"wikiRoot"`
-	Driver      string `default:"opencli"                     yaml:"driver"`
-	GHTopicsURL string `default:"https://docs.lucc.dev/gh.yml" yaml:"ghTopicsURL"`
-	Concurrency int    `default:"3"       validate:"gte:1"    yaml:"concurrency"`
-	// BrowserConcurrency caps concurrent opencli processes. opencli shares one
-	// Chrome tab, so this stays below Concurrency; 0 uses the driver default.
-	BrowserConcurrency int             `default:"2" validate:"gte:0" yaml:"browserConcurrency"`
-	PerURLTimeout      int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
-	MaxContentSize     int             `default:"20000"                       yaml:"maxContentSize"`
-	Media              wikiMediaConfig `yaml:"media"`
-	// IsAggr switches the local digest output layout: one <date>-summary.md at
-	// the wiki root, grouped by topic path, instead of per-topic summary.md
-	// files. When R2 is set, digest artifacts go to the bucket and IsAggr has
-	// no effect. Kept to parse configs written before R2-mode took over.
-	IsAggr bool `default:"false" yaml:"isAggr"`
+	WikiRoot            string          `default:"wiki"    validate:"required" yaml:"wikiRoot"`
+	Driver              string          `default:"opencli"                     yaml:"driver"`
+	GHTopicsURL         string          `default:"https://docs.lucc.dev/gh.yml" yaml:"ghTopicsURL"`
+	YTDLPCookiesBrowser string          `default:"chrome" yaml:"ytdlpCookiesBrowser"`
+	YTDLPSubtitleLangs  []string        `yaml:"ytdlpSubtitleLangs"`
+	Concurrency         int             `default:"3"       validate:"gte:1"    yaml:"concurrency"`
+	BrowserConcurrency  int             `default:"2" validate:"gte:0" yaml:"browserConcurrency"`
+	PerURLTimeout       int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
+	MaxContentSize      int             `default:"20000"                       yaml:"maxContentSize"`
+	Media               wikiMediaConfig `yaml:"media"`
+	IsAggr              bool            `default:"false" yaml:"isAggr"`
 }
 
 // wikiMediaConfig controls media content extraction.
@@ -193,6 +190,7 @@ func LoadConfig(configPath, wikiRootOverride string) (*Config, error) {
 			if wikiRootOverride != "" {
 				cfg.Wiki.WikiRoot = wikiRootOverride
 			}
+			applyYTDLPEnv(&cfg.Wiki)
 
 			return nil
 		},
@@ -205,6 +203,27 @@ func LoadConfig(configPath, wikiRootOverride string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// applyYTDLPEnv lets the env override the YAML/default yt-dlp tuning.
+func applyYTDLPEnv(w *WikiConfig) {
+	if v := strings.TrimSpace(os.Getenv("WIKI_YTDLP_COOKIES_FROM_BROWSER")); v != "" {
+		if strings.EqualFold(v, "none") {
+			v = ""
+		}
+		w.YTDLPCookiesBrowser = v
+	}
+	if v := strings.TrimSpace(os.Getenv("WIKI_YTDLP_SUBTITLE_LANGS")); v != "" {
+		var langs []string
+		for _, lang := range strings.Split(v, ",") {
+			if lang = strings.TrimSpace(lang); lang != "" {
+				langs = append(langs, lang)
+			}
+		}
+		if len(langs) > 0 {
+			w.YTDLPSubtitleLangs = langs
+		}
+	}
 }
 
 func formatConfigLoadError(err error) error {

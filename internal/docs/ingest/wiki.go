@@ -302,9 +302,11 @@ func newWikiFetcher(cfg *Config) fetcher {
 		browserConcurrency = limit
 	}
 	driverOpts := wikifetch.DriverOptions{
-		MaxBodySize:        cfg.Wiki.MaxContentSize,
-		MediaEnabled:       cfg.Wiki.Media.Enabled,
-		BrowserConcurrency: browserConcurrency,
+		MaxBodySize:         cfg.Wiki.MaxContentSize,
+		MediaEnabled:        cfg.Wiki.Media.Enabled,
+		BrowserConcurrency:  browserConcurrency,
+		YTDLPCookiesBrowser: cfg.Wiki.YTDLPCookiesBrowser,
+		YTDLPSubtitleLangs:  cfg.Wiki.YTDLPSubtitleLangs,
 	}
 	driver, err := wikifetch.NewDriver(driverName, driverOpts)
 	if err != nil {
@@ -315,7 +317,7 @@ func newWikiFetcher(cfg *Config) fetcher {
 		wikifetch.WithDriver(driver),
 		wikifetch.WithMediaEnabled(cfg.Wiki.Media.Enabled),
 	}
-	if driver != nil && driver.Name() == "opencli" {
+	if wikifetch.UsesHTTPFallback(driver) {
 		fetcherOpts = append(fetcherOpts, httpFallbackOptions(driverOpts)...)
 	}
 

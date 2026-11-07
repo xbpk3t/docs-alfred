@@ -210,6 +210,10 @@ func (d *openCLIDriver) releaseBrowser() {
 
 func (d *openCLIDriver) Name() string { return "opencli" }
 
+// UsesHTTPFallback lets the ingest fetcher prefer the static HTTP driver for
+// generic non-adapter pages, keeping the shared browser tab for adapters.
+func (d *openCLIDriver) UsesHTTPFallback() bool { return true }
+
 func (d *openCLIDriver) FetchContent(ctx context.Context, urlStr, contentType string) *types.ContentFetchResult {
 	u := strings.ToLower(urlStr)
 
