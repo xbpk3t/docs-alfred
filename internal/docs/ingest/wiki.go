@@ -52,7 +52,7 @@ type classifier interface {
 		ctx context.Context,
 		urlStr, title, content string,
 		pin wikiclassify.TopicPin,
-	) *wikitypes.ClassifyResult
+	) (*wikitypes.ClassifyResult, error)
 }
 
 type writer interface {

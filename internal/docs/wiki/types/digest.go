@@ -42,6 +42,9 @@ const (
 	FailureReasonEmpty          FailureReason = "empty"
 	FailureReasonClassify       FailureReason = "classify_failed"
 	FailureReasonAI             FailureReason = "ai_unavailable"
+	// FailureReasonCatalog means the topic catalog was unavailable before the
+	// AI was called. It is transient and must not be reported as an AI outage.
+	FailureReasonCatalog FailureReason = "catalog_unavailable"
 )
 
 // DigestEntry records a single pipeline outcome for one URL.

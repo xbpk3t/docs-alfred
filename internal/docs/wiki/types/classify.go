@@ -7,10 +7,11 @@ import (
 
 // RouteReason values explain why an item went to uncat.md (or related routes).
 const (
-	RouteReasonNeedsManualReview = "needs_manual_review"
-	RouteReasonNoTopicMatch      = "no_topic_match"
-	RouteReasonInvalidTopicPath  = "invalid_topic_path"
-	RouteReasonAIUnavailable     = "ai_classify_unavailable"
+	RouteReasonNeedsManualReview  = "needs_manual_review"
+	RouteReasonNoTopicMatch       = "no_topic_match"
+	RouteReasonInvalidTopicPath   = "invalid_topic_path"
+	RouteReasonAIUnavailable      = "ai_classify_unavailable"
+	RouteReasonCatalogUnavailable = "catalog_unavailable"
 )
 
 // ClassifyType represents the wiki entry type.

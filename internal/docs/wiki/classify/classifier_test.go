@@ -260,15 +260,17 @@ func TestRenderStructuredSummaryWithActionableAdvice(t *testing.T) {
 
 func TestClassifyURLEmptyContent(t *testing.T) {
 	c := NewClassifier(nil, t.TempDir(), "")
-	result := c.ClassifyURL(context.Background(), "https://example.com", "Title", "")
+	result, err := c.ClassifyURL(context.Background(), "https://example.com", "Title", "")
 	assert.Nil(t, result)
+	assert.NoError(t, err)
 }
 
 func TestClassifyURLVideoContentTooShort(t *testing.T) {
 	c := NewClassifier(nil, t.TempDir(), "")
 	// Video content under 600 runes should be rejected
-	result := c.ClassifyURL(context.Background(), "https://www.youtube.com/watch?v=abc", "Title", "short")
+	result, err := c.ClassifyURL(context.Background(), "https://www.youtube.com/watch?v=abc", "Title", "short")
 	assert.Nil(t, result)
+	assert.ErrorIs(t, err, ErrVideoTooShort)
 }
 
 // A child answer is digested with the answer template, under the topic it
@@ -292,7 +294,7 @@ func TestClassifyURLInTopicPinsAnswerPrompt(t *testing.T) {
 		return []ghindex.TopicCandidate{{Path: pinned, Display: "agent-security"}}, nil
 	}
 
-	result := c.ClassifyURLInTopic(
+	result, err := c.ClassifyURLInTopic(
 		context.Background(),
 		"https://www.zhihu.com/question/35129528/answer/123456789",
 		"问题标题 - 恋猫",
@@ -300,6 +302,7 @@ func TestClassifyURLInTopicPinsAnswerPrompt(t *testing.T) {
 		TopicPin{TopicPath: pinned, WikiType: types.TypeDeepDive},
 	)
 
+	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, pinned, result.TopicPath)
 	assert.Contains(t, captured, "已知归档位置", "the answer template pins the archive location")
@@ -330,13 +333,14 @@ func TestClassifyURLAnswerWithoutPinChoosesOwnTopic(t *testing.T) {
 		return []ghindex.TopicCandidate{{Path: chosen, Display: "claude-code"}}, nil
 	}
 
-	result := c.ClassifyURL(
+	result, err := c.ClassifyURL(
 		context.Background(),
 		"https://www.zhihu.com/question/35129528/answer/123456789",
 		"问题标题 - 恋猫",
 		"这条回答的完整正文，足够长以通过内容检查。",
 	)
 
+	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, chosen, result.TopicPath)
 	assert.Contains(t, captured, "候选 topic path", "an unpinned answer picks its own topic")
@@ -359,7 +363,7 @@ func TestClassifyURLInTopicOverridesModelTopic(t *testing.T) {
 		},
 	))
 
-	result := c.ClassifyURLInTopic(
+	result, err := c.ClassifyURLInTopic(
 		context.Background(),
 		"https://www.zhihu.com/question/35129528/answer/123456789",
 		"问题标题 - 恋猫",
@@ -367,6 +371,7 @@ func TestClassifyURLInTopicOverridesModelTopic(t *testing.T) {
 		TopicPin{TopicPath: pinned, WikiType: types.TypeDeepDive},
 	)
 
+	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, pinned, result.TopicPath)
 	assert.Equal(t, types.TypeDeepDive, result.WikiType)
@@ -391,7 +396,7 @@ func TestClassifyURLInTopicSkipsCatalogWhenPinned(t *testing.T) {
 		return nil, errors.New("catalog down")
 	}
 
-	result := c.ClassifyURLInTopic(
+	result, err := c.ClassifyURLInTopic(
 		context.Background(),
 		"https://www.zhihu.com/question/35129528/answer/123456789",
 		"问题标题 - 恋猫",
@@ -399,6 +404,7 @@ func TestClassifyURLInTopicSkipsCatalogWhenPinned(t *testing.T) {
 		TopicPin{TopicPath: pinned, WikiType: types.TypeDeepDive},
 	)
 
+	require.NoError(t, err)
 	require.NotNil(t, result, "a pinned post must classify even with no catalog")
 	assert.Equal(t, pinned, result.TopicPath)
 	assert.Zero(t, catalogLoads)
@@ -416,8 +422,61 @@ func TestClassifyURLNoCandidates(t *testing.T) {
 	c.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
 		return nil, errors.New("no remote")
 	}
-	result := c.ClassifyURL(context.Background(), "https://example.com", "Title", "some content that is long enough")
+	result, err := c.ClassifyURL(context.Background(), "https://example.com", "Title", "some content that is long enough")
 	assert.Nil(t, result)
+	assert.ErrorIs(t, err, ErrCatalogUnavailable)
+}
+
+// A candidate-valid topicPath is authoritative even when the model also labels
+// the item "inbox". The contradiction must not demote a legal path to uncat.
+func TestClassifyURLNormalizesInboxTypeForResolvedTopic(t *testing.T) {
+	const chosen = "zzz/efficacy/relationship"
+
+	tests := []struct {
+		name     string
+		metadata string
+		want     types.ClassifyType
+	}{
+		{
+			name:     "inbox becomes research",
+			metadata: `{"contentType":"text","tags":["a","b","c"]}`,
+			want:     types.TypeDeepDive,
+		},
+		{
+			name:     "repo metadata keeps review",
+			metadata: `{"contentType":"repo","tags":["a","b","c"]}`,
+			want:     types.TypeRepoEval,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewClassifier(nil, t.TempDir(), "", WithChatFn(
+				func(_ context.Context, _ *ai.ClientConfig, _ []ai.Message) (string, error) {
+					return `{"topicPath":"` + chosen + `","wikiType":"inbox","contentType":"text",
+						"summary":{"overview":"overview","keyPoints":["point"]},
+						"metadata":` + tt.metadata + `,
+						"confidence":0.78,"needsManualReview":false}`, nil
+				},
+			))
+			c.loadGHTopics = func() ([]ghindex.TopicCandidate, error) {
+				return []ghindex.TopicCandidate{{Path: chosen, Display: "relationship"}}, nil
+			}
+
+			result, err := c.ClassifyURL(
+				context.Background(),
+				"https://www.bilibili.com/video/BV1yKGZ6qE4X",
+				"title",
+				strings.Repeat("足够长的正文内容。", 100),
+			)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, chosen, result.TopicPath)
+			assert.Equal(t, tt.want, result.WikiType)
+			assert.False(t, result.NeedsManualReview)
+		})
+	}
 }
 
 // --- validateClassifyResult with valid result ---

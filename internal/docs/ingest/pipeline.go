@@ -2,6 +2,7 @@ package wikiingest
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -161,12 +162,7 @@ func videoTooShortPending(
 		return pendingURLWrite{}, false
 	}
 
-	item := &wikitypes.ClassifyItem{
-		URL:         urlStr,
-		Title:       fetchResult.Title,
-		ContentType: contentType,
-		Summary:     &wikitypes.StructuredSummary{Overview: fetchResult.Body},
-	}
+	item := classifyItemWithRawBody(urlStr, fetchResult.Title, fetchResult.Body)
 
 	return pendingExtractFailureWrite(
 		item, wikitypes.FailureReasonTooShort, "video content too short (likely no transcript)",
@@ -254,28 +250,36 @@ func classifyPending(
 	}
 	content := fetchResult.Body
 
-	classResult := deps.classifier.ClassifyURLInTopic(ctx, urlStr, title, content, pin)
-	if classResult == nil {
-		item := &wikitypes.ClassifyItem{
-			URL:         urlStr,
-			Title:       title,
-			ContentType: wikifetch.DetectContentType(urlStr),
-			Summary:     &wikitypes.StructuredSummary{Overview: content},
+	classResult, classifyErr := deps.classifier.ClassifyURLInTopic(ctx, urlStr, title, content, pin)
+	if classifyErr != nil {
+		switch {
+		case errors.Is(classifyErr, wikiclassify.ErrCatalogUnavailable):
+			// The model was never called. Keep the inbox line, but record the
+			// real cause so a catalog outage is not counted as AI downtime.
+			return pendingAIErrorWrite(urlStr, wikitypes.FailureReasonCatalog, classifyErr.Error())
+		case errors.Is(classifyErr, wikiclassify.ErrVideoTooShort):
+			return pendingExtractFailureWrite(
+				classifyItemWithRawBody(urlStr, title, content),
+				wikitypes.FailureReasonTooShort,
+				classifyErr.Error(),
+			)
+		default:
+			return pendingAIErrorWrite(urlStr, wikitypes.FailureReasonAI, "AI classify unavailable after retries: "+classifyErr.Error())
 		}
-		// Empty content is a permanent content-side failure; non-empty content
-		// with a nil classifier means the AI call failed, which is transient.
+	}
+	if classResult == nil {
+		// Empty content is a permanent content-side failure; a nil result with
+		// non-empty content means a classifier implementation returned no
+		// result, which remains transient.
 		if strings.TrimSpace(content) == "" {
-			return pendingExtractFailureWrite(item, wikitypes.FailureReasonEmpty, "extraction failed: empty content")
+			return pendingExtractFailureWrite(
+				classifyItemWithRawBody(urlStr, title, content),
+				wikitypes.FailureReasonEmpty,
+				"extraction failed: empty content",
+			)
 		}
 
-		// Content was fetched but AI classify failed. Log as AI error JSONL and
-		// keep the inbox line: an AI/network outage is transient. Do not dump
-		// raw content into uncat.
-		return pendingURLWrite{
-			URL:   urlStr,
-			Kind:  pendingAIError,
-			Error: "AI classify unavailable after retries: classification failed: AI error",
-		}
+		return pendingAIErrorWrite(urlStr, wikitypes.FailureReasonAI, "AI classify unavailable after retries: classifier returned nil")
 	}
 
 	item := classifyItemFromResult(urlStr, title, classResult)
@@ -285,6 +289,29 @@ func classifyPending(
 	}
 
 	return pendingURLWrite{URL: urlStr, Kind: pendingSummary, Item: item}
+}
+
+// pendingAIErrorWrite is the single shape for a transient classification
+// failure: the URL stays in the inbox for a later retry.
+func pendingAIErrorWrite(urlStr string, reason wikitypes.FailureReason, message string) pendingURLWrite {
+	return pendingURLWrite{
+		URL:           urlStr,
+		Kind:          pendingAIError,
+		FailureType:   wikitypes.FailureAI,
+		FailureReason: reason,
+		Error:         message,
+	}
+}
+
+// classifyItemWithRawBody preserves fetched content on failure paths without
+// writing it to uncat.
+func classifyItemWithRawBody(urlStr, title, content string) *wikitypes.ClassifyItem {
+	return &wikitypes.ClassifyItem{
+		URL:         urlStr,
+		Title:       title,
+		ContentType: wikifetch.DetectContentType(urlStr),
+		Summary:     &wikitypes.StructuredSummary{Overview: content},
+	}
 }
 
 type pendingWriteKind string

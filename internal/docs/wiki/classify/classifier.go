@@ -33,6 +33,15 @@ const noneVal = "none"
 // unreliable.
 const minContentForVideo = 600
 
+var (
+	// ErrCatalogUnavailable reports that topic candidates could not be loaded
+	// before classification. Callers must treat it as a transient catalog
+	// outage, not as an AI failure.
+	ErrCatalogUnavailable = errors.New("topic catalog unavailable")
+	// ErrVideoTooShort reports video metadata without a usable transcript.
+	ErrVideoTooShort = errors.New("video content too short (likely no transcript)")
+)
+
 // chatFn is the AI chat entrypoint; tests may inject a fake.
 type chatFn func(ctx context.Context, cfg *ai.ClientConfig, messages []ai.Message) (string, error)
 
@@ -91,24 +100,25 @@ func NewClassifier(aiCfg *ai.ClientConfig, wikiRoot, ghTopicsURL string, opts ..
 // ClassifyURL performs full classification on a URL with fetched title + content.
 // Pipeline: classify-json (topic+summary) then optional light verify pass
 // (text/media only; repo skips — reserved for vs pathway).
-// Returns nil if classification is unavailable (graceful degradation).
-func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content string) *types.ClassifyResult {
+// A non-nil error distinguishes a catalog/AI outage from an empty result.
+func (c *Classifier) ClassifyURL(ctx context.Context, urlStr, title, content string) (*types.ClassifyResult, error) {
 	return c.ClassifyURLInTopic(ctx, urlStr, title, content, TopicPin{})
 }
 
 // ClassifyURLInTopic classifies a child post that inherits its container's
 // archive location instead of choosing one (a zhihu answer inside a question
 // thread). A zero pin keeps the normal choose-your-own-topic behavior.
+// Empty content returns (nil, nil); catalog and AI failures return typed errors.
 func (c *Classifier) ClassifyURLInTopic(
 	ctx context.Context,
 	urlStr, title, content string,
 	pin TopicPin,
-) *types.ClassifyResult {
+) (*types.ClassifyResult, error) {
 	contentType := fetch.DetectContentType(strings.ToLower(urlStr))
 	if strings.TrimSpace(content) == "" {
 		slog.Warn("Classification skipped for empty content", "url", urlStr)
 
-		return nil
+		return nil, nil
 	}
 
 	// For video content, require transcript-length content. Short content
@@ -118,7 +128,7 @@ func (c *Classifier) ClassifyURLInTopic(
 	if contentType == types.ContentVideo && len([]rune(content)) < minContentForVideo {
 		slog.Warn("Video content too short (likely no transcript)", "url", urlStr, "len", len(content))
 
-		return nil
+		return nil, fmt.Errorf("%w: %d chars", ErrVideoTooShort, len([]rune(content)))
 	}
 
 	// A pinned post already knows where it goes, so it needs no catalog: an
@@ -129,11 +139,13 @@ func (c *Classifier) ClassifyURLInTopic(
 		candidates, err = c.classificationCandidates(ctx, urlStr, title, content)
 		if err != nil {
 			slog.Warn("Classification candidates unavailable", "url", urlStr, "error", err)
+
+			return nil, fmt.Errorf("%w: %w", ErrCatalogUnavailable, err)
 		}
 		if len(candidates) == 0 {
 			slog.Warn("Classification skipped with no topic candidates", "url", urlStr)
 
-			return nil
+			return nil, ErrCatalogUnavailable
 		}
 	}
 
@@ -150,14 +162,19 @@ func (c *Classifier) ClassifyURLInTopic(
 	if err != nil {
 		slog.Warn("AI classification failed", "url", urlStr, "error", err)
 
-		return nil
+		return nil, fmt.Errorf("AI classify failed: %w", err)
 	}
 	pin.applyTo(classified)
 
 	// Light verify pass: never blocks digest success.
 	c.maybeVerify(ctx, classified, unit, pin.IsSet(), urlStr, title, contentType, content, maxLen)
 
-	return c.buildClassifyResult(classified, contentType, candidates, urlStr)
+	result := c.buildClassifyResult(classified, contentType, candidates, urlStr)
+	if result == nil {
+		return nil, errors.New("classification returned no result")
+	}
+
+	return result, nil
 }
 
 // TopicPin pins the archive location of a child post to its container's
@@ -241,7 +258,7 @@ func (c *Classifier) buildClassifyResult(classified *aiClassification, contentTy
 
 	return &types.ClassifyResult{
 		TopicPath:         topicPath,
-		WikiType:          classified.WikiType,
+		WikiType:          normalizeWritableWikiType(classified),
 		ContentType:       contentType,
 		Summary:           classified.Summary,
 		MetadataBlock:     metaBlock,
@@ -249,6 +266,22 @@ func (c *Classifier) buildClassifyResult(classified *aiClassification, contentTy
 		Confidence:        classified.Confidence,
 		NeedsManualReview: false,
 	}
+}
+
+// normalizeWritableWikiType resolves the contradiction a resolved topic path
+// can still carry: the AI returning wikiType "inbox" (or an unknown value)
+// next to a candidate-valid path. The path is authoritative once resolved, so
+// the type must name a real write target; repo metadata keeps its review type.
+func normalizeWritableWikiType(classified *aiClassification) types.ClassifyType {
+	wikiType := classified.WikiType
+	if isValidClassifyType(wikiType) && wikiType != types.TypeInbox {
+		return wikiType
+	}
+	if classified.Metadata != nil && classified.Metadata.ContentType == types.DisplayTypeRepo {
+		return types.TypeRepoEval
+	}
+
+	return types.TypeDeepDive
 }
 
 // routeManualReviewWithGoodContent implements recall-oriented NMR handling.
@@ -261,14 +294,10 @@ func (c *Classifier) routeManualReviewWithGoodContent(
 	topicPath, topicOK := c.resolveWritableTopicPath(classified.TopicPath, candidates)
 	if topicOK && classified.Confidence >= c.MinConfidence {
 		metaBlock := buildMetaBlock(classified)
-		wikiType := classified.WikiType
-		if !isValidClassifyType(wikiType) || wikiType == types.TypeInbox {
-			wikiType = types.TypeDeepDive
-		}
 
 		return &types.ClassifyResult{
 			TopicPath:         topicPath,
-			WikiType:          wikiType,
+			WikiType:          normalizeWritableWikiType(classified),
 			ContentType:       contentType,
 			Summary:           classified.Summary,
 			MetadataBlock:     metaBlock,

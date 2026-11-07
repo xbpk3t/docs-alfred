@@ -23,7 +23,11 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 	case pendingFetchFailure:
 		return writeFetchFailure(deps, wikiRoot, pending.URL, pending.FailureType, pending.FailureReason, pending.ExtraInfo, dryRun)
 	case pendingAIError:
-		return writeAIError(deps, wikiRoot, pending.URL, pending.Error, dryRun)
+		failureReason := pending.FailureReason
+		if failureReason == "" {
+			failureReason = wikitypes.FailureReasonAI
+		}
+		return writeAIError(deps, wikiRoot, pending.URL, failureReason, pending.Error, dryRun)
 	case pendingSkip:
 		return URLResult{URL: pending.URL, Status: StatusSkipped, Handled: true}
 	case pendingUnhandled:
@@ -337,19 +341,24 @@ func writeFetchFailure(
 func writeAIError(
 	deps *dependencies,
 	wikiRoot,
-	urlStr,
+	urlStr string,
+	failureReason wikitypes.FailureReason,
 	message string,
 	dryRun bool,
 ) URLResult {
 	item := &wikitypes.ClassifyItem{
-		URL:         urlStr,
-		Title:       urlStr,
-		RouteReason: wikitypes.RouteReasonAIUnavailable,
+		URL:   urlStr,
+		Title: urlStr,
+	}
+	// WriteFailureEntry already defaults an AI failure's route reason; only the
+	// catalog outage needs its distinct one.
+	if failureReason == wikitypes.FailureReasonCatalog {
+		item.RouteReason = wikitypes.RouteReasonCatalogUnavailable
 	}
 	path, err := deps.writer.WriteFailureEntry(
 		item,
 		wikitypes.FailureAI,
-		wikitypes.FailureReasonAI,
+		failureReason,
 		message,
 		newWriteOpts(deps, wikiRoot, dryRun),
 	)
@@ -358,7 +367,7 @@ func writeAIError(
 			URL:           urlStr,
 			Status:        StatusUnhandledError,
 			FailureType:   wikitypes.FailureAI,
-			FailureReason: wikitypes.FailureReasonAI,
+			FailureReason: failureReason,
 			Error:         fmt.Sprintf("write AI error: %v", err),
 		}
 	}
@@ -371,11 +380,11 @@ func writeAIError(
 	return URLResult{
 		URL:           urlStr,
 		Status:        status,
-		Handled:       false, // AI/network failure is transient: keep the inbox line.
-		Retryable:     failureRetryable(wikitypes.FailureReasonAI),
+		Handled:       false, // AI/catalog failure is transient: keep the inbox line.
+		Retryable:     failureRetryable(failureReason),
 		OutputPath:    path,
 		FailureType:   wikitypes.FailureAI,
-		FailureReason: wikitypes.FailureReasonAI,
+		FailureReason: failureReason,
 	}
 }
 
@@ -390,7 +399,8 @@ func failureRetryable(reason wikitypes.FailureReason) bool {
 		wikitypes.FailureReasonBrowserError,
 		wikitypes.FailureReasonHTTPError,
 		wikitypes.FailureReasonPartialExtract,
-		wikitypes.FailureReasonAI:
+		wikitypes.FailureReasonAI,
+		wikitypes.FailureReasonCatalog:
 		return true
 	default:
 		return false

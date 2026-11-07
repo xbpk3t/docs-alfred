@@ -501,10 +501,13 @@ type fakeDeps struct {
 
 func newFakeDeps() *fakeDeps {
 	return &fakeDeps{
-		fetcher:    &fakeFetcher{results: map[string]*wikitypes.ContentFetchResult{}},
-		classifier: &fakeClassifier{results: map[string]*wikitypes.ClassifyResult{}},
-		writer:     &fakeWriter{},
-		inbox:      &fakeInbox{},
+		fetcher: &fakeFetcher{results: map[string]*wikitypes.ContentFetchResult{}},
+		classifier: &fakeClassifier{
+			results: map[string]*wikitypes.ClassifyResult{},
+			errs:    map[string]error{},
+		},
+		writer: &fakeWriter{},
+		inbox:  &fakeInbox{},
 	}
 }
 
@@ -544,6 +547,7 @@ func (f *fakeFetcher) FetchContent(_ context.Context, urlStr, _ string) *wikityp
 
 type fakeClassifier struct {
 	results map[string]*wikitypes.ClassifyResult
+	errs    map[string]error
 	// pins records the pin each URL was classified under, so tests can assert
 	// that child posts inherit their container's topic.
 	mu   sync.Mutex
@@ -554,15 +558,18 @@ func (f *fakeClassifier) ClassifyURLInTopic(
 	_ context.Context,
 	urlStr, _, _ string,
 	pin wikiclassify.TopicPin,
-) *wikitypes.ClassifyResult {
+) (*wikitypes.ClassifyResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.pins == nil {
 		f.pins = map[string]wikiclassify.TopicPin{}
 	}
 	f.pins[urlStr] = pin
+	if err := f.errs[urlStr]; err != nil {
+		return nil, err
+	}
 
-	return f.results[urlStr]
+	return f.results[urlStr], nil
 }
 
 // onlyPending asserts a fetch produced exactly one pending entry and returns it.

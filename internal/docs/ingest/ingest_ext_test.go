@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
 	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
@@ -701,6 +702,20 @@ func TestPrepareURLAttemptNilClassifierNonEmptyContent(t *testing.T) {
 	assert.Contains(t, pending.Error, "AI classify unavailable")
 }
 
+func TestPrepareURLAttemptCatalogUnavailable(t *testing.T) {
+	deps := newFakeDeps()
+	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
+		Title: "Title",
+		Body:  "some real content here",
+	}
+	deps.classifier.errs["https://example.com/a"] = wikiclassify.ErrCatalogUnavailable
+
+	pending := onlyPending(t, prepareURLAttempt(context.Background(), deps.dependencies(), "https://example.com/a"))
+	assert.Equal(t, pendingAIError, pending.Kind)
+	assert.Equal(t, wikitypes.FailureReasonCatalog, pending.FailureReason)
+	assert.Contains(t, pending.Error, "topic catalog unavailable")
+}
+
 func TestPrepareURLAttemptClassifyFailure(t *testing.T) {
 	deps := newFakeDeps()
 	deps.fetcher.results["https://example.com/a"] = &wikitypes.ContentFetchResult{
@@ -839,7 +854,7 @@ func TestWriteAIErrorWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.failureErr = errors.New("write failed")
 
-	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", "AI timeout", false)
+	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureReasonAI, "AI timeout", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
 	assert.Equal(t, wikitypes.FailureAI, result.FailureType)
@@ -848,11 +863,20 @@ func TestWriteAIErrorWriterError(t *testing.T) {
 func TestWriteAIErrorDryRun(t *testing.T) {
 	deps := newFakeDeps()
 
-	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", "AI timeout", true)
+	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureReasonAI, "AI timeout", true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
 	assert.False(t, result.Handled, "AI failure is transient; keep the inbox line")
 	assert.True(t, result.Retryable)
 	assert.True(t, deps.writer.failures[0].dryRun)
+}
+
+func TestWriteCatalogErrorIsRetryableAndDistinct(t *testing.T) {
+	deps := newFakeDeps()
+
+	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureReasonCatalog, "catalog down", true)
+	assert.Equal(t, wikitypes.FailureReasonCatalog, result.FailureReason)
+	assert.True(t, result.Retryable)
+	assert.False(t, result.Handled)
 }
 
 // --- writeSummary ---

@@ -66,7 +66,9 @@ func RemoteTopicCatalog(cfg LocalGHConfig, url string) ([]TopicCandidate, error)
 	}
 
 	manager := NewManager(DefaultConfigPath, url)
-	if err := manager.LoadWithBackgroundSync(); err != nil {
+	// Load blocking here: digest/ccx callers need the cache populated before
+	// reading it, unlike the Alfred search path which keeps background sync.
+	if err := manager.LoadWithCacheTTL(); err != nil {
 		return nil, fmt.Errorf("load remote gh topics from %s: %w", url, err)
 	}
 
