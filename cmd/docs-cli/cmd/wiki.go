@@ -33,15 +33,14 @@ type wikiFlags struct {
 }
 
 const (
-	wikiCommandName         = "wiki"
-	wikiDigestCommandName   = "digest"
-	wikiAuditCommandName    = "audit"
-	wikiCheckCommandName    = "check"
-	wikiStatsCommandName    = "stats"
-	wikiCompactCommandName  = "compact"
-	wikiPruneCommandName    = "prune"
-	wikiNotifyCommandName   = "digest-notify"
-	wikiBackfillCommandName = "backfill-history"
+	wikiCommandName        = "wiki"
+	wikiDigestCommandName  = "digest"
+	wikiAuditCommandName   = "audit"
+	wikiCheckCommandName   = "check"
+	wikiStatsCommandName   = "stats"
+	wikiCompactCommandName = "compact"
+	wikiPruneCommandName   = "prune"
+	wikiNotifyCommandName  = "digest-notify"
 )
 
 func newWikiCmd() *cobra.Command {
@@ -69,7 +68,6 @@ and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 	cmd.AddCommand(newWikiCompactCmd())
 	cmd.AddCommand(newWikiPruneCmd())
 	cmd.AddCommand(newWikiNotifyCmd())
-	cmd.AddCommand(newWikiBackfillCmd())
 
 	return cmd
 }
@@ -173,43 +171,6 @@ func newWikiNotifyCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&failed, "failed", false, "Render the notification as a failed run")
-	addWikiFlags(cmd, &flags)
-
-	return cmd
-}
-
-func newWikiBackfillCmd() *cobra.Command {
-	var (
-		flags wikiFlags
-		from  string
-	)
-	cmd := &cobra.Command{
-		Use:   wikiBackfillCommandName,
-		Short: "Merge the local digest-success log into the R2 success history",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
-			if err != nil {
-				return fmt.Errorf("load config: %w", err)
-			}
-			applyWikiFlagOverrides(cfg, &flags)
-
-			result, err := wikiuc.RunBackfillDigestHistory(context.Background(), wikiuc.BackfillHistoryInput{
-				Config:    cfg,
-				LocalPath: from,
-				DryRun:    flags.dryRun,
-			})
-			if err != nil {
-				return err
-			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(),
-				"local_unique=%d remote_unique=%d added=%d key=%s dry_run=%v\n",
-				result.LocalUnique, result.RemoteUnique, result.Added, result.Key, result.DryRun)
-
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&from, "from", "", "Local digest-success.jsonl (default <wikiRoot>/digest-success.jsonl)")
 	addWikiFlags(cmd, &flags)
 
 	return cmd

@@ -1,8 +1,6 @@
 package wikiingest
 
 import (
-	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,40 +58,4 @@ func TestLastRunLogEntryEmpty(t *testing.T) {
 	entry, err := lastRunLogEntry(nil)
 	require.NoError(t, err)
 	assert.Nil(t, entry)
-}
-
-func TestMergeSuccessHistoryAddsLocalOnlyEntries(t *testing.T) {
-	local := strings.Join([]string{
-		`{"url":"https://example.com/a","status":"success","stage":"write"}`,
-		`{"url":"https://example.com/b","status":"success","stage":"write"}`,
-		`{"url":"https://example.com/a?utm_source=x","status":"success","stage":"write"}`,
-		`{"url":"https://example.com/failed","status":"failure","stage":"fetch"}`,
-		`not-json`,
-	}, "\n")
-	remote := strings.Join([]string{
-		`{"url":"https://example.com/b","status":"success","stage":"write"}`,
-		`{"url":"https://example.com/d","status":"success","stage":"write"}`,
-	}, "\n")
-
-	merged, stats, err := mergeSuccessHistory([]byte(local), []byte(remote))
-	require.NoError(t, err)
-	assert.Equal(t, 2, stats.localUnique, "a and b after tracking-param dedup")
-	assert.Equal(t, 2, stats.remoteUnique, "b and d")
-	assert.Equal(t, 1, stats.added, "only a is missing from the remote log")
-
-	urls := map[string]int{}
-	for _, line := range strings.Split(strings.TrimSpace(string(merged)), "\n") {
-		var entry wikitypes.DigestEntry
-		require.NoError(t, json.Unmarshal([]byte(line), &entry))
-		urls[entry.URL]++
-	}
-	assert.Equal(t, 1, urls["https://example.com/a"])
-	assert.Equal(t, 1, urls["https://example.com/b"])
-	assert.Equal(t, 1, urls["https://example.com/d"])
-	assert.NotContains(t, urls, "https://example.com/failed")
-
-	// Idempotent: the merged log is now the remote input.
-	_, again, err := mergeSuccessHistory([]byte(local), merged)
-	require.NoError(t, err)
-	assert.Zero(t, again.added)
 }
