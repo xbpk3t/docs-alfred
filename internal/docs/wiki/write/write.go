@@ -513,6 +513,10 @@ func LogSuccessEntry(item *types.ClassifyItem, outputPath string, opts *WriteOpt
 	return LogDigestEntry(&entry, opts)
 }
 
+// manualReviewKey is the uncat.md object name shared by local, R2 and prune
+// writers.
+const manualReviewKey = "uncat.md"
+
 // WriteManualReviewEntry appends a human-readable entry to wiki/uncat.md
 // for items with NeedsManualReview=true that have good AI-generated summaries.
 func WriteManualReviewEntry(item *types.ClassifyItem, opts *WriteOptions) (string, error) {
@@ -524,7 +528,7 @@ func WriteManualReviewEntry(item *types.ClassifyItem, opts *WriteOptions) (strin
 		item.RouteReason = types.RouteReasonNeedsManualReview
 	}
 
-	path := filepath.Join(opts.WikiRoot, "uncat.md")
+	path := filepath.Join(opts.WikiRoot, manualReviewKey)
 	if opts.DryRun {
 		slog.Info("[DRY RUN] Would append to uncat.md",
 			"path", path, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
@@ -574,7 +578,7 @@ func WriteManualReviewEntry(item *types.ClassifyItem, opts *WriteOptions) (strin
 // writeManualReviewR2 appends a manual review entry to uncat.md in the R2
 // bucket, skipping URLs that are already queued.
 func writeManualReviewR2(item *types.ClassifyItem, opts *WriteOptions, dateHeading, entry string) (string, error) {
-	const key = "uncat.md"
+	key := manualReviewKey
 
 	r2UncatMu.Lock()
 	defer r2UncatMu.Unlock()
@@ -871,15 +875,21 @@ func manualReviewContainsURL(content, rawURL string) bool {
 		return false
 	}
 	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "URL:") {
-			continue
-		}
-		candidate := strings.TrimSpace(strings.TrimPrefix(line, "URL:"))
-		if urlutil.NormalizeForDedup(candidate) == target {
+		if key, ok := entryURLFromLine(line); ok && key == target {
 			return true
 		}
 	}
 
 	return false
+}
+
+// entryURLFromLine parses the "URL: <url>" metadata line of an uncat.md entry
+// and returns its tracking-insensitive dedup key.
+func entryURLFromLine(line string) (string, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "URL:") {
+		return "", false
+	}
+
+	return urlutil.NormalizeForDedup(strings.TrimSpace(strings.TrimPrefix(line, "URL:"))), true
 }

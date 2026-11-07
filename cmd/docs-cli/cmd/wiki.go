@@ -39,6 +39,7 @@ const (
 	wikiCheckCommandName   = "check"
 	wikiStatsCommandName   = "stats"
 	wikiCompactCommandName = "compact"
+	wikiPruneCommandName   = "prune"
 )
 
 func newWikiCmd() *cobra.Command {
@@ -64,6 +65,7 @@ and entry type (repo_eval/deep_dive/inbox). Writes structured entries.`,
 	cmd.AddCommand(newWikiCheckCmd())
 	cmd.AddCommand(newWikiStatsCmd())
 	cmd.AddCommand(newWikiCompactCmd())
+	cmd.AddCommand(newWikiPruneCmd())
 
 	return cmd
 }
@@ -317,6 +319,78 @@ Top-N candidates from compact.topN (default 10). Brand from compact.title (From,
 	cmd.Flags().BoolVar(&flags.sendMail, "send-mail", false, "Send Resend email")
 	cmd.Flags().BoolVar(&flags.createIssue, "create-issue", false, "Create a new Linear issue with the compact report")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Print result; do not send mail or create issue")
+
+	return cmd
+}
+
+type wikiPruneFlags struct {
+	config   string
+	wikiRoot string
+	urlFile  string
+	urls     []string
+	apply    bool
+}
+
+func newWikiPruneCmd() *cobra.Command {
+	var flags wikiPruneFlags
+	cmd := &cobra.Command{
+		Use:   wikiPruneCommandName,
+		Short: "Remove stale entries from remote uncat.md by URL",
+		Long: `Remove matching ### entry blocks from the R2 uncat.md queue.
+
+This is a read-merge-write on R2 and must not run while a digest is writing
+uncat.md. Default is dry-run; pass --apply to upload the pruned file.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := wikiuc.LoadConfig(flags.config, flags.wikiRoot)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+
+			urls := append([]string(nil), flags.urls...)
+			if flags.urlFile != "" {
+				data, readErr := os.ReadFile(flags.urlFile)
+				if readErr != nil {
+					return fmt.Errorf("read url file %s: %w", flags.urlFile, readErr)
+				}
+				for _, line := range strings.Split(string(data), "\n") {
+					line = strings.TrimSpace(line)
+					if line == "" || strings.HasPrefix(line, "#") {
+						continue
+					}
+					urls = append(urls, line)
+				}
+			}
+			if len(urls) == 0 {
+				return errors.New("at least one --url or --url-file entry is required")
+			}
+
+			result, err := wikiuc.RunPrune(context.Background(), wikiuc.PruneInput{
+				Config: cfg,
+				URLs:   urls,
+				DryRun: !flags.apply,
+			})
+			if err != nil {
+				return err
+			}
+
+			action := "removed"
+			if result.DryRun {
+				action = "would remove"
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s %d entries from %s\n", action, len(result.Removed), result.Key)
+			for _, u := range result.Removed {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), u)
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&flags.config, "config", "c", "", "Config file path (wiki.yml)")
+	cmd.Flags().StringVar(&flags.wikiRoot, "wiki-root", "", "Wiki root directory (overrides config)")
+	cmd.Flags().StringSliceVar(&flags.urls, "url", nil, "URL to remove (repeatable)")
+	cmd.Flags().StringVar(&flags.urlFile, "url-file", "", "File with one URL per line")
+	cmd.Flags().BoolVar(&flags.apply, "apply", false, "Upload the pruned uncat.md (default: dry-run)")
 
 	return cmd
 }

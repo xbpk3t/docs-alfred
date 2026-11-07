@@ -113,6 +113,27 @@ func RunAddURLs(ctx context.Context, input AddInput) (*Result, error) {
 	return result, nil
 }
 
+// PruneInput selects uncat.md entries to remove by URL.
+type PruneInput struct {
+	Config *Config
+	URLs   []string
+	DryRun bool
+}
+
+// RunPrune removes entries from the remote uncat.md queue by URL. It is a
+// serialized R2 read-merge-write and must not run during a digest.
+func RunPrune(ctx context.Context, input PruneInput) (*wikiwrite.PruneResult, error) {
+	if input.Config == nil {
+		return nil, errors.New("wiki config is required")
+	}
+	store := newMediaStore(input.Config)
+	if store == nil {
+		return nil, errors.New("wiki prune requires r2.bucket")
+	}
+
+	return wikiwrite.PruneManualReview(ctx, digestStoreAdapter{store: store}, input.URLs, input.DryRun)
+}
+
 // RunDigest processes wiki/inbox.md and flushes handled lines.
 func RunDigest(ctx context.Context, input DigestInput) (*Result, error) {
 	slog.Info("wiki digest started")
