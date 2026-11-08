@@ -47,15 +47,12 @@ func TestLastRunLogEntrySkipsMalformedLines(t *testing.T) {
 		"not-json\n" +
 		`{"batchId":"last","processed":2}` + "\n")
 
-	entry, err := lastRunLogEntry(data)
-	require.NoError(t, err)
+	entry := lastRunLogEntry(data)
 	require.NotNil(t, entry)
 	assert.Equal(t, "last", entry.BatchID)
 	assert.Equal(t, 2, entry.Processed)
 }
 
 func TestLastRunLogEntryEmpty(t *testing.T) {
-	entry, err := lastRunLogEntry(nil)
-	require.NoError(t, err)
-	assert.Nil(t, entry)
+	assert.Nil(t, lastRunLogEntry(nil))
 }

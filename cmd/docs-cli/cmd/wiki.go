@@ -155,9 +155,10 @@ func newWikiNotifyCmd() *cobra.Command {
 			applyWikiFlagOverrides(cfg, &flags)
 
 			result, err := wikiuc.RunDigestNotify(context.Background(), wikiuc.NotifyInput{
-				Config: cfg,
-				Failed: failed,
-				DryRun: flags.dryRun,
+				Config:    cfg,
+				MailToken: os.Getenv("RESEND_TOKEN"),
+				Failed:    failed,
+				DryRun:    flags.dryRun,
 			})
 			if result != nil && flags.dryRun {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), result.Subject)

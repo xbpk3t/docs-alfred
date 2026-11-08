@@ -93,40 +93,58 @@ type URLResult struct {
 	Handled       bool                    `json:"handled"`
 }
 
-// Summary returns count-oriented command details for structured output.
-func (r *Result) Summary() map[string]any {
-	var succeeded, handledFailures, retryableFailures, permanentFailures, unhandledFailures, skipped, written int
+// resultCounts buckets URL results by outcome; Summary and RunLog share it so
+// the CLI output and the persisted run log cannot drift.
+type resultCounts struct {
+	succeeded         int
+	handledFailures   int
+	retryableFailures int
+	permanentFailures int
+	unhandledFailures int
+	skipped           int
+	written           int
+}
+
+func (r *Result) counts() resultCounts {
+	var c resultCounts
 	for i := range r.URLResults {
 		item := &r.URLResults[i]
 		switch item.Status {
 		case StatusSummaryWritten, StatusDryRunSummary:
-			succeeded++
+			c.succeeded++
 		case StatusFailureWritten, StatusDryRunFailure:
-			handledFailures++
+			c.handledFailures++
 			if item.Retryable {
-				retryableFailures++
+				c.retryableFailures++
 			} else {
-				permanentFailures++
+				c.permanentFailures++
 			}
 		case StatusUnhandledError:
-			unhandledFailures++
+			c.unhandledFailures++
 		case StatusSkipped:
-			skipped++
+			c.skipped++
 		}
 		if item.OutputPath != "" && (item.Status == StatusSummaryWritten || item.Status == StatusFailureWritten) {
-			written++
+			c.written++
 		}
 	}
 
+	return c
+}
+
+// Summary returns count-oriented command details for structured output.
+func (r *Result) Summary() map[string]any {
+	c := r.counts()
+
 	return map[string]any{
 		"processed":         len(r.URLResults),
-		"succeeded":         succeeded,
-		"handledFailures":   handledFailures,
-		"retryableFailures": retryableFailures,
-		"permanentFailures": permanentFailures,
-		"unhandledFailures": unhandledFailures,
-		"skipped":           skipped,
-		"written":           written,
+		"succeeded":         c.succeeded,
+		"handledFailures":   c.handledFailures,
+		"retryableFailures": c.retryableFailures,
+		"permanentFailures": c.permanentFailures,
+		"unhandledFailures": c.unhandledFailures,
+		"skipped":           c.skipped,
+		"written":           c.written,
 		"flushed":           r.Flushed,
 		"wouldFlush":        r.WouldFlush,
 		"dryRun":            r.DryRun,
@@ -170,6 +188,7 @@ func (r *Result) Actions() []string {
 // RunLog builds the run-level summary written to logs/digest-runs.jsonl.
 func (r *Result) RunLog(started time.Time, runErr error) *wikitypes.DigestRunEntry {
 	now := time.Now()
+	c := r.counts()
 	entry := &wikitypes.DigestRunEntry{
 		Timestamp:       now.Format(time.RFC3339),
 		BatchID:         "wiki-" + now.Format("2006-01-02"),
@@ -177,31 +196,19 @@ func (r *Result) RunLog(started time.Time, runErr error) *wikitypes.DigestRunEnt
 		DurationMs:      now.Sub(started).Milliseconds(),
 		DryRun:          r.DryRun,
 		Processed:       len(r.URLResults),
+		Succeeded:       c.succeeded,
+		Retryable:       c.retryableFailures,
+		Permanent:       c.permanentFailures,
+		Unhandled:       c.unhandledFailures,
+		Skipped:         c.skipped,
+		Written:         c.written,
 		Flushed:         r.Flushed,
 		AbortReason:     r.AbortReason,
 		FailureByReason: map[string]int{},
 	}
 	for i := range r.URLResults {
-		item := &r.URLResults[i]
-		switch item.Status {
-		case StatusSummaryWritten, StatusDryRunSummary:
-			entry.Succeeded++
-		case StatusFailureWritten, StatusDryRunFailure:
-			if item.Retryable {
-				entry.Retryable++
-			} else {
-				entry.Permanent++
-			}
-		case StatusUnhandledError:
-			entry.Unhandled++
-		case StatusSkipped:
-			entry.Skipped++
-		}
-		if item.OutputPath != "" && (item.Status == StatusSummaryWritten || item.Status == StatusFailureWritten) {
-			entry.Written++
-		}
-		if item.FailureReason != "" {
-			entry.FailureByReason[string(item.FailureReason)]++
+		if reason := r.URLResults[i].FailureReason; reason != "" {
+			entry.FailureByReason[string(reason)]++
 		}
 	}
 	if len(entry.FailureByReason) == 0 {

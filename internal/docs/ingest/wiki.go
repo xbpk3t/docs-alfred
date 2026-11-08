@@ -272,11 +272,7 @@ func logDigestRun(deps *dependencies, wikiRoot string, result *Result, started t
 	if result == nil {
 		return
 	}
-	opts := &wikiwrite.WriteOptions{
-		WikiRoot: wikiRoot,
-		R2Store:  digestStoreOrNil(deps),
-		DryRun:   result.DryRun,
-	}
+	opts := newWriteOpts(deps, wikiRoot, result.DryRun)
 	if _, err := wikiwrite.LogDigestRun(result.RunLog(started, runErr), opts); err != nil {
 		slog.Warn("wiki digest: run log write failed", "error", err)
 	}

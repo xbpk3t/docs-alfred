@@ -65,14 +65,28 @@ func LogDigestEntry(entry *types.DigestEntry, opts *WriteOptions) (string, error
 		return "", fmt.Errorf("marshal digest entry: %w", err)
 	}
 
+	return appendLogLine(digestFilename(entry), line, opts)
+}
+
+// DigestRunLogKey is the R2 key of the digest run-summary log.
+const DigestRunLogKey = "logs/" + digestFilenameRuns
+
+// DigestFailureLogNames returns the JSONL files that can contain failure
+// entries, so readers do not re-declare the writer's filenames.
+func DigestFailureLogNames() []string {
+	return []string{digestFilenameAIError, digestFilenameExtractError, digestFilenameFetchError}
+}
+
+// appendLogLine appends one JSONL line to filename, in the bucket when R2 is
+// configured (read-merge-write, since R2 has no append) and locally otherwise.
+func appendLogLine(filename string, line []byte, opts *WriteOptions) (string, error) {
 	if opts.R2Store != nil {
-		return logDigestEntryR2(entry, opts, line)
+		return appendLogLineR2(filename, line, opts)
 	}
 
-	logPath := logDigestPath(opts, entry)
+	logPath := filepath.Join(opts.WikiRoot, filename)
 	if opts.DryRun {
-		slog.Info("[DRY RUN] Would log digest entry", "path", logPath,
-			"url", entry.URL, "status", entry.Status, "failureKind", entry.FailureKind)
+		slog.Info("[DRY RUN] Would log digest line", "path", logPath)
 
 		return logPath, nil
 	}
@@ -93,98 +107,19 @@ func LogDigestEntry(entry *types.DigestEntry, opts *WriteOptions) (string, error
 		return "", fmt.Errorf("write digest newline: %w", err)
 	}
 
-	slog.Debug("Digest entry logged", "path", logPath, "url", entry.URL, "status", entry.Status)
-
 	return logPath, nil
 }
 
-// logDigestPath is the local JSONL path for the given entry's outcome.
-func logDigestPath(opts *WriteOptions, entry *types.DigestEntry) string {
-	return filepath.Join(opts.WikiRoot, digestFilename(entry))
-}
-
-// logDigestEntryR2 appends one JSON line to a logs/digest-<kind>.jsonl object
-// in the bucket. R2 has no append, so it read-merge-writes the object; the
-// success log is read back by history dedup, so its URL set must stay complete.
-func logDigestEntryR2(entry *types.DigestEntry, opts *WriteOptions, line []byte) (string, error) {
+// appendLogLineR2 appends one JSON line to a logs/<filename> object in the
+// bucket. The success log is read back by history dedup, so its URL set must
+// stay complete.
+func appendLogLineR2(filename string, line []byte, opts *WriteOptions) (string, error) {
 	r2LogMu.Lock()
 	defer r2LogMu.Unlock()
 
-	key := "logs/" + digestFilename(entry)
+	key := "logs/" + filename
 	if opts.DryRun {
-		slog.Info("[DRY RUN] Would log digest entry to R2", "key", key,
-			"url", entry.URL, "status", entry.Status, "failureKind", entry.FailureKind)
-
-		return key, nil
-	}
-
-	existing, getErr := opts.R2Store.GetObject(context.Background(), key)
-	if getErr != nil {
-		return "", fmt.Errorf("r2 log %s: read existing: %w", key, getErr)
-	}
-	merged := make([]byte, 0, len(existing)+len(line)+1)
-	merged = append(merged, existing...)
-	merged = append(merged, line...)
-	if merged[len(merged)-1] != '\n' {
-		merged = append(merged, '\n')
-	}
-	if _, err := opts.R2Store.Upload(context.Background(), key, string(merged)); err != nil {
-		return "", fmt.Errorf("r2 log %s: %w", key, err)
-	}
-	slog.Debug("Digest entry logged to R2", "key", key, "url", entry.URL, "status", entry.Status)
-
-	return key, nil
-}
-
-// LogDigestRun appends one run-summary line to logs/digest-runs.jsonl in the
-// bucket, or to <wikiRoot>/digest-runs.jsonl when R2 is not configured.
-func LogDigestRun(entry *types.DigestRunEntry, opts *WriteOptions) (string, error) {
-	if opts == nil || (opts.WikiRoot == "" && opts.R2Store == nil) {
-		return "", nil
-	}
-	if entry.Timestamp == "" {
-		entry.Timestamp = carbon.Now().Layout(time.RFC3339)
-	}
-	line, err := json.Marshal(entry)
-	if err != nil {
-		return "", fmt.Errorf("marshal digest run: %w", err)
-	}
-
-	if opts.R2Store != nil {
-		return logRunEntryR2(line, opts)
-	}
-
-	logPath := filepath.Join(opts.WikiRoot, digestFilenameRuns)
-	if opts.DryRun {
-		slog.Info("[DRY RUN] Would log digest run", "path", logPath)
-
-		return logPath, nil
-	}
-
-	unlock := lockPath(logPath)
-	defer unlock()
-
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileutil.FilePermPrivate)
-	if err != nil {
-		return "", fmt.Errorf("open digest run log %s: %w", logPath, err)
-	}
-	defer func() { _ = f.Close() }()
-	if _, err := f.Write(append(line, '\n')); err != nil {
-		return "", fmt.Errorf("write digest run: %w", err)
-	}
-
-	return logPath, nil
-}
-
-// logRunEntryR2 appends one run-summary line to logs/digest-runs.jsonl via the
-// same read-merge-write path as the per-URL logs.
-func logRunEntryR2(line []byte, opts *WriteOptions) (string, error) {
-	r2LogMu.Lock()
-	defer r2LogMu.Unlock()
-
-	const key = "logs/" + digestFilenameRuns
-	if opts.DryRun {
-		slog.Info("[DRY RUN] Would log digest run to R2", "key", key)
+		slog.Info("[DRY RUN] Would log digest line to R2", "key", key)
 
 		return key, nil
 	}
@@ -205,4 +140,21 @@ func logRunEntryR2(line []byte, opts *WriteOptions) (string, error) {
 	}
 
 	return key, nil
+}
+
+// LogDigestRun appends one run-summary line to logs/digest-runs.jsonl in the
+// bucket, or to <wikiRoot>/digest-runs.jsonl when R2 is not configured.
+func LogDigestRun(entry *types.DigestRunEntry, opts *WriteOptions) (string, error) {
+	if opts == nil || (opts.WikiRoot == "" && opts.R2Store == nil) {
+		return "", nil
+	}
+	if entry.Timestamp == "" {
+		entry.Timestamp = carbon.Now().Layout(time.RFC3339)
+	}
+	line, err := json.Marshal(entry)
+	if err != nil {
+		return "", fmt.Errorf("marshal digest run: %w", err)
+	}
+
+	return appendLogLine(digestFilenameRuns, line, opts)
 }

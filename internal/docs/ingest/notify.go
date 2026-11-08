@@ -1,28 +1,28 @@
 package wikiingest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"html"
-	"os"
 	"sort"
 	"strings"
 	"time"
 
+	wikicompact "github.com/xbpk3t/docs-alfred/internal/docs/wiki/compact"
 	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
-	"github.com/xbpk3t/docs-alfred/pkg/mail"
+	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 )
 
-const (
-	digestRunLogKey   = "logs/digest-runs.jsonl"
-	digestNotifyTitle = "wiki digest"
-)
+const digestNotifyTitle = "wiki digest"
 
 // NotifyInput drives the digest run notification sent by the dagu failure
 // handler.
 type NotifyInput struct {
 	Config *Config
+	// MailToken is the Resend token, resolved from env by the CLI.
+	MailToken string
 	// Failed marks the notification as a failed DAG run even when the latest
 	// run log is stale or missing.
 	Failed bool
@@ -31,7 +31,6 @@ type NotifyInput struct {
 
 // NotifyResult is the rendered notification.
 type NotifyResult struct {
-	Entry   *wikitypes.DigestRunEntry
 	Subject string
 	HTML    string
 	Sent    bool
@@ -50,11 +49,11 @@ func RunDigestNotify(ctx context.Context, input NotifyInput) (*NotifyResult, err
 		readErr error
 	)
 	if store := newMediaStore(input.Config); store != nil {
-		data, err := store.GetObject(ctx, digestRunLogKey)
+		data, err := store.GetObject(ctx, wikiwrite.DigestRunLogKey)
 		if err != nil {
 			readErr = err
 		} else {
-			entry, _ = lastRunLogEntry(data)
+			entry = lastRunLogEntry(data)
 		}
 	}
 
@@ -62,26 +61,22 @@ func RunDigestNotify(ctx context.Context, input NotifyInput) (*NotifyResult, err
 	if readErr != nil {
 		body += fmt.Sprintf("<p><b>Run log unavailable:</b> %s</p>", html.EscapeString(readErr.Error()))
 	}
-	result := &NotifyResult{Subject: subject, HTML: body, Entry: entry}
+	result := &NotifyResult{Subject: subject, HTML: body}
 	if input.DryRun {
 		return result, nil
 	}
 
-	token := os.Getenv("RESEND_TOKEN")
-	if token == "" {
+	if input.MailToken == "" {
 		return result, fmt.Errorf("RESEND_TOKEN is required to send digest notifications")
 	}
 	mailTo := input.Config.Compact.Send.Resend.MailTo
 	if len(mailTo) == 0 {
 		return result, fmt.Errorf("compact.send.resend.mailTo is required to send digest notifications")
 	}
-	if err := mail.SendHTML(ctx, &mail.SendOptions{
-		Token:   token,
-		From:    mail.DefaultFrom(digestNotifyTitle),
-		Subject: subject,
-		HTML:    body,
-		To:      mailTo,
-	}); err != nil {
+	if err := wikicompact.SendCompactEmail(ctx, &wikicompact.MailConfig{
+		Token:  input.MailToken,
+		MailTo: mailTo,
+	}, digestNotifyTitle, subject, body); err != nil {
 		return result, err
 	}
 	result.Sent = true
@@ -91,22 +86,24 @@ func RunDigestNotify(ctx context.Context, input NotifyInput) (*NotifyResult, err
 
 // lastRunLogEntry returns the last parseable run-summary line, or nil when the
 // log has no entries.
-func lastRunLogEntry(data []byte) (*wikitypes.DigestRunEntry, error) {
-	var last *wikitypes.DigestRunEntry
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+func lastRunLogEntry(data []byte) *wikitypes.DigestRunEntry {
+	remaining := bytes.TrimRight(data, "\n")
+	for len(remaining) > 0 {
+		i := bytes.LastIndexByte(remaining, '\n')
+		line := bytes.TrimSpace(remaining[i+1:])
+		if len(line) > 0 {
+			var entry wikitypes.DigestRunEntry
+			if json.Unmarshal(line, &entry) == nil {
+				return &entry
+			}
 		}
-		var entry wikitypes.DigestRunEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
+		if i < 0 {
+			break
 		}
-		entryCopy := entry
-		last = &entryCopy
+		remaining = remaining[:i]
 	}
 
-	return last, nil
+	return nil
 }
 
 // buildDigestNotify renders the subject and HTML body. It is pure so it can be
@@ -156,7 +153,7 @@ func buildDigestNotify(cfg *Config, entry *wikitypes.DigestRunEntry, failed bool
 		fmt.Fprintf(&b, "<p><b>Error:</b> %s</p>", html.EscapeString(entry.Error))
 	}
 	if base := strings.TrimRight(cfg.R2.PublicBaseURL, "/"); base != "" {
-		fmt.Fprintf(&b, "<p><a href=\"%s/%s\">run log</a></p>", html.EscapeString(base), digestRunLogKey)
+		fmt.Fprintf(&b, "<p><a href=\"%s/%s\">run log</a></p>", html.EscapeString(base), wikiwrite.DigestRunLogKey)
 	}
 
 	return subject, b.String()
