@@ -3,6 +3,7 @@ package wikiingest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -197,6 +198,16 @@ func prepareInboxEntry(
 		slog.Info("wiki digest: skip already digested or duplicate URL", "url", entry.URL)
 
 		return []pendingURLWrite{{URL: entry.URL, Kind: pendingSkip}}
+	}
+	if count := deps.failures.authFailures(entry.URL); count >= maxAuthFailures {
+		slog.Warn("wiki digest: auth retry budget exhausted", "url", entry.URL, "count", count)
+
+		return []pendingURLWrite{newPendingFetchFailure(
+			entry.URL,
+			wikitypes.FailureExtract,
+			wikitypes.FailureReasonRetryExhausted,
+			fmt.Sprintf("retry limit reached: %d prior auth failures", count),
+		)}
 	}
 
 	urlCtx, cancel := context.WithTimeout(ctx, inboxCfg.perURLTimeout)

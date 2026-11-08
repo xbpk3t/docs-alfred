@@ -15,6 +15,7 @@ import (
 	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/configutil"
+	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
 // --- shouldWriteClassifyFailure ---
@@ -764,6 +765,36 @@ func TestPrepareInboxEntryClassifyRetryError(t *testing.T) {
 	assert.Nil(t, result.Item)
 }
 
+func TestWritePendingRetryExhaustedFlushes(t *testing.T) {
+	deps := newFakeDeps()
+	result := writePendingURL(deps.dependencies(), t.TempDir(), &pendingURLWrite{
+		URL:           "https://example.com/a",
+		Kind:          pendingFetchFailure,
+		FailureType:   wikitypes.FailureExtract,
+		FailureReason: wikitypes.FailureReasonRetryExhausted,
+		ExtraInfo:     "retry limit reached",
+	}, false)
+	assert.Equal(t, StatusFailureWritten, result.Status)
+	assert.True(t, result.Handled)
+	assert.False(t, result.Retryable)
+	assert.Equal(t, wikitypes.FailureReasonRetryExhausted, result.FailureReason)
+}
+
+func TestPrepareInboxEntryAuthRetryExhausted(t *testing.T) {
+	deps := newFakeDeps()
+	d := deps.dependencies()
+	d.failures = &failureHistory{authCounts: map[string]int{
+		urlutil.NormalizeForDedup("https://example.com/a"): maxAuthFailures,
+	}}
+
+	entry := wikiwrite.InboxEntry{URL: "https://example.com/a", LineIndex: 0}
+	inboxCfg := inboxConfig{concurrency: 1, perURLTimeout: 60 * time.Second}
+	result := onlyPending(t, prepareInboxEntry(context.Background(), d, entry, inboxCfg))
+	assert.Equal(t, pendingFetchFailure, result.Kind)
+	assert.Equal(t, wikitypes.FailureReasonRetryExhausted, result.FailureReason)
+	assert.Contains(t, result.ExtraInfo, "prior auth failures")
+}
+
 // --- processAddURL ---
 
 func TestProcessAddURLFetchFailure(t *testing.T) {
@@ -1132,4 +1163,15 @@ func TestFailureReasonForFetchResultNotFound(t *testing.T) {
 		FailureKind: wikitypes.FailureResolve,
 	}))
 	assert.False(t, failureRetryable(wikitypes.FailureReasonNotFound))
+}
+
+func TestFailureRetryableTerminalAndAuthReasons(t *testing.T) {
+	assert.False(t, failureRetryable(wikitypes.FailureReasonPaidContent))
+	assert.False(t, failureRetryable(wikitypes.FailureReasonEmpty))
+	assert.True(t, failureRetryable(wikitypes.FailureReasonBrowserError),
+		"transient browser errors stay retryable")
+	assert.False(t, failureRetryable(wikitypes.FailureReasonBrowserUnreachable),
+		"DNS/TLS/connection-refused pages are terminal")
+	assert.True(t, failureRetryable(wikitypes.FailureReasonAuthRequired),
+		"non-Bilibili auth failures can recover after a site login")
 }

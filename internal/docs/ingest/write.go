@@ -407,7 +407,8 @@ func failureRetryable(reason wikitypes.FailureReason) bool {
 		wikitypes.FailureReasonHTTPError,
 		wikitypes.FailureReasonPartialExtract,
 		wikitypes.FailureReasonAI,
-		wikitypes.FailureReasonCatalog:
+		wikitypes.FailureReasonCatalog,
+		wikitypes.FailureReasonAuthRequired:
 		return true
 	default:
 		return false

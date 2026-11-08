@@ -45,6 +45,18 @@ const (
 	// FailureReasonCatalog means the topic catalog was unavailable before the
 	// AI was called. It is transient and must not be reported as an AI outage.
 	FailureReasonCatalog FailureReason = "catalog_unavailable"
+	// FailureReasonPaidContent is a video/page that requires payment/charging
+	// before its content can be read. Retrying cannot change the outcome.
+	FailureReasonPaidContent FailureReason = "paid_content"
+	// FailureReasonAuthRequired means the site session is missing or lacks
+	// permission. It is environment-dependent and stays retryable.
+	FailureReasonAuthRequired FailureReason = "auth_required"
+	// FailureReasonBrowserUnreachable is a terminal browser error page
+	// (DNS/TLS/connection refused); retrying the same URL cannot recover it.
+	FailureReasonBrowserUnreachable FailureReason = "browser_unreachable"
+	// FailureReasonRetryExhausted is the terminal outcome after repeated
+	// environment failures (for example auth_required) exhausted the budget.
+	FailureReasonRetryExhausted FailureReason = "retry_exhausted"
 )
 
 // DigestRunEntry is one line in logs/digest-runs.jsonl: a run-level summary

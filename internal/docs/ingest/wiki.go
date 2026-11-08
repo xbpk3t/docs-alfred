@@ -36,6 +36,9 @@ type dependencies struct {
 	// history holds previously digested URLs (from digest-success.jsonl).
 	// digest skips URLs found here; add skips them too unless --force re-digests.
 	history *digestHistory
+	// failures counts prior auth_required outcomes so an expired login cannot
+	// keep the same inbox line forever. Nil for wiki add.
+	failures *failureHistory
 	// isAggr mirrors wiki.isAggr: digest entries land in one <date>-summary.md
 	// at the wiki root instead of per-topic summary.md files.
 	isAggr bool
@@ -165,6 +168,12 @@ func RunDigest(ctx context.Context, input DigestInput) (result *Result, retErr e
 	entries, err := deps.inbox.ParseInbox(inboxPath)
 	if err != nil {
 		return nil, fmt.Errorf("parse inbox: %w", err)
+	}
+	// The auth-retry budget only applies to inbox lines, so an empty inbox
+	// skips the failure logs entirely. A nil history is safe: authFailures
+	// reports zero.
+	if deps.failures == nil && len(entries) > 0 {
+		deps.failures = loadFailureHistory(wikiRoot, digestStoreOrNil(deps))
 	}
 
 	result = &Result{Name: "wiki digest", WikiRoot: wikiRoot, DryRun: input.DryRun}
