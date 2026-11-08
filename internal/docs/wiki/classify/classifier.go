@@ -15,9 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/avast/retry-go/v4"
 	"github.com/samber/lo"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
 	"github.com/xbpk3t/docs-alfred/pkg/ai"
@@ -694,8 +692,9 @@ func promptForUnit(unit types.UnitType) string {
 	}
 }
 
-// classifyOnly runs the AI classification call with retry.
-// Retries on AI call failure, JSON parse failure, or validation failure.
+// classifyOnly runs the AI classification call. AI/network failures are
+// retried only inside ChatContext; malformed JSON/validation failures get a
+// bounded re-ask here without multiplying the transport retries.
 func (c *Classifier) classifyOnly(
 	ctx context.Context,
 	urlStr string,
@@ -720,34 +719,36 @@ func (c *Classifier) classifyOnly(
 		return nil, fmt.Errorf("render classify prompt: %w", err)
 	}
 
-	var result *aiClassification
-	err = retry.Do(
-		func() error {
-			r, e := c.chat(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: promptText}})
-			if e != nil {
-				return fmt.Errorf("AI classify call: %w", e)
-			}
+	// c.chat is ChatContext, which already performs its own bounded retries
+	// with jitter/Retry-After. Do not retry AI/network failures again here:
+	// that multiplied one slow call into 9 attempts. Only malformed model
+	// output is re-asked, and those retries stay bounded.
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		r, err := c.chat(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: promptText}})
+		if err != nil {
+			return nil, fmt.Errorf("AI classify call: %w", err)
+		}
 
-			parsed, e := parseClassifyOnlyResult(r)
-			if e != nil {
-				return fmt.Errorf("parse classify JSON: %w", e)
-			}
+		parsed, err := parseClassifyOnlyResult(r)
+		if err != nil {
+			lastErr = fmt.Errorf("parse classify JSON: %w", err)
 
-			if e := validateClassifyResult(parsed); e != nil {
-				return fmt.Errorf("validate classify result: %w", e)
-			}
+			continue
+		}
+		if err := validateClassifyResult(parsed); err != nil {
+			lastErr = fmt.Errorf("validate classify result: %w", err)
 
-			result = parsed
-			return nil
-		},
-		retry.Attempts(3),
-		retry.Delay(1*time.Second),
-		retry.DelayType(retry.BackOffDelay),
-	)
-	if err != nil {
-		return nil, err
+			continue
+		}
+
+		return parsed, nil
 	}
-	return result, nil
+
+	return nil, lastErr
 }
 
 type verifyPromptData struct {
@@ -841,29 +842,18 @@ func (c *Classifier) runVerify(
 		return "", fmt.Errorf("render verify prompt: %w", err)
 	}
 
-	var out string
-	err = retry.Do(
-		func() error {
-			r, e := c.chat(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: promptText}})
-			if e != nil {
-				return fmt.Errorf("AI verify call: %w", e)
-			}
-			parsed := parseVerifyOutput(r)
-			if parsed == "" {
-				return errors.New("empty verify output")
-			}
-			out = parsed
-			return nil
-		},
-		retry.Attempts(2),
-		retry.Delay(500*time.Millisecond),
-		retry.DelayType(retry.BackOffDelay),
-		retry.Context(ctx),
-	)
+	// c.chat already retries transient AI/network failures; the verify pass is
+	// best-effort, so one call (plus ChatContext's bounded retries) is enough.
+	r, err := c.chat(ctx, c.AIConfig, []ai.Message{{Role: "user", Content: promptText}})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("AI verify call: %w", err)
 	}
-	return out, nil
+	parsed := parseVerifyOutput(r)
+	if parsed == "" {
+		return "", errors.New("empty verify output")
+	}
+
+	return parsed, nil
 }
 
 // parseVerifyOutput accepts plain markdown or a thin JSON wrapper {"verify":"..."}.
