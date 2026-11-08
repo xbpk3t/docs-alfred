@@ -28,20 +28,33 @@ const noneVal = "none"
 
 // Fetcher handles fetching content from various sources.
 type Fetcher struct {
-	driver       ContentDriver
-	fallback     ContentDriver
-	GHClient     *resty.Client
-	GHBaseURL    string
-	MaxBodySize  int
-	MediaEnabled bool
+	driver        ContentDriver
+	mediaDriver   ContentDriver
+	fallback      ContentDriver
+	mediaFallback ContentDriver
+	GHClient      *resty.Client
+	GHBaseURL     string
+	MaxBodySize   int
+	MediaEnabled  bool
 }
 
 // FetcherOption customizes content fetching behavior.
 type FetcherOption func(*Fetcher)
 
-// WithDriver sets the content driver for the fetcher.
+// WithDriver sets the text/default content driver for the fetcher.
 func WithDriver(driver ContentDriver) FetcherOption {
 	return func(f *Fetcher) { f.driver = driver }
+}
+
+// WithMediaDriver overrides the driver used for video/audio URLs.
+func WithMediaDriver(driver ContentDriver) FetcherOption {
+	return func(f *Fetcher) { f.mediaDriver = driver }
+}
+
+// WithMediaFallbackDriver sets a media-only fallback (for example opencli
+// Bilibili summary when the yt-dlp media driver has no transcript).
+func WithMediaFallbackDriver(driver ContentDriver) FetcherOption {
+	return func(f *Fetcher) { f.mediaFallback = driver }
 }
 
 // WithFallbackDriver sets a secondary driver. Generic (non-adapter) URLs try
@@ -73,6 +86,9 @@ func NewFetcher(opts ...FetcherOption) *Fetcher {
 			MaxBodySize:  f.MaxBodySize,
 			MediaEnabled: f.MediaEnabled,
 		})
+	}
+	if f.mediaDriver == nil {
+		f.mediaDriver = f.driver
 	}
 	if f.MaxBodySize <= 0 {
 		f.MaxBodySize = 5000
@@ -174,33 +190,76 @@ func (f *Fetcher) fetchFromDrivers(ctx context.Context, rawURL, contentType stri
 	// replace a retryable extraction failure with a permanent one — never call
 	// it for video.
 	canFallback := f.fallback != nil && contentType != types.ContentVideo
-	if canFallback && !needsAdapter {
-		// A thin landing/navigation page passes the 120-rune gate but would
-		// suppress the primary renderer. Require enough body to look like an
-		// article before accepting the generic fallback.
-		if fast := f.fetchUsable(ctx, f.fallback, rawURL, contentType); fast != nil &&
-			utf8.RuneCountInString(fast.Body) >= minFallbackBodyRunes {
-			slog.Debug("fallback driver served generic url", "url", rawURL, "driver", f.fallback.Name())
-
-			return fast
-		}
+	if fast := f.fetchGenericFallback(ctx, rawURL, contentType, needsAdapter, canFallback); fast != nil {
+		return fast
 	}
 
-	result := f.driver.FetchContent(ctx, rawURL, contentType)
+	isMedia := contentType == types.ContentVideo || contentType == types.ContentAudio
+	driver := f.driver
+	if isMedia && f.mediaDriver != nil {
+		driver = f.mediaDriver
+	}
+
 	// Single quality gate: a driver can return a 200 anti-bot shell without an
 	// error; that is still a failed primary extraction and deserves the
 	// fallback.
-	gated := f.ensureFetchedQuality(result, contentType, rawURL)
-	if canFallback && needsAdapter && gated.Error != "" {
-		if rescue := f.fetchUsable(ctx, f.fallback, rawURL, contentType); rescue != nil {
-			slog.Info("primary driver failed, fallback served url",
-				"url", rawURL, "primary", f.driver.Name(), "fallback", f.fallback.Name())
-
-			return rescue
-		}
+	gated := f.ensureFetchedQuality(driver.FetchContent(ctx, rawURL, contentType), contentType, rawURL)
+	if rescue := f.fetchRescue(ctx, rawURL, contentType, needsAdapter, canFallback, isMedia, driver, gated); rescue != nil {
+		return rescue
 	}
 
 	return gated
+}
+
+// fetchGenericFallback lets the static HTTP driver serve non-adapter pages
+// before the primary renderer runs. A thin landing/navigation page passes the
+// 120-rune gate but would suppress the primary renderer, so require enough
+// body to look like an article.
+func (f *Fetcher) fetchGenericFallback(
+	ctx context.Context, rawURL, contentType string, needsAdapter, canFallback bool,
+) *types.ContentFetchResult {
+	if !canFallback || needsAdapter {
+		return nil
+	}
+	fast := f.fetchUsable(ctx, f.fallback, rawURL, contentType)
+	if fast == nil || utf8.RuneCountInString(fast.Body) < minFallbackBodyRunes {
+		return nil
+	}
+	slog.Debug("fallback driver served generic url", "url", rawURL, "driver", f.fallback.Name())
+
+	return fast
+}
+
+// fetchRescue tries the applicable fallback after the primary driver failed:
+// the static HTTP driver for adapter sites, or the media driver for a Bilibili
+// video whose subtitle track came up empty.
+func (f *Fetcher) fetchRescue(
+	ctx context.Context, rawURL, contentType string,
+	needsAdapter, canFallback, isMedia bool,
+	driver ContentDriver, gated *types.ContentFetchResult,
+) *types.ContentFetchResult {
+	var fallback ContentDriver
+	switch {
+	case canFallback && needsAdapter && gated.Error != "":
+		fallback = f.fallback
+	// Bilibili's official AI summary lives in opencli, not yt-dlp. Use the
+	// media-only fallback when the selected yt-dlp path found no transcript.
+	case isMedia && driver == f.mediaDriver && f.mediaFallback != nil &&
+		gated.Error != "" && gated.FailureReason == types.FailureReasonTooShort &&
+		isBilibiliVideoURL(rawURL):
+		fallback = f.mediaFallback
+	}
+	if fallback == nil {
+		return nil
+	}
+	rescue := f.fetchUsable(ctx, fallback, rawURL, contentType)
+	if rescue == nil {
+		return nil
+	}
+	slog.Info("fallback driver served url",
+		"url", rawURL, "primary", driver.Name(), "fallback", fallback.Name())
+
+	return rescue
 }
 
 // minFallbackBodyRunes is the minimum body length for the generic HTTP
@@ -675,8 +734,8 @@ func shellSignalReason(titleLower, bodyLower string, runes int) (string, types.F
 		if reason := zhihuVerificationReason(bodyLower); reason != "" {
 			return reason, types.FailureReasonAntiBot
 		}
-		if reason := browserErrorReason(bodyLower); reason != "" {
-			return reason, types.FailureReasonBrowserError
+		if reason, failureReason := browserErrorReason(bodyLower); reason != "" {
+			return reason, failureReason
 		}
 	}
 	if isJSONAPIError(bodyLower) {
@@ -706,7 +765,7 @@ func shellTitleReason(titleLower string) (string, types.FailureReason) {
 	case "loading…", "loading...":
 		return "javascript shell: page still loading", types.FailureReasonJSShell
 	case "untitled":
-		return "empty extraction: untitled page", types.FailureReasonPartialExtract
+		return "empty extraction: untitled page", types.FailureReasonEmpty
 	}
 
 	return "", ""
@@ -722,14 +781,19 @@ func zhihuVerificationReason(bodyLower string) string {
 	return ""
 }
 
-func browserErrorReason(bodyLower string) string {
-	for _, pattern := range browserErrorPatterns {
+func browserErrorReason(bodyLower string) (string, types.FailureReason) {
+	for _, pattern := range browserUnreachablePatterns {
 		if strings.Contains(bodyLower, pattern) {
-			return "browser error page: " + pattern
+			return "browser error page: " + pattern, types.FailureReasonBrowserUnreachable
+		}
+	}
+	for _, pattern := range browserTransientPatterns {
+		if strings.Contains(bodyLower, pattern) {
+			return "browser error page: " + pattern, types.FailureReasonBrowserError
 		}
 	}
 
-	return ""
+	return "", ""
 }
 
 func jsShellReason(bodyLower string, runes int) string {
@@ -791,7 +855,7 @@ var errorShellPatterns = []string{
 
 var errorShellMatcher = ahocorasick.NewStringMatcher(errorShellPatterns)
 
-var browserErrorPatterns = []string{
+var browserUnreachablePatterns = []string{
 	"err_connection_closed",
 	"err_connection_reset",
 	"err_name_not_resolved",
@@ -799,6 +863,9 @@ var browserErrorPatterns = []string{
 	"err_ssl",
 	"this site can't be reached",
 	"this site can’t be reached",
+}
+
+var browserTransientPatterns = []string{
 	"unexpectedly closed the connection",
 	"took too long to respond",
 }

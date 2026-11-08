@@ -25,6 +25,13 @@ func TestMarkdownFallbackBodyConvertsHTML(t *testing.T) {
 	assert.NotContains(t, body, "<h1>", "fallback body should not be raw HTML")
 }
 
+func TestShellTitleUntitledIsPermanent(t *testing.T) {
+	reason, failureReason := shellTitleReason("untitled")
+	assert.Contains(t, reason, "untitled")
+	assert.Equal(t, types.FailureReasonEmpty, failureReason,
+		"an untitled extraction is a parked/empty page, not a retryable partial extract")
+}
+
 func TestHTTPDriverRejectsLowQualityContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`<html><head><title>X</title></head><body>This page requires JavaScript.</body></html>`))
@@ -826,7 +833,7 @@ func TestAssessContentQualityShellSignals(t *testing.T) {
 			title:      "vutr.substack.com",
 			body:       "This site can’t be reached. ERR_CONNECTION_CLOSED",
 			url:        "https://vutr.substack.com/p/1",
-			wantReason: types.FailureReasonBrowserError,
+			wantReason: types.FailureReasonBrowserUnreachable,
 		},
 		{
 			name:       "gerrit query shell",

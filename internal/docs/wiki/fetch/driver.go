@@ -37,10 +37,8 @@ var (
 	_ ContentDriver    = (*openCLIDriver)(nil)
 	_ ContentDriver    = (*httpDriver)(nil)
 	_ ContentDriver    = (*ytdlpDriver)(nil)
-	_ ContentDriver    = (*hybridDriver)(nil)
 	_ HTTPFallbackUser = (*openCLIDriver)(nil)
 	_ HTTPFallbackUser = (*ytdlpDriver)(nil)
-	_ HTTPFallbackUser = (*hybridDriver)(nil)
 )
 
 // NewDriver creates a ContentDriver by name.
@@ -52,8 +50,6 @@ func NewDriver(name string, opts DriverOptions) (ContentDriver, error) {
 		return newHTTPDriver(opts), nil
 	case "ytdlp":
 		return newYTDLPDriver(opts), nil
-	case "hybrid":
-		return newHybridDriver(opts), nil
 	default:
 		return nil, fmt.Errorf("unknown driver: %s", name)
 	}

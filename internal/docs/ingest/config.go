@@ -30,8 +30,8 @@ const (
 // Config holds wiki workflow configuration shared by wiki subcommands.
 type Config struct {
 	R2        R2Config        `yaml:"r2,omitempty"`
-	AI        AIConfig        `yaml:"ai"`
 	Compact   CompactConfig   `yaml:"compact"`
+	AI        AIConfig        `yaml:"ai"`
 	Wiki      WikiConfig      `yaml:"wiki"`
 	TrnsIndex TrnsIndexConfig `yaml:"trnsIndex,omitempty"`
 }
@@ -147,8 +147,9 @@ type CompactLinearConfig struct {
 
 // WikiConfig contains wiki-specific workflow settings.
 type WikiConfig struct {
+	Media               wikiMediaConfig `yaml:"media"`
 	WikiRoot            string          `default:"wiki"    validate:"required" yaml:"wikiRoot"`
-	Driver              string          `default:"opencli"                     yaml:"driver"`
+	Text                wikiTextConfig  `yaml:"text"`
 	GHTopicsURL         string          `default:"https://docs.lucc.dev/gh.yml" yaml:"ghTopicsURL"`
 	YTDLPCookiesBrowser string          `default:"chrome" yaml:"ytdlpCookiesBrowser"`
 	YTDLPSubtitleLangs  []string        `yaml:"ytdlpSubtitleLangs"`
@@ -156,13 +157,18 @@ type WikiConfig struct {
 	BrowserConcurrency  int             `default:"2" validate:"gte:0" yaml:"browserConcurrency"`
 	PerURLTimeout       int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
 	MaxContentSize      int             `default:"20000"                       yaml:"maxContentSize"`
-	Media               wikiMediaConfig `yaml:"media"`
 	IsAggr              bool            `default:"false" yaml:"isAggr"`
+}
+
+// wikiTextConfig selects the driver for non-media URLs.
+type wikiTextConfig struct {
+	Driver string `default:"opencli" yaml:"driver" validate:"required|in:opencli,http-readability"`
 }
 
 // wikiMediaConfig controls media content extraction.
 type wikiMediaConfig struct {
-	Enabled bool `default:"true" yaml:"enabled"`
+	Driver  string `default:"opencli" yaml:"driver" validate:"required|in:opencli,ytdlp"`
+	Enabled bool   `default:"true" yaml:"enabled"`
 }
 
 // AIConfig contains AI model settings.
@@ -177,8 +183,11 @@ type AIConfig struct {
 	Effort string `yaml:"effort"`
 	// MaxRPM caps AI requests per minute process-wide (client-side shaping for
 	// rate-limited gateways; set below the channel's real limit). 0 = unlimited.
-	MaxRPM      int     `default:"0"                       yaml:"maxRPM"`
-	Temperature float64 `default:"0.3"                     yaml:"temperature"`
+	MaxRPM int `default:"0" yaml:"maxRPM"`
+	// Timeout is the per-attempt AI call deadline in seconds. 0 uses the
+	// pkg/ai default (60s); long wiki classification prompts need more.
+	Timeout     int     `default:"180" validate:"gte:0" yaml:"timeout"`
+	Temperature float64 `default:"0.3" yaml:"temperature"`
 }
 
 // LoadConfig loads wiki config from disk, preserving defaults for omitted fields.

@@ -377,14 +377,10 @@ func requireFile(path, label string) error {
 	return nil
 }
 
-// newWikiFetcher builds the fetcher and its driver stack: the configured
-// driver, an opencli fallback when the configured name is unknown, and the
-// static-HTTP fallback that keeps generic pages off the shared browser tab.
+// newWikiFetcher builds the fetcher with an explicit text driver and media
+// driver. Text keeps the static-HTTP fallback; media can switch between
+// opencli and yt-dlp without affecting text adapters.
 func newWikiFetcher(cfg *Config) fetcher {
-	driverName := cfg.Wiki.Driver
-	if driverName == "" {
-		driverName = "opencli"
-	}
 	// A browser slot is held per in-flight fetch, so more slots than workers
 	// is dead config; clamp it so a mistyped value cannot stampede opencli.
 	browserConcurrency := cfg.Wiki.BrowserConcurrency
@@ -400,20 +396,61 @@ func newWikiFetcher(cfg *Config) fetcher {
 		YTDLPCookiesBrowser: cfg.Wiki.YTDLPCookiesBrowser,
 		YTDLPSubtitleLangs:  cfg.Wiki.YTDLPSubtitleLangs,
 	}
-	driver, err := wikifetch.NewDriver(driverName, driverOpts)
-	if err != nil {
-		slog.Warn("Unknown driver, falling back to opencli", "driver", driverName, "error", err)
-		driver, _ = wikifetch.NewDriver("opencli", driverOpts)
+	textDriver := newDriverOrOpenCLI(cfg.Wiki.Text.Driver, driverOpts, "text")
+	mediaDriver := newDriverOrOpenCLI(cfg.Wiki.Media.Driver, driverOpts, "media")
+	// Each opencli driver owns a browser-concurrency semaphore; share one
+	// instance so the budget stays global instead of doubling per role.
+	if mediaDriver.Name() == "opencli" && textDriver.Name() == "opencli" {
+		mediaDriver = textDriver
 	}
+
 	fetcherOpts := []wikifetch.FetcherOption{
-		wikifetch.WithDriver(driver),
+		wikifetch.WithDriver(textDriver),
+		wikifetch.WithMediaDriver(mediaDriver),
 		wikifetch.WithMediaEnabled(cfg.Wiki.Media.Enabled),
 	}
-	if wikifetch.UsesHTTPFallback(driver) {
+	if wikifetch.UsesHTTPFallback(textDriver) || wikifetch.UsesHTTPFallback(mediaDriver) {
 		fetcherOpts = append(fetcherOpts, httpFallbackOptions(driverOpts)...)
+	}
+	// Bilibili's official AI summary is an opencli feature. When yt-dlp owns
+	// media, keep an opencli media-only fallback for the no-subtitle case.
+	if mediaDriver.Name() == "ytdlp" {
+		fetcherOpts = append(fetcherOpts, mediaFallbackOptions(textDriver, driverOpts)...)
 	}
 
 	return wikifetch.NewFetcher(fetcherOpts...)
+}
+
+func newDriverOrOpenCLI(name string, opts wikifetch.DriverOptions, label string) wikifetch.ContentDriver {
+	if name == "" {
+		name = "opencli"
+	}
+	driver, err := wikifetch.NewDriver(name, opts)
+	if err != nil {
+		slog.Warn("Unknown driver, falling back to opencli", "role", label, "driver", name, "error", err)
+
+		driver, _ = wikifetch.NewDriver("opencli", opts)
+	}
+
+	return driver
+}
+
+// mediaFallbackOptions returns the opencli media fallback for the Bilibili
+// no-subtitle case, reusing the text driver when it is already opencli so the
+// browser-concurrency budget stays shared.
+func mediaFallbackOptions(textDriver wikifetch.ContentDriver, opts wikifetch.DriverOptions) []wikifetch.FetcherOption {
+	fallback := textDriver
+	if fallback.Name() != "opencli" {
+		var err error
+		fallback, err = wikifetch.NewDriver("opencli", opts)
+		if err != nil {
+			slog.Warn("media fallback driver unavailable", "error", err)
+
+			return nil
+		}
+	}
+
+	return []wikifetch.FetcherOption{wikifetch.WithMediaFallbackDriver(fallback)}
 }
 
 // httpFallbackOptions returns the HTTP fallback fetcher option, or nil when the
@@ -497,6 +534,9 @@ func newAIConfig(cfg *Config) *ai.ClientConfig {
 	ac.Model = cfg.AI.Model
 	if cfg.AI.Effort != "" {
 		ac.Effort = cfg.AI.Effort
+	}
+	if cfg.AI.Timeout > 0 {
+		ac.Timeout = time.Duration(cfg.AI.Timeout) * time.Second
 	}
 	ac.Temperature = cfg.AI.Temperature
 	return ac

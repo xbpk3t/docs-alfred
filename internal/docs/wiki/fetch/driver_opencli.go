@@ -106,20 +106,36 @@ func openCLIFailureReason(stdout, stderr []byte, err error) types.FailureReason 
 	case 2:
 		return types.FailureReasonNotFound
 	case 77:
-		return types.FailureReasonAntiBot
+		return types.FailureReasonAuthRequired
 	case 69, 75:
 		return types.FailureReasonHTTPError
 	}
 
 	// Text fallback for older builds or errors that bypass the envelope.
 	text := strings.ToLower(string(stdout) + "\n" + string(stderr) + "\n" + err.Error())
+	if reason, ok := deterministicAPIReason(text); ok {
+		return reason
+	}
 	switch {
 	case strings.Contains(text, "empty_result"):
 		return types.FailureReasonEmpty
 	case strings.Contains(text, "auth_required") || strings.Contains(text, "noperm"):
-		return types.FailureReasonAntiBot
+		return types.FailureReasonAuthRequired
 	default:
 		return types.FailureReasonHTTPError
+	}
+}
+
+// deterministicAPIReason maps provider codes whose outcome cannot improve on
+// retry. Bilibili 62002 is a removed/not-visible video; 62012 is paywalled.
+func deterministicAPIReason(lower string) (types.FailureReason, bool) {
+	switch {
+	case strings.Contains(lower, "62002"), strings.Contains(lower, "稿件不可见"):
+		return types.FailureReasonNotFound, true
+	case strings.Contains(lower, "62012"), strings.Contains(lower, "需要充电"), strings.Contains(lower, "充电专属"):
+		return types.FailureReasonPaidContent, true
+	default:
+		return "", false
 	}
 }
 
@@ -127,6 +143,9 @@ func openCLIFailureReason(stdout, stderr []byte, err error) types.FailureReason 
 // message fallback for codes the adapter embeds in prose.
 func openCLIEnvelopeReason(env openCLIErrorEnvelope) types.FailureReason {
 	message := strings.ToLower(env.Error.Message)
+	if reason, ok := deterministicAPIReason(message); ok {
+		return reason
+	}
 	if strings.Contains(message, "404") || strings.Contains(message, "410") ||
 		strings.Contains(message, "not found") {
 		return types.FailureReasonNotFound
@@ -137,7 +156,7 @@ func openCLIEnvelopeReason(env openCLIErrorEnvelope) types.FailureReason {
 	case "ARGUMENT", "USAGE_ERROR", "USAGE":
 		return types.FailureReasonNotFound
 	case "AUTH_REQUIRED", "NOPERM", "PERMISSION":
-		return types.FailureReasonAntiBot
+		return types.FailureReasonAuthRequired
 	case "BROWSER_CONNECT":
 		return types.FailureReasonBrowserError
 	default:
@@ -328,7 +347,9 @@ func (d *openCLIDriver) fetchTwitterThread(
 		return result
 	}
 	if len(rows) == 0 {
-		return extractFailureWithReason(rawURL, "twitter thread returned no rows", types.FailureReasonPartialExtract)
+		// opencli returns ok:true with an empty array for a tweet that no
+		// longer exists (deleted/protected); retrying cannot recover it.
+		return extractFailureWithReason(rawURL, "twitter thread returned no rows", types.FailureReasonNotFound)
 	}
 
 	root := twitterRootRow(rows, rawURL)
@@ -802,10 +823,23 @@ func (d *openCLIDriver) appendBilibiliSummary(
 			return nil
 		}
 
+		reason := summaryResult.FailureReason
+		switch reason {
+		case types.FailureReasonAuthRequired:
+			// Bilibili's summary auth failure means the video is paid/charging
+			// for this account; retrying without payment cannot recover it.
+			reason = types.FailureReasonPaidContent
+		case types.FailureReasonPaidContent, types.FailureReasonNotFound:
+			// Keep deterministic causes visible.
+		default:
+			// A generic summary API failure remains a retryable partial extract.
+			reason = types.FailureReasonPartialExtract
+		}
+
 		return extractFailureWithReason(
 			rawURL,
 			"bilibili summary unavailable: "+summaryResult.Error,
-			types.FailureReasonPartialExtract,
+			reason,
 		)
 	}
 	summary := strings.TrimSpace(summaryResult.Body)

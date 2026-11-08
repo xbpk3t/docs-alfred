@@ -26,8 +26,11 @@ func TestLoadConfigPreservesDefaultsWithPartialFile(t *testing.T) {
 	require.Equal(t, 2, cfg.Wiki.Concurrency)
 	require.Equal(t, 2, cfg.Wiki.BrowserConcurrency, "browser concurrency defaults below wiki concurrency")
 	require.Equal(t, "wiki", cfg.Wiki.WikiRoot)
+	require.Equal(t, "opencli", cfg.Wiki.Text.Driver)
 	require.True(t, cfg.Wiki.Media.Enabled)
+	require.Equal(t, "opencli", cfg.Wiki.Media.Driver)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
+	require.Equal(t, 180, cfg.AI.Timeout)
 	require.Equal(t, "wiki compact", cfg.Compact.Title)
 	require.Equal(t, 1, cfg.Compact.Schedule, "schedule defaults to weekly")
 	require.Equal(t, "LUC", cfg.Compact.Send.Linear.TeamKey)
@@ -53,6 +56,35 @@ func TestLoadConfigMaxRPM(t *testing.T) {
 	cfg, err = LoadConfig("", "")
 	require.NoError(t, err)
 	require.Zero(t, cfg.AI.MaxRPM, "unset maxRPM defaults to unlimited")
+}
+
+func TestLoadConfigTextAndMediaDrivers(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "wiki.yml")
+	require.NoError(t, os.WriteFile(configPath, []byte(`
+wiki:
+  text:
+    driver: http-readability
+  media:
+    driver: ytdlp
+`), 0o600))
+
+	cfg, err := LoadConfig(configPath, "")
+	require.NoError(t, err)
+	require.Equal(t, "http-readability", cfg.Wiki.Text.Driver)
+	require.Equal(t, "ytdlp", cfg.Wiki.Media.Driver)
+}
+
+func TestLoadConfigRejectsWrongDriverForContentType(t *testing.T) {
+	tests := []string{
+		"wiki:\n  text:\n    driver: ytdlp\n",
+		"wiki:\n  media:\n    driver: http-readability\n",
+	}
+	for _, content := range tests {
+		configPath := filepath.Join(t.TempDir(), "wiki.yml")
+		require.NoError(t, os.WriteFile(configPath, []byte(content), 0o600))
+		_, err := LoadConfig(configPath, "")
+		require.Error(t, err)
+	}
 }
 
 func TestLoadConfigCompactSendBlock(t *testing.T) {

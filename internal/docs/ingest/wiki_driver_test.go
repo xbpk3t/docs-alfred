@@ -27,31 +27,28 @@ case " $* " in
 esac
 `
 
-// TestNewWikiFetcherUsesConfiguredVideoDriver proves wiki.driver switches the
-// fetcher to the yt-dlp-backed drivers without touching the opencli default.
-func TestNewWikiFetcherUsesConfiguredVideoDriver(t *testing.T) {
-	for _, driverName := range []string{"ytdlp", "hybrid"} {
-		t.Run(driverName, func(t *testing.T) {
-			binDir := t.TempDir()
-			require.NoError(t, os.WriteFile(
-				filepath.Join(binDir, "yt-dlp"), []byte(fakeYTDLPScript), 0o700,
-			))
-			t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+// TestNewWikiFetcherUsesConfiguredMediaDriver proves wiki.media.driver
+// switches only the video/audio driver; text keeps its own driver.
+func TestNewWikiFetcherUsesConfiguredMediaDriver(t *testing.T) {
+	binDir := t.TempDir()
+	require.NoError(t, os.WriteFile(
+		filepath.Join(binDir, "yt-dlp"), []byte(fakeYTDLPScript), 0o700,
+	))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-			cfg := &Config{}
-			cfg.Wiki.Driver = driverName
-			cfg.Wiki.MaxContentSize = 20000
-			cfg.Wiki.Media.Enabled = true
+	cfg := &Config{}
+	cfg.Wiki.Text.Driver = "opencli"
+	cfg.Wiki.Media.Driver = "ytdlp"
+	cfg.Wiki.MaxContentSize = 20000
+	cfg.Wiki.Media.Enabled = true
 
-			fetcher := newWikiFetcher(cfg)
-			result := fetcher.FetchContent(
-				context.Background(), "https://www.youtube.com/watch?v=abc", "",
-			)
+	fetcher := newWikiFetcher(cfg)
+	result := fetcher.FetchContent(
+		context.Background(), "https://www.youtube.com/watch?v=abc", "",
+	)
 
-			require.NotNil(t, result)
-			require.Empty(t, result.Error)
-			assert.True(t, result.HasTranscript)
-			assert.Contains(t, result.Body, "## 字幕内容")
-		})
-	}
+	require.NotNil(t, result)
+	require.Empty(t, result.Error)
+	assert.True(t, result.HasTranscript)
+	assert.Contains(t, result.Body, "## 字幕内容")
 }

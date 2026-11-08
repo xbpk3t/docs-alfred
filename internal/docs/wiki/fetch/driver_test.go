@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"net/http"
@@ -397,6 +398,24 @@ exit 75
 	assert.Equal(t, "original", result.Body)
 }
 
+func TestAppendBilibiliSummaryAuthIsPaidContent(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	script := `#!/bin/sh
+printf '%s\n' '{"ok":false,"error":{"code":"AUTH_REQUIRED","message":"Bilibili conclusion API requires login or permission: 访问权限不足 (-403)","exitCode":77}}'
+exit 77
+`
+	require.NoError(t, os.WriteFile(opencliPath, []byte(script), 0o700))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := &types.ContentFetchResult{Title: "Test", Body: "original", SourceURL: "https://www.bilibili.com/video/BV1xx"}
+	failure := driver.appendBilibiliSummary(context.Background(), result, "https://www.bilibili.com/video/BV1xx")
+	require.NotNil(t, failure)
+	assert.Equal(t, types.FailureReasonPaidContent, failure.FailureReason)
+	assert.Equal(t, "original", result.Body)
+}
+
 func TestAppendBilibiliSummaryNoSummaryIsNotFailure(t *testing.T) {
 	binDir := t.TempDir()
 	opencliPath := filepath.Join(binDir, "opencli")
@@ -719,6 +738,50 @@ printf -- '- title: Test Article\n  status: success\n  saved: %s\n' "$out/articl
 	require.NotNil(t, result)
 	require.Empty(t, result.Error)
 	assert.Contains(t, result.Body, "WeChat Article")
+}
+
+func TestOpenCLIFailureReasonBilibiliDeterministic(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want types.FailureReason
+	}{
+		{
+			name: "deleted video 62002",
+			body: `{"ok":false,"error":{"code":"COMMAND_EXEC","message":"Bilibili view API failed: 稿件不可见 (62002)","exitCode":1}}`,
+			want: types.FailureReasonNotFound,
+		},
+		{
+			name: "paywalled video 62012",
+			body: `{"ok":false,"error":{"code":"COMMAND_EXEC","message":"Bilibili view API failed: 62012 (62012)","exitCode":1}}`,
+			want: types.FailureReasonPaidContent,
+		},
+		{
+			name: "auth required",
+			body: `{"ok":false,"error":{"code":"AUTH_REQUIRED","message":"login required","exitCode":77}}`,
+			want: types.FailureReasonAuthRequired,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, openCLIFailureReason([]byte(tt.body), nil, errors.New("exit 1")))
+		})
+	}
+}
+
+func TestFetchTwitterThreadEmptyRowsIsPermanent(t *testing.T) {
+	binDir := t.TempDir()
+	opencliPath := filepath.Join(binDir, "opencli")
+	require.NoError(t, os.WriteFile(opencliPath, []byte(`#!/bin/sh
+printf '%s\n' '{"ok":true,"data":[]}'
+`), 0o700))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	driver := newOpenCLIDriver(DriverOptions{MaxBodySize: 5000})
+	result := driver.FetchContent(context.Background(), "https://x.com/user/status/123", types.ContentText)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Error)
+	assert.Equal(t, types.FailureReasonNotFound, result.FailureReason)
 }
 
 func TestOpenCLIDriverWeixinVerificationIsRetryable(t *testing.T) {

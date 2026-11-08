@@ -17,6 +17,7 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/internal/rss/transcript"
 	"github.com/xbpk3t/docs-alfred/pkg/cmdutil"
+	"github.com/xbpk3t/docs-alfred/pkg/opencli"
 	"github.com/xbpk3t/docs-alfred/pkg/textutil"
 )
 
@@ -28,15 +29,6 @@ type ytdlpDriver struct {
 	subtitleLangs  []string
 	maxBodySize    int
 	mediaEnabled   bool
-}
-
-// hybridDriver routes video URLs to yt-dlp and everything else to opencli, so
-// a full digest can run with the yt-dlp video path while text adapters keep
-// working. Bilibili videos without subtitles fall back to opencli because its
-// official AI summary is not available through yt-dlp.
-type hybridDriver struct {
-	media ContentDriver
-	text  ContentDriver
 }
 
 func newYTDLPDriver(opts DriverOptions) *ytdlpDriver {
@@ -53,28 +45,17 @@ func newYTDLPDriver(opts DriverOptions) *ytdlpDriver {
 	}
 }
 
-func newHybridDriver(opts DriverOptions) *hybridDriver {
-	return &hybridDriver{
-		media: newYTDLPDriver(opts),
-		text:  newOpenCLIDriver(opts),
-	}
-}
-
 func (d *ytdlpDriver) Name() string { return "ytdlp" }
-
-func (d *hybridDriver) Name() string { return "hybrid" }
 
 // UsesHTTPFallback lets the ingest fetcher route non-video pages to the static
 // HTTP driver instead of failing them here.
 func (d *ytdlpDriver) UsesHTTPFallback() bool { return true }
 
-func (d *hybridDriver) UsesHTTPFallback() bool { return true }
-
 func (d *ytdlpDriver) FetchContent(ctx context.Context, urlStr, _ string) *types.ContentFetchResult {
-	if !isVideoURL(strings.ToLower(urlStr)) {
+	if !isVideoURL(urlStr) {
 		return extractFailureWithReason(
 			urlStr,
-			"ytdlp driver only handles video URLs; use hybrid or opencli",
+			"ytdlp driver only handles video URLs; use opencli for text",
 			types.FailureReasonEmpty,
 		)
 	}
@@ -83,24 +64,6 @@ func (d *ytdlpDriver) FetchContent(ctx context.Context, urlStr, _ string) *types
 	}
 
 	return d.fetchVideo(ctx, urlStr)
-}
-
-func (d *hybridDriver) FetchContent(ctx context.Context, urlStr, contentType string) *types.ContentFetchResult {
-	lowerURL := strings.ToLower(urlStr)
-	if !isVideoURL(lowerURL) {
-		return d.text.FetchContent(ctx, urlStr, contentType)
-	}
-
-	result := d.media.FetchContent(ctx, urlStr, contentType)
-	if result != nil && result.Error != "" &&
-		result.FailureReason == types.FailureReasonTooShort &&
-		isBilibiliVideoURL(lowerURL) {
-		slog.Info("hybrid: yt-dlp has no subtitle, using opencli bilibili summary", "url", urlStr)
-
-		return d.text.FetchContent(ctx, urlStr, contentType)
-	}
-
-	return result
 }
 
 func (d *ytdlpDriver) fetchVideo(ctx context.Context, rawURL string) *types.ContentFetchResult {
@@ -132,14 +95,6 @@ func (d *ytdlpDriver) fetchVideo(ctx context.Context, rawURL string) *types.Cont
 	}
 	if failure != nil {
 		return failure
-	}
-	body = strings.TrimSpace(body)
-	if body == "" {
-		return extractFailureWithReason(
-			rawURL,
-			"yt-dlp subtitle normalized to empty content",
-			types.FailureReasonPartialExtract,
-		)
 	}
 
 	title := strings.TrimSpace(meta.Title)
@@ -215,7 +170,7 @@ func (d *ytdlpDriver) downloadSubtitleFallback(
 	langs []string,
 ) (string, *types.ContentFetchResult) {
 	filters := append([]string(nil), langs...)
-	if isBilibiliVideoURL(strings.ToLower(rawURL)) {
+	if isBilibiliVideoURL(rawURL) {
 		filters = append(filters, "ai-zh")
 	}
 	filter := strings.Join(lo.Uniq(filters), ",")
@@ -317,7 +272,7 @@ func (d *ytdlpDriver) subtitleLangsFor(rawURL string, meta *ytdlpMetadata) []str
 		return d.subtitleLangs
 	}
 
-	if isBilibiliVideoURL(strings.ToLower(rawURL)) || (meta != nil && containsHan(meta.Title)) {
+	if isBilibiliVideoURL(rawURL) || (meta != nil && containsHan(meta.Title)) {
 		return []string{"zh-Hans", "zh-CN", "zh", "zh-Hant", "zh-TW", "zho", "chi", "en"}
 	}
 
@@ -411,9 +366,12 @@ func containsHan(s string) bool {
 	return false
 }
 
-func isBilibiliVideoURL(lowerURL string) bool {
-	return strings.Contains(lowerURL, "bilibili.com/video/") ||
-		strings.Contains(lowerURL, "b23.tv/")
+// isBilibiliVideoURL reads the site taxonomy from the opencli route table
+// instead of re-deriving it from URL substrings.
+func isBilibiliVideoURL(rawURL string) bool {
+	adapter, _ := opencli.CommandForURL(rawURL)
+
+	return adapter == opencli.AdapterBilibili
 }
 
 // firstSubtitleFile returns the first vtt/srt file yt-dlp wrote; the language
@@ -463,10 +421,5 @@ func ytdlpFailure(
 	}
 	slog.Warn("yt-dlp command failed", "url", rawURL, "stage", stage, "reason", reason, "error", detail)
 
-	return &types.ContentFetchResult{
-		SourceURL:     rawURL,
-		Error:         "yt-dlp " + stage + ": " + detail,
-		FailureKind:   types.FailureExtract,
-		FailureReason: reason,
-	}
+	return extractFailureWithReason(rawURL, "yt-dlp "+stage+": "+detail, reason)
 }

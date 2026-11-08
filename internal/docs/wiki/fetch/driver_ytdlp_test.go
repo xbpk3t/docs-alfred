@@ -43,14 +43,13 @@ case " $* " in
 esac
 `
 
-func TestNewDriverReturnsYTDLPAndHybrid(t *testing.T) {
+func TestNewDriverReturnsYTDLP(t *testing.T) {
 	ytdlp, err := NewDriver("ytdlp", DriverOptions{MaxBodySize: 2000, MediaEnabled: true})
 	require.NoError(t, err)
 	assert.Equal(t, "ytdlp", ytdlp.Name())
 
-	hybrid, err := NewDriver("hybrid", DriverOptions{MaxBodySize: 2000, MediaEnabled: true})
-	require.NoError(t, err)
-	assert.Equal(t, "hybrid", hybrid.Name())
+	_, err = NewDriver("hybrid", DriverOptions{MaxBodySize: 2000, MediaEnabled: true})
+	require.Error(t, err, "hybrid is no longer a driver; text/media are selected separately")
 }
 
 func TestYTDLPDriverSubtitleSuccess(t *testing.T) {
@@ -218,78 +217,45 @@ esac
 	assert.Contains(t, log, "ai-zh")
 }
 
-func TestHybridDriverRoutesVideoToYTDLPAndTextToOpenCLI(t *testing.T) {
-	binDir := t.TempDir()
-	writeFakeBin(t, binDir, "yt-dlp", fakeYTDLPSuccessScript)
-	writeFakeBin(t, binDir, "opencli", `#!/bin/sh
-if [ -n "$OPENCLI_FAKE_LOG" ]; then printf '%s\n' "$*" >> "$OPENCLI_FAKE_LOG"; fi
-printf '# Web Article\n\nSome content from opencli.\n'
-`)
-	prependPATH(t, binDir)
-	logDir := t.TempDir()
-	ytdlpLog := filepath.Join(logDir, "ytdlp.log")
-	opencliLog := filepath.Join(logDir, "opencli.log")
-	t.Setenv("YTDLP_FAKE_LOG", ytdlpLog)
-	t.Setenv("OPENCLI_FAKE_LOG", opencliLog)
+func TestFetcherRoutesTextAndMediaDrivers(t *testing.T) {
+	text := &recordingDriver{body: strings.Repeat("article body. ", 30)}
+	media := &recordingDriver{body: "## 字幕内容\n\nvideo transcript body. " + strings.Repeat("detail. ", 30)}
+	f := NewFetcher(WithDriver(text), WithMediaDriver(media))
 
-	driver := newHybridDriver(DriverOptions{MaxBodySize: 20000, MediaEnabled: true})
+	tr := f.FetchContent(context.Background(), "https://example.com/article", types.ContentText)
+	require.NotNil(t, tr)
+	require.Empty(t, tr.Error)
+	assert.Contains(t, tr.Body, "article body")
+	assert.Equal(t, "https://example.com/article", text.url)
+	assert.Empty(t, media.url, "text must not call the media driver")
 
-	video := driver.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", types.ContentVideo)
-	require.NotNil(t, video)
-	require.Empty(t, video.Error)
-	assert.True(t, video.HasTranscript)
-
-	text := driver.FetchContent(context.Background(), "https://example.com/article", types.ContentText)
-	require.NotNil(t, text)
-	require.Empty(t, text.Error)
-	assert.Equal(t, "Web Article", text.Title)
-
-	ytdlpCalls := readFileOrEmpty(t, ytdlpLog)
-	opencliCalls := readFileOrEmpty(t, opencliLog)
-	assert.Contains(t, ytdlpCalls, "--dump-json")
-	assert.NotContains(t, ytdlpCalls, "example.com")
-	assert.Contains(t, opencliCalls, "example.com")
-	assert.NotContains(t, opencliCalls, "youtube.com")
+	vr := f.FetchContent(context.Background(), "https://www.youtube.com/watch?v=abc", types.ContentVideo)
+	require.NotNil(t, vr)
+	require.Empty(t, vr.Error)
+	assert.Contains(t, vr.Body, "video transcript body")
+	assert.Equal(t, "https://www.youtube.com/watch?v=abc", media.url)
 }
 
-func TestHybridDriverBilibiliNoSubtitleFallsBackToOpenCLISummary(t *testing.T) {
-	binDir := t.TempDir()
-	writeFakeBin(t, binDir, "yt-dlp", `#!/bin/sh
-printf '%s\n' '{"title":"B站视频","subtitles":{},"automatic_captions":{}}'
-`)
-	writeFakeBin(t, binDir, "opencli", `#!/bin/sh
-if [ -n "$OPENCLI_FAKE_LOG" ]; then printf '%s\n' "$*" >> "$OPENCLI_FAKE_LOG"; fi
-case "$1" in
-  bilibili)
-    case "$2" in
-      video)
-        printf '# Bilibili Video\n\nTitle: Test Video\nViews: 1000\n'
-        ;;
-      subtitle)
-        exit 1
-        ;;
-      summary)
-        printf 'B站 AI summary content that is long enough to be useful for testing purposes.\n'
-        ;;
-    esac
-    ;;
-  *)
-    printf 'mock\n'
-    ;;
-esac
-`)
-	prependPATH(t, binDir)
-	opencliLog := filepath.Join(t.TempDir(), "opencli.log")
-	t.Setenv("OPENCLI_FAKE_LOG", opencliLog)
+func TestFetcherBilibiliNoSubtitleUsesMediaFallback(t *testing.T) {
+	text := &recordingDriver{body: strings.Repeat("article body. ", 30)}
+	media := &failureDriver{result: &types.ContentFetchResult{
+		Error:         "no subtitle or automatic caption available",
+		FailureKind:   types.FailureExtract,
+		FailureReason: types.FailureReasonTooShort,
+		SourceURL:     "https://www.bilibili.com/video/BV1xx",
+	}}
+	mediaFallback := &recordingDriver{body: strings.Repeat("B站 AI 总结内容。", 30)}
+	f := NewFetcher(
+		WithDriver(text),
+		WithMediaDriver(media),
+		WithMediaFallbackDriver(mediaFallback),
+	)
 
-	driver := newHybridDriver(DriverOptions{MaxBodySize: 20000, MediaEnabled: true})
-	result := driver.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", types.ContentVideo)
-
+	result := f.FetchContent(context.Background(), "https://www.bilibili.com/video/BV1xx", types.ContentVideo)
 	require.NotNil(t, result)
 	require.Empty(t, result.Error)
-	assert.True(t, result.HasTranscript)
 	assert.Contains(t, result.Body, "AI 总结")
-	assert.Contains(t, readFileOrEmpty(t, opencliLog), "bilibili summary")
+	assert.Equal(t, "https://www.bilibili.com/video/BV1xx", mediaFallback.url)
 }
 
 func TestYTDLPDriverMediaDisabled(t *testing.T) {
