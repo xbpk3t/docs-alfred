@@ -37,6 +37,12 @@ func (f *fakeFeedStore) ListKeys(_ context.Context, prefix string) ([]string, er
 	return keys, nil
 }
 
+func (f *fakeFeedStore) Delete(_ context.Context, key string) error {
+	delete(f.objects, key)
+
+	return nil
+}
+
 func (f *fakeFeedStore) GetObject(_ context.Context, key string) ([]byte, error) {
 	data, ok := f.objects[key]
 	if !ok {
@@ -205,6 +211,29 @@ func TestBuildFeedsSkipsMalformedKeysButKeepsFeeds(t *testing.T) {
 
 	require.Contains(t, store.uploads, "feeds/AI.xml")
 	assert.Len(t, store.uploads, 1, "malformed digest keys are skipped, feeds/ is not touched")
+}
+
+type fakePruningFeedStore struct {
+	*fakeFeedStore
+	deleted []string
+}
+
+func (f *fakePruningFeedStore) Delete(_ context.Context, key string) error {
+	f.deleted = append(f.deleted, key)
+	delete(f.objects, key)
+
+	return nil
+}
+
+func TestBuildFeedsRemovesStaleFolderFeed(t *testing.T) {
+	store := &fakePruningFeedStore{fakeFeedStore: newFakeFeedStore(map[string]string{
+		"digest/wiki-2026-10-26/AI/agent/agents/1a2b3c4d5e6f7890.md": digestPostMarkdown("Agents", "x"),
+		"feeds/old.xml": "<rss/>",
+	})}
+
+	require.NoError(t, BuildFeeds(context.Background(), store, "https://dw.lucc.dev"))
+	assert.Equal(t, []string{"feeds/old.xml"}, store.deleted)
+	require.Contains(t, store.uploads, "feeds/AI.xml")
 }
 
 func TestBuildOPMLOneOutlinePerFolder(t *testing.T) {

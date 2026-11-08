@@ -56,21 +56,42 @@ func BuildFeeds(ctx context.Context, r2 mediaStore, publicBaseURL string) error 
 		folders = append(folders, f)
 	}
 	sort.Strings(folders)
+	current := make(map[string]bool, len(folders))
 
 	for _, f := range folders {
-		feedXML, err := buildFeedXML(f, byFolder[f], publicBaseURL)
-		if err != nil {
+		key := "feeds/" + f + ".xml"
+		// Keep the old object if this folder's rebuild fails; only truly
+		// absent folders are stale.
+		current[key] = true
+		feedXML, buildErr := buildFeedXML(f, byFolder[f], publicBaseURL)
+		if buildErr != nil {
 			// Skip one broken folder instead of failing the whole rebuild; it
 			// will be retried next run. R2 PUT is not retried here.
-			slog.Warn("digest feed: skip folder feed", "folder", f, "error", err)
+			slog.Warn("digest feed: skip folder feed", "folder", f, "error", buildErr)
 
 			continue
 		}
-		key := "feeds/" + f + ".xml"
-		if _, err := r2.Upload(ctx, key, feedXML); err != nil {
-			return fmt.Errorf("upload feed %s: %w", key, err)
+		if _, uploadErr := r2.Upload(ctx, key, feedXML); uploadErr != nil {
+			return fmt.Errorf("upload feed %s: %w", key, uploadErr)
 		}
 		slog.Info("digest feed: wrote folder feed", "key", key, "items", len(byFolder[f]))
+	}
+
+	// Drop folder feeds whose posts disappeared.
+	existing, err := r2.ListKeys(ctx, "feeds/")
+	if err != nil {
+		return fmt.Errorf("list feeds for cleanup: %w", err)
+	}
+	for _, key := range existing {
+		if current[key] {
+			continue
+		}
+		if err := r2.Delete(ctx, key); err != nil {
+			slog.Warn("digest feed: remove stale feed failed", "key", key, "error", err)
+
+			continue
+		}
+		slog.Info("digest feed: removed stale feed", "key", key)
 	}
 
 	return nil

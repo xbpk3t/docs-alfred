@@ -68,6 +68,12 @@ func (f *fakeStore) Get(_ context.Context, _, key string) ([]byte, error) {
 	return data, nil
 }
 
+func (f *fakeStore) Remove(_ context.Context, _, key string) error {
+	delete(f.objects, key)
+
+	return nil
+}
+
 // publicServer serves HEAD with a fixed content type for any path.
 func publicServer(t *testing.T, status int, contentType string) *httptest.Server {
 	t.Helper()

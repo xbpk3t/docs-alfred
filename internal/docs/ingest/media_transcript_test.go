@@ -36,6 +36,12 @@ func (f *fakeMediaStore) Upload(_ context.Context, filename, content string) (*l
 	return &litter.Result{URL: "https://media.example/" + filename, Driver: "r2"}, nil
 }
 
+func (f *fakeMediaStore) Delete(_ context.Context, key string) error {
+	delete(f.objects, key)
+
+	return nil
+}
+
 func (f *fakeMediaStore) ListKeys(_ context.Context, prefix string) ([]string, error) {
 	if f.listErr != nil {
 		return nil, f.listErr

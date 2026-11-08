@@ -18,6 +18,7 @@ import (
 // the rss2nl trns index. *litter.R2 implements it; tests fake it.
 type mediaStore interface {
 	Upload(ctx context.Context, filename, content string) (*litter.Result, error)
+	Delete(ctx context.Context, key string) error
 	ListKeys(ctx context.Context, prefix string) ([]string, error)
 	GetObject(ctx context.Context, key string) ([]byte, error)
 }

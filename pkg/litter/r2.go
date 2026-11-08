@@ -42,6 +42,7 @@ type objectStore interface {
 	Put(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType string) error
 	List(ctx context.Context, bucket, prefix string) ([]string, error)
 	Get(ctx context.Context, bucket, key string) ([]byte, error)
+	Remove(ctx context.Context, bucket, key string) error
 }
 
 type minioStore struct {
@@ -74,6 +75,10 @@ func (m *minioStore) Get(ctx context.Context, bucket, key string) ([]byte, error
 	defer func() { _ = obj.Close() }()
 
 	return io.ReadAll(obj)
+}
+
+func (m *minioStore) Remove(ctx context.Context, bucket, key string) error {
+	return m.client.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{})
 }
 
 // NewR2 creates an R2 uploader from explicit configuration.
@@ -125,6 +130,17 @@ func (r *R2) Upload(ctx context.Context, filename, content string) (*Result, err
 	}
 
 	return &Result{URL: publicURL, Driver: driverR2}, nil
+}
+
+// Delete removes one object. It is used by feed rebuilds to drop a folder feed
+// that no longer has any digest posts.
+func (r *R2) Delete(ctx context.Context, filename string) error {
+	key, err := r.objectKey(filename)
+	if err != nil {
+		return err
+	}
+
+	return r.store.Remove(ctx, r.bucket, key)
 }
 
 // ListKeys lists object keys under prefix (within the configured key prefix).
