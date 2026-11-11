@@ -252,6 +252,23 @@ func TestCreateRendererForDomain_Default(t *testing.T) {
 	assert.NotNil(t, createRendererForDomain("default"))
 }
 
+func TestCreateRendererForDomain_DiaryUnsupported(t *testing.T) {
+	assert.Nil(t, createRendererForDomain("diary"))
+}
+
+func TestRunDomainRender_DiaryUnsupported(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	_, err := RunDomainRender(DomainRenderConfig{
+		Domain: "diary",
+		Src:    tmpDir,
+		OutDir: filepath.Join(tmpDir, "out"),
+		Format: "json",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not support render")
+}
+
 // ---------------------------------------------------------------------------
 // createRendererForDomain — parse-mode wiring
 // ---------------------------------------------------------------------------
@@ -277,7 +294,6 @@ func TestCreateRendererForDomain_ParseModes(t *testing.T) {
 		{"gh", render.ParseFlatten},
 		{"goods", render.ParseFlatten},
 		{"task", render.ParseMulti},
-		{"diary", render.ParseSingle},
 		{"default", render.ParseSingle},
 	}
 	for _, tt := range tests {

@@ -22,6 +22,11 @@ var Goods []byte
 //go:embed books.schema.json
 var Books []byte
 
+// Diary is the JSON Schema for data/diary YAML files.
+//
+//go:embed diary.schema.json
+var Diary []byte
+
 // Using is the JSON Schema for the `goods using` output view (a projection of
 // goods.schema.json). It drives the generated using model.
 //

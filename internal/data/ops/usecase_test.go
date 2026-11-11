@@ -75,6 +75,48 @@ func TestRunDomainCheck_GoodsIncludeHidden(t *testing.T) {
 	assert.True(t, checkutil.HasErrors(result.Issues))
 }
 
+func TestRunDomainCheck_DiaryDomain(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "2024.yml"), []byte(`- date: 2024-01-01
+  des: hello
+  score: 4
+  url: https://example.com
+`), 0644))
+
+	result, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainDiary, Path: tmpDir})
+	require.NoError(t, err)
+	assert.Empty(t, result.Issues)
+}
+
+func TestRunDomainCheck_DiaryAllowsDateOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "2024.yml"), []byte("- date: 2024-01-01\n"), 0644))
+
+	result, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainDiary, Path: tmpDir})
+	require.NoError(t, err)
+	assert.Empty(t, result.Issues)
+}
+
+func TestRunDomainCheck_DiaryRejectsUnknownField(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "2024.yml"), []byte("- date: 2024-01-01\n  review: x\n"), 0644))
+
+	result, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainDiary, Path: tmpDir})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Issues)
+	assert.True(t, checkutil.HasErrors(result.Issues))
+	assert.Equal(t, 1, result.Issues[0].Line)
+}
+
+func TestRunDomainCheck_DiaryIgnoresHidden(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".OKR.yml"), []byte("year: 2024\n"), 0644))
+
+	result, err := RunDomainCheck(DomainCheckInput{Domain: data.DomainDiary, Path: tmpDir})
+	require.NoError(t, err)
+	assert.Empty(t, result.Issues)
+}
+
 func TestRunDomainDedup_UnknownDomain(t *testing.T) {
 	_, err := RunDomainDedup(DomainDedupInput{Domain: data.DataDomain("unknown")})
 	require.Error(t, err)

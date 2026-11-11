@@ -72,7 +72,7 @@ func TestNewDedupCmdWithInvalidDomain(t *testing.T) {
 
 func TestRunDomainCheckWithValidDomain(t *testing.T) {
 	// Test with gh domain and default path - may fail due to missing data but tests path
-	err := runDomainCheck("gh", "", "", false)
+	err := runDomainCheck("gh", "", false)
 	_ = err
 }
 
@@ -151,10 +151,8 @@ func TestNewCheckCmdFlags(t *testing.T) {
 
 	require.Equal(t, "check", cmd.Name())
 	require.Equal(t, "check <domain>", cmd.Use)
-	require.NotNil(t, cmd.Flag("rule-scope"))
-
-	// rule-scope is hidden.
-	require.True(t, cmd.Flag("rule-scope").Hidden)
+	require.NotNil(t, cmd.Flag("include-hidden"))
+	require.Nil(t, cmd.Flag("rule-scope"))
 }
 
 func TestNewCheckCmdRequiresExactlyOneArg(t *testing.T) {

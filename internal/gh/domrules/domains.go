@@ -6,6 +6,18 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/render"
 )
 
+// DataDomain defines a data domain for validation.
+type DataDomain string
+
+const (
+	DomainBooks DataDomain = "books"
+	DomainDiary DataDomain = "diary"
+	DomainGH    DataDomain = "gh"
+	DomainGoods DataDomain = "goods"
+	DomainTask  DataDomain = "task"
+	DomainNtl   DataDomain = "ntl"
+)
+
 // CheckStrategy selects how a domain's data directory is validated.
 type CheckStrategy string
 
@@ -14,8 +26,8 @@ const (
 	CheckGoodsSchema CheckStrategy = "goods_schema"
 	// CheckBooksSchema validates against the embedded books.schema.json (books/ntl).
 	CheckBooksSchema CheckStrategy = "books_schema"
-	// CheckStructured runs the diary structured-field check.
-	CheckStructured CheckStrategy = "structured"
+	// CheckDiarySchema validates against the embedded diary.schema.json.
+	CheckDiarySchema CheckStrategy = "diary_schema"
 	// CheckWalker runs the gh walker check.
 	CheckWalker CheckStrategy = "walker"
 	// CheckYAMLParseOnly only parses YAML files (task).
@@ -38,8 +50,10 @@ const (
 type RenderStrategy string
 
 const (
-	// RenderGeneric uses the single-stream YAML renderer (diary/task); books/ntl
-	// also use it as the base when their catalog path isn't taken.
+	// RenderNone disables rendering for a domain.
+	RenderNone RenderStrategy = "none"
+	// RenderGeneric uses the single-stream YAML renderer (task); books/ntl also
+	// use it as the base when their catalog path isn't taken.
 	RenderGeneric RenderStrategy = "generic"
 	// RenderGH walks the gh directory tree and emits a merged repo list.
 	RenderGH RenderStrategy = "gh"
@@ -51,7 +65,6 @@ const (
 type DomainSpec struct {
 	Domain        DataDomain
 	DefaultPath   string
-	RuleScope     RuleScope
 	Check         CheckStrategy
 	Duplicate     DuplicateStrategy
 	Render        RenderStrategy
@@ -65,19 +78,20 @@ const defaultPathBooks = "data/books"
 
 var domainSpecs = []DomainSpec{
 	// books is validated by its embedded JSON Schema (books.schema.json) via
-	// the books domain check; it has no structured-check rule scope.
+	// the books domain check.
 	{Domain: DomainBooks, DefaultPath: defaultPathBooks,
 		Check: CheckBooksSchema, Duplicate: DupGeneric,
 		Render: RenderGeneric, DefaultFormat: "json", ParseMode: render.ParseFlatten,
 		Catalog: true, CatalogPrefix: "books."},
-	{Domain: DomainDiary, DefaultPath: "data/diary", RuleScope: ScopeDiary,
-		Check:  CheckStructured,
-		Render: RenderGeneric, DefaultFormat: "yaml", ParseMode: render.ParseSingle},
+	// diary is validated by its embedded JSON Schema (diary.schema.json); it is
+	// not rendered.
+	{Domain: DomainDiary, DefaultPath: "data/diary",
+		Check: CheckDiarySchema, Render: RenderNone},
 	{Domain: DomainGH, DefaultPath: "data/gh",
 		Check: CheckWalker, Duplicate: DupGH,
 		Render: RenderGH, DefaultFormat: "json,yaml", ParseMode: render.ParseFlatten},
 	// goods is validated by its embedded JSON Schema (goods.schema.json) via
-	// the goods domain check; it has no structured-check rule scope.
+	// the goods domain check.
 	{Domain: DomainGoods, DefaultPath: "data/goods",
 		Check:  CheckGoodsSchema,
 		Render: RenderGoods, DefaultFormat: "json", ParseMode: render.ParseFlatten,
@@ -117,17 +131,4 @@ func DomainDefaultPath(domain DataDomain, override string) (string, error) {
 	}
 
 	return spec.DefaultPath, nil
-}
-
-// ResolveScope determines the actual RuleScope. Only diary uses the structured
-// check now (books/ntl/goods are schema-checked, gh uses the walker, task is
-// YAML-parse-only), so this always resolves to the diary scope.
-func ResolveScope(file, scope string) RuleScope {
-	return ScopeDiary
-}
-
-// AllowedFieldsForScope returns the allowed field set for a rule scope.
-// Diary is the only structured-checked domain.
-func AllowedFieldsForScope(scope RuleScope) map[string]bool {
-	return DiaryFields
 }

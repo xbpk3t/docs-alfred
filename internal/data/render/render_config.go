@@ -39,6 +39,11 @@ type DomainRenderResult struct {
 
 // RunDomainRender renders a single domain's data into the specified output formats.
 func RunDomainRender(cfg DomainRenderConfig) (*DomainRenderResult, error) {
+	renderer := createRendererForDomain(cfg.Domain)
+	if renderer == nil {
+		return nil, fmt.Errorf("domain %s does not support render", cfg.Domain)
+	}
+
 	src, err := filepath.Abs(cfg.Src)
 	if err != nil {
 		return nil, fmt.Errorf("get absolute path: %w", err)
@@ -51,8 +56,6 @@ func RunDomainRender(cfg DomainRenderConfig) (*DomainRenderResult, error) {
 
 	isSourceDir := fi.IsDir()
 	formats := strings.Split(cfg.Format, ",")
-
-	renderer := createRendererForDomain(cfg.Domain)
 
 	var outputFiles []string
 
@@ -122,6 +125,9 @@ func renderFormat(domain string, isSourceDir bool, src string, ft fileType, rend
 // single-stream renderer.
 func createRendererForDomain(domain string) render.Renderer {
 	spec, _ := domrules.SpecForDomain(domrules.DataDomain(domain))
+	if spec.Render == domrules.RenderNone {
+		return nil
+	}
 
 	var renderer render.Renderer
 	switch spec.Render {

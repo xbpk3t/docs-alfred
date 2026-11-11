@@ -165,7 +165,7 @@ func TestNewCheckCmdRunEWithMaxLines(t *testing.T) {
 
 func TestRunDomainCheckGhValidData(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
-	err := runDomainCheck(data.DomainGH, ghDir, "", false)
+	err := runDomainCheck(data.DomainGH, ghDir, false)
 	require.NoError(t, err)
 }
 
@@ -192,20 +192,14 @@ func TestRunDomainCheckGhInvalidKind(t *testing.T) {
 	ghDir := writeGhFiles(t, map[string]string{"tool.yml": `- topic: overview
   kind: unset
 `})
-	err := runDomainCheck(data.DomainGH, ghDir, "", false)
+	err := runDomainCheck(data.DomainGH, ghDir, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "data check gh failed")
 }
 
 func TestRunDomainCheckGhNonexistentPath(t *testing.T) {
-	err := runDomainCheck(data.DomainGH, "/tmp/__gh_no_such__", "", false)
+	err := runDomainCheck(data.DomainGH, "/tmp/__gh_no_such__", false)
 	require.Error(t, err)
-}
-
-func TestRunDomainCheckGhWithRuleScope(t *testing.T) {
-	ghDir := writeGhFiles(t, map[string]string{"tool.yml": validGhYAML})
-	err := runDomainCheck(data.DomainGH, ghDir, "auto", false)
-	require.NoError(t, err)
 }
 
 // ---------------------------------------------------------------------------

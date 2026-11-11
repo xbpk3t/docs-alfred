@@ -156,3 +156,15 @@ func TestCheckFile_PostRule(t *testing.T) {
 	require.Len(t, issues, 1)
 	assert.Contains(t, issues[0].Message, "business rule")
 }
+
+func TestCheckFile_LineNumberFromTopLevelIndex(t *testing.T) {
+	sch := compileTestSchema(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.yml")
+	// The second item starts on line 3; its name violates minLength.
+	require.NoError(t, os.WriteFile(path, []byte("- name: a\n  kind: type\n- name: \"\"\n"), 0o644))
+
+	issues := CheckFile(path, sch, nil)
+	require.NotEmpty(t, issues)
+	assert.Equal(t, 3, issues[0].Line)
+}

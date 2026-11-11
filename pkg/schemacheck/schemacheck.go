@@ -13,12 +13,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+	yamlparser "github.com/goccy/go-yaml/parser"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
 	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
+	"github.com/xbpk3t/docs-alfred/pkg/yamlutil"
 )
 
 // Compile compiles a JSON Schema from a file path into a reusable validator.
@@ -123,15 +127,70 @@ func CheckFile(path string, sch *jsonschema.Schema, post PostRule) []checkutil.I
 		return []checkutil.Issue{{File: path, Severity: checkutil.SeverityError, Message: fmt.Sprintf("YAML parse error: %v", err)}}
 	}
 
+	msgs := Validate(sch, doc)
 	var issues []checkutil.Issue
-	for _, msg := range Validate(sch, doc) {
-		issues = append(issues, checkutil.Issue{File: path, Severity: checkutil.SeverityError, Message: msg})
+	if len(msgs) > 0 {
+		lines := topLevelItemLines(data)
+		for _, msg := range msgs {
+			issues = append(issues, checkutil.Issue{
+				File:     path,
+				Line:     issueLine(msg, lines),
+				Severity: checkutil.SeverityError,
+				Message:  msg,
+			})
+		}
 	}
 	if post != nil {
 		issues = append(issues, post(doc, path)...)
 	}
 
 	return issues
+}
+
+var schemaPathIndex = regexp.MustCompile(`^/(\d+)`)
+
+// topLevelItemLines returns the 1-based source line of each top-level sequence
+// item. Schema errors use /N/... JSON pointers; mapping N back to the item's
+// line keeps the check output actionable without a bespoke per-domain parser.
+func topLevelItemLines(data []byte) []int {
+	parsed, err := yamlparser.ParseBytes(data, 0)
+	if err != nil {
+		return nil
+	}
+
+	for _, doc := range parsed.Docs {
+		if doc == nil || doc.Body == nil {
+			continue
+		}
+		seq, ok := yamlutil.Sequence(doc.Body)
+		if !ok {
+			continue
+		}
+		lines := make([]int, len(seq.Values))
+		for i, item := range seq.Values {
+			lines[i] = yamlutil.NodeLine(item)
+		}
+
+		return lines
+	}
+
+	return nil
+}
+
+// issueLine extracts the leading /N index from a schema error message and maps
+// it to the top-level item's line. Nested errors (/0/table/3/name) map to the
+// containing top-level item.
+func issueLine(msg string, lines []int) int {
+	match := schemaPathIndex.FindStringSubmatch(msg)
+	if len(match) != 2 {
+		return 0
+	}
+	idx, err := strconv.Atoi(match[1])
+	if err != nil || idx >= len(lines) {
+		return 0
+	}
+
+	return lines[idx]
 }
 
 // yamlToJSON decodes YAML into JSON-native types (map[string]any / []any /

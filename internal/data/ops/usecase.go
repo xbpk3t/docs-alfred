@@ -9,14 +9,15 @@ import (
 	data "github.com/xbpk3t/docs-alfred/internal/gh/domrules"
 	"github.com/xbpk3t/docs-alfred/internal/gh/ghcheck"
 	"github.com/xbpk3t/docs-alfred/internal/gh/goods"
+	"github.com/xbpk3t/docs-alfred/internal/gh/schema"
 	"github.com/xbpk3t/docs-alfred/pkg/checkutil"
+	"github.com/xbpk3t/docs-alfred/pkg/schemacheck"
 )
 
 // DomainCheckInput holds input for domain data check.
 type DomainCheckInput struct {
-	Domain    data.DataDomain
-	Path      string // empty = default for domain
-	RuleScope string // empty = default for domain
+	Domain data.DataDomain
+	Path   string // empty = default for domain
 
 	// IncludeHidden reports whether hidden (dot-prefixed) YAML files are checked.
 	IncludeHidden bool
@@ -34,14 +35,13 @@ func RunDomainCheck(input DomainCheckInput) (*DomainCheckResult, error) {
 		return nil, err
 	}
 
-	slog.Info("Checking domain", "domain", input.Domain, "path", opts.path, "scope", opts.scope)
+	slog.Info("Checking domain", "domain", input.Domain, "path", opts.path)
 
 	return runDomainCheckWithOptions(input.Domain, &opts)
 }
 
 type domainCheckOptions struct {
 	path          string
-	scope         string
 	spec          data.DomainSpec
 	includeHidden bool
 }
@@ -56,15 +56,8 @@ func resolveDomainCheckOptions(input DomainCheckInput) (domainCheckOptions, erro
 	if path == "" {
 		path = spec.DefaultPath
 	}
-	scope := input.RuleScope
-	if scope == "" {
-		scope = string(spec.RuleScope)
-		if scope == "" {
-			scope = "auto"
-		}
-	}
 
-	return domainCheckOptions{spec: spec, path: path, scope: scope, includeHidden: input.IncludeHidden}, nil
+	return domainCheckOptions{spec: spec, path: path, includeHidden: input.IncludeHidden}, nil
 }
 
 func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions) (*DomainCheckResult, error) {
@@ -92,15 +85,13 @@ func runDomainCheckWithOptions(domain data.DataDomain, opts *domainCheckOptions)
 		}
 
 		return &DomainCheckResult{Issues: result.Issues}, nil
-	case data.CheckStructured:
-		result, err := data.RunStructuredDataCheckWithOptions(opts.path, opts.scope, data.RunStructuredCheckOptions{
-			IncludeHidden: opts.includeHidden,
-		})
+	case data.CheckDiarySchema:
+		issues, err := schemacheck.CheckDirectory(opts.path, "diary", schema.Diary, opts.includeHidden)
 		if err != nil {
 			return nil, err
 		}
 
-		return &DomainCheckResult{Issues: result.Issues}, nil
+		return &DomainCheckResult{Issues: issues}, nil
 	case data.CheckYAMLParseOnly:
 		return runYAMLParseOnlyDomainCheck(domain, opts.path)
 	default:

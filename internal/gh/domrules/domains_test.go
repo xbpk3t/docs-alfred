@@ -15,7 +15,6 @@ func TestSpecForDomain(t *testing.T) {
 
 	spec, ok = SpecForDomain(DomainBooks)
 	require.True(t, ok)
-	require.Empty(t, spec.RuleScope)
 	require.Equal(t, CheckBooksSchema, spec.Check)
 	require.Equal(t, DupGeneric, spec.Duplicate)
 
@@ -32,14 +31,21 @@ func TestSpecForDomainUnknown(t *testing.T) {
 }
 
 func TestSpecForDomainGoods(t *testing.T) {
-	// goods is validated by its embedded JSON Schema, not the structured check;
-	// it must not declare a rule scope or structured check.
+	// goods is validated by its embedded JSON Schema.
 	spec, ok := SpecForDomain(DomainGoods)
 	require.True(t, ok)
 	require.Equal(t, "data/goods", spec.DefaultPath)
-	require.Empty(t, spec.RuleScope)
 	require.Equal(t, CheckGoodsSchema, spec.Check)
 	require.Equal(t, DupNone, spec.Duplicate)
+}
+
+func TestSpecForDomainDiary(t *testing.T) {
+	spec, ok := SpecForDomain(DomainDiary)
+	require.True(t, ok)
+	require.Equal(t, "data/diary", spec.DefaultPath)
+	require.Equal(t, CheckDiarySchema, spec.Check)
+	require.Equal(t, RenderNone, spec.Render)
+	require.Empty(t, spec.DefaultFormat)
 }
 
 func TestSpecRenderAndFormat(t *testing.T) {
@@ -54,7 +60,7 @@ func TestSpecRenderAndFormat(t *testing.T) {
 		{DomainBooks, RenderGeneric, "json", true},
 		{DomainNtl, RenderGeneric, "json", true},
 		{DomainTask, RenderGeneric, "yaml", false},
-		{DomainDiary, RenderGeneric, "yaml", false},
+		{DomainDiary, RenderNone, "", false},
 	}
 	for _, tt := range tests {
 		spec, ok := SpecForDomain(tt.domain)
