@@ -3,15 +3,13 @@ package write
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"time"
 
 	carbon "github.com/dromara/carbon/v2"
-	"github.com/xbpk3t/docs-alfred/pkg/fileutil"
 )
 
 // digestFilenames maps outcomes to log files.
@@ -44,13 +42,10 @@ func digestFilename(entry *types.DigestEntry) string {
 	}
 }
 
-// LogDigestEntry appends a JSON line to the appropriate digest log file.
-// With R2Store set, the log lands at logs/digest-<kind>.jsonl in the bucket
-// instead of a local file under WikiRoot; otherwise it appends locally.
-// The local write is thread-safe (uses per-file locking via lockPath).
+// LogDigestEntry appends a JSON line to logs/digest-<kind>.jsonl in the R2
+// bucket.
 func LogDigestEntry(entry *types.DigestEntry, opts *WriteOptions) (string, error) {
-	if opts == nil || (opts.WikiRoot == "" && opts.R2Store == nil) {
-		// Nothing to log — skip silently.
+	if opts == nil {
 		return "", nil
 	}
 	if entry.Timestamp == "" {
@@ -77,43 +72,13 @@ func DigestFailureLogNames() []string {
 	return []string{digestFilenameAIError, digestFilenameExtractError, digestFilenameFetchError}
 }
 
-// appendLogLine appends one JSONL line to filename, in the bucket when R2 is
-// configured (read-merge-write, since R2 has no append) and locally otherwise.
-func appendLogLine(filename string, line []byte, opts *WriteOptions) (string, error) {
-	if opts.R2Store != nil {
-		return appendLogLineR2(filename, line, opts)
-	}
-
-	logPath := filepath.Join(opts.WikiRoot, filename)
-	if opts.DryRun {
-		slog.Info("[DRY RUN] Would log digest line", "path", logPath)
-
-		return logPath, nil
-	}
-
-	unlock := lockPath(logPath)
-	defer unlock()
-
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileutil.FilePermPrivate)
-	if err != nil {
-		return "", fmt.Errorf("open digest log %s: %w", logPath, err)
-	}
-	defer func() { _ = f.Close() }()
-
-	if _, err := f.Write(line); err != nil {
-		return "", fmt.Errorf("write digest entry: %w", err)
-	}
-	if _, err := f.WriteString("\n"); err != nil {
-		return "", fmt.Errorf("write digest newline: %w", err)
-	}
-
-	return logPath, nil
-}
-
-// appendLogLineR2 appends one JSON line to a logs/<filename> object in the
+// appendLogLine appends one JSON line to a logs/<filename> object in the
 // bucket. The success log is read back by history dedup, so its URL set must
 // stay complete.
-func appendLogLineR2(filename string, line []byte, opts *WriteOptions) (string, error) {
+func appendLogLine(filename string, line []byte, opts *WriteOptions) (string, error) {
+	if opts.R2Store == nil {
+		return "", errors.New("digest log: r2 store required")
+	}
 	r2LogMu.Lock()
 	defer r2LogMu.Unlock()
 
@@ -143,9 +108,9 @@ func appendLogLineR2(filename string, line []byte, opts *WriteOptions) (string, 
 }
 
 // LogDigestRun appends one run-summary line to logs/digest-runs.jsonl in the
-// bucket, or to <wikiRoot>/digest-runs.jsonl when R2 is not configured.
+// bucket.
 func LogDigestRun(entry *types.DigestRunEntry, opts *WriteOptions) (string, error) {
-	if opts == nil || (opts.WikiRoot == "" && opts.R2Store == nil) {
+	if opts == nil {
 		return "", nil
 	}
 	if entry.Timestamp == "" {

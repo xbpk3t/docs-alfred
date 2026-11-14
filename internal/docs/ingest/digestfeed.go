@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adrg/frontmatter"
 	"github.com/xbpk3t/docs-alfred/pkg/md"
 )
 
@@ -225,13 +226,18 @@ func buildFeedXML(folder string, posts []digestPost, publicBaseURL string) (stri
 }
 
 // buildItem renders one digest post into an RSS item. Title comes from the
-// first "### <title>" line of the post body (buildEntry writes h3, not h1);
-// link points at the public direct URL of the post's markdown object; and the
-// description is the markdown body rendered to HTML via goldmark. A nil date
-// (unbatched batch) leaves pubDate blank.
+// post's YAML frontmatter; pre-frontmatter posts fall back to their first
+// heading. Link points at the public direct URL of the post's markdown object;
+// the description is the body (frontmatter stripped) rendered to HTML via
+// goldmark. A nil date (unbatched batch) leaves pubDate blank.
 func buildItem(folder string, p digestPost, publicBaseURL string, date *time.Time) rssItem {
+	fm, body := splitDigestFrontmatter(p.content)
+	title := fm.Title
+	if title == "" {
+		title = entryTitle(body)
+	}
 	item := rssItem{
-		Title:   entryTitle(p.content),
+		Title:   title,
 		Link:    digestPublicURL(publicBaseURL, p),
 		GUID:    digestPublicURL(publicBaseURL, p),
 		PubDate: "",
@@ -239,7 +245,7 @@ func buildItem(folder string, p digestPost, publicBaseURL string, date *time.Tim
 	if date != nil {
 		item.PubDate = date.Format(rfc822Layout)
 	}
-	if desc, err := md.ToHTML(p.content); err == nil {
+	if desc, err := md.ToHTML(body); err == nil {
 		item.Description = desc
 	} else {
 		slog.Warn("digest feed: markdown to html failed, item without description", "folder", folder, "error", err)
@@ -248,9 +254,31 @@ func buildItem(folder string, p digestPost, publicBaseURL string, date *time.Tim
 	return item
 }
 
+// digestFrontmatter is the subset of a digest post's YAML frontmatter the feed
+// needs.
+type digestFrontmatter struct {
+	Title string `yaml:"title"`
+}
+
+// splitDigestFrontmatter separates YAML frontmatter from the post body. Older
+// posts have no frontmatter; the whole content is returned as body then.
+func splitDigestFrontmatter(content string) (digestFrontmatter, string) {
+	var fm digestFrontmatter
+	if !strings.HasPrefix(content, "---") {
+		return fm, content
+	}
+
+	body, err := frontmatter.Parse(strings.NewReader(content), &fm)
+	if err != nil {
+		return digestFrontmatter{}, content
+	}
+
+	return fm, string(body)
+}
+
 // entryTitle extracts the post title via the shared markdown heading extractor
-// (first heading wins). It falls back to a placeholder when there is no heading
-// (shouldn't happen for buildEntry output, which always writes an h3).
+// (first heading wins). Only pre-frontmatter posts need it; frontmatter posts
+// carry the title in YAML.
 func entryTitle(mdContent string) string {
 	if t := md.ExtractTitleFromMarkdown(mdContent); t != "" {
 		return t

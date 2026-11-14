@@ -338,14 +338,14 @@ func TestWritePendingURLNil(t *testing.T) {
 	deps := &dependencies{
 		writer: &fakeWriter{},
 	}
-	result := writePendingURL(deps, t.TempDir(), nil, false)
+	result := writePendingURL(deps, nil, false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 }
 
 func TestWritePendingURLUnhandled(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingUnhandled, Error: "some error"}
-	result := writePendingURL(deps, t.TempDir(), pending, false)
+	result := writePendingURL(deps, pending, false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Equal(t, "some error", result.Error)
 }
@@ -353,14 +353,14 @@ func TestWritePendingURLUnhandled(t *testing.T) {
 func TestWritePendingURLDefault(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: "invalid"}
-	result := writePendingURL(deps, t.TempDir(), pending, false)
+	result := writePendingURL(deps, pending, false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 }
 
 func TestWritePendingURLAIError(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingAIError, Error: "AI failed"}
-	result := writePendingURL(deps, t.TempDir(), pending, false)
+	result := writePendingURL(deps, pending, false)
 	assert.Equal(t, StatusFailureWritten, result.Status)
 	assert.Equal(t, wikitypes.FailureAI, result.FailureType)
 }
@@ -369,7 +369,7 @@ func TestWritePendingURLExtractFailure(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
 	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingExtractFailure, Item: item, ExtraInfo: "too short"}
-	result := writePendingURL(deps, t.TempDir(), pending, false)
+	result := writePendingURL(deps, pending, false)
 	assert.Equal(t, StatusFailureWritten, result.Status)
 	assert.Equal(t, wikitypes.FailureExtract, result.FailureType)
 }
@@ -377,7 +377,7 @@ func TestWritePendingURLExtractFailure(t *testing.T) {
 func TestWritePendingURLFetchFailure(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingFetchFailure, FailureType: wikitypes.FailureFetch, ExtraInfo: "timeout"}
-	result := writePendingURL(deps, t.TempDir(), pending, false)
+	result := writePendingURL(deps, pending, false)
 	assert.Equal(t, StatusFailureWritten, result.Status)
 	assert.Equal(t, wikitypes.FailureFetch, result.FailureType)
 }
@@ -392,7 +392,7 @@ func TestWritePendingURLSummaryDryRun(t *testing.T) {
 		Summary:   &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingSummary, Item: item}
-	result := writePendingURL(deps, t.TempDir(), pending, true)
+	result := writePendingURL(deps, pending, true)
 	assert.Equal(t, StatusDryRunSummary, result.Status)
 	assert.True(t, result.Handled)
 }
@@ -401,7 +401,7 @@ func TestWritePendingURLFailureDryRun(t *testing.T) {
 	deps := &dependencies{writer: &fakeWriter{}}
 	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 	pending := &pendingURLWrite{URL: "https://example.com", Kind: pendingClassifyFailure, Item: item, ExtraInfo: "info"}
-	result := writePendingURL(deps, t.TempDir(), pending, true)
+	result := writePendingURL(deps, pending, true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
 	assert.True(t, result.Handled)
 }
@@ -425,7 +425,7 @@ func TestNewPendingUnhandled(t *testing.T) {
 // --- serviceWriter and serviceInboxStore ---
 
 func TestServiceWriterWriteSummary(t *testing.T) {
-	root := t.TempDir()
+	store := newFakeMediaStore()
 	w := serviceWriter{}
 	path, err := w.WriteSummary(&wikitypes.ClassifyItem{
 		URL:       "https://example.com",
@@ -433,21 +433,23 @@ func TestServiceWriterWriteSummary(t *testing.T) {
 		TopicPath: "topic/path",
 		Type:      wikitypes.TypeDeepDive,
 		Summary:   &wikitypes.StructuredSummary{Overview: "summary"},
-	}, &wikiwrite.WriteOptions{WikiRoot: root})
+	}, &wikiwrite.WriteOptions{R2Store: digestStoreAdapter{store: store}})
 	require.NoError(t, err)
 	assert.NotEmpty(t, path)
+	assert.NotEmpty(t, store.uploads)
 }
 
 func TestServiceWriterWriteFailureEntry(t *testing.T) {
-	root := t.TempDir()
+	store := newFakeMediaStore()
 	w := serviceWriter{}
 	path, err := w.WriteFailureEntry(
 		&wikitypes.ClassifyItem{URL: "https://example.com"},
 		wikitypes.FailureFetch, wikitypes.FailureReasonHTTPError, "timeout",
-		&wikiwrite.WriteOptions{WikiRoot: root},
+		&wikiwrite.WriteOptions{R2Store: digestStoreAdapter{store: store}},
 	)
 	require.NoError(t, err)
 	assert.NotEmpty(t, path)
+	assert.Contains(t, store.uploads, "logs/digest-fetch-error.jsonl")
 }
 
 func TestServiceInboxStoreParseInbox(t *testing.T) {
@@ -460,7 +462,7 @@ func TestServiceInboxStoreParseInbox(t *testing.T) {
 }
 
 func TestServiceWriterWriteManualReviewEntry(t *testing.T) {
-	root := t.TempDir()
+	store := newFakeMediaStore()
 	w := serviceWriter{}
 	path, err := w.WriteManualReviewEntry(
 		&wikitypes.ClassifyItem{
@@ -470,10 +472,11 @@ func TestServiceWriterWriteManualReviewEntry(t *testing.T) {
 			Type:      wikitypes.TypeInbox,
 			Summary:   &wikitypes.StructuredSummary{Overview: "needs review"},
 		},
-		&wikiwrite.WriteOptions{WikiRoot: root},
+		&wikiwrite.WriteOptions{R2Store: digestStoreAdapter{store: store}},
 	)
 	require.NoError(t, err)
 	assert.NotEmpty(t, path)
+	assert.Contains(t, store.uploads, "uncat.md")
 }
 
 func TestServiceInboxStoreFlushInbox(t *testing.T) {
@@ -767,7 +770,7 @@ func TestPrepareInboxEntryClassifyRetryError(t *testing.T) {
 
 func TestWritePendingRetryExhaustedFlushes(t *testing.T) {
 	deps := newFakeDeps()
-	result := writePendingURL(deps.dependencies(), t.TempDir(), &pendingURLWrite{
+	result := writePendingURL(deps.dependencies(), &pendingURLWrite{
 		URL:           "https://example.com/a",
 		Kind:          pendingFetchFailure,
 		FailureType:   wikitypes.FailureExtract,
@@ -804,7 +807,7 @@ func TestProcessAddURLFetchFailure(t *testing.T) {
 		FailureKind: wikitypes.FailureResolve,
 	}
 
-	results := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
+	results := processAddURL(context.Background(), deps.dependencies(), "https://example.com/a", false)
 	require.Len(t, results, 1)
 	assert.Equal(t, StatusFailureWritten, results[0].Status)
 	assert.Equal(t, wikitypes.FailureResolve, results[0].FailureType)
@@ -815,7 +818,7 @@ func TestProcessAddURLUnhandledError(t *testing.T) {
 	deps.fetcher.results["https://example.com/a"] = nil
 	deps.fetcher.returnNil = true
 
-	results := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
+	results := processAddURL(context.Background(), deps.dependencies(), "https://example.com/a", false)
 	// nil fetch result → fetch failure pending → writePendingURL → failure written
 	require.Len(t, results, 1)
 	assert.Equal(t, StatusFailureWritten, results[0].Status)
@@ -828,7 +831,7 @@ func TestWriteClassifyFailureWriterError(t *testing.T) {
 	deps.writer.failureErr = errors.New("disk full")
 	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 
-	result := writeClassifyFailure(deps.dependencies(), t.TempDir(), item, "info", false)
+	result := writeClassifyFailure(deps.dependencies(), item, "info", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "disk full")
 	assert.Equal(t, wikitypes.FailureClassify, result.FailureType)
@@ -841,7 +844,7 @@ func TestWriteExtractFailureWriterError(t *testing.T) {
 	deps.writer.failureErr = errors.New("write failed")
 	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 
-	result := writeExtractFailure(deps.dependencies(), t.TempDir(), item, wikitypes.FailureReasonEmpty, "info", false)
+	result := writeExtractFailure(deps.dependencies(), item, wikitypes.FailureReasonEmpty, "info", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
 	assert.Equal(t, wikitypes.FailureExtract, result.FailureType)
@@ -851,7 +854,7 @@ func TestWriteExtractFailureDryRun(t *testing.T) {
 	deps := newFakeDeps()
 	item := &wikitypes.ClassifyItem{URL: "https://example.com", Title: "Test"}
 
-	result := writeExtractFailure(deps.dependencies(), t.TempDir(), item, wikitypes.FailureReasonEmpty, "info", true)
+	result := writeExtractFailure(deps.dependencies(), item, wikitypes.FailureReasonEmpty, "info", true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
 	assert.True(t, result.Handled)
 	assert.True(t, deps.writer.failures[0].dryRun)
@@ -863,7 +866,7 @@ func TestWriteFetchFailureWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.failureErr = errors.New("write failed")
 
-	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureFetch, wikitypes.FailureReasonHTTPError, "timeout", false)
+	result := writeFetchFailure(deps.dependencies(), "https://example.com", wikitypes.FailureFetch, wikitypes.FailureReasonHTTPError, "timeout", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
 	assert.Equal(t, wikitypes.FailureFetch, result.FailureType)
@@ -872,7 +875,7 @@ func TestWriteFetchFailureWriterError(t *testing.T) {
 func TestWriteFetchFailureDryRun(t *testing.T) {
 	deps := newFakeDeps()
 
-	result := writeFetchFailure(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureFetch, wikitypes.FailureReasonHTTPError, "timeout", true)
+	result := writeFetchFailure(deps.dependencies(), "https://example.com", wikitypes.FailureFetch, wikitypes.FailureReasonHTTPError, "timeout", true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
 	assert.False(t, result.Handled, "transient failures keep the inbox line")
 	assert.True(t, result.Retryable)
@@ -885,7 +888,7 @@ func TestWriteAIErrorWriterError(t *testing.T) {
 	deps := newFakeDeps()
 	deps.writer.failureErr = errors.New("write failed")
 
-	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureReasonAI, "AI timeout", false)
+	result := writeAIError(deps.dependencies(), "https://example.com", wikitypes.FailureReasonAI, "AI timeout", false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
 	assert.Equal(t, wikitypes.FailureAI, result.FailureType)
@@ -894,7 +897,7 @@ func TestWriteAIErrorWriterError(t *testing.T) {
 func TestWriteAIErrorDryRun(t *testing.T) {
 	deps := newFakeDeps()
 
-	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureReasonAI, "AI timeout", true)
+	result := writeAIError(deps.dependencies(), "https://example.com", wikitypes.FailureReasonAI, "AI timeout", true)
 	assert.Equal(t, StatusDryRunFailure, result.Status)
 	assert.False(t, result.Handled, "AI failure is transient; keep the inbox line")
 	assert.True(t, result.Retryable)
@@ -904,7 +907,7 @@ func TestWriteAIErrorDryRun(t *testing.T) {
 func TestWriteCatalogErrorIsRetryableAndDistinct(t *testing.T) {
 	deps := newFakeDeps()
 
-	result := writeAIError(deps.dependencies(), t.TempDir(), "https://example.com", wikitypes.FailureReasonCatalog, "catalog down", true)
+	result := writeAIError(deps.dependencies(), "https://example.com", wikitypes.FailureReasonCatalog, "catalog down", true)
 	assert.Equal(t, wikitypes.FailureReasonCatalog, result.FailureReason)
 	assert.True(t, result.Retryable)
 	assert.False(t, result.Handled)
@@ -924,7 +927,7 @@ func TestWriteSummaryNeedsManualReview(t *testing.T) {
 		NeedsManualReview: true,
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, false, false)
+	result := writeSummary(deps.dependencies(), item, false, false)
 	assert.Equal(t, StatusSummaryWritten, result.Status)
 	assert.True(t, result.Handled)
 	assert.Contains(t, result.OutputPath, "summary.md")
@@ -944,7 +947,7 @@ func TestWriteSummaryNeedsManualReviewNoTopicGoesUncat(t *testing.T) {
 		RouteReason:       wikitypes.RouteReasonNoTopicMatch,
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, false, false)
+	result := writeSummary(deps.dependencies(), item, false, false)
 	assert.Equal(t, StatusSummaryWritten, result.Status)
 	assert.True(t, result.Handled)
 	assert.Contains(t, result.OutputPath, "uncat.md")
@@ -963,7 +966,7 @@ func TestWriteSummaryManualReviewWriterError(t *testing.T) {
 		NeedsManualReview: true,
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, false, false)
+	result := writeSummary(deps.dependencies(), item, false, false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "disk full")
 }
@@ -979,7 +982,7 @@ func TestWriteSummaryWriterError(t *testing.T) {
 		Summary:   &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, false, false)
+	result := writeSummary(deps.dependencies(), item, false, false)
 	assert.Equal(t, StatusUnhandledError, result.Status)
 	assert.Contains(t, result.Error, "write failed")
 }
@@ -1006,7 +1009,7 @@ func TestWriteSummaryNeedsManualReviewDryRun(t *testing.T) {
 		NeedsManualReview: true,
 	}
 
-	result := writeSummary(deps.dependencies(), t.TempDir(), item, true, false)
+	result := writeSummary(deps.dependencies(), item, true, false)
 	assert.Equal(t, StatusDryRunSummary, result.Status)
 	assert.True(t, result.Handled)
 }
@@ -1080,7 +1083,7 @@ func TestProcessAddURLUnhandledClassifyRetryError(t *testing.T) {
 	}
 	// No classifier result → AI failure JSONL (retryable), not unhandled.
 
-	results := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), "https://example.com/a", false)
+	results := processAddURL(context.Background(), deps.dependencies(), "https://example.com/a", false)
 	require.Len(t, results, 1)
 	assert.Equal(t, StatusFailureWritten, results[0].Status)
 	assert.False(t, results[0].Handled, "transient AI failure keeps the inbox line")

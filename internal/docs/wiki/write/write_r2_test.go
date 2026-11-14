@@ -2,11 +2,11 @@ package write
 
 import (
 	"context"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/adrg/frontmatter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
@@ -76,7 +76,7 @@ func TestDigestObjectKey(t *testing.T) {
 
 func TestWriteSummaryR2UploadsPerPostObject(t *testing.T) {
 	store := newFakeDigestStore()
-	opts := &WriteOptions{WikiRoot: t.TempDir(), R2Store: store}
+	opts := &WriteOptions{R2Store: store}
 
 	url := "https://example.com/a"
 	path, err := WriteSummary(&types.ClassifyItem{
@@ -104,33 +104,52 @@ func TestWriteSummaryR2UploadsPerPostObject(t *testing.T) {
 	assert.True(t, strings.HasSuffix(key, ".md"))
 
 	content := string(store.objects[key])
-	assert.Contains(t, content, url)
-	assert.Contains(t, content, "topic: AI/agent")
+	assert.True(t, strings.HasPrefix(content, "---\n"), "post must start with YAML frontmatter: %q", content)
+	assert.Contains(t, content, "title: entry\n")
+	assert.Contains(t, content, "URL: "+url+"\n")
+	assert.Contains(t, content, "topic: AI/agent\n")
+	assert.NotContains(t, content, "```")
+	assert.NotContains(t, content, "\n### ")
 }
 
-func TestWriteSummaryR2LocalWikiRootStaysEmpty(t *testing.T) {
-	root := t.TempDir()
-	store := newFakeDigestStore()
-	opts := &WriteOptions{WikiRoot: root, R2Store: store}
+// The frontmatter must round-trip through a YAML parser: the original metadata
+// values are emitted as quoted scalars when needed.
+func TestBuildEntryFrontmatterRoundTrips(t *testing.T) {
+	item := &types.ClassifyItem{
+		URL:           "https://example.com/a?x=1&y=2",
+		Title:         "Title: with a colon",
+		TopicPath:     "AI/agent",
+		Type:          types.TypeDeepDive,
+		MetadataBlock: "Type: text\ntags: KWIC, 系统设计\nverdict: try",
+		TranscriptURL: "https://example.com/t.md",
+		Summary:       &types.StructuredSummary{Overview: "summary"},
+	}
 
-	_, err := WriteSummary(&types.ClassifyItem{
-		URL:       "https://example.com/a",
-		Title:     "entry",
-		TopicPath: "AI/agent",
-		Type:      types.TypeDeepDive,
-		Summary:   &types.StructuredSummary{Overview: "summary"},
-	}, opts)
+	var fm struct {
+		Title      string `yaml:"title"`
+		URL        string `yaml:"URL"`
+		Topic      string `yaml:"topic"`
+		Type       string `yaml:"Type"`
+		Tags       string `yaml:"tags"`
+		Verdict    string `yaml:"verdict"`
+		Transcript string `yaml:"Transcript"`
+	}
+	body, err := frontmatter.Parse(strings.NewReader(buildEntry(item)), &fm)
 	require.NoError(t, err)
-
-	// No summary.md, no date-summary.md, no topic dirs under the local root.
-	entries, err := os.ReadDir(root)
-	require.NoError(t, err)
-	assert.Empty(t, entries, "R2 mode must not write anything to the local wiki root")
+	assert.Equal(t, item.Title, fm.Title)
+	assert.Equal(t, item.URL, fm.URL)
+	assert.Equal(t, item.TopicPath, fm.Topic)
+	assert.Equal(t, "text", fm.Type)
+	assert.Equal(t, "KWIC, 系统设计", fm.Tags)
+	assert.Equal(t, "try", fm.Verdict)
+	assert.Equal(t, item.TranscriptURL, fm.Transcript)
+	assert.NotContains(t, string(body), "---")
+	assert.Contains(t, string(body), "#### overview")
 }
 
 func TestLogDigestEntryR2MergesJSONL(t *testing.T) {
 	store := newFakeDigestStore()
-	opts := &WriteOptions{WikiRoot: t.TempDir(), R2Store: store, BatchID: "wiki-2026-10-26"}
+	opts := &WriteOptions{R2Store: store, BatchID: "wiki-2026-10-26"}
 
 	// Two successes append to the same logs/digest-success.jsonl object.
 	for _, u := range []string{"https://example.com/a", "https://example.com/b"} {
@@ -152,7 +171,7 @@ func TestLogDigestEntryR2MergesJSONL(t *testing.T) {
 
 func TestWriteManualReviewEntryR2WritesUncat(t *testing.T) {
 	store := newFakeDigestStore()
-	opts := &WriteOptions{WikiRoot: t.TempDir(), R2Store: store}
+	opts := &WriteOptions{R2Store: store}
 
 	path, err := WriteManualReviewEntry(&types.ClassifyItem{
 		URL:         "https://example.com/needs-review",
@@ -168,5 +187,8 @@ func TestWriteManualReviewEntryR2WritesUncat(t *testing.T) {
 
 	// uncat.md put plus its success-log put.
 	require.Contains(t, store.puts, "uncat.md")
-	assert.Contains(t, string(store.objects["uncat.md"]), "review me")
+	content := string(store.objects["uncat.md"])
+	assert.Contains(t, content, "### review me")
+	assert.Contains(t, content, "---\ntitle: review me\n")
+	assert.NotContains(t, content, "```")
 }

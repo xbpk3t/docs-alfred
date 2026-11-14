@@ -1,275 +1,16 @@
 package write
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
-	carbon "github.com/dromara/carbon/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
-
-func TestParseSummaryFrontmatter(t *testing.T) {
-	raw := `---
-title: demo
-date: 2026-06-06
-source: wiki-inbox
-batch_id: wiki-2026-06-06
-total_urls: 2
-succeeded: 1
-failed: 1
----
-
-## 2026-06-06
-
-body
-`
-
-	result := parseSummaryFrontmatter(raw)
-
-	require.NotNil(t, result)
-	assert.Equal(t, "demo", result.fm.Title)
-	assert.Equal(t, "wiki-2026-06-06", result.fm.BatchID)
-	assert.Contains(t, result.body, "## 2026-06-06")
-}
-
-func TestParseSummaryFrontmatterBodyCanContainDelimiters(t *testing.T) {
-	raw := `---
-title: demo
-date: 2026-06-06
----
-
-before
----
-after
-`
-
-	result := parseSummaryFrontmatter(raw)
-
-	require.NotNil(t, result)
-	assert.Contains(t, result.body, "before\n---\nafter")
-}
-
-func TestParseSummaryFrontmatterRequiresLeadingFrontmatter(t *testing.T) {
-	raw := `intro
----
-title: demo
----
-`
-
-	assert.Nil(t, parseSummaryFrontmatter(raw))
-}
-
-func TestWriteSummaryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
-	root := t.TempDir()
-	item := &types.ClassifyItem{
-		URL:       "https://example.com/a",
-		Title:     "A",
-		TopicPath: "topic/path",
-		Type:      types.TypeDeepDive,
-		Summary:   &types.StructuredSummary{Overview: "summary"},
-	}
-
-	path, err := WriteSummary(item, &WriteOptions{WikiRoot: root, DryRun: true})
-
-	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(root, "topic", "path", "summary.md"), path)
-	_, err = os.Stat(filepath.Join(root, "topic"))
-	assert.True(t, os.IsNotExist(err))
-}
-
-func TestWriteFailureEntryDryRunDoesNotCreateDirectoryOrFile(t *testing.T) {
-	root := t.TempDir()
-	item := &types.ClassifyItem{
-		URL:   "https://example.com/a",
-		Title: "A",
-	}
-
-	path, err := WriteFailureEntry(item, types.FailureFetch, types.FailureReasonHTTPError, "fetch failed", &WriteOptions{WikiRoot: root, DryRun: true})
-
-	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(root, "digest-fetch-error.jsonl"), path)
-	_, err = os.Stat(filepath.Join(root, "digest-fetch-error.jsonl"))
-	assert.True(t, os.IsNotExist(err))
-}
-
-func TestWriteSummaryConcurrentSameTopicDoesNotLoseEntries(t *testing.T) {
-	root := t.TempDir()
-	const count = 20
-	var wg sync.WaitGroup
-	for i := range count {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			_, err := WriteSummary(&types.ClassifyItem{
-				URL:       fmt.Sprintf("https://example.com/%02d", i),
-				Title:     fmt.Sprintf("Item %02d", i),
-				TopicPath: "topic/path",
-				Type:      types.TypeDeepDive,
-				Summary:   &types.StructuredSummary{Overview: "summary"},
-			}, &WriteOptions{WikiRoot: root})
-			require.NoError(t, err)
-		}(i)
-	}
-	wg.Wait()
-
-	data, err := os.ReadFile(filepath.Join(root, "topic", "path", "summary.md"))
-	require.NoError(t, err)
-	parsed := parseSummaryFrontmatter(string(data))
-	require.NotNil(t, parsed)
-	require.Equal(t, count, parsed.fm.TotalURLs)
-	require.Equal(t, count, parsed.fm.Succeeded)
-	for i := range count {
-		require.Equal(t, 1, strings.Count(string(data), fmt.Sprintf("https://example.com/%02d", i)))
-	}
-}
-
-func TestWriteSummaryForcesDigestTypeRegardlessOfItemType(t *testing.T) {
-	root := t.TempDir()
-	// A research (deep-dive) item must still yield a type=digest summary.md.
-	item := &types.ClassifyItem{
-		URL:       "https://example.com/a",
-		Title:     "A",
-		TopicPath: "topic/path",
-		Type:      types.TypeDeepDive,
-		Summary:   &types.StructuredSummary{Overview: "summary"},
-	}
-
-	path, err := WriteSummary(item, &WriteOptions{WikiRoot: root})
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	parsed := parseSummaryFrontmatter(string(data))
-	require.NotNil(t, parsed)
-	assert.Equal(t, "digest", parsed.fm.Type)
-}
-
-func TestWriteSummarySelfHealsStaleNonDigestType(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "topic", "path")
-	require.NoError(t, os.MkdirAll(dir, 0o700))
-	summary := filepath.Join(dir, "summary.md")
-	require.NoError(t, os.WriteFile(summary, []byte("---\ntype: research\ntitle: s\ndate: 2026-01-01\nsource: s\n---\n\n## 2026-01-01\n\nold\n"), 0o600))
-
-	_, err := WriteSummary(&types.ClassifyItem{
-		URL:       "https://example.com/b",
-		Title:     "B",
-		TopicPath: "topic/path",
-		Type:      types.TypeDeepDive,
-		Summary:   &types.StructuredSummary{Overview: "summary"},
-	}, &WriteOptions{WikiRoot: root})
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(summary)
-	require.NoError(t, err)
-	parsed := parseSummaryFrontmatter(string(data))
-	require.NotNil(t, parsed)
-	assert.Equal(t, "digest", parsed.fm.Type)
-	assert.Contains(t, string(data), "old") // existing body preserved
-}
-
-// writeSummaryT writes one digest entry and returns the summary path.
-func writeSummaryT(t *testing.T, opts *WriteOptions, url, topic string) string {
-	t.Helper()
-
-	path, err := WriteSummary(&types.ClassifyItem{
-		URL:       url,
-		Title:     "entry " + topic,
-		TopicPath: topic,
-		Type:      types.TypeDeepDive,
-		Summary:   &types.StructuredSummary{Overview: "summary"},
-	}, opts)
-	require.NoError(t, err, "write %s", url)
-
-	return path
-}
-
-func TestWriteSummaryTopicModeKeepsDateHeading(t *testing.T) {
-	root := t.TempDir()
-	today := carbon.Now().ToDateString()
-
-	path := writeSummaryT(t, &WriteOptions{WikiRoot: root}, "https://example.com/a", "topic/path")
-	assert.Equal(t, filepath.Join(root, "topic", "path", "summary.md"), path)
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "\n## "+today+"\n")
-	assert.Contains(t, string(data), "topic: topic/path\n")
-}
-
-// --- aggregate mode (wiki.isAggr) ---
-
-func TestWriteSummaryAggregateModeGroupsByTopic(t *testing.T) {
-	root := t.TempDir()
-	today := carbon.Now().ToDateString()
-	opts := &WriteOptions{WikiRoot: root, IsAggr: true}
-
-	writeSummaryT(t, opts, "https://example.com/a", "AI/agent")
-	writeSummaryT(t, opts, "https://example.com/b", "db/RDB")
-	writeSummaryT(t, opts, "https://example.com/c", "AI/agent")
-
-	path := filepath.Join(root, today+"-summary.md")
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-
-	// One file for the whole day; no per-topic dirs are created.
-	_, err = os.Stat(filepath.Join(root, "AI"))
-	assert.True(t, os.IsNotExist(err))
-
-	parsed := parseSummaryFrontmatter(string(data))
-	require.NotNil(t, parsed)
-	assert.Equal(t, 3, parsed.fm.TotalURLs)
-	assert.Equal(t, 3, parsed.fm.Succeeded)
-	assert.Equal(t, "wiki-"+today, parsed.fm.Title)
-
-	// One section per topic; same-topic entries merge under it across runs.
-	body := string(data)
-	assert.Equal(t, 1, strings.Count(body, "\n## AI/agent\n"))
-	assert.Equal(t, 1, strings.Count(body, "\n## db/RDB\n"))
-	assert.Equal(t, 2, strings.Count(body, "topic: AI/agent\n"))
-	for _, u := range []string{"https://example.com/a", "https://example.com/b", "https://example.com/c"} {
-		assert.Equal(t, 1, strings.Count(body, u))
-	}
-}
-
-func TestWriteSummaryAggregateModeNestedTopicDoesNotCollide(t *testing.T) {
-	root := t.TempDir()
-	opts := &WriteOptions{WikiRoot: root, IsAggr: true}
-
-	writeSummaryT(t, opts, "https://example.com/parent", "AI/agent")
-	writeSummaryT(t, opts, "https://example.com/child", "AI/agent/agent-fwk")
-	writeSummaryT(t, opts, "https://example.com/parent2", "AI/agent")
-
-	data, err := os.ReadFile(filepath.Join(root, carbon.Now().ToDateString()+"-summary.md"))
-	require.NoError(t, err)
-
-	// Parent and child each own exactly one section; the parent's second entry
-	// must not land in the child's section (prefix collision).
-	body := string(data)
-	assert.Equal(t, 1, strings.Count(body, "\n## AI/agent\n"))
-	assert.Equal(t, 1, strings.Count(body, "\n## AI/agent/agent-fwk\n"))
-	assert.Equal(t, 2, strings.Count(body, "topic: AI/agent\n"))
-	assert.Equal(t, 1, strings.Count(body, "topic: AI/agent/agent-fwk\n"))
-
-	heading := "\n## AI/agent\n"
-	start := strings.Index(body, heading)
-	require.Greater(t, start, -1)
-	rest := body[start+len(heading):]
-	parentSection := rest
-	if end := strings.Index(rest, "\n## "); end >= 0 {
-		parentSection = rest[:end]
-	}
-	assert.Contains(t, parentSection, "https://example.com/parent")
-	assert.Contains(t, parentSection, "https://example.com/parent2")
-	assert.NotContains(t, parentSection, "https://example.com/child")
-}
 
 func TestParseInboxMarkdownLinksAndBareURLs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "inbox.md")
@@ -363,71 +104,6 @@ func TestFlushInboxKeepsUnhandledMarkdownLinkURL(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), "https://example.com/done")
 	assert.Contains(t, string(data), "https://example.com/todo")
-}
-
-func TestLockPathReturnsUnlockFunc(t *testing.T) {
-	unlock := lockPath(filepath.Join(t.TempDir(), "test.md"))
-	assert.NotNil(t, unlock)
-	unlock()
-}
-
-func TestLockPathConcurrentAccess(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.md")
-	var wg sync.WaitGroup
-	for range 10 {
-		wg.Go(func() {
-			unlock := lockPath(path)
-			unlock()
-		})
-	}
-	wg.Wait()
-}
-
-// --- loadFrontmatter ---
-
-func TestLoadFrontmatterNonFrontmatterContent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "summary.md")
-	require.NoError(t, os.WriteFile(path, []byte("just plain content without frontmatter"), 0o600))
-
-	item := &types.ClassifyItem{TopicPath: "topic/path"}
-	fm, body := loadFrontmatter(path, item, "2026-06-20", "batch-1")
-
-	assert.Equal(t, "path", fm.Title)
-	assert.Equal(t, "2026-06-20", fm.Date)
-	assert.Equal(t, "batch-1", fm.BatchID)
-	assert.Equal(t, 0, fm.TotalURLs)
-	assert.Contains(t, body, "just plain content")
-}
-
-func TestLoadFrontmatterWithExistingFrontmatter(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "summary.md")
-	require.NoError(t, os.WriteFile(path, []byte(`---
-title: existing
-date: 2026-06-01
-total_urls: 5
-succeeded: 3
----
-
-existing body
-`), 0o600))
-
-	item := &types.ClassifyItem{TopicPath: "topic/path"}
-	fm, body := loadFrontmatter(path, item, "2026-06-20", "batch-1")
-
-	assert.Equal(t, "existing", fm.Title)
-	assert.Equal(t, 5, fm.TotalURLs)
-	assert.Equal(t, 3, fm.Succeeded)
-	assert.Contains(t, body, "existing body")
-}
-
-func TestLoadFrontmatterNewFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nonexistent.md")
-	item := &types.ClassifyItem{TopicPath: "topic/path"}
-	fm, body := loadFrontmatter(path, item, "2026-06-20", "batch-1")
-
-	assert.Equal(t, "path", fm.Title)
-	assert.Equal(t, "2026-06-20", fm.Date)
-	assert.Empty(t, body)
 }
 
 // --- appendEntryToExistingSection ---
@@ -573,39 +249,39 @@ func TestNormalizedURLSet(t *testing.T) {
 // --- WriteManualReviewEntry with MetadataBlock ---
 
 func TestWriteManualReviewEntryWithMetadataBlock(t *testing.T) {
-	root := t.TempDir()
-	path, err := WriteManualReviewEntry(&types.ClassifyItem{
+	store := newFakeDigestStore()
+	_, err := WriteManualReviewEntry(&types.ClassifyItem{
 		URL:           "https://example.com",
 		Title:         "Test Item",
 		MetadataBlock: "Type: text\nauthor: Alice",
 		Summary:       &types.StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
-	}, &WriteOptions{WikiRoot: root})
+	}, &WriteOptions{R2Store: store})
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "Type: text")
-	assert.Contains(t, string(data), "author: Alice")
+	content := string(store.objects["uncat.md"])
+	assert.Contains(t, content, "---\ntitle: Test Item\n")
+	assert.Contains(t, content, "Type: text")
+	assert.Contains(t, content, "author: Alice")
+	assert.NotContains(t, content, "```")
 }
 
 // --- WriteSummary with MetadataBlock ---
 
 func TestWriteSummaryWithMetadataBlock(t *testing.T) {
-	root := t.TempDir()
-	path, err := WriteSummary(&types.ClassifyItem{
+	store := newFakeDigestStore()
+	_, err := WriteSummary(&types.ClassifyItem{
 		URL:           "https://example.com",
 		Title:         "Test",
 		TopicPath:     "topic/path",
 		Type:          types.TypeDeepDive,
 		MetadataBlock: "Type: text\nquality: high",
 		Summary:       &types.StructuredSummary{Overview: "overview", KeyPoints: []string{"point"}},
-	}, &WriteOptions{WikiRoot: root})
+	}, &WriteOptions{R2Store: store})
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "Type: text")
-	assert.Contains(t, string(data), "quality: high")
+	content := string(store.objects[firstDigestKey(t, store)])
+	assert.Contains(t, content, "Type: text")
+	assert.Contains(t, content, "quality: high")
 }
 
 // --- appendToFile ---
@@ -618,25 +294,11 @@ func TestFailureKindString(t *testing.T) {
 	assert.Equal(t, "ai", types.FailureAI.String())
 }
 
-// --- renderContent with YAML marshal error ---
-
-func TestRenderContentFallbackOnMarshalError(t *testing.T) {
-	// SummaryFrontmatter with valid fields should marshal fine
-	fm := &SummaryFrontmatter{
-		Title:  "test",
-		Date:   "2026-06-20",
-		Source: "rss2nl-wiki",
-	}
-	content := renderContent(fm, "body")
-	assert.True(t, strings.HasPrefix(content, "---"))
-	assert.Contains(t, content, "body")
-}
-
 // --- WriteSummary with full metadata ---
 
 func TestWriteSummaryFullMetadata(t *testing.T) {
-	root := t.TempDir()
-	path, err := WriteSummary(&types.ClassifyItem{
+	store := newFakeDigestStore()
+	_, err := WriteSummary(&types.ClassifyItem{
 		URL:           "https://example.com",
 		Title:         "Full Test",
 		TopicPath:     "tech/research/go",
@@ -648,63 +310,50 @@ func TestWriteSummaryFullMetadata(t *testing.T) {
 			KeyPoints:   []string{"Point 1", "Point 2"},
 			Detail:      "Detailed analysis",
 		},
-	}, &WriteOptions{WikiRoot: root, BatchID: "test-batch"})
+	}, &WriteOptions{R2Store: store, BatchID: "test-batch"})
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	content := string(data)
-	assert.Contains(t, content, "Full Test")
+	key := firstDigestKey(t, store)
+	assert.Contains(t, key, "test-batch")
+	content := string(store.objects[key])
+	assert.Contains(t, content, "title: Full Test")
 	assert.Contains(t, content, "Type: text")
 	assert.Contains(t, content, "quality: high")
-	assert.Contains(t, content, "test-batch")
 	assert.Contains(t, content, "overview")
 	assert.Contains(t, content, "keyPoints")
 	assert.Contains(t, content, "detail")
 }
 
+// firstDigestKey returns the single digest object key a write test uploaded.
+func firstDigestKey(t *testing.T, store *fakeDigestStore) string {
+	t.Helper()
+	for _, key := range store.puts {
+		if strings.HasPrefix(key, "digest/") {
+			return key
+		}
+	}
+	t.Fatalf("no digest object uploaded; puts=%v", store.puts)
+
+	return ""
+}
+
 // --- WriteFailureEntry with real write ---
 
 func TestWriteFailureEntryRealWrite(t *testing.T) {
-	root := t.TempDir()
+	store := newFakeDigestStore()
 	item := &types.ClassifyItem{
 		URL:   "https://example.com",
 		Title: "Failed Item",
 	}
 
-	path, err := WriteFailureEntry(item, types.FailureExtract, types.FailureReasonPartialExtract, "extraction failed", &WriteOptions{WikiRoot: root})
+	path, err := WriteFailureEntry(item, types.FailureExtract, types.FailureReasonPartialExtract, "extraction failed", &WriteOptions{R2Store: store})
 	require.NoError(t, err)
-	assert.NotEmpty(t, path)
+	assert.Equal(t, "logs/digest-extract-error.jsonl", path)
 
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "https://example.com")
-	assert.Contains(t, string(data), "extraction failed")
-	assert.Contains(t, string(data), `"failureReason":"partial_extract"`)
-}
-
-// --- appendEntryBody edge cases ---
-
-func TestAppendEntryBodyExistingContentNoDateHeading(t *testing.T) {
-	existing := "Some existing content without date headings"
-	result := appendEntryBody(existing, "## 2026-06-20", "### New Entry")
-	assert.Contains(t, result, "Some existing content")
-	assert.Contains(t, result, "## 2026-06-20")
-	assert.Contains(t, result, "### New Entry")
-}
-
-func TestAppendEntryBodyExistingContentWithOtherDateHeading(t *testing.T) {
-	existing := "## 2026-06-19\n\n### Old Entry\n"
-	result := appendEntryBody(existing, "## 2026-06-20", "### New Entry")
-	assert.Contains(t, result, "## 2026-06-20")
-	assert.Contains(t, result, "## 2026-06-19")
-	assert.Contains(t, result, "### New Entry")
-}
-
-func TestAppendEntryBodyEmptyExisting(t *testing.T) {
-	result := appendEntryBody("", "## 2026-06-20", "### Entry")
-	assert.Contains(t, result, "## 2026-06-20")
-	assert.Contains(t, result, "### Entry")
+	data := string(store.objects[path])
+	assert.Contains(t, data, "https://example.com")
+	assert.Contains(t, data, "extraction failed")
+	assert.Contains(t, data, `"failureReason":"partial_extract"`)
 }
 
 // --- FlushInbox with multiple lines ---
@@ -781,23 +430,11 @@ func TestFlushInboxLineFlushedButUnhandled(t *testing.T) {
 	assert.Contains(t, result, "https://example.com/b")
 }
 
-// --- parseSummaryFrontmatter edge cases ---
-
-func TestParseSummaryFrontmatterNoFrontmatter(t *testing.T) {
-	result := parseSummaryFrontmatter("just content without frontmatter")
-	assert.Nil(t, result)
-}
-
-func TestParseSummaryFrontmatterInvalidYAML(t *testing.T) {
-	result := parseSummaryFrontmatter("---\ninvalid: [yaml: content\n---\nbody")
-	assert.Nil(t, result)
-}
-
 // --- WriteManualReviewEntry full path ---
 
 func TestWriteManualReviewEntryFull(t *testing.T) {
-	root := t.TempDir()
-	path, err := WriteManualReviewEntry(&types.ClassifyItem{
+	store := newFakeDigestStore()
+	_, err := WriteManualReviewEntry(&types.ClassifyItem{
 		URL:           "https://example.com/article",
 		Title:         "Review Item",
 		Type:          types.TypeDeepDive,
@@ -807,16 +444,16 @@ func TestWriteManualReviewEntryFull(t *testing.T) {
 			KeyPoints:   []string{"key1", "key2"},
 			WorthNoting: "note",
 		},
-	}, &WriteOptions{WikiRoot: root, BatchID: "batch-1"})
+	}, &WriteOptions{R2Store: store, BatchID: "batch-1"})
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	content := string(data)
-	assert.Contains(t, content, "Review Item")
+	content := string(store.objects["uncat.md"])
+	assert.Contains(t, content, "### Review Item")
+	assert.Contains(t, content, "title: Review Item")
 	assert.Contains(t, content, "Type: text")
 	assert.Contains(t, content, "overview")
 	assert.Contains(t, content, "Overview text")
+	assert.NotContains(t, content, "```")
 }
 
 // --- extractInboxLineURLRefs ---
@@ -899,4 +536,9 @@ func TestManualReviewContainsURL(t *testing.T) {
 	content := "### A\n\n```markdown\nURL: https://example.com/post?utm_source=x\nType: inbox\n```\n"
 	assert.True(t, manualReviewContainsURL(content, "https://example.com/post"))
 	assert.False(t, manualReviewContainsURL(content, "https://example.com/other"))
+
+	// Current format is YAML frontmatter. The encoder quotes URLs containing
+	// '#', and the quoted value must still normalize to the same dedup key.
+	frontmatter := "### B\n\n---\ntitle: B\nURL: \"https://example.com/post#section\"\n---\n\nbody\n"
+	assert.True(t, manualReviewContainsURL(frontmatter, "https://example.com/post#section"))
 }

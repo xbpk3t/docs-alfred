@@ -10,12 +10,10 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 
-	"github.com/adrg/frontmatter"
 	carbon "github.com/dromara/carbon/v2"
 	"github.com/goccy/go-yaml"
 	"github.com/xbpk3t/docs-alfred/internal/gh/index"
@@ -23,36 +21,18 @@ import (
 	"github.com/xbpk3t/docs-alfred/pkg/urlutil"
 )
 
-// SummaryFrontmatter is the YAML frontmatter for summary.md files.
-type SummaryFrontmatter struct {
-	Title     string `yaml:"title"`
-	Date      string `yaml:"date"`
-	Source    string `yaml:"source"`
-	Type      string `yaml:"type"`
-	BatchID   string `yaml:"batch_id"`
-	TotalURLs int    `yaml:"total_urls"`
-	Succeeded int    `yaml:"succeeded"`
-	Failed    int    `yaml:"failed"`
-}
-
-// WriteOptions contains options for writing wiki entries.
+// WriteOptions contains options for writing wiki entries. Digest artifacts are
+// remote-only: every write goes to R2, so R2Store is required.
 type WriteOptions struct {
 	R2Store         DigestStore
 	ValidTopicPaths map[string]bool
-	WikiRoot        string
 	BatchID         string
 	DryRun          bool
-	IsAggr          bool
 	// SkipHistory writes the artifact but does not append a success entry to
 	// digest-success.jsonl. Multi-item synthesis entries use it while the line
 	// still has retryable child failures, so a later run re-expands the thread.
 	SkipHistory bool
 }
-
-var pathLocks = struct {
-	locks map[string]*sync.Mutex
-	mu    sync.Mutex
-}{locks: make(map[string]*sync.Mutex)}
 
 // R2 has no append/CAS primitive, so read-merge-write must be serialized at
 // least inside this process. r2UncatMu and r2LogMu are separate because an
@@ -63,42 +43,15 @@ var (
 	r2LogMu   sync.Mutex
 )
 
-// DigestStore is the R2 surface the write layer needs when digest artifacts go
-// remote. *litter.R2 implements it via a small adapter in the ingest package;
-// tests fake it.
+// DigestStore is the R2 surface the write layer needs; digest artifacts are
+// remote-only. *litter.R2 implements it via a small adapter in the ingest
+// package; tests fake it.
 type DigestStore interface {
 	// Upload stores content under the given object name and returns its public
 	// URL.
 	Upload(ctx context.Context, key, content string) (string, error)
 	// GetObject reads an object's content; a missing object reads as empty.
 	GetObject(ctx context.Context, key string) ([]byte, error)
-}
-
-func lockPath(path string) func() {
-	key, err := filepath.Abs(path)
-	if err != nil {
-		key = filepath.Clean(path)
-	}
-
-	pathLocks.mu.Lock()
-	mu := pathLocks.locks[key]
-	if mu == nil {
-		mu = &sync.Mutex{}
-		pathLocks.locks[key] = mu
-	}
-	pathLocks.mu.Unlock()
-
-	mu.Lock()
-
-	return func() {
-		mu.Unlock()
-		// Clean up the map entry if no other goroutine is waiting.
-		pathLocks.mu.Lock()
-		if pathLocks.locks[key] == mu {
-			delete(pathLocks.locks, key)
-		}
-		pathLocks.mu.Unlock()
-	}
 }
 
 // routeInvalidTopicPath fuzzy-resolves or reroutes invalid topic paths to uncat.
@@ -133,11 +86,14 @@ func routeInvalidTopicPath(item *types.ClassifyItem, opts *WriteOptions) (bool, 
 	return true, out, err
 }
 
-// WriteSummary writes a structured summary.md entry with YAML frontmatter.
-// Follows TS writer.ts: appendToSummaryFile.
+// WriteSummary writes one digest post to R2 as a standalone markdown file with
+// YAML frontmatter.
 func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) {
+	if opts == nil || opts.R2Store == nil {
+		return "", errors.New("write summary: r2 store required")
+	}
 	if item.TopicPath == "" {
-		// Empty TopicPath would write to wiki root — route to classify rejection.
+		// No topic means no digest location — route to classify rejection.
 		_, err := WriteFailureEntry(item, types.FailureClassify, types.FailureReasonClassify, "empty topic path", opts)
 
 		return "", err
@@ -149,89 +105,24 @@ func WriteSummary(item *types.ClassifyItem, opts *WriteOptions) (string, error) 
 		return outPath, err
 	}
 
-	today := carbon.Now().ToDateString()
 	batchID := opts.BatchID
 	if batchID == "" {
-		batchID = "wiki-" + today
+		batchID = "wiki-" + carbon.Now().ToDateString()
 	}
 
-	// Aggregate mode (wiki.isAggr) collects the day's entries into one
-	// <date>-summary.md at the wiki root, grouped by topic path. The default
-	// per-topic mode writes <topic>/summary.md, grouped by date.
-	summaryPath := filepath.Join(resolveTopicDir(item, opts), types.SummaryFile)
-	sectionHeading := "## " + today
-	fmTitle := filepath.Base(item.TopicPath)
-	if opts.IsAggr {
-		summaryPath = filepath.Join(opts.WikiRoot, today+"-summary.md")
-		sectionHeading = "## " + item.TopicPath
-		fmTitle = batchID
-	}
-	// PathWithin is used even when ValidTopicPaths is nil (catalog outage), so
-	// an AI-supplied or pinned topic path can never escape the wiki root.
-	if !fileutil.PathWithin(opts.WikiRoot, summaryPath) {
-		return "", fmt.Errorf("summary path escapes wiki root: %s", summaryPath)
-	}
-
+	key := digestObjectKey(batchID, item.TopicPath, item.URL)
 	if opts.DryRun {
-		if opts.R2Store != nil {
-			slog.Info("[DRY RUN] Would write summary to R2",
-				"key", digestObjectKey(batchID, item.TopicPath, item.URL), "url", item.URL, "topic", item.TopicPath)
+		slog.Info("[DRY RUN] Would write summary to R2", "key", key, "url", item.URL, "topic", item.TopicPath)
 
-			return digestObjectKey(batchID, item.TopicPath, item.URL), nil
-		}
-		slog.Info("[DRY RUN] Would write summary", "path", summaryPath)
-
-		return summaryPath, nil
+		return key, nil
 	}
 
-	entry := buildEntry(item)
-
-	// R2 mode: every post is its own object at digest/<batch>/<topic>/<hash>.md,
-	// so the wiki tree stays free of digest artifacts. batch = one digest run.
-	if opts.R2Store != nil {
-		return writeSummaryR2(item, entry, batchID, opts)
-	}
-
-	unlock := lockPath(summaryPath)
-	defer unlock()
-
-	fm, existingBody := loadFrontmatter(summaryPath, item, today, batchID)
-
-	fm.TotalURLs++
-	fm.Succeeded++
-	fm.BatchID = batchID
-	fm.Date = today
-	fm.Title = fmTitle
-	// A summary.md aggregates many entries, so its frontmatter type reflects its
-	// role (digest) — NOT the type of the individual item being digested. The
-	// per-entry type (research/blog/etc.) lives in the body entry metadata. Forcing
-	// digest here also self-heals files that were written with a per-entry type.
-	// Binding is shared with the checker via wikitypes.ArtifactTypeFor so the two
-	// sides can't drift.
-	fm.Type = string(types.ArtifactTypeFor(types.SummaryFile))
-
-	newBody := appendEntryBody(existingBody, sectionHeading, entry)
-
-	content := renderContent(fm, newBody)
-
-	if err := fileutil.AtomicWriteFile(summaryPath, []byte(content), fileutil.FilePermPrivate); err != nil {
-		return "", fmt.Errorf("write summary: %w", err)
-	}
-
-	slog.Info("Summary written", "path", summaryPath, "topic", item.TopicPath)
-
-	// Log success to JSONL.
-	if _, err := LogSuccessEntry(item, summaryPath, opts); err != nil {
-		slog.Warn("Failed to log success entry", "url", item.URL, "error", err)
-	}
-
-	return summaryPath, nil
+	return writeSummaryR2(item, buildEntry(item), key, opts)
 }
 
 // writeSummaryR2 uploads the entry as its own object at
 // digest/<batch>/<topic>/<hash>.md and logs the success entry.
-func writeSummaryR2(item *types.ClassifyItem, entry, batchID string, opts *WriteOptions) (string, error) {
-	key := digestObjectKey(batchID, item.TopicPath, item.URL)
+func writeSummaryR2(item *types.ClassifyItem, entry, key string, opts *WriteOptions) (string, error) {
 	url, err := opts.R2Store.Upload(context.Background(), key, entry)
 	if err != nil {
 		return "", fmt.Errorf("r2 write summary: %w", err)
@@ -242,10 +133,6 @@ func writeSummaryR2(item *types.ClassifyItem, entry, batchID string, opts *Write
 	}
 
 	return url, nil
-}
-
-func resolveTopicDir(item *types.ClassifyItem, opts *WriteOptions) string {
-	return filepath.Join(opts.WikiRoot, item.TopicPath)
 }
 
 // digestObjectKey builds the R2 object key for one post's digest:
@@ -343,70 +230,75 @@ func buildEntry(item *types.ClassifyItem) string {
 		title = item.URL
 	}
 
-	// Build codeblock metadata section. URL is always the first field; topic
-	// follows it so an entry stays self-locating when it is cut out of an
-	// aggregate <date>-summary.md.
-	metaBlock := fmt.Sprintf("URL: %s\n", item.URL)
-	if item.TopicPath != "" {
-		metaBlock += fmt.Sprintf("topic: %s\n", item.TopicPath)
+	return buildEntryFrontmatter(item, title) + "\n\n" + classify.RenderStructuredSummary(item.Summary) + "\n"
+}
+
+// buildEntryFrontmatter renders the original codeblock metadata as YAML
+// frontmatter: title first, then URL/topic, then the AI metadata lines, then
+// the transcript link.
+func buildEntryFrontmatter(item *types.ClassifyItem, title string) string {
+	items := yaml.MapSlice{
+		{Key: "title", Value: title},
+		{Key: "URL", Value: item.URL},
 	}
+	if item.TopicPath != "" {
+		items = append(items, yaml.MapItem{Key: "topic", Value: item.TopicPath})
+	}
+
+	return renderFrontmatter(appendEntryMetaItems(items, item))
+}
+
+// appendEntryMetaItems appends the frontmatter fields shared by digest posts
+// and uncat entries: classifier metadata (or Type) and the transcript link.
+func appendEntryMetaItems(items yaml.MapSlice, item *types.ClassifyItem) yaml.MapSlice {
 	if item.MetadataBlock != "" {
-		metaBlock += item.MetadataBlock
-	} else {
-		// Fallback: just Type if no structured metadata.
-		metaBlock += fmt.Sprintf("Type: %s", item.Type)
+		items = append(items, metadataItems(item.MetadataBlock)...)
+	} else if item.Type != "" {
+		items = append(items, yaml.MapItem{Key: "Type", Value: string(item.Type)})
 	}
 	if item.TranscriptURL != "" {
-		metaBlock += fmt.Sprintf("\nTranscript: %s", item.TranscriptURL)
+		items = append(items, yaml.MapItem{Key: "Transcript", Value: item.TranscriptURL})
 	}
 
-	return fmt.Sprintf("### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, classify.RenderStructuredSummary(item.Summary))
+	return items
 }
 
-//nolint:nonamedreturns
-func loadFrontmatter(summaryPath string, item *types.ClassifyItem, today, batchID string) (fm *SummaryFrontmatter, body string) {
-	fm = &SummaryFrontmatter{
-		Title:     filepath.Base(item.TopicPath),
-		Date:      today,
-		Source:    "rss2nl-wiki",
-		BatchID:   batchID,
-		TotalURLs: 0,
-		Succeeded: 0,
-		Failed:    0,
-	}
-	if data, err := os.ReadFile(summaryPath); err == nil {
-		if parsed := parseSummaryFrontmatter(string(data)); parsed != nil {
-			fm = parsed.fm
-			body = parsed.body
-
-			return
+// metadataItems parses the classifier's "key: value" metadata lines into
+// ordered YAML items. Values are marshaled as YAML scalars, so a value that
+// needs quoting (a colon, a leading special character) stays valid.
+func metadataItems(block string) yaml.MapSlice {
+	var items yaml.MapSlice
+	for _, line := range strings.Split(block, "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		key = strings.TrimSpace(key)
+		if !ok || key == "" {
+			continue
 		}
-		body = string(data)
-
-		return
+		items = append(items, yaml.MapItem{Key: key, Value: strings.TrimSpace(value)})
 	}
 
-	return
+	return items
 }
 
-func appendEntryBody(existingBody, sectionHeading, entry string) string {
-	if merged, ok := appendEntryToExistingSection(existingBody, sectionHeading, entry); ok {
-		return merged
-	}
-	insertPos := strings.Index(existingBody, "\n## ")
-	if insertPos >= 0 {
-		return fmt.Sprintf("%s\n%s\n\n%s\n%s", existingBody[:insertPos], sectionHeading, entry, existingBody[insertPos:])
+// renderFrontmatter renders ordered YAML items as a standard --- block.
+func renderFrontmatter(items yaml.MapSlice) string {
+	fmYAML, err := yaml.Marshal(items)
+	if err != nil {
+		// Never lose the post body over a metadata marshal failure.
+		slog.Warn("marshal entry frontmatter", "error", err)
+
+		return "---\n---"
 	}
 
-	return fmt.Sprintf("%s%s\n\n%s\n", existingBody, sectionHeading, entry)
+	return "---\n" + string(fmYAML) + "---"
 }
 
 // sectionBodyStart returns the offset just past the "## <heading>" line whose
 // text matches heading exactly, or -1 when no such section exists.
 //
-// The match must be line-exact, not a substring: topic paths nest (## AI/agent
-// is a prefix of ## AI/agent/agent-fwk), so a substring search would append
-// entries into the wrong section in aggregate mode.
+// The match must be line-exact, not a substring: a heading that merely starts
+// with the same text (or the same text inside an entry body) must not be
+// mistaken for the section.
 func sectionBodyStart(body, heading string) int {
 	if i := strings.Index(body, "\n"+heading+"\n"); i >= 0 {
 		return i + len(heading) + 2
@@ -445,17 +337,8 @@ func appendEntryToExistingSection(existingBody, sectionHeading, entry string) (s
 	return fmt.Sprintf("%s\n\n%s\n%s", prefix, entry, suffix), true
 }
 
-func renderContent(fm *SummaryFrontmatter, body string) string {
-	fmYAML, err := yaml.Marshal(fm)
-	if err != nil {
-		return "---\n---\n\n" + body
-	}
-
-	return fmt.Sprintf("---\n%s---\n\n%s", string(fmYAML), body)
-}
-
 // WriteFailureEntry logs a structured failure entry to the appropriate JSONL log
-// under <wikiRoot>/digest-<type>-error.jsonl. Each log file collects one type:
+// under logs/digest-<type>-error.jsonl in the R2 bucket. Each log file collects one type:
 //   - fetch:     network-level errors (DNS, timeout) with no opencli fallback
 //   - resolve:   HTTP-level errors (403 anti-bot) where opencli also failed
 //   - extract:   URL fetched but usable article/media content could not be extracted
@@ -517,92 +400,54 @@ func LogSuccessEntry(item *types.ClassifyItem, outputPath string, opts *WriteOpt
 	return LogDigestEntry(&entry, opts)
 }
 
-// manualReviewKey is the uncat.md object name shared by local, R2 and prune
-// writers.
+// manualReviewKey is the uncat.md object name in the R2 bucket.
 const manualReviewKey = "uncat.md"
 
-// WriteManualReviewEntry appends a human-readable entry to wiki/uncat.md
-// for items with NeedsManualReview=true that have good AI-generated summaries.
+// WriteManualReviewEntry appends a human-readable entry to the remote uncat.md
+// queue for items with NeedsManualReview=true that have good AI summaries.
 func WriteManualReviewEntry(item *types.ClassifyItem, opts *WriteOptions) (string, error) {
 	if opts == nil || item == nil {
 		return "", nil
+	}
+	if opts.R2Store == nil {
+		return "", errors.New("write manual review: r2 store required")
 	}
 
 	if item.RouteReason == "" {
 		item.RouteReason = types.RouteReasonNeedsManualReview
 	}
 
-	path := filepath.Join(opts.WikiRoot, manualReviewKey)
 	if opts.DryRun {
 		slog.Info("[DRY RUN] Would append to uncat.md",
-			"path", path, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
+			"key", manualReviewKey, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
 
-		return path, nil
+		return manualReviewKey, nil
 	}
-
-	today := carbon.Now().ToDateString()
-	dateHeading := "## " + today
 
 	title, metaBlock := buildReviewEntryMeta(item)
-	entry := fmt.Sprintf("\n### %s\n\n```markdown\n%s\n```\n\n%s\n", title, metaBlock, classify.RenderStructuredSummary(item.Summary))
+	entry := fmt.Sprintf("\n### %s\n\n%s\n\n%s\n", title, metaBlock, classify.RenderStructuredSummary(item.Summary))
 
-	// R2 mode: the uncat queue lives at uncat.md in the bucket (read-merge-write,
-	// same as the digest logs) so nothing lands in the local wiki tree.
-	if opts.R2Store != nil {
-		return writeManualReviewR2(item, opts, dateHeading, entry)
-	}
-
-	unlock := lockPath(path)
-	defer unlock()
-
-	existing, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return "", fmt.Errorf("write uncat.md: read existing: %w", err)
-	}
-	if manualReviewContainsURL(string(existing), item.URL) {
-		slog.Info("Manual review entry already exists; skipping duplicate", "path", path, "url", item.URL)
-
-		return path, nil
-	}
-	if err := fileutil.AtomicWriteFile(path, []byte(mergeDateSection(string(existing), dateHeading, entry)), fileutil.FilePermPrivate); err != nil {
-		return "", fmt.Errorf("write uncat.md: %w", err)
-	}
-
-	slog.Info("Manual review entry appended",
-		"path", path, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
-
-	// Log success to JSONL so uncat.md entries count toward the success rate.
-	if _, err := LogSuccessEntry(item, path, opts); err != nil {
-		slog.Warn("Failed to log success entry for manual review", "url", item.URL, "error", err)
-	}
-
-	return path, nil
-}
-
-// writeManualReviewR2 appends a manual review entry to uncat.md in the R2
-// bucket, skipping URLs that are already queued.
-func writeManualReviewR2(item *types.ClassifyItem, opts *WriteOptions, dateHeading, entry string) (string, error) {
-	key := manualReviewKey
-
+	// R2 has no append primitive: serialize the read-merge-write for the queue.
 	r2UncatMu.Lock()
 	defer r2UncatMu.Unlock()
 
-	existing, err := opts.R2Store.GetObject(context.Background(), key)
+	existing, err := opts.R2Store.GetObject(context.Background(), manualReviewKey)
 	if err != nil {
 		return "", fmt.Errorf("r2 write uncat.md: read existing: %w", err)
 	}
 	if manualReviewContainsURL(string(existing), item.URL) {
 		slog.Info("Manual review entry already exists in R2; skipping duplicate",
-			"key", key, "url", item.URL)
+			"key", manualReviewKey, "url", item.URL)
 
-		return key, nil
+		return manualReviewKey, nil
 	}
-	url, err := opts.R2Store.Upload(context.Background(), key, mergeDateSection(string(existing), dateHeading, entry))
+	dateHeading := "## " + carbon.Now().ToDateString()
+	url, err := opts.R2Store.Upload(context.Background(), manualReviewKey, mergeDateSection(string(existing), dateHeading, entry))
 	if err != nil {
 		return "", fmt.Errorf("r2 write uncat.md: %w", err)
 	}
 	slog.Info("Manual review entry appended to R2",
-		"key", key, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
+		"key", manualReviewKey, "url", item.URL, "reason", item.RouteReason, "suggestedTopic", item.SuggestedTopic)
 	if _, err := LogSuccessEntry(item, url, opts); err != nil {
 		slog.Warn("Failed to log success entry for manual review", "url", item.URL, "error", err)
 	}
@@ -610,7 +455,9 @@ func writeManualReviewR2(item *types.ClassifyItem, opts *WriteOptions, dateHeadi
 	return url, nil
 }
 
-// buildReviewEntryMeta builds the title and metadata block for a manual review entry.
+// buildReviewEntryMeta builds the title and frontmatter block for a manual
+// review entry. The H3 stays because uncat.md aggregates many entries and the
+// heading is the block separator prune uses.
 //
 //nolint:nonamedreturns
 func buildReviewEntryMeta(item *types.ClassifyItem) (title, metaBlock string) {
@@ -619,34 +466,22 @@ func buildReviewEntryMeta(item *types.ClassifyItem) (title, metaBlock string) {
 		title = item.URL
 	}
 
-	// Build codeblock metadata section matching buildEntry format.
-	var b strings.Builder
-	fmt.Fprintf(&b, "URL: %s\n", item.URL)
-	if item.MetadataBlock != "" {
-		b.WriteString(item.MetadataBlock)
-		if !strings.HasSuffix(item.MetadataBlock, "\n") {
-			b.WriteByte('\n')
-		}
-	} else if item.Type != "" {
-		fmt.Fprintf(&b, "Type: %s\n", item.Type)
-	}
+	items := appendEntryMetaItems(yaml.MapSlice{
+		{Key: "title", Value: title},
+		{Key: "URL", Value: item.URL},
+	}, item)
 	if item.RouteReason != "" {
-		fmt.Fprintf(&b, "reason: %s\n", item.RouteReason)
+		items = append(items, yaml.MapItem{Key: "reason", Value: item.RouteReason})
 	}
 	if item.SuggestedTopic != "" {
-		fmt.Fprintf(&b, "suggestedTopic: %s\n", item.SuggestedTopic)
+		items = append(items, yaml.MapItem{Key: "suggestedTopic", Value: item.SuggestedTopic})
 	}
-	if item.TranscriptURL != "" {
-		fmt.Fprintf(&b, "Transcript: %s\n", item.TranscriptURL)
-	}
-	metaBlock = strings.TrimRight(b.String(), "\n")
 
-	return
+	return title, renderFrontmatter(items)
 }
 
 // mergeDateSection appends an entry to the matching date section of existing
-// content, falling back to appending a fresh section when none exists. Shared by
-// the local (file) and R2 (object) uncat write paths.
+// content, falling back to appending a fresh section when none exists.
 func mergeDateSection(existing, dateHeading, entry string) string {
 	if merged, ok := appendEntryToExistingSection(existing, dateHeading, entry); ok {
 		return merged
@@ -677,27 +512,6 @@ func digestStageForFailure(failureType types.FailureKind) types.DigestStage {
 	default:
 		return types.StageClassify
 	}
-}
-
-// parseSummaryFrontmatterResult holds the result of parsing.
-type parseResult struct {
-	fm   *SummaryFrontmatter
-	body string
-}
-
-// parseSummaryFrontmatter parses YAML frontmatter from a summary.md file.
-func parseSummaryFrontmatter(raw string) *parseResult {
-	if !strings.HasPrefix(raw, "---") {
-		return nil
-	}
-
-	var fm SummaryFrontmatter
-	body, err := frontmatter.Parse(strings.NewReader(raw), &fm)
-	if err != nil || len(body) == len(raw) {
-		return nil
-	}
-
-	return &parseResult{fm: &fm, body: string(body)}
 }
 
 // ParseInbox parses inbox.md and returns a list of URL entries.
@@ -871,8 +685,9 @@ func cleanFlushedInboxLine(line string) string {
 }
 
 // manualReviewContainsURL reports whether an uncat.md body already has an
-// entry for rawURL. Entries carry the URL in their fenced metadata block as
-// "URL: <url>"; compare normalized forms so tracking variants collapse.
+// entry for rawURL. Entries carry the URL as a `URL:` line in their
+// frontmatter (older entries used a fenced metadata block); compare normalized
+// forms so tracking variants collapse.
 func manualReviewContainsURL(content, rawURL string) bool {
 	target := urlutil.NormalizeForDedup(rawURL)
 	if target == "" {
@@ -887,13 +702,21 @@ func manualReviewContainsURL(content, rawURL string) bool {
 	return false
 }
 
-// entryURLFromLine parses the "URL: <url>" metadata line of an uncat.md entry
-// and returns its tracking-insensitive dedup key.
+// entryURLFromLine parses the `URL:` line of an uncat.md entry and returns its
+// tracking-insensitive dedup key. The value goes through YAML unmarshaling
+// because the encoder quotes values that need it (a URL containing '#' gets
+// double quotes); a plain trim would keep the quotes and break dedup/prune.
 func entryURLFromLine(line string) (string, bool) {
 	line = strings.TrimSpace(line)
-	if !strings.HasPrefix(line, "URL:") {
+	raw, ok := strings.CutPrefix(line, "URL:")
+	if !ok {
 		return "", false
 	}
 
-	return urlutil.NormalizeForDedup(strings.TrimSpace(strings.TrimPrefix(line, "URL:"))), true
+	var urlStr string
+	if err := yaml.Unmarshal([]byte(strings.TrimSpace(raw)), &urlStr); err != nil {
+		return "", false
+	}
+
+	return urlutil.NormalizeForDedup(urlStr), true
 }

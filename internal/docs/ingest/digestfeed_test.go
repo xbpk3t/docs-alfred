@@ -101,6 +101,29 @@ func TestEntryTitleExtractsFirstH3(t *testing.T) {
 	assert.Equal(t, "(untitled)", entryTitle("no heading here"))
 }
 
+// digestPostFrontmatter mimics the current buildEntry output: title and
+// metadata in YAML frontmatter, then the structured summary body.
+func digestPostFrontmatter(title, summary string) string {
+	return fmt.Sprintf("---\ntitle: %s\nURL: https://example.com/%s\nType: research\n---\n\n%s\n",
+		title, strings.ToLower(strings.ReplaceAll(title, " ", "")), summary)
+}
+
+func TestBuildFeedsUsesFrontmatterTitleAndStripsMetadata(t *testing.T) {
+	store := newFakeFeedStore(map[string]string{
+		"digest/wiki-2026-10-26/AI/agent/agents/1a2b3c4d5e6f7890.md": digestPostFrontmatter("Frontmatter title", "summary body"),
+	})
+
+	require.NoError(t, BuildFeeds(context.Background(), store, "https://dw.lucc.dev"))
+
+	var feed rssFeed
+	require.NoError(t, xml.Unmarshal([]byte(store.uploads["feeds/AI.xml"]), &feed))
+	require.Len(t, feed.Channel.Items, 1)
+	assert.Equal(t, "Frontmatter title", feed.Channel.Items[0].Title)
+	assert.Contains(t, feed.Channel.Items[0].Description, "summary body")
+	assert.NotContains(t, feed.Channel.Items[0].Description, "URL:")
+	assert.NotContains(t, feed.Channel.Items[0].Description, "Type:")
+}
+
 func TestBatchDateParsesWikiBatch(t *testing.T) {
 	d, ok := batchDate("wiki-2026-10-26")
 	require.True(t, ok)

@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
 
 	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
@@ -23,18 +21,15 @@ type failureHistory struct {
 	authCounts map[string]int
 }
 
-func loadFailureHistory(wikiRoot string, r2Store wikiwrite.DigestStore) *failureHistory {
+func loadFailureHistory(r2Store wikiwrite.DigestStore) *failureHistory {
 	h := &failureHistory{authCounts: map[string]int{}}
+	if r2Store == nil {
+		return h
+	}
 	for _, name := range wikiwrite.DigestFailureLogNames() {
-		var data []byte
-		if r2Store != nil {
-			var err error
-			data, err = r2Store.GetObject(context.Background(), "logs/"+name)
-			if err != nil {
-				continue
-			}
-		} else {
-			data, _ = os.ReadFile(filepath.Join(wikiRoot, name))
+		data, err := r2Store.GetObject(context.Background(), "logs/"+name)
+		if err != nil {
+			continue
 		}
 		for _, raw := range bytes.Split(data, []byte("\n")) {
 			// Only auth failures count; skip the JSON decode for every other

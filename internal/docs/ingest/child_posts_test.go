@@ -229,7 +229,7 @@ func TestRunDigestExpandsMultiItemPage(t *testing.T) {
 func TestProcessAddURLExpandsMultiItemPage(t *testing.T) {
 	deps := multiItemDeps()
 
-	results := processAddURL(context.Background(), deps.dependencies(), t.TempDir(), questionURL, false)
+	results := processAddURL(context.Background(), deps.dependencies(), questionURL, false)
 
 	require.Len(t, results, 3)
 	assert.Equal(t, questionURL, results[0].URL)

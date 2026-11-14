@@ -20,15 +20,15 @@ import (
 // processAddURL fetches one URL and writes every entry it produces: a plain
 // page yields one, a multi-item page (zhihu question) yields its synthesis plus
 // one entry per child post.
-func processAddURL(ctx context.Context, deps *dependencies, wikiRoot, urlStr string, dryRun bool) []URLResult {
-	return writePendingURLs(deps, wikiRoot, prepareURLAttempt(ctx, deps, urlStr), dryRun)
+func processAddURL(ctx context.Context, deps *dependencies, urlStr string, dryRun bool) []URLResult {
+	return writePendingURLs(deps, prepareURLAttempt(ctx, deps, urlStr), dryRun)
 }
 
 // writePendingURLs writes every pending entry produced by one fetched URL.
-func writePendingURLs(deps *dependencies, wikiRoot string, pending []pendingURLWrite, dryRun bool) []URLResult {
+func writePendingURLs(deps *dependencies, pending []pendingURLWrite, dryRun bool) []URLResult {
 	results := make([]URLResult, 0, len(pending))
 	for i := range pending {
-		results = append(results, writePendingURL(deps, wikiRoot, &pending[i], dryRun))
+		results = append(results, writePendingURL(deps, &pending[i], dryRun))
 	}
 
 	return results
@@ -107,7 +107,6 @@ func isAIFailure(result *URLResult) bool {
 func runInboxEntries(
 	ctx context.Context,
 	deps *dependencies,
-	wikiRoot string,
 	entries []wikiwrite.InboxEntry,
 	inboxCfg inboxConfig,
 	dryRun bool,
@@ -130,7 +129,7 @@ func runInboxEntries(
 				return nil //nolint:nilerr
 			}
 			prepared := prepareInboxEntry(groupCtx, deps, entry, inboxCfg)
-			lineResults := writeLineResults(deps, wikiRoot, prepared, dryRun)
+			lineResults := writeLineResults(deps, prepared, dryRun)
 			for i := range lineResults {
 				lineResults[i].LineIndex = entry.LineIndex
 			}
@@ -159,15 +158,15 @@ func runInboxEntries(
 // child is still retryable, the synthesis keeps the line (Handled=false) and
 // skips success history, so the next run re-expands the thread and retries the
 // child instead of orphaning it.
-func writeLineResults(deps *dependencies, wikiRoot string, pending []pendingURLWrite, dryRun bool) []URLResult {
+func writeLineResults(deps *dependencies, pending []pendingURLWrite, dryRun bool) []URLResult {
 	if len(pending) <= 1 {
-		return writePendingURLs(deps, wikiRoot, pending, dryRun)
+		return writePendingURLs(deps, pending, dryRun)
 	}
 
 	results := make([]URLResult, 0, len(pending))
 	lineComplete := true
 	for i := 1; i < len(pending); i++ {
-		result := writePendingURL(deps, wikiRoot, &pending[i], dryRun)
+		result := writePendingURL(deps, &pending[i], dryRun)
 		if !result.Handled {
 			lineComplete = false
 		}
@@ -176,7 +175,7 @@ func writeLineResults(deps *dependencies, wikiRoot string, pending []pendingURLW
 
 	parent := pending[0]
 	parent.SkipHistory = !lineComplete
-	parentResult := writePendingURL(deps, wikiRoot, &parent, dryRun)
+	parentResult := writePendingURL(deps, &parent, dryRun)
 	if !lineComplete {
 		parentResult.Handled = false
 	}

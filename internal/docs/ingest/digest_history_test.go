@@ -2,7 +2,6 @@ package wikiingest
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,40 +11,29 @@ import (
 	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 )
 
-// writeSuccessHistory writes a digest-success.jsonl under wikiRoot from the
-// given URLs, using the same entry shape as LogSuccessEntry.
-func writeSuccessHistory(t *testing.T, wikiRoot string, urls []string) {
+// writeSuccessHistory seeds logs/digest-success.jsonl in the fake store through
+// the real success-log writer, so the entry shape cannot drift.
+func writeSuccessHistory(t *testing.T, store *fakeMediaStore, urls []string) {
 	t.Helper()
-	path := filepath.Join(wikiRoot, digestFileNameSuccess)
-	var lines []byte
+	opts := &wikiwrite.WriteOptions{R2Store: digestStoreAdapter{store: store}}
 	for _, u := range urls {
-		entry := wikitypes.DigestEntry{
-			URL:        u,
-			Timestamp:  "2026-01-01T00:00:00Z",
-			Stage:      wikitypes.StageWrite,
-			Status:     wikitypes.DigestSuccess,
-			TopicPath:  "topic/path",
-			OutputPath: "topic/path/summary.md",
-		}
-		b, err := json.Marshal(entry)
+		_, err := wikiwrite.LogSuccessEntry(&wikitypes.ClassifyItem{
+			URL:       u,
+			TopicPath: "topic/path",
+		}, "topic/path/summary.md", opts)
 		require.NoError(t, err)
-		lines = append(lines, b...)
-		lines = append(lines, '\n')
 	}
-	require.NoError(t, os.WriteFile(path, lines, 0o600))
 }
 
 func TestLoadDigestHistorySkipsFailuresAndMalformed(t *testing.T) {
-	wikiRoot := t.TempDir()
-	path := filepath.Join(wikiRoot, digestFileNameSuccess)
-	content := "" +
+	store := newFakeMediaStore()
+	store.objects["logs/"+digestFileNameSuccess] = "" +
 		`{"timestamp":"2026-01-01T00:00:00Z","url":"https://example.com/ok","status":"success","stage":"write"}` + "\n" +
 		`{"timestamp":"2026-01-01T00:00:00Z","url":"https://example.com/failed","status":"failure","stage":"fetch"}` + "\n" +
 		`not-json` + "\n" +
 		`{"timestamp":"2026-01-01T00:00:00Z","url":"https://example.com/with?utm_source=x","status":"success","stage":"write"}` + "\n"
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
-	h := loadDigestHistory(wikiRoot, nil)
+	h := loadDigestHistory(digestStoreAdapter{store: store})
 	// Persisted success → already seen.
 	require.True(t, h.claimOrSeen("https://example.com/ok"))
 	// Failure entries are not remembered → treated as new (retried).
@@ -55,7 +43,7 @@ func TestLoadDigestHistorySkipsFailuresAndMalformed(t *testing.T) {
 }
 
 func TestLoadDigestHistoryMissingFileYieldsEmpty(t *testing.T) {
-	h := loadDigestHistory(t.TempDir(), nil)
+	h := loadDigestHistory(digestStoreAdapter{store: newFakeMediaStore()})
 	require.NotNil(t, h)
 	require.False(t, h.claimOrSeen("https://example.com/a"))
 }
@@ -64,9 +52,9 @@ func TestDigestSkipsAlreadyDigestedURL(t *testing.T) {
 	deps := newFakeDeps()
 	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: "https://example.com/old", LineIndex: 1}}
 	cfg := testConfig(t)
-	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{"https://example.com/old"})
+	writeSuccessHistory(t, deps.r2, []string{"https://example.com/old"})
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/old\n"), 0o600))
-	deps.history = loadDigestHistory(cfg.Wiki.WikiRoot, nil)
+	deps.history = loadDigestHistory(digestStoreAdapter{store: deps.r2})
 
 	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies()})
 	require.NoError(t, err)
@@ -87,9 +75,9 @@ func TestDigestSkipsTrackingParamVariantOfDigestedURL(t *testing.T) {
 	// History has the bare URL; inbox has the same page with tracking params.
 	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: "https://example.com/post?utm_source=nl&utm_medium=email", LineIndex: 1}}
 	cfg := testConfig(t)
-	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{"https://example.com/post"})
+	writeSuccessHistory(t, deps.r2, []string{"https://example.com/post"})
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/post?utm_source=nl&utm_medium=email\n"), 0o600))
-	deps.history = loadDigestHistory(cfg.Wiki.WikiRoot, nil)
+	deps.history = loadDigestHistory(digestStoreAdapter{store: deps.r2})
 
 	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies()})
 	require.NoError(t, err)
@@ -112,9 +100,9 @@ func TestDigestDoesNotSkipContentParamVariant(t *testing.T) {
 		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 	cfg := testConfig(t)
-	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{"https://example.com/watch?v=abc"})
+	writeSuccessHistory(t, deps.r2, []string{"https://example.com/watch?v=abc"})
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/watch?v=def\n"), 0o600))
-	deps.history = loadDigestHistory(cfg.Wiki.WikiRoot, nil)
+	deps.history = loadDigestHistory(digestStoreAdapter{store: deps.r2})
 
 	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies()})
 	require.NoError(t, err)
@@ -136,10 +124,9 @@ func TestDigestRetriesFailedURL(t *testing.T) {
 	}
 	cfg := testConfig(t)
 	// Only failure entries for this URL — success history is empty.
-	failPath := filepath.Join(cfg.Wiki.WikiRoot, "digest-fetch-error.jsonl")
-	require.NoError(t, os.WriteFile(failPath, []byte(`{"timestamp":"2026-01-01T00:00:00Z","url":"https://example.com/flaky","status":"failure","stage":"fetch"}`+"\n"), 0o600))
+	deps.r2.objects["logs/digest-fetch-error.jsonl"] = `{"timestamp":"2026-01-01T00:00:00Z","url":"https://example.com/flaky","status":"failure","stage":"fetch"}` + "\n"
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/flaky\n"), 0o600))
-	deps.history = loadDigestHistory(cfg.Wiki.WikiRoot, nil)
+	deps.history = loadDigestHistory(digestStoreAdapter{store: deps.r2})
 
 	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies()})
 	require.NoError(t, err)
@@ -151,9 +138,9 @@ func TestDigestDryRunSkipsWithoutFlushing(t *testing.T) {
 	deps := newFakeDeps()
 	deps.inbox.entries = []wikiwrite.InboxEntry{{URL: "https://example.com/old", LineIndex: 1}}
 	cfg := testConfig(t)
-	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{"https://example.com/old"})
+	writeSuccessHistory(t, deps.r2, []string{"https://example.com/old"})
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- https://example.com/old\n"), 0o600))
-	deps.history = loadDigestHistory(cfg.Wiki.WikiRoot, nil)
+	deps.history = loadDigestHistory(digestStoreAdapter{store: deps.r2})
 
 	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies(), DryRun: true})
 	require.NoError(t, err)
@@ -166,7 +153,7 @@ func TestAddSkipsAlreadyDigestedURL(t *testing.T) {
 	// wiki add now consults history: an already digested URL is skipped by default.
 	deps := newFakeDeps()
 	cfg := testConfig(t)
-	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{"https://example.com/again"})
+	writeSuccessHistory(t, deps.r2, []string{"https://example.com/again"})
 	// RunAddURLs resolves deps itself; history is loaded from the wiki root.
 
 	result, err := RunAddURLs(context.Background(), AddInput{Config: cfg, URLs: []string{"https://example.com/again"}, deps: deps.dependencies()})
@@ -188,7 +175,7 @@ func TestAddForceRedigestsAlreadyDigestedURL(t *testing.T) {
 		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 	cfg := testConfig(t)
-	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{"https://example.com/again"})
+	writeSuccessHistory(t, deps.r2, []string{"https://example.com/again"})
 
 	result, err := RunAddURLs(context.Background(), AddInput{Config: cfg, URLs: []string{"https://example.com/again"}, Force: true, deps: deps.dependencies()})
 	require.NoError(t, err)
@@ -210,7 +197,7 @@ func TestAddForceStillCollapsesDuplicatesWithinBatch(t *testing.T) {
 		Summary:     &wikitypes.StructuredSummary{Overview: "summary"},
 	}
 	cfg := testConfig(t)
-	writeSuccessHistory(t, cfg.Wiki.WikiRoot, []string{url})
+	writeSuccessHistory(t, deps.r2, []string{url})
 
 	result, err := RunAddURLs(context.Background(), AddInput{Config: cfg, URLs: []string{url, url}, Force: true, deps: deps.dependencies()})
 	require.NoError(t, err)
@@ -237,7 +224,7 @@ func TestDigestCollapsesDuplicateURLsWithinBatch(t *testing.T) {
 	cfg := testConfig(t)
 	// No success history — the duplicate here is intra-batch only.
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("- "+url+"\n- "+url+"\n"), 0o600))
-	deps.history = loadDigestHistory(cfg.Wiki.WikiRoot, nil)
+	deps.history = loadDigestHistory(digestStoreAdapter{store: deps.r2})
 
 	result, err := RunDigest(context.Background(), DigestInput{Config: cfg, deps: deps.dependencies()})
 	require.NoError(t, err)
@@ -250,31 +237,15 @@ func TestDigestCollapsesDuplicateURLsWithinBatch(t *testing.T) {
 	require.Equal(t, []string{url}, deps.inbox.flushed[2])
 }
 
-// fakeDigestStoreR2 is a minimal write.DigestStore for R2-mode history tests.
-type fakeDigestStoreR2 struct {
-	objects map[string][]byte
-}
-
-func (f *fakeDigestStoreR2) Upload(_ context.Context, key, content string) (string, error) {
-	f.objects[key] = []byte(content)
-
-	return "https://dw.test/" + key, nil
-}
-
-func (f *fakeDigestStoreR2) GetObject(_ context.Context, key string) ([]byte, error) {
-	return f.objects[key], nil
-}
-
 func TestLoadDigestHistoryFromR2SeedsDedup(t *testing.T) {
-	store := &fakeDigestStoreR2{objects: map[string][]byte{}}
+	store := newFakeMediaStore()
 	// Seed the R2 success log with two successes and one failure.
-	lines := "" +
+	store.objects["logs/digest-success.jsonl"] = "" +
 		`{"timestamp":"2026-01-01T00:00:00Z","url":"https://example.com/old","status":"success","stage":"write"}` + "\n" +
 		`{"timestamp":"2026-01-01T00:00:00Z","url":"https://example.com/again","status":"success","stage":"write"}` + "\n" +
 		`{"timestamp":"2026-01-01T00:00:00Z","url":"https://example.com/bad","status":"failure","stage":"fetch"}` + "\n"
-	store.objects["logs/digest-success.jsonl"] = []byte(lines)
 
-	h := loadDigestHistory(t.TempDir(), store)
+	h := loadDigestHistory(digestStoreAdapter{store: store})
 
 	require.True(t, h.claimOrSeen("https://example.com/old"))
 	require.True(t, h.claimOrSeen("https://example.com/again"))
@@ -283,9 +254,7 @@ func TestLoadDigestHistoryFromR2SeedsDedup(t *testing.T) {
 }
 
 func TestLoadDigestHistoryFromR2MissingObjectYieldsEmpty(t *testing.T) {
-	store := &fakeDigestStoreR2{objects: map[string][]byte{}}
-
-	h := loadDigestHistory(t.TempDir(), store)
+	h := loadDigestHistory(digestStoreAdapter{store: newFakeMediaStore()})
 
 	require.NotNil(t, h)
 	require.False(t, h.claimOrSeen("https://example.com/a"))

@@ -39,11 +39,9 @@ const ArtifactDir = "transcript"
 const BlogArtifactDir = "public"
 
 // Fixed-name per-topic artifact files and the OKF type their frontmatter MUST
-// carry. This single binding is shared by the write layer (which creates these
-// files) and the workspace checker (which validates them), so a per-topic
-// artifact's declared type can't drift between producer and validator. The
-// placement depth of each artifact is a checker-only concern (topicArtifacts
-// in internal/docs/check), not part of this table.
+// carry. The workspace checker validates them against this table. The placement
+// depth of each artifact is a checker-only concern (topicArtifacts in
+// internal/docs/check), not part of this table.
 const (
 	SummaryFile = "summary.md"
 	LogFile     = "log.md"

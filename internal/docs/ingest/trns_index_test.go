@@ -66,7 +66,7 @@ func TestRunTrnsIndexEntriesWritesTranscriptLinkedEntries(t *testing.T) {
 	d := deps.dependencies()
 	d.r2 = store
 
-	results := runTrnsIndexEntries(context.Background(), d, t.TempDir(),
+	results := runTrnsIndexEntries(context.Background(), d,
 		inboxConfig{concurrency: 1, perURLTimeout: time.Minute}, false)
 
 	require.Len(t, results, 1)
@@ -90,7 +90,7 @@ func TestRunTrnsIndexEntriesSkipsAlreadyDigested(t *testing.T) {
 	d := deps.dependencies()
 	d.r2 = store
 
-	results := runTrnsIndexEntries(context.Background(), d, t.TempDir(),
+	results := runTrnsIndexEntries(context.Background(), d,
 		inboxConfig{concurrency: 1, perURLTimeout: time.Minute}, false)
 
 	require.Len(t, results, 1)
@@ -111,7 +111,7 @@ func TestRunTrnsIndexEntriesFetchFailureIsIsolated(t *testing.T) {
 	d := deps.dependencies()
 	d.r2 = store
 
-	results := runTrnsIndexEntries(context.Background(), d, t.TempDir(),
+	results := runTrnsIndexEntries(context.Background(), d,
 		inboxConfig{concurrency: 1, perURLTimeout: time.Minute}, false)
 
 	require.Len(t, results, 1)
@@ -131,7 +131,7 @@ func TestRunTrnsIndexEntriesSkipsIncompleteEntries(t *testing.T) {
 	d := deps.dependencies()
 	d.r2 = store
 
-	results := runTrnsIndexEntries(context.Background(), d, t.TempDir(),
+	results := runTrnsIndexEntries(context.Background(), d,
 		inboxConfig{concurrency: 1, perURLTimeout: time.Minute}, false)
 
 	require.Len(t, results, 2)
@@ -142,7 +142,7 @@ func TestRunTrnsIndexEntriesSkipsIncompleteEntries(t *testing.T) {
 }
 
 func TestRunTrnsIndexEntriesWithoutStoreIsNoop(t *testing.T) {
-	results := runTrnsIndexEntries(context.Background(), &dependencies{}, t.TempDir(),
+	results := runTrnsIndexEntries(context.Background(), &dependencies{},
 		inboxConfig{concurrency: 1, perURLTimeout: time.Minute}, false)
 
 	assert.Empty(t, results)
@@ -176,9 +176,8 @@ func TestRunDigestConsumesTrnsIndexWithoutInboxEntries(t *testing.T) {
 	assert.Equal(t, pageOne, deps.writer.summaries[0].transcriptURL)
 }
 
-// A broken r2 setup must not block the inbox run: the trns loop is skipped,
-// the inbox lines still flush.
-func TestRunDigestTrnsIndexWithoutStoreStillFlushesInbox(t *testing.T) {
+// An empty trns index must not block the inbox run: the inbox lines still flush.
+func TestRunDigestEmptyTrnsIndexStillFlushesInbox(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.TrnsIndex.Enabled = true
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("inbox\n"), 0o600))

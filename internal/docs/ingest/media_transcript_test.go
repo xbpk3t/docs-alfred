@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,6 +17,7 @@ import (
 // fakeMediaStore fakes the R2 surface: object listing/reading for the trns
 // index and uploads for transcripts.
 type fakeMediaStore struct {
+	mu      sync.Mutex
 	objects map[string]string // key → content
 	uploads map[string]string // filename → content
 	upErr   error
@@ -31,12 +33,17 @@ func (f *fakeMediaStore) Upload(_ context.Context, filename, content string) (*l
 	if f.upErr != nil {
 		return nil, f.upErr
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.uploads[filename] = content
+	f.objects[filename] = content
 
 	return &litter.Result{URL: "https://media.example/" + filename, Driver: "r2"}, nil
 }
 
 func (f *fakeMediaStore) Delete(_ context.Context, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	delete(f.objects, key)
 
 	return nil
@@ -46,6 +53,8 @@ func (f *fakeMediaStore) ListKeys(_ context.Context, prefix string) ([]string, e
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var keys []string
 	for k := range f.objects {
 		if strings.HasPrefix(k, prefix) {
@@ -61,6 +70,8 @@ func (f *fakeMediaStore) GetObject(_ context.Context, key string) ([]byte, error
 	if f.getErr != nil {
 		return nil, f.getErr
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	data, ok := f.objects[key]
 	if !ok {
 		// Match litter.R2.GetObject: a missing object reads as empty, not an
@@ -69,6 +80,19 @@ func (f *fakeMediaStore) GetObject(_ context.Context, key string) ([]byte, error
 	}
 
 	return []byte(data), nil
+}
+
+// uploadContains reports whether any uploaded object body contains substr.
+func (f *fakeMediaStore) uploadContains(substr string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, content := range f.uploads {
+		if strings.Contains(content, substr) {
+			return true
+		}
+	}
+
+	return false
 }
 
 const (

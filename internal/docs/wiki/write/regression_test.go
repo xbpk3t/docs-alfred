@@ -2,8 +2,6 @@ package write
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -68,7 +66,7 @@ func (s *reviewR2) content(key string) string {
 // concurrent workers both read the old uncat.md and overwrite each other.
 func TestReviewR2ManualReviewConcurrentWritersDoNotLoseEntries(t *testing.T) {
 	store := newReviewR2("uncat.md")
-	opts := &WriteOptions{WikiRoot: t.TempDir(), R2Store: store}
+	opts := &WriteOptions{R2Store: store}
 
 	var wg sync.WaitGroup
 	for _, u := range []string{"https://example.com/one", "https://example.com/two"} {
@@ -95,7 +93,7 @@ func TestReviewR2ManualReviewConcurrentWritersDoNotLoseEntries(t *testing.T) {
 // diagnostics.
 func TestReviewR2DigestLogConcurrentWritersDoNotLoseLines(t *testing.T) {
 	store := newReviewR2("logs/digest-success.jsonl")
-	opts := &WriteOptions{WikiRoot: t.TempDir(), R2Store: store}
+	opts := &WriteOptions{R2Store: store}
 
 	var wg sync.WaitGroup
 	for _, u := range []string{"https://example.com/one", "https://example.com/two"} {
@@ -118,25 +116,10 @@ func TestReviewR2DigestLogConcurrentWritersDoNotLoseLines(t *testing.T) {
 	assert.Contains(t, merged, "https://example.com/two")
 }
 
-// Local uncat dedup must be idempotent for the same URL.
-func TestReviewLocalManualReviewDedup(t *testing.T) {
-	opts := &WriteOptions{WikiRoot: t.TempDir()}
-	item := &types.ClassifyItem{URL: "https://example.com/one", Title: "one"}
-
-	_, err := WriteManualReviewEntry(item, opts)
-	require.NoError(t, err)
-	_, err = WriteManualReviewEntry(item, opts)
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(filepath.Join(opts.WikiRoot, "uncat.md"))
-	require.NoError(t, err)
-	assert.Equal(t, 1, strings.Count(string(data), "URL: https://example.com/one"))
-}
-
-// The R2 uncat queue must also be idempotent for a repeated URL.
+// The R2 uncat queue must be idempotent for a repeated URL.
 func TestReviewR2ManualReviewDedup(t *testing.T) {
 	store := newReviewR2("")
-	opts := &WriteOptions{WikiRoot: t.TempDir(), R2Store: store}
+	opts := &WriteOptions{R2Store: store}
 	item := &types.ClassifyItem{URL: "https://example.com/one", Title: "one"}
 
 	_, err := WriteManualReviewEntry(item, opts)
@@ -145,27 +128,4 @@ func TestReviewR2ManualReviewDedup(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, strings.Count(store.content("uncat.md"), "URL: https://example.com/one"))
-}
-
-// When the topic catalog is unavailable, ValidTopicPaths is nil and
-// routeInvalidTopicPath is a no-op. An AI-supplied topic path must still not
-// escape the wiki root.
-func TestReviewSummaryTopicPathCannotEscapeWikiRoot(t *testing.T) {
-	parent := t.TempDir()
-	root := filepath.Join(parent, "wiki")
-	require.NoError(t, os.MkdirAll(root, 0o700))
-	escaped := filepath.Join(parent, "escape", "summary.md")
-	t.Cleanup(func() { _ = os.RemoveAll(filepath.Join(parent, "escape")) })
-
-	item := &types.ClassifyItem{
-		URL:       "https://example.com/a",
-		Title:     "escape",
-		TopicPath: "../escape",
-		Summary:   &types.StructuredSummary{Overview: "real content"},
-	}
-	_, err := WriteSummary(item, &WriteOptions{WikiRoot: root})
-	if err == nil {
-		_, statErr := os.Stat(escaped)
-		assert.True(t, os.IsNotExist(statErr), "summary write escaped the wiki root")
-	}
 }

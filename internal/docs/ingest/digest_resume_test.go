@@ -29,7 +29,7 @@ func TestWriteLineResultsKeepsParentWhenChildRetryable(t *testing.T) {
 	}
 	child := pendingAIErrorWrite(answerOne, wikitypes.FailureReasonAI, "AI down")
 
-	results := writeLineResults(deps.dependencies(), t.TempDir(), []pendingURLWrite{parent, child}, false)
+	results := writeLineResults(deps.dependencies(), []pendingURLWrite{parent, child}, false)
 
 	require.Len(t, results, 2)
 	require.Len(t, deps.writer.summaries, 1)
@@ -56,7 +56,7 @@ func TestWriteLineResultsLogsParentWhenChildrenTerminal(t *testing.T) {
 		"404",
 	)
 
-	results := writeLineResults(deps.dependencies(), t.TempDir(), []pendingURLWrite{parent, child}, false)
+	results := writeLineResults(deps.dependencies(), []pendingURLWrite{parent, child}, false)
 
 	require.Len(t, results, 2)
 	require.Len(t, deps.writer.summaries, 1)
@@ -124,9 +124,8 @@ func TestRunDigestAIBreakerStopsRemainingURLs(t *testing.T) {
 	assert.Equal(t, maxConsecutiveAIFailures, result.Summary()["retryableFailures"])
 
 	// The run-level summary is written even on the abort path.
-	data, readErr := os.ReadFile(filepath.Join(cfg.Wiki.WikiRoot, "digest-runs.jsonl"))
-	require.NoError(t, readErr)
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	data := deps.r2.objects[wikiwrite.DigestRunLogKey]
+	lines := strings.Split(strings.TrimSpace(data), "\n")
 	require.Len(t, lines, 1)
 	var run wikitypes.DigestRunEntry
 	require.NoError(t, json.Unmarshal([]byte(lines[0]), &run))
@@ -135,17 +134,11 @@ func TestRunDigestAIBreakerStopsRemainingURLs(t *testing.T) {
 	assert.Contains(t, run.Error, "aborted")
 }
 
-func TestRunDigestRequiresR2WhenConfigured(t *testing.T) {
+func TestRunDigestRequiresR2(t *testing.T) {
 	cfg := testConfig(t)
-	cfg.R2.Bucket = "bucket"
-	cfg.R2.PublicBaseURL = "https://dw.test"
-
-	for _, name := range []string{"R2_AK", "CF_R2_AK", "R2_SK", "R2_KEY", "CF_R2_SK", "R2_ENDPOINT", "CF_ACCOUNT"} {
-		t.Setenv(name, "")
-	}
 	require.NoError(t, os.WriteFile(
 		filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("inbox\n"), 0o600))
 
 	_, err := RunDigest(context.Background(), DigestInput{Config: cfg})
-	require.ErrorContains(t, err, "R2 client is unavailable")
+	require.ErrorContains(t, err, "r2.bucket is required")
 }

@@ -9,25 +9,25 @@ import (
 	wikiwrite "github.com/xbpk3t/docs-alfred/internal/docs/wiki/write"
 )
 
-func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWrite, dryRun bool) URLResult {
+func writePendingURL(deps *dependencies, pending *pendingURLWrite, dryRun bool) URLResult {
 	if pending == nil {
 		return URLResult{Status: StatusUnhandledError, Error: "missing pending wiki write"}
 	}
 	switch pending.Kind {
 	case pendingSummary:
-		return writeSummary(deps, wikiRoot, pending.Item, dryRun, pending.SkipHistory)
+		return writeSummary(deps, pending.Item, dryRun, pending.SkipHistory)
 	case pendingClassifyFailure:
-		return writeClassifyFailure(deps, wikiRoot, pending.Item, pending.ExtraInfo, dryRun)
+		return writeClassifyFailure(deps, pending.Item, pending.ExtraInfo, dryRun)
 	case pendingExtractFailure:
-		return writeExtractFailure(deps, wikiRoot, pending.Item, pending.FailureReason, pending.ExtraInfo, dryRun)
+		return writeExtractFailure(deps, pending.Item, pending.FailureReason, pending.ExtraInfo, dryRun)
 	case pendingFetchFailure:
-		return writeFetchFailure(deps, wikiRoot, pending.URL, pending.FailureType, pending.FailureReason, pending.ExtraInfo, dryRun)
+		return writeFetchFailure(deps, pending.URL, pending.FailureType, pending.FailureReason, pending.ExtraInfo, dryRun)
 	case pendingAIError:
 		failureReason := pending.FailureReason
 		if failureReason == "" {
 			failureReason = wikitypes.FailureReasonAI
 		}
-		return writeAIError(deps, wikiRoot, pending.URL, failureReason, pending.Error, dryRun)
+		return writeAIError(deps, pending.URL, failureReason, pending.Error, dryRun)
 	case pendingSkip:
 		return URLResult{URL: pending.URL, Status: StatusSkipped, Handled: true}
 	case pendingUnhandled:
@@ -38,23 +38,17 @@ func writePendingURL(deps *dependencies, wikiRoot string, pending *pendingURLWri
 }
 
 // newWriteOpts builds WriteOptions with ValidTopicPaths from dependencies.
-func newWriteOpts(deps *dependencies, wikiRoot string, dryRun bool) *wikiwrite.WriteOptions {
-	opts := &wikiwrite.WriteOptions{
-		WikiRoot:        wikiRoot,
+func newWriteOpts(deps *dependencies, dryRun bool) *wikiwrite.WriteOptions {
+	return &wikiwrite.WriteOptions{
 		DryRun:          dryRun,
 		ValidTopicPaths: deps.validTopicPaths,
-		IsAggr:          deps.isAggr,
-		// Digest artifacts go to R2 when configured; the local wiki tree then
-		// holds no digest outputs (summary/logs/uncat all live in the bucket).
+		// Digest artifacts are remote-only; there is no local fallback.
 		R2Store: digestStoreOrNil(deps),
 	}
-
-	return opts
 }
 
 func writeSummary(
 	deps *dependencies,
-	wikiRoot string,
 	item *wikitypes.ClassifyItem,
 	dryRun bool,
 	skipHistory bool,
@@ -74,40 +68,23 @@ func writeSummary(
 		item.NeedsManualReview = false
 	}
 
-	// Items with NeedsManualReview and good content get written to wiki/uncat.md
-	// for manual triage, not under a topic dir.
+	opts := newWriteOpts(deps, dryRun)
+	opts.SkipHistory = skipHistory
+	write := deps.writer.WriteSummary
+	errPrefix := "write summary"
+	// NeedsManualReview items go to the remote uncat.md queue for triage,
+	// not under a topic dir.
 	if item.NeedsManualReview {
 		if item.RouteReason == "" {
 			item.RouteReason = wikitypes.RouteReasonNeedsManualReview
 		}
-		opts := newWriteOpts(deps, wikiRoot, dryRun)
-		opts.SkipHistory = skipHistory
-		path, err := deps.writer.WriteManualReviewEntry(item, opts)
-		if err != nil {
-			return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("write manual review: %v", err)}
-		}
-
-		status := StatusSummaryWritten
-		if dryRun {
-			status = StatusDryRunSummary
-		}
-
-		return URLResult{
-			URL:         item.URL,
-			Status:      status,
-			Handled:     true,
-			OutputPath:  path,
-			TopicPath:   item.TopicPath,
-			WikiType:    string(item.Type),
-			ContentType: item.ContentType,
-		}
+		write = deps.writer.WriteManualReviewEntry
+		errPrefix = "write manual review"
 	}
 
-	opts := newWriteOpts(deps, wikiRoot, dryRun)
-	opts.SkipHistory = skipHistory
-	path, err := deps.writer.WriteSummary(item, opts)
+	path, err := write(item, opts)
 	if err != nil {
-		return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("write summary: %v", err)}
+		return URLResult{URL: item.URL, Status: StatusUnhandledError, Error: fmt.Sprintf("%s: %v", errPrefix, err)}
 	}
 
 	status := StatusSummaryWritten
@@ -177,8 +154,8 @@ func shouldWriteClassifyFailure(result *wikitypes.ClassifyResult) bool {
 		return true
 	}
 	// Good content (non-empty summary overview) → always a write-layer decision,
-	// never a classify reject. The write layer routes: legal topic → summary.md,
-	// NMR / no topic → uncat.md with reason.
+	// never a classify reject. The write layer routes: legal topic → a digest
+	// post, NMR / no topic → uncat.md with reason.
 	if result.Summary != nil && strings.TrimSpace(result.Summary.Overview) != "" {
 		return false
 	}
@@ -220,7 +197,6 @@ func classifyFailureInfo(result *wikitypes.ClassifyResult) string {
 
 func writeClassifyFailure(
 	deps *dependencies,
-	wikiRoot string,
 	item *wikitypes.ClassifyItem,
 	extraInfo string,
 	dryRun bool,
@@ -230,7 +206,7 @@ func writeClassifyFailure(
 		wikitypes.FailureClassify,
 		wikitypes.FailureReasonClassify,
 		extraInfo,
-		newWriteOpts(deps, wikiRoot, dryRun),
+		newWriteOpts(deps, dryRun),
 	)
 	if err != nil {
 		return URLResult{
@@ -261,7 +237,6 @@ func writeClassifyFailure(
 
 func writeExtractFailure(
 	deps *dependencies,
-	wikiRoot string,
 	item *wikitypes.ClassifyItem,
 	failureReason wikitypes.FailureReason,
 	extraInfo string,
@@ -272,7 +247,7 @@ func writeExtractFailure(
 		wikitypes.FailureExtract,
 		failureReason,
 		extraInfo,
-		newWriteOpts(deps, wikiRoot, dryRun),
+		newWriteOpts(deps, dryRun),
 	)
 	if err != nil {
 		return URLResult{
@@ -303,7 +278,6 @@ func writeExtractFailure(
 
 func writeFetchFailure(
 	deps *dependencies,
-	wikiRoot,
 	urlStr string,
 	failureType wikitypes.FailureKind,
 	failureReason wikitypes.FailureReason,
@@ -316,7 +290,7 @@ func writeFetchFailure(
 		failureType,
 		failureReason,
 		extraInfo,
-		newWriteOpts(deps, wikiRoot, dryRun),
+		newWriteOpts(deps, dryRun),
 	)
 	if err != nil {
 		return URLResult{
@@ -347,7 +321,6 @@ func writeFetchFailure(
 
 func writeAIError(
 	deps *dependencies,
-	wikiRoot,
 	urlStr string,
 	failureReason wikitypes.FailureReason,
 	message string,
@@ -367,7 +340,7 @@ func writeAIError(
 		wikitypes.FailureAI,
 		failureReason,
 		message,
-		newWriteOpts(deps, wikiRoot, dryRun),
+		newWriteOpts(deps, dryRun),
 	)
 	if err != nil {
 		return URLResult{

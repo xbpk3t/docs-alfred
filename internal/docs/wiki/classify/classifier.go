@@ -9,8 +9,10 @@ import (
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/prompt"
 	"github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
 	"log/slog"
+	"maps"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -588,8 +590,8 @@ func buildMetaBlock(result *aiClassification) string {
 				pairs = append(pairs, "Type: "+v)
 				delete(kv, "Type")
 			}
-			for k, v := range kv {
-				pairs = append(pairs, k+": "+v)
+			for _, k := range slices.Sorted(maps.Keys(kv)) {
+				pairs = append(pairs, k+": "+kv[k])
 			}
 
 			return strings.Join(pairs, "\n")

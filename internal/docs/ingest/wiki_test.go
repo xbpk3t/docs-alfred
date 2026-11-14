@@ -5,11 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	wikiclassify "github.com/xbpk3t/docs-alfred/internal/docs/wiki/classify"
 	wikitypes "github.com/xbpk3t/docs-alfred/internal/docs/wiki/types"
@@ -342,11 +342,13 @@ func TestRunDigestWritesLinesIncrementallyAndSortsResults(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.Wiki.Concurrency = 3
 	require.NoError(t, os.WriteFile(filepath.Join(cfg.Wiki.WikiRoot, "inbox.md"), []byte("inbox\n"), 0o600))
+	store := newFakeMediaStore()
 	deps := &dependencies{
 		fetcher:         fetcher,
 		classifier:      classifier,
 		writer:          serviceWriter{},
 		inbox:           &fakeInbox{entries: entries},
+		r2:              store,
 		validTopicPaths: map[string]bool{"topic/path": true},
 	}
 
@@ -365,14 +367,10 @@ func TestRunDigestWritesLinesIncrementallyAndSortsResults(t *testing.T) {
 
 	// urls[2] is unblocked, so its line must be persisted while the first two
 	// are still in flight: a kill at this point loses at most those two lines.
-	summaryPath := filepath.Join(cfg.Wiki.WikiRoot, "topic", "path", "summary.md")
 	require.Eventually(t, func() bool {
-		data, err := os.ReadFile(summaryPath)
-		return err == nil && strings.Contains(string(data), urls[2])
+		return store.uploadContains(urls[2])
 	}, 2*time.Second, 10*time.Millisecond)
-	data, err := os.ReadFile(summaryPath)
-	require.NoError(t, err)
-	require.NotContains(t, string(data), urls[0])
+	assert.False(t, store.uploadContains(urls[0]))
 
 	close(blocks[urls[1]])
 	close(blocks[urls[0]])
@@ -388,11 +386,9 @@ func TestRunDigestWritesLinesIncrementallyAndSortsResults(t *testing.T) {
 		require.Equal(t, url, outcome.result.URLResults[i].URL)
 	}
 
-	data, err = os.ReadFile(summaryPath)
-	require.NoError(t, err)
-	content := string(data)
-	require.Contains(t, content, "total_urls: 3")
-	require.Contains(t, content, "succeeded: 3")
+	for _, url := range urls {
+		assert.True(t, store.uploadContains(url), "missing digest post for %s", url)
+	}
 }
 
 func TestRunDigestDryRunDoesNotWriteOrFlush(t *testing.T) {
@@ -547,6 +543,7 @@ type fakeDeps struct {
 	writer     *fakeWriter
 	inbox      *fakeInbox
 	history    *digestHistory
+	r2         *fakeMediaStore
 }
 
 func newFakeDeps() *fakeDeps {
@@ -558,6 +555,7 @@ func newFakeDeps() *fakeDeps {
 		},
 		writer: &fakeWriter{},
 		inbox:  &fakeInbox{},
+		r2:     newFakeMediaStore(),
 	}
 }
 
@@ -568,6 +566,7 @@ func (f *fakeDeps) dependencies() *dependencies {
 		writer:     f.writer,
 		inbox:      f.inbox,
 		history:    f.history,
+		r2:         f.r2,
 	}
 }
 
@@ -664,7 +663,7 @@ func (f *fakeWriter) WriteSummary(item *wikitypes.ClassifyItem, opts *wikiwrite.
 		skipHistory:   opts.SkipHistory,
 	})
 
-	return filepath.Join(opts.WikiRoot, item.TopicPath, "summary.md"), nil
+	return "digest/fake/" + item.TopicPath + "/summary.md", nil
 }
 
 func (f *fakeWriter) WriteFailureEntry(
@@ -685,7 +684,7 @@ func (f *fakeWriter) WriteFailureEntry(
 		extraInfo:     extraInfo,
 	})
 
-	return filepath.Join(opts.WikiRoot, failureType.String()+"-failed.md"), nil
+	return "logs/digest-" + failureType.String() + "-error.jsonl", nil
 }
 
 func (f *fakeWriter) WriteManualReviewEntry(item *wikitypes.ClassifyItem, opts *wikiwrite.WriteOptions) (string, error) {
@@ -693,7 +692,7 @@ func (f *fakeWriter) WriteManualReviewEntry(item *wikitypes.ClassifyItem, opts *
 		return "", f.failureErr
 	}
 
-	return filepath.Join(opts.WikiRoot, "uncat.md"), nil
+	return "uncat.md", nil
 }
 
 type fakeInbox struct {

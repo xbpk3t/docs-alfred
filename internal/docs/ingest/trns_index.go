@@ -32,7 +32,6 @@ type trnsIndexEntry struct {
 func runTrnsIndexEntries(
 	ctx context.Context,
 	deps *dependencies,
-	wikiRoot string,
 	inboxCfg inboxConfig,
 	dryRun bool,
 ) []URLResult {
@@ -70,7 +69,7 @@ func runTrnsIndexEntries(
 
 	var results []URLResult
 	for i := range pending {
-		result := writePendingURL(deps, wikiRoot, &pending[i], dryRun)
+		result := writePendingURL(deps, &pending[i], dryRun)
 		// Not an inbox line — a negative index keeps it out of the flush set.
 		result.LineIndex = -1
 		results = append(results, result)

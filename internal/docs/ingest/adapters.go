@@ -61,7 +61,7 @@ func (a digestStoreAdapter) GetObject(ctx context.Context, key string) ([]byte, 
 }
 
 // digestStoreOrNil returns the write-layer DigestStore for a run's R2 store, or
-// nil when R2 is not configured (digest artifacts then stay local).
+// nil when R2 is not configured (callers then refuse the digest run).
 func digestStoreOrNil(deps *dependencies) wikiwrite.DigestStore {
 	if deps == nil || deps.r2 == nil {
 		return nil

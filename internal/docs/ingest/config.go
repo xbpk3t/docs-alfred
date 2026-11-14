@@ -157,7 +157,6 @@ type WikiConfig struct {
 	BrowserConcurrency  int             `default:"2" validate:"gte:0" yaml:"browserConcurrency"`
 	PerURLTimeout       int             `default:"600"     validate:"gte:1"    yaml:"perURLTimeout"`
 	MaxContentSize      int             `default:"20000"                       yaml:"maxContentSize"`
-	IsAggr              bool            `default:"false" yaml:"isAggr"`
 }
 
 // wikiTextConfig selects the driver for non-media URLs.
