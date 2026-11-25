@@ -76,7 +76,7 @@ func TestDefaultExportConfig(t *testing.T) {
 	cfg := defaultExportConfig()
 
 	require.Equal(t, "wiki", cfg.WikiRoot, "default WikiRoot should be 'wiki'")
-	require.Equal(t, "https://api.lucc.dev/v1", cfg.AI.BaseURL, "default AI BaseURL")
+	require.Equal(t, "http://nixos-vps-agt.tailf19540.ts.net:8080/v1", cfg.AI.BaseURL, "default AI BaseURL")
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model, "default AI Model")
 	require.Empty(t, cfg.AI.APIKey, "default APIKey should be empty")
 }
@@ -200,7 +200,7 @@ func TestLoadExportConfig_EmptyPathUsesDefaults(t *testing.T) {
 	// WikiRoot is canonicalized to absolute path at config-load time.
 	require.True(t, filepath.IsAbs(cfg.WikiRoot), "WikiRoot should be canonicalized to absolute")
 	require.Equal(t, "wiki", filepath.Base(cfg.WikiRoot))
-	require.Equal(t, "https://api.lucc.dev/v1", cfg.AI.BaseURL)
+	require.Equal(t, "http://nixos-vps-agt.tailf19540.ts.net:8080/v1", cfg.AI.BaseURL)
 	require.Equal(t, "deepseek-v4-flash", cfg.AI.Model)
 }
 

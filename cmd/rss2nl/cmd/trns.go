@@ -22,7 +22,7 @@ import (
 
 const (
 	defaultTrnsSource         = "podcast"
-	defaultTrnsSummaryBaseURL = "https://api.lucc.dev/v1"
+	defaultTrnsSummaryBaseURL = "http://nixos-vps-agt.tailf19540.ts.net:8080/v1"
 	// trnsDriverR2 selects direct R2 links (never-expire) for trns uploads.
 	trnsDriverR2 = "r2"
 	// trnsDriverLitterbox is the default temporary-upload driver.

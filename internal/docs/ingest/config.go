@@ -175,7 +175,7 @@ type wikiMediaConfig struct {
 type AIConfig struct {
 	APIKey  string `yaml:"apiKey"`
 	Model   string `default:"deepseek-v4-flash"       validate:"required"     yaml:"model"`
-	BaseURL string `default:"https://api.lucc.dev/v1" validate:"required|url" yaml:"baseUrl"`
+	BaseURL string `default:"http://nixos-vps-agt.tailf19540.ts.net:8080/v1" validate:"required|url" yaml:"baseUrl"`
 	// Effort is the reasoning-effort tier, a peer of model. Empty falls to the
 	// shared pkg/ai default (LLM_EFFORT env, else "max"); no struct default so an
 	// unset YAML value doesn't override LLM_EFFORT. Recognized: low/medium/high/xhigh/max.
