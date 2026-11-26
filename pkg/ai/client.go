@@ -23,7 +23,7 @@ import (
 
 // defaultBaseURL is the gateway endpoint shared across all CLI defaults. The
 // literal lives here once; config loaders and ClientPool.Get fall back to it.
-const defaultBaseURL = "http://nixos-vps-agt.tailf19540.ts.net:8080/v1"
+const defaultBaseURL = "https://llm.lucc.dev/v1"
 
 // ClientPool reuses one openai.Client per (endpoint, key) instead of rebuilding
 // its HTTP transport + connection pool on every call. Digest/loop call sites fan

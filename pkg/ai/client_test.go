@@ -20,7 +20,7 @@ func TestDefaultConfig_Defaults(t *testing.T) {
 	t.Setenv("LLM_MODEL", "")
 	t.Setenv("LLM_EFFORT", "")
 	cfg := DefaultConfig()
-	assert.Equal(t, "http://nixos-vps-agt.tailf19540.ts.net:8080/v1", cfg.BaseURL)
+	assert.Equal(t, "https://llm.lucc.dev/v1", cfg.BaseURL)
 	assert.Equal(t, "deepseek-v4-flash", cfg.Model)
 	// Effort is env-driven here; the effective default (max) is applied per call.
 	assert.Empty(t, cfg.Effort)

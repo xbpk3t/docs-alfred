@@ -20,7 +20,7 @@ type exportConfig struct {
 
 type exportAIConfig struct {
 	APIKey  string `yaml:"apiKey"`
-	BaseURL string `default:"http://nixos-vps-agt.tailf19540.ts.net:8080/v1" yaml:"baseUrl"`
+	BaseURL string `default:"https://llm.lucc.dev/v1" yaml:"baseUrl"`
 	Model   string `default:"deepseek-v4-flash"       yaml:"model"`
 	// Effort: empty = shared pkg/ai default (LLM_EFFORT, else "max").
 	Effort string `yaml:"effort"`

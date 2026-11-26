@@ -41,7 +41,7 @@ trns:
   summary:
     enabled: true          # AI summary generation
     model: deepseek-v4-flash
-    baseUrl: http://nixos-vps-agt.tailf19540.ts.net:8080/v1
+    baseUrl: https://llm.lucc.dev/v1
     language: zh
   temporaryUpload:
     enabled: true          # Upload transcripts to Litterbox
