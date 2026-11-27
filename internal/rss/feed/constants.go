@@ -16,6 +16,21 @@ const (
 	DefaultFeedFetchConcurrency = 10
 	// DefaultHostFetchConcurrency is per-host in-flight when no hosts[] rule matches.
 	DefaultHostFetchConcurrency = 4
+	// DefaultFallbackMaxAttempts is intentionally low: the relay is the last
+	// resort and a daily run can retry on the next schedule.
+	DefaultFallbackMaxAttempts = 1
+)
+
+// Fallback relay constants.
+const (
+	// DefaultFallbackRelay fetches a feed server-side and returns JSON Feed,
+	// which gofeed parses natively. The {url} placeholder is URL-encoded.
+	DefaultFallbackRelay = "https://feed2json.org/convert?url={url}"
+	// fallbackURLPlaceholder is replaced with url.QueryEscape(originalURL).
+	fallbackURLPlaceholder = "{url}"
+	// FetchedViaDirect / FetchedViaRelay describe how a feed was fetched.
+	FetchedViaDirect = "direct"
+	FetchedViaRelay  = "relay"
 )
 
 // 日志字段常量.
@@ -23,6 +38,7 @@ const (
 	LogKeyURL      = "url"
 	LogKeyAttempts = "attempts"
 	LogKeyError    = "error"
+	LogKeyRelay    = "relay"
 )
 
 // GetScheduleTimeRanges returns the time range mapping.

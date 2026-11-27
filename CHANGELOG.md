@@ -5,6 +5,12 @@ description: 记录架构级重要变更
 
 ## Unreleased
 
+### rss2nl feed relay fallback [2026-11-25]
+
+`feed.fallback.enabled` 开启后，feed 直连失败（timeout / DNS / TLS / network / 403 / 429 / 5xx）时
+自动改走 feed2json relay；404/410 等永久失败不 fallback。`FetchResult.FetchedVia` 记录
+`direct` / `relay`，失败报告仍按原始 URL 归组。
+
 ### skx 单 skill + 子命令路由与 schema 校验 [2026-08-16]
 
 [`5ffde58`](https://github.com/xbpk3t/docs-alfred/commit/5ffde5846ede14585da88747d190600e10611c4b)

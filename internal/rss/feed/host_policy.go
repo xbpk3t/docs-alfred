@@ -22,7 +22,7 @@ type resolvedHostRule struct {
 	hasExplicit  bool // matched an entry in feed.hosts
 }
 
-func (f FeedConfig) resolveHostRule(host string) resolvedHostRule {
+func (f *FeedConfig) resolveHostRule(host string) resolvedHostRule {
 	host = strings.ToLower(strings.TrimSpace(host))
 	defConc := f.HostDefaultConcurrency
 	if defConc <= 0 {

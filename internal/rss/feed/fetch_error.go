@@ -329,6 +329,46 @@ func isFastRetryableFetchError(err error) bool {
 	return inspectFetchError(err).FastRetryable
 }
 
+// shouldFallbackFeedError reports whether a failed direct fetch is worth
+// retrying through the relay. Permanent failures (401/404/410, parse errors)
+// and user cancellation are excluded: the relay cannot fix a dead URL and we
+// should not make an extra request for it.
+func shouldFallbackFeedError(ctx context.Context, feedErr *FeedError) bool {
+	if feedErr == nil || ctx.Err() != nil {
+		return false
+	}
+	if feedErr.Err != nil {
+		return shouldFallbackFetchError(feedErr.Err)
+	}
+
+	return shouldFallbackFailureKind(feedErr.Kind, feedErr.Transient, 0)
+}
+
+func shouldFallbackFetchError(err error) bool {
+	info := inspectFetchError(err)
+
+	return shouldFallbackFailureKind(info.Kind, info.Transient, info.StatusCode)
+}
+
+func shouldFallbackFailureKind(kind FeedFailureKind, transient bool, statusCode int) bool {
+	switch kind {
+	case FeedFailureKindTimeout, FeedFailureKindDNS, FeedFailureKindTLS, FeedFailureKindNetwork:
+		return true
+	case FeedFailureKindHTTPStatus:
+		if statusCode == 0 {
+			return transient
+		}
+		switch statusCode {
+		case 403, 408, 425, 429:
+			return true
+		}
+
+		return statusCode >= 500
+	default:
+		return false
+	}
+}
+
 func containsAny(s string, needles ...string) bool {
 	for _, needle := range needles {
 		if needle != "" && strings.Contains(s, needle) {

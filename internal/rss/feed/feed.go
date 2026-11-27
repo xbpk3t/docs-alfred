@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
@@ -37,11 +39,81 @@ func getMaxAttempts(cfg *Config) uint {
 	return uint(cfg.FeedConfig.MaxTries)
 }
 
+// fetchURLWithRetry fetches rawURL directly and, when fallback is enabled and
+// the error is retryable/blocking (timeout, DNS/TLS/network, 403/429/5xx),
+// retries once through the relay before returning the original error.
 func fetchURLWithRetry(
 	ctx context.Context,
 	rawURL string,
 	cfg *Config,
 	hosts *hostFetchController,
+) (*gofeed.Feed, *FeedError, string) {
+	if cfg == nil {
+		return nil, &FeedError{URL: rawURL, Message: "nil config", Kind: FeedFailureKindUnknown}, ""
+	}
+
+	feed, feedErr := fetchSingleURLWithRetry(ctx, rawURL, cfg, hosts, getMaxAttempts(cfg))
+	if feedErr == nil {
+		return feed, nil, FetchedViaDirect
+	}
+	if !cfg.FeedConfig.Fallback.Enabled || !shouldFallbackFeedError(ctx, feedErr) {
+		return nil, feedErr, ""
+	}
+
+	relayURL, ok := fallbackRelayURL(cfg.FeedConfig.Fallback, rawURL)
+	if !ok {
+		return nil, feedErr, ""
+	}
+
+	slog.Warn("Feed fetch failed; trying relay fallback",
+		slog.String(LogKeyURL, rawURL),
+		slog.String(LogKeyRelay, relayURL),
+		slog.String(LogKeyError, feedErr.Message))
+
+	fallbackFeed, fallbackErr := fetchSingleURLWithRetry(
+		ctx,
+		relayURL,
+		cfg,
+		hosts,
+		DefaultFallbackMaxAttempts,
+	)
+	if fallbackErr == nil {
+		slog.Info("Feed fetched via relay fallback",
+			slog.String(LogKeyURL, rawURL),
+			slog.String(LogKeyRelay, relayURL))
+
+		return fallbackFeed, nil, FetchedViaRelay
+	}
+
+	slog.Warn("Relay fallback failed",
+		slog.String(LogKeyURL, rawURL),
+		slog.String(LogKeyRelay, relayURL),
+		slog.String(LogKeyError, fallbackErr.Message))
+
+	return nil, feedErr, ""
+}
+
+// fallbackRelayURL expands the relay template with the URL-encoded original
+// feed URL. It returns ok=false when the template lacks the {url} placeholder.
+func fallbackRelayURL(cfg FeedFallbackConfig, rawURL string) (string, bool) {
+	relay := strings.TrimSpace(cfg.Relay)
+	if relay == "" {
+		relay = DefaultFallbackRelay
+	}
+	if !strings.Contains(relay, fallbackURLPlaceholder) {
+		return "", false
+	}
+
+	return strings.ReplaceAll(relay, fallbackURLPlaceholder, url.QueryEscape(rawURL)), true
+}
+
+// fetchSingleURLWithRetry fetches one URL (direct feed or relay) with retries.
+func fetchSingleURLWithRetry(
+	ctx context.Context,
+	rawURL string,
+	cfg *Config,
+	hosts *hostFetchController,
+	maxAttempts uint,
 ) (*gofeed.Feed, *FeedError) {
 	if feedErr := validateURL(rawURL); feedErr != nil {
 		slog.Error("Invalid URL", slog.String(LogKeyURL, rawURL), slog.Any(LogKeyError, feedErr))
@@ -77,7 +149,7 @@ func fetchURLWithRetry(
 			return nil
 		},
 		retry.Context(ctx),
-		retry.Attempts(getMaxAttempts(cfg)),
+		retry.Attempts(maxAttempts),
 		retry.Delay(DefaultRetryDelay),
 		retry.DelayType(retry.BackOffDelay),
 		retry.LastErrorOnly(true),
@@ -195,13 +267,15 @@ func validateURL(rawURL string) *FeedError {
 type fetchURLResult struct {
 	feed *gofeed.Feed
 	err  *FeedError
+	via  string
 }
 
 // FetchResult holds a fetched feed with its original URL.
 type FetchResult struct {
-	Feed *gofeed.Feed
-	Err  *FeedError
-	URL  string
+	Feed       *gofeed.Feed
+	Err        *FeedError
+	URL        string
+	FetchedVia string // direct or relay
 }
 
 // FetchURLsWithMeta 批量获取URLs，同时返回每个请求的结果元信息.
@@ -241,9 +315,9 @@ func fetchOneURL(
 	}
 	defer hosts.release(host)
 
-	feed, feedErr := fetchURLWithRetry(ctx, rawURL, cfg, hosts)
+	feed, feedErr, via := fetchURLWithRetry(ctx, rawURL, cfg, hosts)
 
-	return fetchURLResult{feed: feed, err: feedErr}
+	return fetchURLResult{feed: feed, err: feedErr, via: via}
 }
 
 func collectFetchResults(urls []string, results []fetchURLResult) ([]*gofeed.Feed, []FetchResult, []*FeedError) {
@@ -251,7 +325,12 @@ func collectFetchResults(urls []string, results []fetchURLResult) ([]*gofeed.Fee
 	meta := make([]FetchResult, 0, len(urls))
 	failedFeeds := make([]*FeedError, 0)
 	for i, result := range results {
-		meta = append(meta, FetchResult{URL: urls[i], Feed: result.feed, Err: result.err})
+		meta = append(meta, FetchResult{
+			URL:        urls[i],
+			Feed:       result.feed,
+			Err:        result.err,
+			FetchedVia: result.via,
+		})
 		if result.err != nil {
 			slog.Error("Failed to fetch feed",
 				slog.String(LogKeyURL, result.err.URL),
