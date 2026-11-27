@@ -103,12 +103,13 @@ type NewsletterConfig struct {
 
 // FeedConfig Feed相关配置.
 type FeedConfig struct {
-	Hosts                  []FeedHostRule `yaml:"hosts,omitempty"`
-	Timeout                int            `default:"30" validate:"gte:0" yaml:"timeout"`
-	MaxTries               int            `default:"3"  validate:"gte:0" yaml:"maxTries"`
-	FeedLimit              int            `default:"30" validate:"gte:0" yaml:"feedLimit"`
-	Concurrency            int            `default:"10" validate:"gte:0" yaml:"concurrency"`
-	HostDefaultConcurrency int            `default:"4"  validate:"gte:0" yaml:"hostDefaultConcurrency"`
+	Hosts                  []FeedHostRule     `yaml:"hosts,omitempty"`
+	Fallback               FeedFallbackConfig `yaml:"fallback,omitempty"`
+	Timeout                int                `default:"30" validate:"gte:0" yaml:"timeout"`
+	MaxTries               int                `default:"3"  validate:"gte:0" yaml:"maxTries"`
+	FeedLimit              int                `default:"30" validate:"gte:0" yaml:"feedLimit"`
+	Concurrency            int                `default:"10" validate:"gte:0" yaml:"concurrency"`
+	HostDefaultConcurrency int                `default:"4"  validate:"gte:0" yaml:"hostDefaultConcurrency"`
 }
 
 // FeedHostRule is a per-hostname fetch policy (concurrency, spacing, circuit).
@@ -118,6 +119,14 @@ type FeedHostRule struct {
 	Match         string `yaml:"match"`
 	Concurrency   int    `yaml:"concurrency"`
 	MinIntervalMs int    `yaml:"minIntervalMs,omitempty"`
+}
+
+// FeedFallbackConfig enables automatic relay fallback (e.g. feed2json) when a
+// direct feed fetch fails with a network/blocking error. Relay is an optional
+// URL template containing {url}; when empty, DefaultFallbackRelay is used.
+type FeedFallbackConfig struct {
+	Relay   string `yaml:"relay,omitempty"`
+	Enabled bool   `yaml:"enabled,omitempty"`
 }
 
 type DashboardConfig struct {
@@ -258,11 +267,29 @@ func (c *Config) Validate() error {
 	if err := c.FeedConfig.validateHosts(); err != nil {
 		return err
 	}
+	if err := c.FeedConfig.validateFallback(); err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (f FeedConfig) validateHosts() error {
+func (f *FeedConfig) validateFallback() error {
+	if !f.Fallback.Enabled {
+		return nil
+	}
+	relay := strings.TrimSpace(f.Fallback.Relay)
+	if relay == "" {
+		return nil
+	}
+	if !strings.Contains(relay, fallbackURLPlaceholder) {
+		return fmt.Errorf("feed.fallback.relay must contain %s", fallbackURLPlaceholder)
+	}
+
+	return nil
+}
+
+func (f *FeedConfig) validateHosts() error {
 	seen := make(map[string]struct{}, len(f.Hosts))
 	for i, rule := range f.Hosts {
 		match := strings.ToLower(strings.TrimSpace(rule.Match))
