@@ -3,163 +3,267 @@ package skx
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	prptschema "github.com/xbpk3t/docs-alfred/cmd/skx/schema"
 )
 
-func writeFile(t *testing.T, path, content string) {
-	t.Helper()
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
-}
+const validBody = "## What\n\n### Is\n\nx\n\n## Output\n\n### Template\n\n```markdown\nx\n```\n"
 
-// setupLayout mirrors the real on-disk layout: prpt.yml sits above a
-// references/ directory that holds the prompt yml files. The schema used is
-// the real embedded prpt.schema.json (schema.Prpt) so tests never drift from
-// the source of truth.
-func setupLayout(t *testing.T, files map[string]string) (root, refs, schema string) {
-	t.Helper()
-	root = t.TempDir()
-	refs = filepath.Join(root, "references")
-	require.NoError(t, os.MkdirAll(refs, 0o755))
-	schema = filepath.Join(root, "prpt.schema.json")
-	writeFile(t, schema, string(prptschema.Prpt))
-	for name, content := range files {
-		writeFile(t, filepath.Join(refs, name), content)
+func mdPrompt(role, desc string, pipeline []string, body string) string {
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("role: " + role + "\n")
+	if desc != "" {
+		b.WriteString("desc: " + desc + "\n")
 	}
-	return root, refs, schema
+	if len(pipeline) > 0 {
+		b.WriteString("pipeline:\n")
+		for _, p := range pipeline {
+			b.WriteString("  - " + p + "\n")
+		}
+	}
+	b.WriteString("---\n\n")
+	b.WriteString(body)
+	return b.String()
 }
 
-func TestCheckDirValid(t *testing.T) {
-	_, refs, schema := setupLayout(t, map[string]string{"a.yml": samplePrompt})
+func writePrompt(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+	return path
+}
 
-	res, err := CheckDir(refs, schema)
+func checkDir(t *testing.T, files map[string]string) *CheckResult {
+	t.Helper()
+	dir := t.TempDir()
+	for name, content := range files {
+		writePrompt(t, dir, name, content)
+	}
+	res, err := CheckDir(dir)
 	require.NoError(t, err)
+	return res
+}
+
+func TestCheckDirValidAtom(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("atom", "x", nil, validBody)})
 	assert.Equal(t, 1, res.Files)
 	assert.Empty(t, res.Issues)
 }
 
-func TestCheckDirMissingRequired(t *testing.T) {
-	// Missing top-level required field: frontmatter alone is not enough.
-	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  role: atom\n"})
-
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
-	assert.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "what")
+func TestCheckDirValidComposite(t *testing.T) {
+	res := checkDir(t, map[string]string{
+		"a.md": mdPrompt("composite", "x", []string{"b"}, validBody),
+		"b.md": mdPrompt("atom", "x", nil, validBody),
+	})
+	assert.Empty(t, res.Issues)
 }
 
-func TestCheckDirUnknownTopLevelKey(t *testing.T) {
-	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  role: atom\nbogus:\n  x: 1\n"})
+func TestCheckDirMissingFrontmatter(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": "# Title\n"})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "missing frontmatter")
+	assert.True(t, res.HasErrors())
+}
 
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
-	assert.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "additional properties 'bogus' not allowed")
+func TestCheckDirBadRole(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("nope", "x", nil, validBody)})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "role must be atom|composite")
 }
 
 func TestCheckDirUnknownFrontmatterKey(t *testing.T) {
-	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  role: atom\n  nope: 1\n"})
-
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
-	assert.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "additional properties 'nope' not allowed")
+	content := "---\nrole: atom\nstatus: draft\n---\n\n" + validBody
+	res := checkDir(t, map[string]string{"a.md": content})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, `unknown frontmatter key "status"`)
 }
 
 func TestCheckDirCompositeRequiresPipeline(t *testing.T) {
-	// role=composite without pl-* is rejected by the schema's if/then.
-	_, refs, schema := setupLayout(t, map[string]string{"a.yml": "frontmatter:\n  role: composite\nwhat:\n  is: x\n"})
-
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("composite", "x", nil, validBody)})
 	require.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "workflow")
+	assert.Contains(t, res.Issues[0].Message, "composite requires non-empty pipeline")
 }
 
-func TestCheckDirCompositeWithDispatchOK(t *testing.T) {
-	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: b\nwhat:\n  is: x\n",
-		"b.yml": "frontmatter:\n  role: atom\nwhat:\n  is: x\n",
+func TestCheckDirAtomRejectsPipeline(t *testing.T) {
+	res := checkDir(t, map[string]string{
+		"a.md": mdPrompt("atom", "x", []string{"b"}, validBody),
+		"b.md": mdPrompt("atom", "x", nil, validBody),
 	})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "atom must not declare pipeline")
+}
 
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
+func TestCheckDirDanglingPipeline(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("composite", "x", []string{"ghost"}, validBody)})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, `pipeline target "ghost" has no routable prompt`)
+}
+
+func TestCheckDirSelfPipeline(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("composite", "x", []string{"a"}, validBody)})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "pipeline includes itself")
+}
+
+func TestCheckDirDuplicatePipeline(t *testing.T) {
+	res := checkDir(t, map[string]string{
+		"a.md": mdPrompt("composite", "x", []string{"b", "b"}, validBody),
+		"b.md": mdPrompt("atom", "x", nil, validBody),
+	})
+	require.Len(t, res.Issues, 1)
+	assert.Equal(t, Warning, res.Issues[0].Severity)
+	assert.Contains(t, res.Issues[0].Message, "duplicate pipeline entry")
+}
+
+func TestCheckDirH1(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("atom", "x", nil, "# Title\n\n"+validBody)})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "H1 heading")
+	assert.Equal(t, Error, res.Issues[0].Severity)
+}
+
+func TestCheckDirH1InsideFenceIgnored(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("atom", "x", nil, "## What\n\n```text\n# comment\n```\n")})
 	assert.Empty(t, res.Issues)
 }
 
-func TestCheckDirCompositeDispatchDanglingDep(t *testing.T) {
-	// dispatch step references a prompt that has no source file.
-	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: ghost\nwhat:\n  is: x\n",
-	})
-
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
+func TestCheckDirBudgetWarning(t *testing.T) {
+	body := "## What\n\n" + strings.Repeat("a", BodyCharWarn+10) + "\n"
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("atom", "x", nil, body)})
 	require.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, `"ghost" has no prompt file`)
+	assert.Equal(t, Warning, res.Issues[0].Severity)
+	assert.Contains(t, res.Issues[0].Message, "chars >")
+	assert.False(t, res.HasErrors())
 }
 
-func TestCheckDirCompositeDispatchMissingKeys(t *testing.T) {
-	// dispatch step without kind/name must fail schema (oneOf object requires both).
-	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\nwhat:\n  is: x\n",
-	})
-
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
+func TestCheckDirDuplicateH2(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("atom", "x", nil, "## What\n\nx\n\n## What\n\ny\n")})
 	require.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "name")
+	assert.Equal(t, Warning, res.Issues[0].Severity)
+	assert.Contains(t, res.Issues[0].Message, "duplicate H2")
 }
 
-func TestCheckDirStrictSectionKeys(t *testing.T) {
-	_, refs, schema := setupLayout(t, map[string]string{
-		// output.format is schema-valid; a bogus sub-key must be flagged.
-		"ok.yml":  "frontmatter:\n  role: atom\nwhat:\n  is: x\noutput:\n  format: md\n  template: x\n",
-		"bad.yml": "frontmatter:\n  role: atom\nwhat:\n  is: x\noutput:\n  format: md\n  bogus: 1\n",
-	})
-
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
-	require.Len(t, res.Issues, 1, "only the schema-invalid sub-key should be flagged")
-	assert.Contains(t, res.Issues[0].Message, "additional properties 'bogus' not allowed")
-
-	if !assert.True(t, res.HasErrors()) {
-		return
-	}
-}
-
-func TestCheckDirStrictWorkflowItemKeys(t *testing.T) {
-	_, refs, schema := setupLayout(t, map[string]string{
-		"a.yml": "frontmatter:\n  role: atom\nworkflow:\n  - phase: x\n    bloop: 1\n",
-	})
-
-	res, err := CheckDir(refs, schema)
-	require.NoError(t, err)
+func TestCheckDirEmptyH2(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("atom", "x", nil, "## What\n\n## Output\n\nx\n")})
 	require.Len(t, res.Issues, 1)
-	assert.Contains(t, res.Issues[0].Message, "additional properties 'bloop' not allowed")
+	assert.Equal(t, Warning, res.Issues[0].Severity)
+	assert.Contains(t, res.Issues[0].Message, "empty H2")
 }
 
-func TestCheckSchemaDrift(t *testing.T) {
+func TestCheckDirUnclosedFence(t *testing.T) {
+	res := checkDir(t, map[string]string{"a.md": mdPrompt("atom", "x", nil, "## What\n\n```text\nx\n")})
+	require.Len(t, res.Issues, 1)
+	assert.Equal(t, Warning, res.Issues[0].Severity)
+	assert.Contains(t, res.Issues[0].Message, "unclosed")
+}
+
+func TestCheckDirPipelineCycle(t *testing.T) {
+	res := checkDir(t, map[string]string{
+		"a.md": mdPrompt("composite", "x", []string{"b"}, validBody),
+		"b.md": mdPrompt("composite", "x", []string{"a"}, validBody),
+	})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "pipeline cycle")
+}
+
+func TestCheckDirHiddenTargetNotRoutable(t *testing.T) {
+	res := checkDir(t, map[string]string{
+		"a.md":       mdPrompt("composite", "x", []string{"hidden"}, validBody),
+		".hidden.md": mdPrompt("atom", "x", nil, validBody),
+	})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, `pipeline target "hidden" has no routable prompt`)
+}
+
+func TestCheckDirHiddenFileChecked(t *testing.T) {
+	res := checkDir(t, map[string]string{
+		".hidden.md": mdPrompt("atom", "x", nil, "# Title\n\n"+validBody),
+	})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "H1 heading")
+}
+
+func TestCheckDirH1ReportsFileLine(t *testing.T) {
+	// Four frontmatter lines; the H1 is on file line 5.
+	content := "---\nrole: atom\ndesc: x\n---\n# Title\n\n## A\n\nx\n"
+	res := checkDir(t, map[string]string{"a.md": content})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "H1 heading at line 5")
+}
+
+func TestCheckDirIndentedCodeNotH1(t *testing.T) {
+	res := checkDir(t, map[string]string{
+		"a.md": mdPrompt("atom", "x", nil, "## A\n\n    # not a heading\n\t# not a heading\n"),
+	})
+	assert.Empty(t, res.Issues)
+}
+
+func TestCheckDirIndentedFenceDoesNotHideH1(t *testing.T) {
+	// Both fences are indented code blocks; the H1 at file line 7 is real.
+	res := checkDir(t, map[string]string{
+		"a.md": mdPrompt("atom", "x", nil, "    ```\n# real heading\n    ```\n"),
+	})
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].Message, "H1 heading at line 7")
+}
+
+func TestCheckDirBOM(t *testing.T) {
+	res := checkDir(t, map[string]string{
+		"a.md": "\uFEFF" + mdPrompt("atom", "x", nil, validBody),
+	})
+	assert.Empty(t, res.Issues)
+}
+
+func TestCheckDirIndentedFrontmatterDelimiter(t *testing.T) {
+	content := "---\nrole: composite\ndesc: |\n  step one\n  ---\n  step two\npipeline:\n  - b\n---\n\n## A\n\nx\n"
+	res := checkDir(t, map[string]string{
+		"a.md": content,
+		"b.md": mdPrompt("atom", "x", nil, validBody),
+	})
+	assert.Empty(t, res.Issues)
+}
+
+func TestCheckDirLoadErrorPathNotDuplicated(t *testing.T) {
 	dir := t.TempDir()
-	// Not a valid JSON Schema → compile fails, surfaced as an error.
-	writeFile(t, filepath.Join(dir, "prpt.schema.json"), "brand-new: 1\n")
-
-	_, err := CheckDir(dir, filepath.Join(dir, "prpt.schema.json"))
-	require.Error(t, err)
+	writePrompt(t, dir, "a.md", "# no frontmatter\n")
+	res, err := CheckDir(dir)
+	require.NoError(t, err)
+	require.Len(t, res.Issues, 1)
+	assert.Equal(t, filepath.Join(dir, "a.md"), res.Issues[0].Path)
+	assert.NotContains(t, res.Issues[0].Message, dir)
+	assert.Contains(t, res.Issues[0].Message, "missing frontmatter")
 }
 
-func TestCheckDirNestedSchemaOK(t *testing.T) {
-	// The prpt JSON Schema uses a nested frontmatter: object (the intended form).
-	root := t.TempDir()
-	refs := filepath.Join(root, "references")
-	require.NoError(t, os.MkdirAll(refs, 0o755))
-	writeFile(t, filepath.Join(root, "prpt.schema.json"), string(prptschema.Prpt))
-	writeFile(t, filepath.Join(refs, "a.yml"), samplePrompt)
+func TestCheckDirDuplicateStemDoesNotLeakEdges(t *testing.T) {
+	dir := t.TempDir()
+	writePrompt(t, dir, "brk.md", mdPrompt("atom", "x", nil, validBody))
+	writePrompt(t, dir, "x.md", mdPrompt("composite", "x", []string{"brk"}, validBody))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "zzz"), 0o755))
+	writePrompt(t, dir, filepath.Join("zzz", "brk.md"), mdPrompt("composite", "x", []string{"x"}, validBody))
 
-	res, err := CheckDir(refs, filepath.Join(root, "prpt.schema.json"))
+	res, err := CheckDir(dir)
 	require.NoError(t, err)
-	assert.Empty(t, res.Issues)
+	require.Len(t, res.Issues, 1)
+	assert.Equal(t, Warning, res.Issues[0].Severity)
+	assert.Equal(t, filepath.Join(dir, "zzz", "brk.md"), res.Issues[0].Path)
+	assert.Contains(t, res.Issues[0].Message, `duplicate routing name "brk"`)
+	assert.NotContains(t, res.Issues[0].Message, "pipeline cycle")
+}
+
+func TestCheckDirShadowedSelfReference(t *testing.T) {
+	dir := t.TempDir()
+	writePrompt(t, dir, "brk.md", mdPrompt("atom", "x", nil, validBody))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "zzz"), 0o755))
+	writePrompt(t, dir, filepath.Join("zzz", "brk.md"), mdPrompt("composite", "x", []string{"brk"}, validBody))
+
+	res, err := CheckDir(dir)
+	require.NoError(t, err)
+	require.Len(t, res.Issues, 1)
+	assert.Equal(t, Warning, res.Issues[0].Severity)
+	assert.Contains(t, res.Issues[0].Message, `duplicate routing name "brk"`)
+	assert.NotContains(t, res.Issues[0].Message, "pipeline includes itself")
 }

@@ -27,8 +27,7 @@ func validateReferencesDir(dir string) error {
 }
 
 type rootFlags struct {
-	dir    string
-	schema string
+	dir string
 }
 
 // Execute runs the skx root command.
@@ -41,7 +40,7 @@ func newRootCmd() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:   "skx",
-		Short: "Validate, route and graph zzz prompt YAML files",
+		Short: "Validate, route and graph zzz prompt markdown files",
 		// Bare `skx` shows help; positional paths are handled by the
 		// subcommands via targetOrDir.
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -69,8 +68,6 @@ func newRootCmd() *cobra.Command {
 		}
 		return validateReferencesDir(flags.dir)
 	}
-
-	root.PersistentFlags().StringVar(&flags.schema, "schema", "", "prpt.yml schema path (default: auto-located above dir)")
 
 	root.AddCommand(newCheckCmd(flags))
 	root.AddCommand(newGraphCmd(flags))

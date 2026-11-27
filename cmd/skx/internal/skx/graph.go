@@ -1,7 +1,6 @@
 package skx
 
 import (
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -20,40 +19,40 @@ type Graph struct {
 	Cycles [][]string `json:"cycles"`
 }
 
-// BuildGraph extracts the dependency graph from every prompt under dir.
-// Edges come from workflow steps of shape {kind: prompt, name} — serial
-// sub-agent dispatch targets. Cycles are detected across all edges.
-// Files that cannot be parsed are skipped and reported in skipped so the
-// graph still covers everything parseable (degrade with reason, never a
+// BuildGraph extracts the dependency graph from the routed prompts under dir.
+// Edges come from frontmatter pipeline entries — serial sub-agent dispatch
+// targets. Cycles are detected across all edges. Prompts shadowed by a
+// duplicate routing name are reported by skx check and do not contribute
+// edges. Files that cannot be parsed are skipped and reported in skipped so
+// the graph still covers everything parseable (degrade with reason, never a
 // silent partial result).
 func BuildGraph(dir string) (*Graph, []string, error) {
-	files, err := CollectYML(dir)
+	idx, err := indexDir(dir)
 	if err != nil {
 		return nil, nil, err
 	}
+	g, dangling := buildGraph(idx)
+	return g, append(idx.skipped, dangling...), nil
+}
 
+// buildGraph derives nodes, edges, and cycles from prompts that were already
+// parsed by indexDir.
+func buildGraph(idx *dirIndex) (*Graph, []string) {
 	nodeSet := map[string]bool{}
 	var edges []Edge
-	var skipped []string
 	var dangling []string
-	for _, f := range files {
-		rel, relErr := filepath.Rel(dir, f)
-		if relErr == nil && skipHidden(rel) {
-			continue // hidden files are cross-ref targets, not graph nodes
-		}
-		doc, err := LoadPrompt(f)
-		if err != nil {
-			skipped = append(skipped, f)
-			continue
-		}
-		stem := doc.Name
-		if stem != "" {
-			nodeSet[stem] = true
-		}
-		// Dispatch steps (kind: prompt) in the workflow are serial sub-agent
-		// targets; execution order follows the workflow/phase/step sequence.
-		for _, to := range dispatchNames(doc.Doc) {
-			edges = append(edges, Edge{From: stem, To: to, Mode: "serial"})
+	// Only the routed (winning) prompt per name contributes nodes and edges.
+	// Shadowed duplicate stems would otherwise merge their edges into the
+	// winner and attribute cycles to a file that never declared them.
+	names := make([]string, 0, len(idx.routable))
+	for name := range idx.routable {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		nodeSet[name] = true
+		for _, to := range idx.routable[name].Pipeline {
+			edges = append(edges, Edge{From: name, To: to, Mode: "serial"})
 		}
 	}
 
@@ -89,7 +88,7 @@ func BuildGraph(dir string) (*Graph, []string, error) {
 
 	g := &Graph{Nodes: nodes, Edges: edges}
 	g.Cycles = findCycles(nodeSet, edges)
-	return g, append(skipped, dangling...), nil
+	return g, dangling
 }
 
 func dedupEdges(edges []Edge) []Edge {

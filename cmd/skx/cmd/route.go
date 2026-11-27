@@ -21,7 +21,7 @@ func writeRouteError(cmd *cobra.Command, name, dir string) error {
 func newRouteCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "route <name>",
-		Short: "Resolve a prompt name to its YAML path (replaces zzz.nu)",
+		Short: "Resolve a prompt name to its markdown path (replaces zzz.nu)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := flags.dir
@@ -34,7 +34,7 @@ func newRouteCmd(flags *rootFlags) *cobra.Command {
 			if err := validateReferencesDir(dir); err != nil {
 				return err
 			}
-			rel, ymlAbs, ok, resolveErr := skx.ResolvePrompt(dir, name)
+			rel, mdAbs, ok, resolveErr := skx.ResolvePrompt(dir, name)
 			if resolveErr != nil {
 				return resolveErr
 			}
@@ -51,7 +51,7 @@ func newRouteCmd(flags *rootFlags) *cobra.Command {
 				}
 			}
 
-			_, werr := cmd.OutOrStdout().Write([]byte(ymlAbs + "\n"))
+			_, werr := cmd.OutOrStdout().Write([]byte(mdAbs + "\n"))
 			return werr
 		},
 	}

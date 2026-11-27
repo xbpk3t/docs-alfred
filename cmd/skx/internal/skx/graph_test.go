@@ -10,37 +10,14 @@ import (
 )
 
 func TestBuildGraph(t *testing.T) {
-	root := t.TempDir()
-	refs := filepath.Join(root, "references")
-	require.NoError(t, writeDirFile(refs, "3w3h.yml", `frontmatter:
-  role: composite
-workflow:
-  - phase: x
-    steps:
-      - kind: prompt
-        name: brk
-      - kind: prompt
-        name: diagram
-      - kind: prompt
-        name: vs
-what:
-  is: x
-`))
-	require.NoError(t, writeDirFile(refs, "brk.yml", "frontmatter:\n  role: atom\nwhat:\n  is: x\n"))
-	require.NoError(t, writeDirFile(refs, "diagram.yml", "frontmatter:\n  role: atom\nwhat:\n  is: x\n"))
-	require.NoError(t, writeDirFile(refs, "vs.yml", `frontmatter:
-  role: composite
-workflow:
-  - phase: x
-    steps:
-      - kind: prompt
-        name: table2yml
-what:
-  is: x
-`))
-	require.NoError(t, writeDirFile(refs, "table2yml.yml", "frontmatter:\n  role: atom\nwhat:\n  is: x\n"))
+	dir := t.TempDir()
+	writePrompt(t, dir, "3w3h.md", mdPrompt("composite", "x", []string{"brk", "diagram", "vs"}, validBody))
+	writePrompt(t, dir, "brk.md", mdPrompt("atom", "x", nil, validBody))
+	writePrompt(t, dir, "diagram.md", mdPrompt("atom", "x", nil, validBody))
+	writePrompt(t, dir, "vs.md", mdPrompt("composite", "x", []string{"table2yml"}, validBody))
+	writePrompt(t, dir, "table2yml.md", mdPrompt("atom", "x", nil, validBody))
 
-	g, _, err := BuildGraph(refs)
+	g, _, err := BuildGraph(dir)
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"3w3h", "brk", "diagram", "table2yml", "vs"}, g.Nodes)
@@ -53,42 +30,57 @@ what:
 	assert.Empty(t, g.Cycles)
 }
 
-func TestBuildGraphPlainStepsNoDispatch(t *testing.T) {
-	root := t.TempDir()
-	refs := filepath.Join(root, "references")
-	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - 普通操作\n      - 另一个\n"))
-	require.NoError(t, writeDirFile(refs, "b.yml", "frontmatter:\n  role: atom\n"))
+func TestBuildGraphNoPipeline(t *testing.T) {
+	dir := t.TempDir()
+	writePrompt(t, dir, "a.md", mdPrompt("atom", "x", nil, validBody))
+	writePrompt(t, dir, "b.md", mdPrompt("atom", "x", nil, validBody))
 
-	g, _, err := BuildGraph(refs)
+	g, _, err := BuildGraph(dir)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"a", "b"}, g.Nodes)
-	assert.Empty(t, g.Edges, "plain string steps must not produce dispatch edges")
+	assert.Empty(t, g.Edges)
 }
 
 func TestBuildGraphCycle(t *testing.T) {
-	root := t.TempDir()
-	refs := filepath.Join(root, "references")
-	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: b\n"))
-	require.NoError(t, writeDirFile(refs, "b.yml", "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: a\n"))
+	dir := t.TempDir()
+	writePrompt(t, dir, "a.md", mdPrompt("composite", "x", []string{"b"}, validBody))
+	writePrompt(t, dir, "b.md", mdPrompt("composite", "x", []string{"a"}, validBody))
 
-	g, _, err := BuildGraph(refs)
+	g, _, err := BuildGraph(dir)
 	require.NoError(t, err)
 	assert.Equal(t, [][]string{{"a", "b", "a"}}, g.Cycles)
 }
 
 func TestBuildGraphSelfLoop(t *testing.T) {
-	root := t.TempDir()
-	refs := filepath.Join(root, "references")
-	require.NoError(t, writeDirFile(refs, "a.yml", "frontmatter:\n  role: composite\nworkflow:\n  - phase: x\n    steps:\n      - kind: prompt\n        name: a\n"))
+	dir := t.TempDir()
+	writePrompt(t, dir, "a.md", mdPrompt("composite", "x", []string{"a"}, validBody))
 
-	g, _, err := BuildGraph(refs)
+	g, _, err := BuildGraph(dir)
 	require.NoError(t, err)
 	assert.Equal(t, [][]string{{"a", "a"}}, g.Cycles)
 }
 
-func writeDirFile(dir, name, content string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644)
+func TestBuildGraphHiddenExcluded(t *testing.T) {
+	dir := t.TempDir()
+	writePrompt(t, dir, "a.md", mdPrompt("composite", "x", []string{"hidden"}, validBody))
+	writePrompt(t, dir, ".hidden.md", mdPrompt("atom", "x", nil, validBody))
+
+	g, skipped, err := BuildGraph(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a"}, g.Nodes)
+	assert.Empty(t, g.Edges)
+	assert.Contains(t, skipped, "a→hidden(serial)")
+}
+
+func TestBuildGraphIgnoresShadowedStem(t *testing.T) {
+	dir := t.TempDir()
+	writePrompt(t, dir, "a.md", mdPrompt("atom", "x", nil, validBody))
+	writePrompt(t, dir, "b.md", mdPrompt("atom", "x", nil, validBody))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "zzz"), 0o755))
+	writePrompt(t, dir, filepath.Join("zzz", "a.md"), mdPrompt("composite", "x", []string{"b"}, validBody))
+
+	g, _, err := BuildGraph(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a", "b"}, g.Nodes)
+	assert.Empty(t, g.Edges)
 }
